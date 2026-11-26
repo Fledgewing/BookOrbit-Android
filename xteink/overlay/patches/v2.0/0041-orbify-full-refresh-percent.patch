@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: full refresh percent
+Subject: [PATCH] BookSync: full refresh percent
 
 Show one monotonic Full refresh percentage and fit Tailscale status rows.
 
@@ -293,7 +293,7 @@ index 96971db..ee96de1 100644
    uint32_t viewLoadedAt[3] = {};
    bool viewNotUpdated[3] = {};
 -  unsigned long mirrorPaintedAt = 0;
-+  // Orbify (patch 0041): a Full refresh walks one request per idle loop() while the reader browses;
++  // BookSync (patch 0041): a Full refresh walks one request per idle loop() while the reader browses;
 +  // its one % sits in the stamp's place (the badge), repainted in its own rectangle.
 +  OrbifyMirror::Walk mirrorWalk;
 +  struct MirrorShown {  // what render() draws (the render task reads only this)
@@ -381,10 +381,10 @@ index e1edfc7..9b6582b 100644
  #endif
    }
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
--  // Orbify (patch 0035): a Full refresh asked for from settings (or the catalog's ⟳ hold that a
+-  // BookSync (patch 0035): a Full refresh asked for from settings (or the catalog's ⟳ hold that a
 -  // reset cut short) saves the catalog for offline here, its progress on screen. Automatic ones
 -  // (7 days, a new library version) wait for the sleep sync instead.
-+  // Orbify (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
++  // BookSync (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
 +  // catalog's ⟳ hold that a reset cut short) saves the catalog for offline here. Patch 0041: one
 +  // start popup, then the walk runs from loop() with its % in the corner; a press goes back to Home.
 +  // Automatic ones (7 days, a new library version) wait for the sleep sync instead.
@@ -545,7 +545,7 @@ index d8b493c..34ab3a6 100644
    // Repaints the scan's step: at once when the step changes, then at most every few seconds.
    static void onScanProgress(void* context, BookOrbitDeviceScan::Step step, size_t done, size_t total);
    void setScanSummary(const BookOrbitDeviceScan::Summary& summary);
--  // Orbify (patch 0035): the Full refresh's "saving for offline N/M", repainted every few seconds.
+-  // BookSync (patch 0035): the Full refresh's "saving for offline N/M", repainted every few seconds.
 -  static void onMirrorStep(void* context, size_t done, size_t total);
 +  // After the refresh (and the Full refresh, if one ran): Wi-Fi off, covers, back to Home.
 +  void finishRefresh(bool refreshed);
@@ -600,7 +600,7 @@ index 78daaee..7039b0d 100644
        Rect{0, metrics.topPadding, renderer.getScreenWidth(), kTopBarHeight + UITheme::getTopStatusBarInset(renderer)},
        nullptr);
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  // Orbify (patch 0041): a Full refresh left unfinished shows its one % in the header's left corner
++  // BookSync (patch 0041): a Full refresh left unfinished shows its one % in the header's left corner
 +  // (it carries on in the catalog and at the sleep syncs). Home makes no requests: read once per boot.
 +  static const int pending = OrbifyMirror::pendingPercent();
 +  if (pending >= 0) {

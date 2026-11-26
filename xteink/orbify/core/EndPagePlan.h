@@ -1,5 +1,5 @@
 #pragma once
-// Orbify End-of-Book page (docs/design/end-of-book/DESIGN.md §5): which rows the page shows, in
+// BookSync End-of-Book page (docs/design/end-of-book/DESIGN.md §5): which rows the page shows, in
 // which order, and which go when the panel is too short for all of them. Pure C++: the firmware
 // (../EndPage.cpp) supplies the theme's measured heights; xteink/test/end_of_book_test.cpp checks
 // every card shape at 480x800 and 528x792 with the tallest theme.

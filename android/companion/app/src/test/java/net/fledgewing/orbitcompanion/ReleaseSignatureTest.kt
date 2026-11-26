@@ -8,6 +8,7 @@ package net.fledgewing.orbitcompanion
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -127,6 +128,34 @@ class ReleaseSignatureTest {
                 throw AssertionError("untrusted feed accepted")
             } catch (_: IllegalArgumentException) { }
         }
+    }
+
+    @Test
+    fun repositoryRenameDoesNotRewriteAnAlreadySignedAndroidPayload() {
+        val root = keyPair()
+        val rootHex = hex(raw(root))
+        val release = keyPair()
+        val name = "orbit-companion-1.0.0.apk"
+        val oldUrl = "https://github.com/${Updater.LEGACY_REPO}/releases/download/v1.0.0/$name"
+        val payload = JSONObject().put("withdrawn", org.json.JSONArray()).put("releases",
+            org.json.JSONArray().put(JSONObject().put("tag_name", "v1.0.0").put("assets",
+                org.json.JSONArray().put(JSONObject().put("name", name).put("browser_download_url", oldUrl))))).toString()
+        fun envelope(body: String, resign: Boolean = false): String {
+            val signedBody = if (resign) body else payload
+            return JSONObject().put("payload", body).put("signatures",
+                signatures(root, release, 1, AndroidReleaseFeed.TAG, AndroidReleaseFeed.ASSET,
+                    sha(signedBody.toByteArray()))).toString()
+        }
+        // Moving the envelope's fetch location leaves these exact payload bytes valid.
+        assertEquals(oldUrl, AndroidReleaseFeed.parse(envelope(payload), rootHex, 1).releases.single().assets[name])
+        val renamed = payload.replace(Updater.LEGACY_REPO, Updater.REPO)
+        assertNotEquals(payload, renamed)
+        try {
+            AndroidReleaseFeed.parse(envelope(renamed), rootHex, 1)
+            throw AssertionError("rewritten payload accepted without a new signature")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(oldUrl.replace(Updater.LEGACY_REPO, Updater.REPO),
+            AndroidReleaseFeed.parse(envelope(renamed, resign = true), rootHex, 1).releases.single().assets[name])
     }
 
     @Test

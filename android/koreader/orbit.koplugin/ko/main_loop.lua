@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 
 -- Keep diagnostics in release builds: only timed BookSync work is attributed here,
 -- never the input wait or another plugin's scheduled callback. No document data is logged.

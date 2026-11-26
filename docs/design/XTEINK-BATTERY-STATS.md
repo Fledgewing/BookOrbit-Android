@@ -2,7 +2,7 @@
 
 Goal: measured battery numbers on the Xteink X4 Pro, X4 Classic and X3, written in the
 Android companion's export format `orbit-battery-stats/1`
-(Orbify `docs/design/STATS-DESIGN.md`, "Export JSON"). The two can then be compared side by
+(BookSync `docs/design/STATS-DESIGN.md`, "Export JSON"). The two can then be compared side by
 side. Constraint: memory must not grow much. Approved with the recommended tiers; built as
 `overlay/patches/v2.0/0025-battery-stats.patch`. Where the build differs from this design,
 §9 "As built" wins.

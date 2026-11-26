@@ -37,7 +37,7 @@ def render_readme(data, readme):
 
 def render(data):
     platforms = data["platforms"]
-    out = ["# Orbify feature support matrix", "",
+    out = ["# BookSync feature support matrix", "",
            f"Source audit at `{data['audited_revision']}`. {data['scope']}", "",
            "Generated from [`shared/features.json`](../shared/features.json) by `python3 tools/features.py`. "
            "Edit the JSON and regenerate; `python3 tools/test/test-features.py` checks schema coverage, citations and document parity.", "",

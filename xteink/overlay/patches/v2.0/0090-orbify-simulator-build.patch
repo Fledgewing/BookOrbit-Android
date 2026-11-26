@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: simulator build
+Subject: [PATCH] BookSync: simulator build
 
 Build the same overlay hooks in the desktop simulator for release tests.
 
@@ -15,7 +15,7 @@ index c82786f..efda252 100644
 -  (void)jsonBody;
 -  (void)replyPath;
 -  return -1;
-+  // Orbify's emulated release tests (xteink/test/e2e/): the same request over the simulator's
++  // BookSync's emulated release tests (xteink/test/e2e/): the same request over the simulator's
 +  // host HTTP, as the sync's own calls above make it.
 +  const std::string url = BOOKORBIT_STORE.getBaseUrl() + path;
 +  HTTPClient http;
@@ -109,7 +109,7 @@ index 334d983..8c2f6a9 100644
    }
    silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
 +#ifdef SIMULATOR
-+  // The simulator carries the restart token across its re-exec (Orbify's e2e tests).
++  // The simulator carries the restart token across its re-exec (BookSync's e2e tests).
 +  SimulatorLifecycle::setSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
 +#endif
    ESP.restart();
@@ -252,7 +252,7 @@ index 0753ec2..883c3f2 100644
    std::atomic<unsigned long> requestedAt{0};  // bit 0 set: 0 means no press yet
    orbify::sleepsync::Deadlines deadlines() const;
 +#ifdef SIMULATOR
-+  // Orbify's emulated release tests (xteink/test/e2e/): the sampling task as a host thread whose
++  // BookSync's emulated release tests (xteink/test/e2e/): the sampling task as a host thread whose
 +  // pin is the scripted Power presses (CROSSPOINT_SIM_INPUT_SCRIPT), so a press during a blocked
 +  // request is seen as on a reader. Keys pressed by hand are still polled when the sync asks.
 +  static void simTaskEntry(PowerButtonWakeWatcher* self);

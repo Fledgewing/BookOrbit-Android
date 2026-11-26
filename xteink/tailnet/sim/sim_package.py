@@ -1,4 +1,4 @@
-"""Orbify's additions to the fetched crossink-simulator package (simulator builds only).
+"""BookSync's additions to the fetched crossink-simulator package (simulator builds only).
 
 tailnet_build.py runs this in a simulator env, after upstream's own package patcher
 (test/integration/ci/patch_simulator_package.py, when the checkout has one). Each step looks for
@@ -54,7 +54,7 @@ inline void *heap_caps_realloc(void *pointer, const size_t bytes, const uint32_t
 """
 
 SCRIPTED_HEAP = """\
-// Orbify: the scripted heap (xteink/tailnet/sim/sim_package.py).
+// BookSync: the scripted heap (xteink/tailnet/sim/sim_package.py).
 namespace orbify_sim_heap {
 struct Step {
   unsigned long atMs;
@@ -112,7 +112,7 @@ inline size_t cap(const simulator_heap::Pool &pool, const bool largest, const si
 # Shared by the scripted heap and the package's WiFi: when this process first started Wi-Fi.
 WIFI_CLOCK_HEADER = "orbify_sim_wifi.h"
 WIFI_CLOCK = """\
-// Orbify (xteink/tailnet/sim/sim_package.py): when this process first called WiFi.begin().
+// BookSync (xteink/tailnet/sim/sim_package.py): when this process first called WiFi.begin().
 #pragma once
 #include <atomic>
 #include <chrono>

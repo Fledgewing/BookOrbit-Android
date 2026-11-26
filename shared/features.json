@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "audited_revision": "71c294545a64133dcf8dbd80eae04b733997cbdd",
-  "scope": "Source support in main shipping configurations; not a device validation or proof of first release. Inherited reader/server functions are included only to explain the Orbify integration or overlay cuts.",
+  "scope": "Source support in main shipping configurations; not a device validation or proof of first release. Inherited reader/server functions are included only to explain the BookSync integration or overlay cuts.",
   "platforms": {
     "android": {
       "label": "Android (M8C / Boox)",
@@ -68,7 +68,7 @@
         },
         "x3": {
           "status": "partial",
-          "note": "Online catalog; no Orbify offline cache",
+          "note": "Online catalog; no BookSync offline cache",
           "reason": "hardware: cache uses PSRAM; X3 flash cuts",
           "evidence": [
             {
@@ -540,7 +540,7 @@
         },
         "x3": {
           "status": "partial",
-          "note": "Live catalog covers; no retained Orbify cache/repair",
+          "note": "Live catalog covers; no retained BookSync cache/repair",
           "reason": "hardware: cached cover path cut for flash/PSRAM",
           "evidence": [
             {
@@ -1441,7 +1441,7 @@
         },
         "x4_pro": {
           "status": "partial",
-          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
+          "note": "Native configurable clock/battery/chapter/progress slots plus BookSync spacing; no single BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -1463,7 +1463,7 @@
         },
         "x4": {
           "status": "partial",
-          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
+          "note": "Native configurable clock/battery/chapter/progress slots plus BookSync spacing; no single BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -1485,7 +1485,7 @@
         },
         "x3": {
           "status": "partial",
-          "note": "Native configurable status bars remain; Orbify spaced page format cut",
+          "note": "Native configurable status bars remain; BookSync spaced page format cut",
           "reason": "hardware: X3 status formatting excluded for flash",
           "evidence": [
             {
@@ -1558,8 +1558,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "No Orbify pool; native current-cover screen remains; flash/PSRAM cut",
-          "reason": "hardware: No Orbify pool; native current-cover screen remains; flash/PSRAM cut",
+          "note": "No BookSync pool; native current-cover screen remains; flash/PSRAM cut",
+          "reason": "hardware: No BookSync pool; native current-cover screen remains; flash/PSRAM cut",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -2470,7 +2470,7 @@
     },
     {
       "id": "button-navigation",
-      "feature": "Reach Orbify screens by reader input",
+      "feature": "Reach BookSync screens by reader input",
       "category": "Behaviour",
       "platforms": {
         "android": {
@@ -2659,7 +2659,7 @@
     },
     {
       "id": "fonts",
-      "feature": "Optional Orbify installer for Bitter and Literata",
+      "feature": "Optional BookSync installer for Bitter and Literata",
       "category": "Behaviour",
       "platforms": {
         "android": {
@@ -2676,8 +2676,8 @@
         },
         "x4_pro": {
           "status": "not_applicable",
-          "note": "Fonts are CrossInk-owned, not an Orbify installer",
-          "reason": "not applicable: Fonts are CrossInk-owned, not an Orbify installer",
+          "note": "Fonts are CrossInk-owned, not an BookSync installer",
+          "reason": "not applicable: Fonts are CrossInk-owned, not an BookSync installer",
           "evidence": [
             {
               "path": "xteink/orbify/EndPage.cpp",
@@ -2688,8 +2688,8 @@
         },
         "x4": {
           "status": "not_applicable",
-          "note": "Fonts are CrossInk-owned, not an Orbify installer",
-          "reason": "not applicable: Fonts are CrossInk-owned, not an Orbify installer",
+          "note": "Fonts are CrossInk-owned, not an BookSync installer",
+          "reason": "not applicable: Fonts are CrossInk-owned, not an BookSync installer",
           "evidence": [
             {
               "path": "xteink/orbify/EndPage.cpp",
@@ -2700,8 +2700,8 @@
         },
         "x3": {
           "status": "not_applicable",
-          "note": "Built-in fonts/SD files are CrossInk-owned; no Orbify installer",
-          "reason": "not applicable: Built-in fonts/SD files are CrossInk-owned; no Orbify installer",
+          "note": "Built-in fonts/SD files are CrossInk-owned; no BookSync installer",
+          "reason": "not applicable: Built-in fonts/SD files are CrossInk-owned; no BookSync installer",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -2845,7 +2845,7 @@
       "platforms": {
         "android": {
           "status": "missing",
-          "note": "Logs exist; no Orbify persisted crash-record equivalent",
+          "note": "Logs exist; no BookSync persisted crash-record equivalent",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -2940,7 +2940,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "In-product Orbify About credit omitted",
+          "note": "In-product BookSync About credit omitted",
           "reason": "hardware: About strings excluded for flash; distribution licences still shipped",
           "evidence": [
             {
@@ -3433,8 +3433,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3503,8 +3503,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3573,8 +3573,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3643,8 +3643,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3713,8 +3713,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3783,8 +3783,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3853,8 +3853,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3923,8 +3923,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3993,8 +3993,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -4187,8 +4187,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -4257,8 +4257,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -4641,8 +4641,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -4703,8 +4703,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -4773,8 +4773,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -5203,7 +5203,7 @@
   },
   "constraints": {
     "run_id": 45688398918,
-    "url": "https://github.com/Fledgewing/Orbify/actions/runs/45688398918",
+    "url": "https://github.com/Fledgewing/BookSync/actions/runs/45688398918",
     "created_at": "2026-11-25T19:45:52Z",
     "revision": "0ebe1858cfd9ca213715b44d8daeba5ed265429f",
     "qualification": "Latest completed successful xteink.yml run observed at audit start; newer runs were still running. Compiler static RAM is not runtime free heap. No runtime low-water or PSRAM consumption measurement in these build summaries.",
@@ -5387,7 +5387,7 @@
         "x4"
       ],
       "size": "S–M",
-      "x3_fit": "Native slot and Small/Medium/Large controls already exist, including on X3. A preset may fit; Orbify spaced formatting still needs a measured delta.",
+      "x3_fit": "Native slot and Small/Medium/Large controls already exist, including on X3. A preset may fit; BookSync spaced formatting still needs a measured delta.",
       "outcome": "Add a single BookSync preset over existing native status-bar controls; do not rebuild controls that CrossInk already supplies."
     },
     {
@@ -5442,10 +5442,10 @@
   ],
   "limitations": [
     "Source audit, no physical device testing; Android permissions/vendor behaviour can restrict helpers.",
-    "Absence claims are based on native settings inventories and build gates; a similarly named native reader feature is not counted as an Orbify addition.",
+    "Absence claims are based on native settings inventories and build gates; a similarly named native reader feature is not counted as an BookSync addition.",
     "No touch requirement for parity: buttons may expose the same outcome. Lack of touch alone does not justify missing controls.",
-    "Fonts, stock Home/catalog and annotations are native integrations; only Orbify adapters, lifecycle hooks and explicit cuts are scored, not all upstream reader capabilities.",
-    "X3 upstream cuts also remove Nearby, mDNS, plugin hub and asset downloads; English-only built-in UI in platformio.local.ini. These are constraints on inherited capabilities, not Orbify features.",
+    "Fonts, stock Home/catalog and annotations are native integrations; only BookSync adapters, lifecycle hooks and explicit cuts are scored, not all upstream reader capabilities.",
+    "X3 upstream cuts also remove Nearby, mDNS, plugin hub and asset downloads; English-only built-in UI in platformio.local.ini. These are constraints on inherited capabilities, not BookSync features.",
     "Server quirks motivating overlays: final progress alone may not finish a book; send-time stale pushes can win; metadata writes change file hashes. See docs/server-contract.md sections linked in the matrix notes."
   ],
   "pinned_sources": [

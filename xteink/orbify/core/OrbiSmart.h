@@ -1,5 +1,5 @@
 #pragma once
-// Orbify OrbiSmart sync (docs/design/position-sync.md §3): which way a book's place moves, when a
+// BookSync OrbiSmart sync (docs/design/position-sync.md §3): which way a book's place moves, when a
 // move is shown, and whether a push may go. OrbiSmartSync wires this pure policy into the
 // reader, background task and sleep sync. The table is
 // shared/fixtures/orbismart/cases.json, which Android's logic/orbismart.lua runs too

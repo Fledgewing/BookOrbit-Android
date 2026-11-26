@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: when the sleep sync's watcher ends the sync itself. The sync checks Power
+// BookSync: when the sleep sync's watcher ends the sync itself. The sync checks Power
 // only between its steps, and on a starved heap one step blocked for 82 s (X4 Pro, rc3). Header
 // only, so the watcher (src/util/PowerButtonWakeWatcher) and the host test share it.
 // millis() arithmetic: unsigned differences, so a wrap of the counter changes nothing.

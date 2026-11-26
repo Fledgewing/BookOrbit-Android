@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: return to the OTA screen after updating
+Subject: [PATCH] BookSync: return to the OTA screen after updating
 
 Route a completed installation back to its update screen without a network join.
 Implementation: orbify/OtaReturn; no verifier changes.

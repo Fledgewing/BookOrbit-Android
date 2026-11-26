@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: the End-of-Book page (docs/design/end-of-book/DESIGN.md §5, mockups 7 and 10; ROADMAP
+// BookSync: the End-of-Book page (docs/design/end-of-book/DESIGN.md §5, mockups 7 and 10; ROADMAP
 // item 2). CrossInk's EndOfBookOptions (overlay patches 0028, 0032) hands it the whole screen:
 //
 //                         The End

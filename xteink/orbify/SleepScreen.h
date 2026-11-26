@@ -1,5 +1,5 @@
 #pragma once
-// Orbify sleep screen, X4 Pro and X4 (docs/design/lock-screen.md, ROADMAP 11; the rules are
+// BookSync sleep screen, X4 Pro and X4 (docs/design/lock-screen.md, ROADMAP 11; the rules are
 // core/SleepPick and core/SleepLayout). CrossInk calls it from overlay patch 0039:
 //
 //   - BookOrbit Pick, a Sleep Screen choice (Settings > Display > Sleep Screen): a recommended

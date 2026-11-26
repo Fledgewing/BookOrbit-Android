@@ -250,10 +250,10 @@ class UpdatePolicyTest {
         assertFalse(UpdatePolicy.shouldInstall(null, Version.parse("0.11.3-rc.11"), bad))
     }
 
-    /** shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list. */
+    /** shared/fixtures/github/booksync-releases.json: Android and firmware releases in one list. */
     private fun fixture(): List<ReleaseInfo> {
-        // @fixture github/orbify-releases.json
-        val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/orbify-releases.json").readText())
+        // @fixture github/booksync-releases.json
+        val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/booksync-releases.json").readText())
         return (0 until arr.length()).map { ReleaseInfo.from(arr.getJSONObject(it)) }
     }
 

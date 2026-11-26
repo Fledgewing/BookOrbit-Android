@@ -1,12 +1,12 @@
 # BookOrbit server contract
 
-The BookOrbit endpoints Orbify relies on and how the server really behaves, read from the source
+The BookOrbit endpoints BookSync relies on and how the server really behaves, read from the source
 at the pinned version (`tools/upstreams.lock`: bookorbit/bookorbit v3.9.0, `c1dd6b4`). Links go
 to that commit. Add a finding here, with its citation, before a design depends on it.
 
 ## Who calls what
 
-- **Android**: the BookOrbit KOReader plugin makes every server call; the Orbify patch hooks the
+- **Android**: the BookOrbit KOReader plugin makes every server call; the BookSync patch hooks the
   plugin's API class (`bookorbit_api.lua`) and never calls the server itself. The plugin's routes
   are in [`koreader-plugin/bookorbit.koplugin/bookorbit_api.lua:629-781`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/koreader-plugin/bookorbit.koplugin/bookorbit_api.lua#L629-L781).
 - **Xteink**: CrossInk-Bookorbit's own client calls the catalog and exchange routes below, but
@@ -29,7 +29,7 @@ catalog routes under `/koreader/plugin/catalog`
 | `PUT /koreader/syncs/progress` | Reading position pushes, Xteink ([`koreader.controller.ts:69`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader.controller.ts#L69)) |
 | `POST /koreader/plugin/book-states` | Read status from KOReader (Android) |
 | `GET /koreader/plugin/catalog/dashboard`, `/dashboard/sections/:type`, `/sections/:section` | Home and its sections |
-| `GET /koreader/plugin/catalog/books`, `/manifest` | Lists (Orbify's series and author views read them) |
+| `GET /koreader/plugin/catalog/books`, `/manifest` | Lists (BookSync's series and author views read them) |
 | `GET /koreader/plugin/catalog/books/:id` | Book detail, including `seriesMembers` |
 | `PUT /koreader/plugin/catalog/books/:id/read-status`, `/rating` | Status and rating set on the device |
 | `GET /koreader/plugin/catalog/files/:fileId/download` | Book downloads |
@@ -40,7 +40,7 @@ catalog routes under `/koreader/plugin/catalog`
 
 Routes with `@RequireAppAttest()` accept only requests signed by BookOrbit's own iOS and Android
 apps ([`app-attest.guard.ts:26`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L26),
-[`:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L74)). Orbify can't sign, so such a route is
+[`:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L74)). BookSync can't sign, so such a route is
 closed to it. `unsignedOutsideProduction` lets unsigned requests through only on non-production
 servers, so it is closed too. The guard is not global
 ([`global-guards.ts:11`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/common/guards/global-guards.ts#L11)). At v3.9.0 it covers 51 routes
@@ -48,10 +48,10 @@ servers, so it is closed too. The guard is not global
 books, uploads, user preferences and statistics, TTS, watch downloads), none under
 `koreader/*` or `opds/*`.
 
-`tools/attest-check` enforces this: it reads the routes Orbify calls from the code (the BookSync
+`tools/attest-check` enforces this: it reads the routes BookSync calls from the code (the BookSync
 plugin's Lua, the companion's Kotlin, and the stock plugin it hooks; `check.mjs --list` prints
 them) and fails when the pinned server puts the guard on one of them, at controller or handler
-level, or installs it globally (`GLOBAL_GUARDS`, `APP_GUARD`). It also fails when a route Orbify
+level, or installs it globally (`GLOBAL_GUARDS`, `APP_GUARD`). It also fails when a route BookSync
 calls is gone from the server. `tools/upstreams pin bookorbit` runs it, and so does
 `plugin-compat.yml` on every pull request. Mark a string that only looks like a route with an
 `orbify:not-a-route` comment on its line.

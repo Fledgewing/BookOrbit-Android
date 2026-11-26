@@ -1,5 +1,5 @@
 #pragma once
-// Orbify End-of-Book page: the next book's cover, at the left of the "Next in series" row (X4 Pro
+// BookSync End-of-Book page: the next book's cover, at the left of the "Next in series" row (X4 Pro
 // and X4; CROSSINK_TAILNET_ORBIFY_EOB_COVER, off on the X3 for flash). Pure C++: the firmware
 // (../FinishSync.cpp) does the requests and the files; xteink/test/end_of_book_test.cpp checks
 // these rules.

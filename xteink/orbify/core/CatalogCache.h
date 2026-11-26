@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-// Orbify write-through cache in front of BookOrbit (docs/design/write-through-cache.md, ROADMAP
+// BookSync write-through cache in front of BookOrbit (docs/design/write-through-cache.md, ROADMAP
 // item 4): the rules, as pure functions. The firmware glue (CatalogCacheStore, the hooks in
 // fetchJson, sendBookOrbitRequest and the cover downloads) only stores and moves files.
 // xteink/test/cache_test.cpp checks these against shared/fixtures/cache/cases.json, the table

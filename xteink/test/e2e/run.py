@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Orbify's Xteink scenarios in upstream's SDL simulator (docs/design/emulated-release-tests.md,
+"""BookSync's Xteink scenarios in upstream's SDL simulator (docs/design/emulated-release-tests.md,
 stage 1), against the seeded BookOrbit server behind the fault proxy (tools/e2e/).
 
     tools/e2e/kit.py up                                  # once: server up and seeded
@@ -647,7 +647,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
 
 @scenario("x4-pro")
 def tailscale_layout(ctx: Context, tmp: Path) -> None:
-    """The Orbify layout rulings (2026-11-24, from Android) on the Tailscale screen: the title once
+    """The BookSync layout rulings (2026-11-24, from Android) on the Tailscale screen: the title once
     (the header), each status on its own line under its row, nothing over a control. A reader that
     is on and logged in (the simulator's ORBIFY_SIM_TAILSCALE=joined): "On; connects when WiFi is on"
     under Enabled, the key-expiry advice under Log out. Before, the status sat centred above the

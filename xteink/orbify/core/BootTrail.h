@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: the last step a boot or a sleep reached, kept in RTC memory so the next
+// BookSync: the last step a boot or a sleep reached, kept in RTC memory so the next
 // boot can say where a silent device stopped. X4 Pro, .167: after a sleep sync the reader did not
 // wake; USB came and went with no log line for five minutes and a USB reset was the only way out.
 // The serial log ends at the sleep screen's redraw, so it cannot tell a hang on the way into deep

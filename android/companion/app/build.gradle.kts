@@ -181,8 +181,8 @@ abstract class OpenSourceNotices : DefaultTask() {
         }
 
         val sb = StringBuilder()
-        sb.append("Orbit Companion: third-party notices\n")
-        sb.append("Orbit Companion itself is MIT-licensed (https://github.com/Fledgewing/Orbify).\n")
+        sb.append("BookSync Companion: third-party notices\n")
+        sb.append("BookSync Companion itself is MIT-licensed (https://github.com/Fledgewing/BookSync).\n")
         sb.append("It bundles the libraries below. Generated at build time from the runtime classpath.\n\n")
         for (m in modules) {
             val coord = "${m.group}:${m.name}:${m.version}"

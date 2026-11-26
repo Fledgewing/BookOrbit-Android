@@ -1,5 +1,5 @@
 #pragma once
-// Orbify end-of-book card (docs/design/end-of-book/DESIGN.md §5, §6): what the End-of-Book page
+// BookSync end-of-book card (docs/design/end-of-book/DESIGN.md §5, §6): what the End-of-Book page
 // offers next, picked from a BookOrbit book detail (GET /koreader/plugin/catalog/books/:id) and
 // cached per book in /.crosspoint/orbify_series/<bookId>.bin.
 //

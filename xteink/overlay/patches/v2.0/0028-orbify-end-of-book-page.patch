@@ -1,6 +1,6 @@
-Subject: [PATCH] Orbify: end of book page
+Subject: [PATCH] BookSync: end of book page
 
-Open the Orbify End-of-Book page from the reader.
+Open the BookSync End-of-Book page from the reader.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 7623f367..98548aac 100644
@@ -56,7 +56,7 @@ index 3a3b1e69..f7175a2b 100755
      default_translations_dir = "lib/I18n/translations"
      default_output_dir = "lib/I18n/"
 -    default_src_dirs = ["src", "lib"]
-+    # src/orbify: the Orbify overlay's sources, a symlink that rglob does not enter.
++    # src/orbify: the BookSync overlay's sources, a symlink that rglob does not enter.
 +    default_src_dirs = ["src", "lib", "src/orbify"]
  
      if translations_dir is None or output_dir is None:
@@ -88,7 +88,7 @@ index e7617533..63c79a80 100644
      // A sync sent this one to replace the open book's outdated copy: back to that book after,
 -    // whatever the outcome.
 -    reopenPath = link.replacePath;
-+    // whatever the outcome. The End-of-Book page's "Download & open" (Orbify, patch 0028) also
++    // whatever the outcome. The End-of-Book page's "Download & open" (BookSync, patch 0028) also
 +    // comes back to its book, and opens the new one once it is downloaded.
 +    reopenPath = link.replacePath.empty() ? link.returnPath : link.replacePath;
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
@@ -102,7 +102,7 @@ index e7617533..63c79a80 100644
      showLoadingBeforeFetch();
      loadRoot();
    }
-+  // The End-of-Book page's author row (Orbify, patch 0028): that author's books, by series.
++  // The End-of-Book page's author row (BookSync, patch 0028): that author's books, by series.
 +  if (!entryLink.author.empty()) {
 +    const BookOrbitCatalogLink link = std::move(entryLink);
 +    entryLink = BookOrbitCatalogLink{};
@@ -123,7 +123,7 @@ index 5d875c47..ace03260 100644
    std::string sectionId;
    std::string title;
    std::string replacePath;
-+  // Orbify (patch 0028), the End-of-Book page: `author` opens the catalog's list of that
++  // BookSync (patch 0028), the End-of-Book page: `author` opens the catalog's list of that
 +  // author's books (the server resolves the name); `returnPath` is the book to go back to,
 +  // and with a bookId the downloaded book opens when it is done (design §5, X9).
 +  std::string author;
@@ -224,7 +224,7 @@ index c93d662c..2da4c55d 100644
 +      return Action::GoHome;
 +    default:
 +      orbifyResult = std::move(result);
-+      return Action::Orbify;
++      return Action::BookSync;
 +  }
 +}
 +#endif
@@ -313,7 +313,7 @@ index c93d662c..2da4c55d 100644
  
    UITheme::drawCenteredText(renderer, safe, UI_12_FONT_ID, titleY, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+  // Orbify: the book's author under the title; the rows carry their own headings.
++  // BookSync: the book's author under the title; the rows carry their own headings.
 +  orbifyTouch = input.hasTouchHardware();
 +  if (orbify) {
 +    if (!orbify->author().empty()) UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, orbify->author().c_str());
@@ -351,8 +351,8 @@ index f8096ab8..ad8fbfc3 100644
  class EndOfBookOptions {
   public:
 -  enum class Action { None, Redraw, OpenBook, GoHome, LastPage };
-+  // Orbify (patch 0028): the reader reads the request with takeOrbifyResult().
-+  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify };
++  // BookSync (patch 0028): the reader reads the request with takeOrbifyResult().
++  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, BookSync };
  
    static constexpr size_t MAX_SUGGESTIONS = 3;
  
@@ -361,7 +361,7 @@ index f8096ab8..ad8fbfc3 100644
    void render(GfxRenderer& renderer, const MappedInputManager& input);
  
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+  // Orbify's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
++  // BookSync's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
 +  // calls this before loadOnce(). Its status row toggles the book's finish through the reader.
 +  void enableOrbify() { orbifyWanted = true; }
 +  OrbifyEndPage::Result takeOrbifyResult() { return std::move(orbifyResult); }
@@ -399,7 +399,7 @@ index 34516cf3..220af4fa 100644
          LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
        }
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+      // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
++      // BookSync (patch 0028): the End-of-Book page with the book's status, next and suggestions.
 +      if (endOfBookOptions) endOfBookOptions->enableOrbify();
 +#endif
      }
@@ -412,7 +412,7 @@ index 34516cf3..220af4fa 100644
 -    switch (endOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
 +    EndOfBookOptions::Action endAction;
 +    {
-+      // The Orbify page's rows are laid out on the render task.
++      // The BookSync page's rows are laid out on the render task.
 +      RenderLock lock(*this);
 +      endAction = endOfBookOptions->handleMenuInput(mappedInput, &openPath);
 +    }
@@ -420,7 +420,7 @@ index 34516cf3..220af4fa 100644
        case EndOfBookOptions::Action::OpenBook:
          activityManager.goToReader(openPath);
          return;
-+      case EndOfBookOptions::Action::Orbify: {
++      case EndOfBookOptions::Action::BookSync: {
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
 +        OrbifyEndPage::Result request = endOfBookOptions->takeOrbifyResult();
 +        switch (request.act) {
@@ -454,7 +454,7 @@ index 34516cf3..220af4fa 100644
          LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
        }
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+      // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
++      // BookSync (patch 0028): the End-of-Book page with the book's status, next and suggestions.
 +      if (endOfBookOptions) endOfBookOptions->enableOrbify();
 +#endif
      }
@@ -468,7 +468,7 @@ index c732f117..ebb5bab6 100644
        }
        return;
      case EndOfBookOptions::Action::None:
-+    case EndOfBookOptions::Action::Orbify:  // EPUB only (overlay patch 0028)
++    case EndOfBookOptions::Action::BookSync:  // EPUB only (overlay patch 0028)
        break;
    }
  
@@ -477,19 +477,19 @@ index f0913acc..6e6178b4 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -103,6 +103,8 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
-   // Orbify (patch 0027): books finished on this reader, on this sync's session.
+   // BookSync (patch 0027): books finished on this reader, on this sync's session.
    OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), !sleepSync && !backgroundSync,
                        sleepSync ? &sleepSyncWakeRequested : nullptr);
-+  // Orbify (patch 0028): the open book's series card, near its end (design §5).
++  // BookSync (patch 0028): the open book's series card, near its end (design §5).
 +  if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
    syncSession.reset();  // no request follows; free the TLS session before the reader reloads
    {
      RenderLock lock(*this);
 @@ -770,6 +772,8 @@ void BookOrbitSyncActivity::performUpload() {
-   // Orbify (patch 0027): the final position is up; now the finished books, on the same session.
+   // BookSync (patch 0027): the final position is up; now the finished books, on the same session.
    if (result == BookOrbitSyncClient::OK) {
      OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
-+    // Orbify (patch 0028): the open book's series card, near its end (design §5).
++    // BookSync (patch 0028): the open book's series card, near its end (design §5).
 +    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
    }
  
@@ -513,7 +513,7 @@ index e84140b5..fb6647e8 100644
                         R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
                         R"("devicePath":true}]})");
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+    // Orbify (patch 0028): the series card's fields ride on the same reply (design §5).
++    // BookSync (patch 0028): the series card's fields ride on the same reply (design §5).
 +    orbify::cardFilter(filter);
 +#endif
    };

@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: the core dump partition at boot, in the log. A panic writes one; nothing
+// BookSync: the core dump partition at boot, in the log. A panic writes one; nothing
 // read or erased it, so one found later could be from any earlier build (the dump read after the
 // .167 hang on the X4 Pro was .141's). Each boot logs whether a record is there, which build wrote
 // it (orbify/core/BootTrail.h sameBuild) and whether an earlier boot already reported it; a new

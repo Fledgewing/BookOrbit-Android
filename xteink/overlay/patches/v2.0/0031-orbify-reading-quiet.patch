@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: reading quiet
+Subject: [PATCH] BookSync: reading quiet
 
 Defer background UI work while a book is being read.
 
@@ -21,7 +21,7 @@ index adb09426..32693e57 100644
    // logged for the run. `stop` is polled between steps.
    const char* runInBackground(std::shared_ptr<Epub> loadedEpub, bool (*stop)());
 -  // Nothing is drawn for a background run.
-+  // Nothing is drawn for a background run: the book stays as it is (Orbify, patch 0031: nothing
++  // Nothing is drawn for a background run: the book stays as it is (BookSync, patch 0031: nothing
 +  // interrupts reading; every repaint a background run asks for goes through OrbifyQuiet).
    void requestUpdate(bool immediate = false) override {
 -    if (!backgroundSync) Activity::requestUpdate(immediate);

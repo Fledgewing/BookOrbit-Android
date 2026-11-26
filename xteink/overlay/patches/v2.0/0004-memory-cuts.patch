@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: memory cuts
+Subject: [PATCH] BookSync: memory cuts
 
 Bound network memory use on readers with little internal RAM.
 

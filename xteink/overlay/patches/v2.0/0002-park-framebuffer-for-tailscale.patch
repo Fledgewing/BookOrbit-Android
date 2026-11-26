@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: park framebuffer for tailscale
+Subject: [PATCH] BookSync: park framebuffer for tailscale
 
 Free the framebuffer while the ESP32-C3 starts its network stack.
 

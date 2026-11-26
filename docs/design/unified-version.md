@@ -64,7 +64,7 @@ until that bridge exists. Never withdraw the only usable bridge without replacin
 The legacy behavior is grounded in CrossInk-Bookorbit at
 87e2e1984481e8a3d996f12b34b50a383f9013b8:
 src/network/OtaUpdater.cpp:338 (isUpdateNewer),
-src/network/FirmwareVersion.cpp:118 (compare), and the Orbify ota-tag-prefix
+src/network/FirmwareVersion.cpp:118 (compare), and the BookSync ota-tag-prefix
 overlay patch. W39 changes both the picker and the final installed-version check.
 Signature verification continues to bind the exact release tag, not its product alias.
 

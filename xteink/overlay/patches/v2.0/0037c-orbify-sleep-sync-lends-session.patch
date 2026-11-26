@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: sleep sync lends session
+Subject: [PATCH] BookSync: sleep sync lends session
 
 Lend the sleep sync TLS session to catalog work instead of opening another.
 
@@ -81,14 +81,14 @@ index 8a8d02f..2ff6fc7 100644
 @@ -110,13 +124,13 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
    OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), !sleepSync && !backgroundSync,
                        sleepSync ? &sleepSyncWakeRequested : nullptr);
-   // Orbify (patch 0028): the open book's series card, near its end (design §5).
+   // BookSync (patch 0028): the open book's series card, near its end (design §5).
 -  if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
 -  syncSession.reset();  // no request follows; free the TLS session before the reader reloads
 +  if (cardWanted()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
 +  // The sleep sync keeps the session: its copy refresh, cover and mirror ride it (patch 0037).
 +  if (!sleepSync) syncSession.reset();  // no request follows; free the TLS session before the reader reloads
  #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-   // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
+   // BookSync (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 -  if (!backgroundSync && !wakeRequested()) {
 -    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 -  }
@@ -111,7 +111,7 @@ index 8a8d02f..2ff6fc7 100644
    const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
 -  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
 -  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
-+  // Orbify (patch 0037): what follows the book rides the sync's own connection, lent to the
++  // BookSync (patch 0037): what follows the book rides the sync's own connection, lent to the
 +  // catalog requests. With Tailscale up an X4 Pro has ~30 KB of internal RAM beside that one
 +  // session: rc3 opened more for these and ran the relay's TLS out of memory (the device then
 +  // stalled for minutes), and the Home's own floor left its snapshot and covers behind. Each
@@ -132,7 +132,7 @@ index 8a8d02f..2ff6fc7 100644
 +    if (extras && !sleepSyncWakeRequested()) OrbifyFinish::fetchNextCover(epubPath, &sleepSyncWakeRequested);
 +#endif
  #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
--  // Orbify (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
+-  // BookSync (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
 -  // then replace queued ones, one book at a time, for up to three minutes per sleep.
 -  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
 -    OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
@@ -145,7 +145,7 @@ index 8a8d02f..2ff6fc7 100644
 +    if (extras && !sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 120000UL, "sleep sync");
  #endif
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
--  // Orbify (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
+-  // BookSync (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
 -  // library version): up to two minutes per sleep, resumed by the next one.
 -  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
 -    const auto due = OrbifyMirror::dueNow();
@@ -178,7 +178,7 @@ index 8a8d02f..2ff6fc7 100644
 @@ -848,14 +885,16 @@ void BookOrbitSyncActivity::performUpload() {
    if (result == BookOrbitSyncClient::OK) {
      OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
-     // Orbify (patch 0028): the open book's series card, near its end (design §5).
+     // BookSync (patch 0028): the open book's series card, near its end (design §5).
 -    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
 +    if (cardWanted()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
    }
@@ -187,7 +187,7 @@ index 8a8d02f..2ff6fc7 100644
 +  // The sleep sync keeps the session for what follows the book (patch 0037).
 +  if (!sleepSync) syncSession.reset();
  #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-   // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
+   // BookSync (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 -  if (result == BookOrbitSyncClient::OK && !backgroundSync && !wakeRequested()) {
 -    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 +  // The sleep sync fetches it in runSleepSync(), on the session.

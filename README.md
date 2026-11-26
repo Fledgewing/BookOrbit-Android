@@ -1,4 +1,4 @@
-# Orbify — BookSync for e-readers
+# BookSync for e-readers
 
 Keeps e-readers in sync with a [BookOrbit](https://github.com/bookorbit/bookorbit) server over
 Tailscale, on Android and on Xteink readers.
@@ -26,14 +26,14 @@ Generated support counts (settings included): ✅ supported, 🟡 partial, ❌ m
 
 ## Releases
 
-One [releases page](https://github.com/Fledgewing/Orbify/releases) for both platforms:
+One [releases page](https://github.com/Fledgewing/BookSync/releases) for both platforms:
 
 - `v…`: BookSync Companion APK and the KOReader plugin. They ship together: the companion updates itself and then installs the plugin of its release.
 - `xteink-v…`: firmware for each reader, installed over the air from **Settings > Check for
   updates**, or flashed from an SD card or USB.
 
 Every release carries `SHA256SUMS` and build attestations:
-`gh attestation verify <file> -R Fledgewing/Orbify`. Before it is published, each release passes
+`gh attestation verify <file> -R Fledgewing/BookSync`. Before it is published, each release passes
 the emulated release tests: a real BookOrbit server behind a fault proxy, Xteink scenarios in
 the CrossInk simulator and the companion's JVM tests (`AGENTS.md`, "Emulated release tests").
 
@@ -43,9 +43,11 @@ Per directory: `android/koreader/` is AGPL-3.0-or-later; `android/companion/`, `
 (source) and everything else are MIT. Firmware binaries are GPL-3.0-or-later (they include
 wolfSSL; see `xteink/README.md`). Each directory has its `LICENSE`.
 
+Repository rename compatibility and rollout: [`docs/repository-rename.md`](docs/repository-rename.md).
+
 ## Credits
 
-Orbify is an independent project, not an official BookOrbit release, and does not include BookOrbit code.
+BookSync is an independent project, not an official BookOrbit release, and does not include BookOrbit code.
 
 [That said, it wouldn't exist without BookOrbit.](https://github.com/bookorbit/bookorbit)
 
@@ -53,7 +55,7 @@ Copyright (C) 2025-2026 neon. Additional copyright is held by the respective Boo
 
 BookOrbit is licensed under the GNU AGPLv3 with additional terms.
 
-Orbify licences: BookSync Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. BookSync is AGPL-3.0-or-later as a KOReader plugin.
+BookSync licences: BookSync Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. BookSync is AGPL-3.0-or-later as a KOReader plugin.
 
 
 ### Shared release versions from 0.12

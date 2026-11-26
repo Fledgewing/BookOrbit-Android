@@ -25,7 +25,7 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 --- a/lib/JsonParser/ReleaseJsonParser.cpp
 +++ b/lib/JsonParser/ReleaseJsonParser.cpp
 @@ -71,6 +71,7 @@
- 
+
  void ReleaseJsonParser::clearRelease() {
    current.tagName[0] = '\0';
 +  current.booksyncVersion[0] = '\0';
@@ -58,7 +58,7 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 @@ -19,6 +19,12 @@
  // The version part of `tag`: what follows the prefix, or nullptr when `tag` lacks it.
  const char* versionOf(const char* tag, const char* prefix);
- 
+
 +// BookSync versions use preview.N < rc.N < stable; metadata has no precedence.
 +// Empty BookSync versions identify legacy firmware and sort below every BookSync version.
 +bool validBookSync(const char* version);
@@ -72,16 +72,16 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 +++ b/src/network/OtaReleasePick.cpp
 @@ -1,6 +1,7 @@
  #include "OtaReleasePick.h"
- 
+
  #include <cstring>
 +#include <climits>
- 
+
  #include "FirmwareVersion.h"
- 
+
 @@ -13,12 +14,86 @@
    return strncmp(tag, prefix, n) == 0 ? tag + n : nullptr;
  }
- 
+
 +namespace {
 +struct Version { unsigned parts[4]{}; int channel = 2; bool valid = false; };
 +bool number(const char*& p, unsigned& out) {
@@ -169,7 +169,7 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
    newest = candidate;
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
-@@ -28,6 +28,9 @@
+@@ -28,7 +28,10 @@
  #include "FirmwareFlasher.h"
  #include "FirmwareVersion.h"
  #include "OtaReleasePick.h"
@@ -177,10 +177,11 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 +#define BOOKSYNC_VERSION ""
 +#endif
  #include "OtaUpdater.h"
+ #include "orbify/OtaManifest.h"
  #include "esp_http_client.h"
  #include "esp_ota_ops.h"
 @@ -312,6 +315,7 @@
- 
+
    updateAvailable = false;
    latestVersion.clear();
 +  latestBookSyncVersion.clear();
@@ -192,13 +193,13 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
    const char* releaseVersion = ota_release_pick::versionOf(release->tagName, otaTagPrefix);
    latestVersion = releaseVersion != nullptr ? releaseVersion : release->tagName;
 +  latestBookSyncVersion = release->booksyncVersion;
- 
+
    if (!release->firmwareFound) {
      LOG_ERR("OTA", "No matching %s asset found for release %s", firmwareAssetStem, latestVersion.c_str());
 @@ -455,7 +460,8 @@
      return false;
    }
- 
+
 -  const int comparison = firmware_version::compare(latestVersion.c_str(), AppVersion::version());
 +  const int comparison = ota_release_pick::compare(latestBookSyncVersion.c_str(), BOOKSYNC_VERSION,
 +                                                    latestVersion.c_str(), AppVersion::version());
@@ -229,4 +230,4 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 +  std::string latestBookSyncVersion;
    std::string otaUrl;
    std::string otaSha256;
-   // Orbify (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).
+   // BookSync (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).

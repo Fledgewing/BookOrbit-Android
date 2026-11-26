@@ -7,7 +7,7 @@ it does not. The interface itself is `android/docs/INTERFACE.md`.
 
 - **Android** and its package manager: the UID of a binder caller, and the signing certificates
   it reports for an installed package.
-- **Orbify's release key.** It signs every BookSync Companion release (SHA-256 `F5:07:8C:…:0A:15`,
+- **BookSync's release key.** It signs every BookSync Companion release (SHA-256 `F5:07:8C:…:0A:15`,
   checked by `release.yml`). Test builds are signed with it too.
 - **KOReader, as first seen.** KOReader is not signed by us, and people install it from GitHub,
   F-Droid or their own build. The companion trusts the KOReader it first sees (trust on first use)
@@ -48,10 +48,10 @@ ship together.
 ## The plugin checks the companion (plugin → companion)
 
 Before it sends anything, the plugin reads the installed companion's signing certificates over
-JNI (`PackageManager`, then SHA-256) and requires every one of them to be Orbify's release
+JNI (`PackageManager`, then SHA-256) and requires every one of them to be BookSync's release
 certificate (`Companion.state()`). An app that has the companion's package name but another
 signer is "untrusted": the plugin sends it nothing, the BookOrbit login least of all, and the
-menus say "This BookSync Companion is not an Orbify release". The login goes only in the call, never
+menus say "This BookSync Companion is not an BookSync release". The login goes only in the call, never
 in a file or a log.
 
 ## The companion → KOReader direction
@@ -84,7 +84,7 @@ KOReader's process with KOReader's UID, so the caller check cannot tell them apa
 KOReader plugin already has KOReader's own file and network access, so what it gains from the
 companion is limited to the companion's command set. That set is kept narrow:
 
-- every command acts on Orbify's own data only, and no command takes an arbitrary path;
+- every command acts on BookSync's own data only, and no command takes an arbitrary path;
 - credentials are never returned to a caller: the companion keeps the login a command brings in
   memory for that job, and no call answers with a login;
 - the destructive or system actions are in their narrowest form: locking the screen is the

@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: background sync
+Subject: [PATCH] BookSync: background sync
 
 Hook reader progress and close events into background sync.
 

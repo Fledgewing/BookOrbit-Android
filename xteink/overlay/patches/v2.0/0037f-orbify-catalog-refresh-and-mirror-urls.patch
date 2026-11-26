@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: catalog refresh and mirror urls
+Subject: [PATCH] BookSync: catalog refresh and mirror urls
 
 Build valid mirror list URLs and show catalog refresh feedback.
 

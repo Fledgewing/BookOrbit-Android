@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-// Orbify offline mirror, X4 Pro and X4 (docs/design/write-through-cache.md, "Offline mirror" and
+// BookSync offline mirror, X4 Pro and X4 (docs/design/write-through-cache.md, "Offline mirror" and
 // its Xteink section): the rules, as pure functions. The firmware walker (orbify/Mirror) makes the
 // requests through the catalog client, so every reply lands in the write-through cache, and the
 // catalog browser then opens offline from it. xteink/test/mirror_test.cpp checks these, the due

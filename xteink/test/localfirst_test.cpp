@@ -1,4 +1,4 @@
-// Host test for Orbify's local-first catalog decisions (xteink/orbify/core/LocalFirst): the shared
+// Host test for BookSync's local-first catalog decisions (xteink/orbify/core/LocalFirst): the shared
 // stamp and overlay tables in shared/fixtures/localfirst/ (Android reads the same ones) and the
 // design's offline rules (docs/design/local-first/DESIGN.md, item 4).
 #include <ArduinoJson.h>

@@ -5,7 +5,7 @@ the plugin when to sync. The plugin does every pull and push and holds the login
 never calls BookOrbit's API. It only checks that the plugin's server answers at its base
 address, with no login.
 
-Up to Orbify 0.7.x this was the user patch `2-orbit-android.lua`; from 0.8.0 it is the plugin
+Up to BookSync 0.7.x this was the user patch `2-orbit-android.lua`; from 0.8.0 it is the plugin
 `orbit.koplugin`, with the same behaviour (design: [`docs/design/orbit-plugin.md`](../../docs/design/orbit-plugin.md)).
 Tested against KOReader v2026.07.1 (the pin) and v2026.07.2, and BookOrbit plugin 2.3.0 (BookOrbit v3.9.0, the newest release); the hooks also check out against 2.4.1 (BookOrbit main, unreleased).
 
@@ -15,7 +15,7 @@ BookSync Companion installs and updates it (Setup › "BookSync plugin installed
 `tools/install-usb.sh`. By hand:
 
 1. Download `orbit.koplugin.zip` from the latest
-   [release](https://github.com/Fledgewing/Orbify/releases/latest) and unzip it into
+   [release](https://github.com/Fledgewing/BookSync/releases/latest) and unzip it into
    `koreader/plugins/` on the device, so that `koreader/plugins/orbit.koplugin/main.lua` exists.
    It carries its version and then updates itself.
 2. Delete `koreader/patches/2-orbit-android.lua` if it is there: while the old patch is loaded

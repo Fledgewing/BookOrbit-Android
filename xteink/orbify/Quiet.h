@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: nothing interrupts reading (core/ReadingQuiet). The overlay asks allow() before it draws,
+// BookSync: nothing interrupts reading (core/ReadingQuiet). The overlay asks allow() before it draws,
 // repaints or restarts on its own; a held event is logged ("ORB Quiet: held ...") and dropped.
 //
 // Where the overlay asks (xteink/README.md, "Nothing interrupts reading"):

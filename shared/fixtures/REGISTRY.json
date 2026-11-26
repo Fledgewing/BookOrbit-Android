@@ -363,7 +363,7 @@
       ]
     },
     {
-      "file": "github/orbify-releases.json",
+      "file": "github/booksync-releases.json",
       "rule": "Android and firmware releases in one list: each side offers only its own",
       "owner": "companion, xteink",
       "readers": [

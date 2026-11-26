@@ -1,4 +1,4 @@
-// Host test for Orbify's finished-book queue (xteink/orbify/core/FinishQueue): the shared rules in
+// Host test for BookSync's finished-book queue (xteink/orbify/core/FinishQueue): the shared rules in
 // shared/fixtures/bookorbit/finish-cases.json (drain guard, errors, hold; Android's tests read the
 // same table), the Xteink request sequence in finish-steps.json, the record format and the
 // two-slot file under torn writes.

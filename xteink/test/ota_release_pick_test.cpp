@@ -1,5 +1,5 @@
-// Host test for the "ota-tag-prefix" overlay patch: the firmware updater reads Orbify's
-// mixed release list (shared/fixtures/github/orbify-releases.json) and offers only its own
+// Host test for the "ota-tag-prefix" overlay patch: the firmware updater reads BookSync's
+// mixed release list (shared/fixtures/github/booksync-releases.json) and offers only its own
 // xteink-v releases. Built by run-host-tests.sh against a CrossInk checkout with the overlay
 // applied (it compiles CrossInk's own parser and version code).
 #include <cstdio>
@@ -73,10 +73,10 @@ static std::string readFile(const char* path) {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s shared/fixtures/github/orbify-releases.json\n", argv[0]);
+    std::fprintf(stderr, "usage: %s shared/fixtures/github/booksync-releases.json\n", argv[0]);
     return 2;
   }
-  // @fixture github/orbify-releases.json
+  // @fixture github/booksync-releases.json
   FILE* f = std::fopen(argv[1], "rb");
   if (!f) {
     std::perror(argv[1]);
@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
   CHECK(!stable.newest.prerelease);
   CHECK(std::string(stable.newest.firmwareUrl).find("firmware-x4-pro-v1.6.1.101") != std::string::npos);
   CHECK(std::string(ota_release_pick::versionOf(stable.newest.tagName, "xteink-v")) == "1.6.1.101+bookorbit.8");
-  // Newer than the last CrossInk-Tailnet build (the bridge) and an older Orbify build.
+  // Newer than the last CrossInk-Tailnet build (the bridge) and an older BookSync build.
   CHECK(firmware_version::compare("1.6.1.101+bookorbit.8", "1.6.1.46-bookorbit.8-x4-pro") == 1);
   CHECK(firmware_version::compare("1.6.1.101+bookorbit.8", "1.6.1.101-bookorbit.8-x4-pro") == 0);
 

@@ -1,4 +1,4 @@
-# Orbify for Android
+# BookSync for Android
 
 Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way CrossInk does on Xteink readers.
 
@@ -13,7 +13,7 @@ Design and approved mockups: `android/docs/DESIGN.md`, `android/docs/mockups.htm
 
 ## Install
 
-From [Releases](https://github.com/Fledgewing/Orbify/releases/latest):
+From [Releases](https://github.com/Fledgewing/BookSync/releases/latest):
 
 **Sideload one APK, then Setup.** Download `orbit-companion-<version>.apk` and install it
 (allow your browser or file manager to install unknown apps; on a Play Protect warning tap
@@ -130,8 +130,8 @@ Every release asset has a keyless build-provenance attestation from the release 
 (`.github/workflows/release.yml`):
 
 ```
-gh attestation verify orbit-companion-<version>.apk -R Fledgewing/Orbify
-gh attestation verify orbit.koplugin.zip -R Fledgewing/Orbify
+gh attestation verify orbit-companion-<version>.apk -R Fledgewing/BookSync
+gh attestation verify orbit.koplugin.zip -R Fledgewing/BookSync
 sha256sum -c SHA256SUMS
 ```
 

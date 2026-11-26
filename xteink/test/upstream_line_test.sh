@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for xteink/scripts/upstream-line.sh: which CrossInk tags Orbify builds, and which
+# Tests for xteink/scripts/upstream-line.sh: which CrossInk tags BookSync builds, and which
 # release channel a build goes to (README "Releases and the update feed").
 set -euo pipefail
 script="$(cd "$(dirname "$0")/../scripts" && pwd)/upstream-line.sh"

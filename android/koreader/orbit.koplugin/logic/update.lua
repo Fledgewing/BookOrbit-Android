@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
@@ -8,7 +8,7 @@
 Update = {}
 
 -- "v1.2.3", "android-v1.2.3", "1.2.3-rc.1", "1.2.3+build" -> { 1, 2, 3, pre = "rc.1" | nil }, or nil.
--- Orbify releases Android (v<version>; android-v<version> is read too) and firmware
+-- BookSync releases Android (v<version>; android-v<version> is read too) and firmware
 -- (xteink-v<version>) from one repo (AGENTS.md "Releases"); a firmware tag is not a version
 -- here.
 function Update.parseVersion(s)

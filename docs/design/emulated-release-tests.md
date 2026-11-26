@@ -84,10 +84,10 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
     README says this is where "an upstream simulator change shows first". rc3 pins it.
 - **The overlay already guards for the simulator, but doesn't build there.**
   - Patches 0004, 0020-0024, 0027 and 0036 carry `#ifdef SIMULATOR` blocks.
-  - The Orbify switches are set only by `tailnet_build.py`, for `SWITCH_ENVS = ("default",
+  - The BookSync switches are set only by `tailnet_build.py`, for `SWITCH_ENVS = ("default",
     "x4-pro", "x4-classic")` (l.63, l.213-230). `overlay/platformio.local.ini` hooks only those
     three envs, and the headers default every `CROSSINK_TAILNET_ORBIFY_*` to 0 (patches 0029,
-    0035). So **a simulator build today has no Orbify features**.
+    0035). So **a simulator build today has no BookSync features**.
   - `BookOrbitSyncClient::orbifyRequest` returns `-1` under `SIMULATOR` (patch 0027 l.113). That
     is the finish queue's writes, and only those: the mirror and the copy refresh use the catalog
     client's own fetches, which upstream's scenarios already run in the simulator.
@@ -100,7 +100,7 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
   get hardware-accelerated Android virtualization; enable it with a udev rule
   ([changelog](https://github.blog/changelog/2024-04-02-github-actions-hardware-accelerated-android-virtualization-now-available/)).
   `ReactiveCircus/android-emulator-runner` recommends `ubuntu-latest` over macOS and caches an AVD
-  snapshot ([README](https://github.com/ReactiveCircus/android-emulator-runner)). Orbify is public,
+  snapshot ([README](https://github.com/ReactiveCircus/android-emulator-runner)). BookSync is public,
   so standard-runner minutes cost nothing
   ([billing](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)).
 - **KOReader on x86.** KOReader v2026.07.1 ships `koreader-android-x86-…apk` beside arm and arm64
@@ -240,10 +240,10 @@ Section 2 described it. It is an SDL host build of the whole firmware: activitie
 fonts, storage on a host directory, the BookOrbit sync and catalog clients over host HTTP, sleep
 and wake as process re-exec, `ESP.restart()` as re-exec, and desktop threads for tasks.
 
-To run Orbify in it:
+To run BookSync in it:
 1. Add simulator envs to `overlay/platformio.local.ini` (`x4-pro-simulator`,
    `x4-classic-simulator`, `simulator-X3`) with a `sim` mode in `tailnet_build.py`. That mode sets
-   the Orbify switches from the matching reader column and builds no MicroLink. Tailscale is not
+   the BookSync switches from the matching reader column and builds no MicroLink. Tailscale is not
    in the simulator; the fake server is reachable directly.
 2. Route `orbifyRequest` under `SIMULATOR` through the same host HTTP shim the sync client uses,
    instead of `return -1`.
@@ -251,7 +251,7 @@ To run Orbify in it:
    largest-block values come from a timeline (`ORBIFY_SIM_HEAP="0:120000/60000;30000:20000/14000"`),
    so the floors' decisions run. These are the decisions: wait, stop a transfer, resume its
    `.part` next sleep, skip a cover decode without a 54 KB block.
-4. Write Orbify scenarios into a copy of upstream's harness pattern, under `xteink/test/e2e/`. They
+4. Write BookSync scenarios into a copy of upstream's harness pattern, under `xteink/test/e2e/`. They
    reuse `seed.py`, the compose file and the runner by pinning upstream's files at the CrossInk pin;
    our scenarios live in our repo.
 
@@ -393,7 +393,7 @@ input `platform: android | xteink | both`, and `ref`):
 |---|---|---|---|
 | D1 | Xteink emulation: upstream simulator vs QEMU vs host-only | two-way | **Simulator** for flows, **host** for logic and renders, QEMU only as stage 5 |
 | D2 | Our scenarios: in our repo vs added to upstream's harness | two-way | **Ours** (`xteink/test/e2e/`), reusing upstream's seed and compose files at the CrossInk pin |
-| D3 | Sending simulator, HAL or harness fixes upstream (CrossInk-Bookorbit, crossink-simulator) | **one-way** (public, someone else's repo) | **Never** (the maintainer's rule, AGENTS.md "Upstream projects"): every fix stays in Orbify, as an overlay patch or a build-time edit of the fetched package |
+| D3 | Sending simulator, HAL or harness fixes upstream (CrossInk-Bookorbit, crossink-simulator) | **one-way** (public, someone else's repo) | **Never** (the maintainer's rule, AGENTS.md "Upstream projects"): every fix stays in BookSync, as an overlay patch or a build-time edit of the fetched package |
 | D4 | Server: real BookOrbit 3.9.0 + fault proxy vs replay | two-way | **Real + proxy**; recorded fixtures stay for host tests |
 | D5 | Image pin: `:3.9.0` by digest vs `latest` | two-way | **Digest**, re-pinned with `tools/upstreams pin bookorbit` |
 | D6 | Android: desktop vs AVD | two-way | **Both**: desktop first (stage 3), AVD for the Android-only rows (stage 4) |

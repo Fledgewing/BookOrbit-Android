@@ -21,7 +21,10 @@
 # Needs: esptool (v4 or v5), gh (for a run id), lsof, od, shasum or sha256sum.
 set -euo pipefail
 
-REPO="Fledgewing/Orbify" # artifacts come from this repo only
+# shellcheck source=SCRIPTDIR/repo-urls.sh
+source "$(dirname "${BASH_SOURCE[0]}")/repo-urls.sh"
+
+REPO=$BOOKSYNC_REPO # artifacts come from this repo only
 PT_OFFSET=0x8000         # where the bootloader reads the partition table (ESP-IDF's default)
 PT_SIZE=0xC00            # the table's sector: 96 entries of 32 bytes
 
@@ -149,7 +152,7 @@ fetch() {
     if [[ $SOURCE =~ ^[0-9]+$ ]]; then
         command -v gh >/dev/null 2>&1 || die "gh not found (needed to download run $SOURCE)"
         say "Run $SOURCE in $REPO:"
-        gh run view "$SOURCE" -R "$REPO" --json workflowName,headBranch,headSha,event,status,conclusion \
+        booksync_run_info --json workflowName,headBranch,headSha,event,status,conclusion \
             -q '"  workflow \(.workflowName), branch \(.headBranch) \(.headSha[0:12]), \(.event), \(.status) \(.conclusion)"' ||
             die "can't read run $SOURCE in $REPO"
         gh run download "$SOURCE" -R "$REPO" -p "firmware-$PIOENV-*" -D "$WORK/dl" ||

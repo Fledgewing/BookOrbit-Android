@@ -1,5 +1,5 @@
 #pragma once
-// Orbify sleep screen, X4 Pro and X4 (docs/design/lock-screen.md R1-R10, X1-X7, ROADMAP 11): the
+// BookSync sleep screen, X4 Pro and X4 (docs/design/lock-screen.md R1-R10, X1-X7, ROADMAP 11): the
 // rules, as pure functions with no allocation. The firmware (../SleepScreen.cpp) does the files and
 // the requests; xteink/test/sleep_pick_test.cpp checks these, the rotation and the batch against the
 // table Android's companion reads too (shared/fixtures/sleep/cases.json).

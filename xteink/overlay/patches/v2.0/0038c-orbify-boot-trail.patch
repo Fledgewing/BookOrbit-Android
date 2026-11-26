@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: boot trail
+Subject: [PATCH] BookSync: boot trail
 
 Record boot milestones and identify stale crash records.
 

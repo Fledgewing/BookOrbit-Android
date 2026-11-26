@@ -3,7 +3,7 @@
 #   scripts/licenses-section.sh <upstream-tag> <overlay-commit>
 # Reads the MicroLink submodule pin and URL from this repository at <overlay-commit>
 # (needs that commit locally), and the upstream tag's freeink-sdk pin and platform from
-# GitHub with `gh` (GH_TOKEN). Env: OVERLAY_REPO (default Fledgewing/Orbify),
+# GitHub with `gh` (GH_TOKEN). Env: OVERLAY_REPO (default Fledgewing/BookSync),
 # UPSTREAM_REPO (default agosez/CrossInk-Bookorbit), SOURCE_ARCHIVE (attached, the default:
 # the release carries source-<version>.tar.gz; request: older releases without one).
 # Used by .github/workflows/xteink.yml for new releases and by hand for older ones.
@@ -11,14 +11,14 @@ set -euo pipefail
 
 tag="${1:?usage: licenses-section.sh <upstream-tag> <overlay-commit>}"
 overlay="${2:?usage: licenses-section.sh <upstream-tag> <overlay-commit>}"
-overlay_repo="${OVERLAY_REPO:-Fledgewing/Orbify}"
+overlay_repo="${OVERLAY_REPO:-Fledgewing/BookSync}"
 upstream_repo="${UPSTREAM_REPO:-agosez/CrossInk-Bookorbit}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 
 enc() { printf '%s' "$1" | sed 's/+/%2B/g'; }
 tag_enc="$(enc "$tag")"
 
-# The overlay is xteink/ in Orbify (prefix "xteink/"); paths in a commit are from the repo root.
+# The overlay is xteink/ in BookSync (prefix "xteink/"); paths in a commit are from the repo root.
 prefix="$(git -C "$here" rev-parse --show-prefix)"
 ml_sha="$(git -C "$here" rev-parse "$overlay:${prefix}third_party/microlink")"
 ml_url="$(git -C "$here" show "$overlay:.gitmodules" \

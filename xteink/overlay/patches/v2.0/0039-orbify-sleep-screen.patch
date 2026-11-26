@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: sleep screen
+Subject: [PATCH] BookSync: sleep screen
 
 Hook sleep-screen rotation and cover preparation into sleep and wake.
 
@@ -44,7 +44,7 @@ index f7175a2..a6c56a6 100755
      """
      if skip_filenames is None:
          skip_filenames = _GENERATED_FILENAMES
-+    # Orbify (patch 0039): tailnet_build.py names the sources a reader builds without
++    # BookSync (patch 0039): tailnet_build.py names the sources a reader builds without
 +    # (ORBIFY_I18N_SKIP, comma-separated), so their strings stay out of its table.
 +    skip_filenames = set(skip_filenames) | {n for n in os.environ.get("ORBIFY_I18N_SKIP", "").split(",") if n}
  
@@ -59,7 +59,7 @@ index 98a7514..a6908bc 100644
    add(SettingInfo::Toggle(StrId::STR_QUICK_RESUME_TIMEOUT, &CrossPointSettings::quickResumeSleepScreen,
                            "quickResumeSleepScreen", StrId::STR_CAT_DISPLAY));
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  // Orbify (patch 0039): the sleep screen's own settings, kept in its own file.
++  // BookSync (patch 0039): the sleep screen's own settings, kept in its own file.
 +  OrbifySleep::addCatalogRows(visitor, context);
 +#endif
    add(SettingInfo::Enum(StrId::STR_HIDE_CLOCK, &CrossPointSettings::hideClock,
@@ -100,7 +100,7 @@ index 175499b..d6b9af0 100644
  
    addSleepSetting(StrId::STR_SLEEP_SCREEN, StrId::STR_SLEEP_SCREEN_WALLPAPER);
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  // Orbify (patch 0039): the Sleep Screen row gains BookOrbit Pick.
++  // BookSync (patch 0039): the Sleep Screen row gains BookOrbit Pick.
 +  if (!sleepSettings.empty()) sleepSettings.back() = OrbifySleep::sleepScreenRow(sleepSettings.back());
 +#endif
    addSleepSetting(StrId::STR_SLEEP_COVER_MODE, StrId::STR_SLEEP_COVER_MODE);
@@ -188,7 +188,7 @@ index d5d3994..dc64757 100644
    int x, y;
    const auto pageWidth = renderer.getScreenWidth();
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  // Orbify (patch 0039): the cover fits above the Bar style's band (L3).
++  // BookSync (patch 0039): the cover fits above the Bar style's band (L3).
 +  const auto pageHeight = renderer.getScreenHeight() - OrbifySleep::bandHeight(renderer);
 +#else
    const auto pageHeight = renderer.getScreenHeight();
@@ -243,7 +243,7 @@ index 607715f..f9352d2 100644
    bool renderBitmapSleepScreen(Bitmap& bitmap) const;
    void renderLastScreenSleepScreen() const;
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  // Orbify (patch 0039): BookOrbit Pick's cover, ready on the card (src/orbify/SleepScreen.h).
++  // BookSync (patch 0039): BookOrbit Pick's cover, ready on the card (src/orbify/SleepScreen.h).
 +  bool renderOrbifyPick() const;
 +#endif
    void renderBlankSleepScreen() const;
@@ -268,7 +268,7 @@ index 4531b6b..359ce03 100644
      if (extras && !sleepSyncWakeRequested()) OrbifyFinish::fetchNextCover(epubPath, &sleepSyncWakeRequested);
  #endif
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+    // Orbify (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
++    // BookSync (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
 +    if (extras && !sleepSyncWakeRequested()) OrbifySleep::topUp(epubPath, &sleepSyncWakeRequested);
 +#endif
  #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
@@ -276,11 +276,11 @@ index 4531b6b..359ce03 100644
      // at a time, the book that was open included (it is not on screen now; the user's ruling of
 @@ -435,6 +442,10 @@ void BookOrbitSyncActivity::runSleepSync() {
  #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-   // Orbify (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
+   // BookSync (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
    if (!sleepSyncWakeRequested()) OrbifyFinish::decodeNextCovers(&sleepSyncWakeRequested);
 +#endif
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  // Orbify (patch 0039): the batch's new covers, with the radio off, before the redraw shows one.
++  // BookSync (patch 0039): the batch's new covers, with the radio off, before the redraw shows one.
 +  if (!sleepSyncWakeRequested()) OrbifySleep::decodeCovers(renderer, &sleepSyncWakeRequested);
  #endif
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
@@ -307,7 +307,7 @@ index c69f3f4..b1e777c 100644
 -        const bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
 +        bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+        // Orbify (patch 0039): the Sleep Screen row with BookOrbit Pick has no member pointer.
++        // BookSync (patch 0039): the Sleep Screen row with BookOrbit Pick has no member pointer.
 +        sleepScreenChanged = sleepScreenChanged || (selectedSetting.key && strcmp(selectedSetting.key, "sleepScreen") == 0);
 +#endif
          const bool quickResumeTimeoutChanged = selectedSetting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
@@ -346,7 +346,7 @@ index c69f3f4..b1e777c 100644
        item.value = nullptr;
      }
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+    // Orbify (patch 0039): a sleep screen row's status, on its own line under the row.
++    // BookSync (patch 0039): a sleep screen row's status, on its own line under the row.
 +    item.subtitle = OrbifySleep::statusLine(settings[i]);
 +#endif
      item.actionValue = static_cast<int16_t>(i);
@@ -361,8 +361,8 @@ index 8207d00..c34b6e9 100644
    BatteryStats,
  #endif
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
-+  OrbifySleepFrom,    // Orbify (patch 0039): Pick From's list of toggles
-+  OrbifySleepScopes,  // Orbify (patch 0039): Leave Out Scopes' list of toggles
++  OrbifySleepFrom,    // BookSync (patch 0039): Pick From's list of toggles
++  OrbifySleepScopes,  // BookSync (patch 0039): Leave Out Scopes' list of toggles
 +#endif
  };
  

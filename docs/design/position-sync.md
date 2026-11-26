@@ -1,9 +1,9 @@
-# BookSync position sync: one setting for seamless, low-battery reading across Orbify
+# BookSync position sync: one setting for seamless, low-battery reading across BookSync
 
 Status: approved with the user's rulings of 2026-11-24 (below). The shared decision table, Android and Xteink firmware wiring are implemented;
 device validation remains before release. Platforms: Android (KOReader + BookOrbit plugin + BookSync plugin + BookSync
 Companion), X4 Pro, X4, X3. Pins read: BookOrbit `c1dd6b4` (server + `koreader-plugin/`),
-CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
+CrossInk-Bookorbit `87e2e19` (rc3), BookSync working tree 2026-11-24.
 
 **The user's rulings (2026-11-24), applied throughout.**
 1. **Jumps are asked, not silent.** When another place exists, a popup asks: "Continue from
@@ -49,7 +49,7 @@ sleep sync it already runs.
 
 - **Android plugin: newest wins, not furthest.** A pulled place is "forward" when its timestamp is
   later than this device's last page turn, whatever its position
-  (`bookorbit_progress_sync.lua:464-472`, `remoteProgressIsNewer` `:157-167`). Orbify's
+  (`bookorbit_progress_sync.lua:464-472`, `remoteProgressIsNewer` `:157-167`). BookSync's
   recommended "further ahead → Silent" (`logic/recommended.lua:24`) then **jumps backward silently**
   to any newer-dated place. Pushes are stamped with send time (`:325`, `os.time()`), and the
   server accepts a behind position stamped "now" (server-contract "The stale-push guard compares
@@ -156,7 +156,7 @@ Checked in the order listed (7 before 3). Two more inputs:
 **Behind-hold (all pushes).** A device never pushes a place behind the last server place it knows,
 except an override or a released reread (rule 7). Every connection pulls before it pushes (the
 Xteink already does; Android's outbox drain waits for BookSync's pull, extending
-`hookPluginPagePush`, `ko/module.lua:78`). This is what makes rule 5 safe: inside Orbify, a
+`hookPluginPagePush`, `ko/module.lua:78`). This is what makes rule 5 safe: inside BookSync, a
 backward move on the server is always deliberate.
 
 The table is `shared/fixtures/orbismart/cases.json` (sections `decide`, `apply`, `push`): the Lua
@@ -235,7 +235,7 @@ any button within 2 s and replays the press. Budget 25 s. Cost of a fast reader:
 | Offline / X3 mid-book | Queued (one per book, newest wins, two-slot file like `orbify_finish.bin`), sent **first** at the next sync. If the server shows reading elsewhere after the override was made, it is dropped and logged; furthest wins. Until it is sent, this device does not move or ask for that book. |
 | How others learn | Rules 5-6 at their next pull (wake, open, pause, sleep): an idle device follows; a device with older unsynced reading follows; reading made after it elsewhere is compared by furthest. They ask with the popup ("… (moved back there)?"), or move silently before render. |
 | Finished book | Moving 10+ points back on a finished book starts a reread in BookOrbit's history (server-contract "Reread evidence"): accepted (ruling 2). |
-| Reset to start | BookOrbit's own reset is followed on every device (rule 2); Orbify adds nothing. |
+| Reset to start | BookOrbit's own reset is followed on every device (rule 2); BookSync adds nothing. |
 | Who sees anything | Only the devices that would move: one popup each. |
 
 ---
@@ -299,7 +299,7 @@ Xteink: first row of BookSync › Sync. BookSync position sync presets and hides
 | Xteink | Sync behaviour Smart (BookSync position sync rules), Sync on Sleep on, Sync While Reading → "When you pause" (X4s), Wake check on. Mark Finished at End untouched. |
 
 New installs get BookSync position sync. On update it follows the recommended-settings rule (addon-mode §5): applied
-where the sync settings are still at their defaults or Orbify's recommended values; otherwise offered
+where the sync settings are still at their defaults or BookSync's recommended values; otherwise offered
 as a Setup checklist row with "what you lose without it".
 
 **Phases.** 1) The shared decision table (Lua + C++ host-tested function), Android BookSync position sync
@@ -333,7 +333,7 @@ week before BookSync position sync.
 |---|---|---|---|
 | 1 | One rule set or per platform? | One pure function, one fixture | The two sides already disagree (newest vs smart); one table ends that. |
 | 2 | How does an override reach other devices with no server field? | Behind-hold everywhere, so any backward server move is deliberate; idle devices follow it (rules 5-6) | BookOrbit stores nothing else a device can write; a marker in the `device` string would add rows and odd names in BookOrbit's UI and break the plugin's own-push check (`device == Device.model`). |
-| 3 | Risk of rule 5 | A stale push from a non-Orbify client (stock KOReader, Kobo) can pull idle devices back | Rare in this setup; the server's own late/reset guards still apply; the fix is one "Read from here everywhere". |
+| 3 | Risk of rule 5 | A stale push from a non-BookSync client (stock KOReader, Kobo) can pull idle devices back | Rare in this setup; the server's own late/reset guards still apply; the fix is one "Read from here everywhere". |
 | 4 | Override lifetime | One shot | Sticky modes need an end condition nobody can see. |
 | 5 | Jump window | Replaced by ruling 1: asked whenever found, silent only before render | The user's ruling. |
 | 6 | Pause push vs interval | Pause, 120 s, moved >1 page | Covers device switches; intervals cost radio while nobody switches. |

@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: end page full screen
+Subject: [PATCH] BookSync: end page full screen
 
 Render the End-of-Book page with the approved full-screen layout.
 
@@ -118,7 +118,7 @@ index 2da4c55d..de997a7b 100644
    // resolutions scale (review request on #2532).
    const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+  // Patch 0032: the Orbify page fills the safe area in large type (mockup 7); the hints stay.
++  // Patch 0032: the BookSync page fills the safe area in large type (mockup 7); the hints stay.
 +  if (orbify) {
 +    orbifyTouch = input.hasTouchHardware();
 +    orbify->draw(renderer, safe.x, safe.y, safe.width, safe.height, orbifyTouch);
@@ -135,7 +135,7 @@ index 2da4c55d..de997a7b 100644
  
    UITheme::drawCenteredText(renderer, safe, UI_12_FONT_ID, titleY, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
 -#if CROSSINK_TAILNET_ORBIFY_FINISH
--  // Orbify: the book's author under the title; the rows carry their own headings.
+-  // BookSync: the book's author under the title; the rows carry their own headings.
 -  orbifyTouch = input.hasTouchHardware();
 -  if (orbify) {
 -    if (!orbify->author().empty()) UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, orbify->author().c_str());
@@ -151,16 +151,16 @@ index ad8fbfc3..ee7e406b 100644
 @@ -25,7 +25,9 @@ class MappedInputManager;
  class EndOfBookOptions {
   public:
-   // Orbify (patch 0028): the reader reads the request with takeOrbifyResult().
--  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify };
+   // BookSync (patch 0028): the reader reads the request with takeOrbifyResult().
+-  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, BookSync };
 +  // Consumed (patch 0032): the page took the input and nothing changes; the reader must not
 +  // hand it on to its own page-turn, Back-to-Home or gesture handling.
-+  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify, Consumed };
++  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, BookSync, Consumed };
  
    static constexpr size_t MAX_SUGGESTIONS = 3;
  
 @@ -57,6 +59,9 @@ class EndOfBookOptions {
-   // Orbify's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
+   // BookSync's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
    // calls this before loadOnce(). Its status row toggles the book's finish through the reader.
    void enableOrbify() { orbifyWanted = true; }
 +  // What the book's own metadata says, for the title block and the offline series and author
@@ -187,7 +187,7 @@ index 220af4fa..960e9d60 100644
 @@ -3832,7 +3832,19 @@ void EpubReaderActivity::loop() {
        }
  #if CROSSINK_TAILNET_ORBIFY_FINISH
-       // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
+       // BookSync (patch 0028): the End-of-Book page with the book's status, next and suggestions.
 -      if (endOfBookOptions) endOfBookOptions->enableOrbify();
 +      if (endOfBookOptions) {
 +        endOfBookOptions->enableOrbify();
@@ -233,5 +233,5 @@ index ebb5bab6..571fb268 100644
 +    case EndOfBookOptions::Action::Consumed:  // overlay patch 0032
 +      return;
      case EndOfBookOptions::Action::None:
-     case EndOfBookOptions::Action::Orbify:  // EPUB only (overlay patch 0028)
+     case EndOfBookOptions::Action::BookSync:  // EPUB only (overlay patch 0028)
        break;

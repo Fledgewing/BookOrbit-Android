@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: copy check
+Subject: [PATCH] BookSync: copy check
 
 Detect when the library file differs from the copy on the reader.
 
@@ -38,7 +38,7 @@ index 63c79a80..0926e1a8 100644
    // never sits half-written under its own name.
    const std::string finalPath = replacePath.empty() ? catalogBookPath(detail, epubFile) : replacePath;
 +#if CROSSINK_TAILNET_ORBIFY_COPY_CHECK
-+  // Orbify (patch 0033): an update compares the copy on the card with the library file first.
++  // BookSync (patch 0033): an update compares the copy on the card with the library file first.
 +  // The sync only learns "the server keeps this copy as an older one of its file"; both hashes
 +  // go to the log, and a copy that already is the library file opens instead of downloading.
 +  if (!replacePath.empty()) {
@@ -67,7 +67,7 @@ index 6e6178b4..9be03e28 100644
    }
    updateBookId = bookId;
 +#if CROSSINK_TAILNET_ORBIFY_COPY_CHECK
-+  // Orbify (patch 0033): the server answered positionIncompatible: it knows this hash as an
++  // BookSync (patch 0033): the server answered positionIncompatible: it knows this hash as an
 +  // older copy of the book's file. The library file's own hash is fetched and logged by the
 +  // update step (BookOrbitCatalogBrowserActivity::downloadBook).
 +  LOG_INF("BookOrbit", "This copy differs from the library file (book %lld): card copy %s (%s); the server keeps it as an older copy",
@@ -89,7 +89,7 @@ index fb6647e8..974ccd64 100644
 -                       R"("devicePath":true}]})");
 +                       R"("devicePath":true,"fileHash":true,"contentVersion":true}]})");
  #if CROSSINK_TAILNET_ORBIFY_FINISH
-     // Orbify (patch 0028): the series card's fields ride on the same reply (design §5).
+     // BookSync (patch 0028): the series card's fields ride on the same reply (design §5).
      orbify::cardFilter(filter);
 @@ -737,6 +737,8 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
      entry.format = std::string(file["format"] | "");
@@ -108,7 +108,7 @@ index a8e9d68e..add148b2 100644
    // account and device. Empty on servers that predate the field; the caller then
    // names the file itself.
    std::string devicePath;
-+  // Orbify (patch 0033): the library file's KOReader partial MD5 and when its bytes last
++  // BookSync (patch 0033): the library file's KOReader partial MD5 and when its bytes last
 +  // changed. Empty when the server leaves them out (a converted delivery variant).
 +  std::string fileHash;
 +  std::string contentVersion;

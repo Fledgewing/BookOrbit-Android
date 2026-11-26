@@ -1,7 +1,7 @@
 {
   "name": "orbify-attest-check",
   "private": true,
-  "description": "Fails when the pinned BookOrbit server puts app attestation on a route Orbify calls (README.md).",
+  "description": "Fails when the pinned BookOrbit server puts app attestation on a route BookSync calls (README.md).",
   "license": "MIT",
   "type": "module",
   "scripts": {

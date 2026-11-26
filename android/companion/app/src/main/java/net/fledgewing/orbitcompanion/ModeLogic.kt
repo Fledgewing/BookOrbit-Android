@@ -1,8 +1,8 @@
 package net.fledgewing.orbitcompanion
 
 /**
- * Orbify's modes and the capabilities the companion offers in each (docs/design/addon-mode.md
- * §3, §6). Pure, unit-tested. Full is today's Orbify; Add-on keeps the reader's own launcher and
+ * BookSync's modes and the capabilities the companion offers in each (docs/design/addon-mode.md
+ * §3, §6). Pure, unit-tested. Full is today's BookSync; Add-on keeps the reader's own launcher and
  * leaves Wi-Fi and sleep alone unless a helper is switched on.
  */
 enum class OrbitMode(val key: String) {
@@ -27,7 +27,7 @@ object ModeLogic {
     /** Every mode: installs and updates, the setup rows, stats, a restart finished by the companion. */
     val BASE = listOf("install", "setup", "stats", "relaunch", "sleep_screen", Worker.CAP, "settings2")
 
-    /** Before a mode is chosen, the companion behaves as Full (today's Orbify). */
+    /** Before a mode is chosen, the companion behaves as Full (today's BookSync). */
     fun effective(mode: OrbitMode?): OrbitMode = mode ?: OrbitMode.FULL
 
     /** The caps the plugin sees (/status and the status file), in a stable order. */

@@ -22,13 +22,14 @@ import runpy
 
 Import("env")  # noqa: F821  (SCons builtin)
 
-# Over-the-air updates come from Orbify's firmware releases (AGENTS.md "Releases"): Android and
+# Over-the-air updates come from BookSync's firmware releases (AGENTS.md "Releases"): Android and
 # firmware share the repo, the firmware's tags are xteink-v<version>, and "latest" is always
 # Android. GitHub's release list sorts prefixed tags after every v<version> release, so the
 # updater reads a feed instead: the newest stable and pre-release firmware releases, in GitHub's
 # release-list format, written by .github/workflows/xteink.yml to the xteink-feed branch. The
 # overlay patch ota-tag-prefix makes the updater read that list and keep xteink-v tags.
-OVERLAY_REPO = os.environ.get("TAILNET_OVERLAY_REPO", "Fledgewing/Orbify")
+OVERLAY_REPO = os.environ.get("TAILNET_OVERLAY_REPO", "Fledgewing/BookSync")
+LEGACY_OVERLAY_REPO = "Fledgewing/Orbify"
 OTA_TAG_PREFIX = os.environ.get("TAILNET_OTA_TAG_PREFIX", "xteink-v")
 OTA_FEED = os.environ.get(
     "TAILNET_OTA_FEED", f"https://raw.githubusercontent.com/{OVERLAY_REPO}/xteink-feed/xteink/releases.json"
@@ -281,7 +282,7 @@ SWITCHES = {
     # 0 off, 1 record (/.crossink/battery.bin), 2 + Settings > System > Battery stats writes
     # /battery_stats.json, 3 + the rates on that page and an export when USB Drive mode starts.
     "CROSSINK_TAILNET_BATTERY_STATS":     (2,      3,      3),
-    # --- Orbify features (xteink/orbify, docs/design/end-of-book/DESIGN.md, ROADMAP items 1 and 2).
+    # --- BookSync features (xteink/orbify, docs/design/end-of-book/DESIGN.md, ROADMAP items 1 and 2).
     # Patch 0027: reaching the end of a book marks it finished; BookOrbit syncs send it.
     "CROSSINK_TAILNET_ORBIFY_FINISH":     (1,      1,      1),
     "CROSSINK_TAILNET_ORBIFY_COPY_CHECK": (1,      1,      1),
@@ -510,7 +511,7 @@ if SIMULATOR:
     # package's include path for lib/Memory and lib/MiniBidi.
     env.Append(CPPPATH=[os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), pioenv, "simulator", "src")])  # noqa: F821
     # The simulator package as fetched trails the firmware: upstream's own patcher (its CI's step),
-    # then Orbify's (heap_caps_get_minimum_free_size, the scripted heap).
+    # then BookSync's (heap_caps_get_minimum_free_size, the scripted heap).
     import subprocess
 
     sys.path.insert(0, sim_dir)
@@ -563,6 +564,11 @@ ota_defines = {
     "CROSSINK_OTA_RELEASE_URL": f"https://api.github.com/repos/{OVERLAY_REPO}/releases/latest",
     "CROSSINK_OTA_RELEASE_LIST_URL": OTA_FEED,
     "CROSSINK_OTA_TAG_PREFIX": OTA_TAG_PREFIX,
+    # Only the default public feed falls back; explicit test/custom feeds stay isolated.
+    "CROSSINK_OTA_FALLBACK_URL": (
+        f"https://raw.githubusercontent.com/{LEGACY_OVERLAY_REPO}/xteink-feed/xteink/releases.json"
+        if OVERLAY_REPO == "Fledgewing/BookSync" and "TAILNET_OTA_FEED" not in os.environ else ""
+    ),
 }
 
 # Signed updates (patch 0050): the root public key, the lowest trusted release-key serial and the

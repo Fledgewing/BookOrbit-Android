@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: is a firmware update signed by Orbify's release key, which the root key certified?
+// BookSync: is a firmware update signed by BookSync's release key, which the root key certified?
 // docs/design/release-signing.md has the formats. The feed gives each signed firmware asset an
 // "orbify_signature": a release-key certificate (serial, release public key, root signature)
 // followed by the release key's signature over "orbify-artifact-v1\n<tag>\n<asset>\n<sha256>\n".

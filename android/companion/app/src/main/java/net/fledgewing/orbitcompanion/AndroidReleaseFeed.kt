@@ -6,7 +6,8 @@ import java.security.MessageDigest
 /** One atomic envelope: the exact payload bytes and their root-certified signature. */
 data class AndroidReleaseFeed(val releases: List<ReleaseInfo>, val withdrawn: Set<Version>) {
     companion object {
-        const val URL = "https://raw.githubusercontent.com/Fledgewing/Orbify/android-feed/android/releases.json"
+        const val URL = "https://raw.githubusercontent.com/${Updater.REPO}/android-feed/android/releases.json"
+        internal const val LEGACY_URL = "https://raw.githubusercontent.com/${Updater.LEGACY_REPO}/android-feed/android/releases.json"
         const val TAG = "android-feed"
         const val ASSET = "android-releases.json"
 

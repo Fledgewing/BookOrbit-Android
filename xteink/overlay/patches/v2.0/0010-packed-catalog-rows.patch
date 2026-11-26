@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: packed catalog rows
+Subject: [PATCH] BookSync: packed catalog rows
 
 Pack catalog row strings to reduce heap fragmentation.
 

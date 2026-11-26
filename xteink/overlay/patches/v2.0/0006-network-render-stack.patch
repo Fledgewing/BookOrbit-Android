@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: network render stack
+Subject: [PATCH] BookSync: network render stack
 
 Reduce render-task memory during network-only boots.
 

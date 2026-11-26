@@ -1,5 +1,5 @@
 #pragma once
-// Orbify End-of-Book page, the drawing (docs/design/end-of-book mockups 7 and 10): a full-screen
+// BookSync End-of-Book page, the drawing (docs/design/end-of-book mockups 7 and 10): a full-screen
 // page in large type. Pure C++: it turns the page's rows into draw operations and tap targets, so
 // the firmware (../EndPage.cpp) draws them with GfxRenderer and the host harness
 // (xteink/test/eob_render.cpp) draws the same operations to a PNG with the same fonts.
