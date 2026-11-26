@@ -117,4 +117,20 @@ return function(test,eq,ok,E,W,Widget)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false}})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)
+    test("Home host: server-only book cards open the owned Details surface",function()
+        withHost(function()
+            local open,panel=E.Library.open,E.ReaderPanel
+            local target
+            local success,err=pcall(function()
+                E.Library.open=function() return false end
+                E.ReaderPanel={details=function(key) target=key; return true end}
+                local h=E.HomeHost.create(); E.HomeHost.active=h
+                h:dispatch("book",{key="opaque-book"})
+                eq(target,"opaque-book")
+            end)
+            E.Library.open,E.ReaderPanel=open,panel
+            ok(success,err)
+        end)
+    end)
+
 end

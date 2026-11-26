@@ -43,6 +43,7 @@ function EndSheet:init()
     local GestureRange = require("ui/gesturerange")
     self.screen_w, self.screen_h = Device.screen:getWidth(), Device.screen:getHeight()
     self.metrics = SheetLayout.metrics(self.screen_w, scaler())
+    if self.min_button then self.metrics.button = math.max(self.metrics.button, scaler()(self.min_button)) end
     self.dimen = Geom:new{ x = 0, y = 0, w = self.screen_w, h = self.screen_h }
     self.ges_events = {
         TapAnywhere = { GestureRange:new{ ges = "tap", range = self.dimen } },
@@ -165,7 +166,15 @@ function EndSheet:rowWidget(block, w, h, mt)
     local grey = Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
     local k = block.kind
     local r = block.row
-    if k == "status" then
+    if k == "progress" then
+        -- A solid fill over a solid track: no ticks, brackets or chapter labels.
+        local finish = Budgets.span("reader-progress.draw", now_s, log)
+        local bar = W("progresswidget"):new{ width=w, height=math.max(4, scaler()(8)),
+            percentage=r.value or 0, ticks={}, bordersize=0, radius=0, margin_h=0, margin_v=0,
+            fillcolor=Blitbuffer.COLOR_BLACK, bgcolor=Blitbuffer.COLOR_LIGHT_GRAY }
+        finish()
+        return bar
+    elseif k == "status" then
         local bw = r.action and mt.action_w or 0
         local hg = HorizontalGroup:new{ box(text(r.text, SheetLayout.FONTS.status, false, w - bw), w - bw) }
         if r.action then

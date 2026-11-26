@@ -7115,6 +7115,7 @@ end)
 dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
+dofile(here .. "/reader_panel_flows.lua")(here, test, ok, eq)
 
 if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
     for _, name in ipairs({

@@ -82,6 +82,8 @@ the placement count. Home pages and Settings groups inherit their screen-family 
 the filter screen budget; facet counts and zero-value ordering stay in the companion.
 Home editor moves project only the current page and draw bounded geometry controls (no widget
 snapshots, JSON decode, file IO or library round-trip); atomic layout validation/save runs on Done.
+Reader progress surfaces reuse a one-row widget budget, including Book info and
+Details; completion callbacks redraw only a still-visible user-opened panel.
 
 ## Read the source, not memory
 
