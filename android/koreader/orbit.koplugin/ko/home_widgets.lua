@@ -39,7 +39,8 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     local ready=snapshot.state == "ready" or snapshot.state == "offline-with-data"
     local hero=p.widget == "continue-reading" and ready
     local title=type((p.settings or {}).title) == "string" and p.settings.title or (p.widget == "continue-reading" and "Continue reading" or p.widget == "lists" and "Lists" or "Shelf")
-    HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
+    if hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
+    else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(30),function() dispatch("all") end) end
     if not ready then
         local labels={loading="Loading…",empty="Nothing here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
         if not compact then HomeWidgets.text(canvas,_(labels[snapshot.state] or "Unavailable"),pad,pad+scale(38),w-2*pad,16) end
@@ -81,6 +82,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         for i=1,count do
             local b=snapshot.items[i]
             local label=b.title or b.name or _("Untitled")
+            if b.group and b.group ~= "" then label=b.group.." · "..label end
             if p.widget == "lists" and b.count ~= nil then label=label.."  ·  "..tostring(b.count) end
             local y=pad+scale(30)+(i-1)*rowH
             local progress=p.widget == "booklist" and tonumber(b.progress)
@@ -95,3 +97,67 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     return u.Frame:new{padding=0,margin=0,bordersize=1,radius=scale(10),background=hero and u.BB.COLOR_BLACK or u.BB.COLOR_WHITE,canvas}
 end
 for _,id in ipairs({"continue-reading","booklist","lists"}) do HomeWidgets.register(id,HomeWidgets.card) end
+
+-- Register the existing stats renderer against the host snapshot contract. The host
+-- reads one materialized reading.stats row for all Stats cards in a paint.
+HomeWidgets.stats={}
+for _,id in ipairs({"year-in-reading","this-week","when-you-read","reading-records"}) do
+    local name=id
+    HomeWidgets.stats[name]=true
+    HomeWidgets.register(name,function(p,snapshot,dispatch,rect)
+        return ReadingStatsWidgets.render(name,snapshot.data,{w=rect.w-2,h=rect.h-2,rows=p.h,snapshotBytes=snapshot.bytes})
+    end,function() return {op="reading.stats",limit=1} end)
+end
+HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
+    local c=HomeWidgets.canvas(rect.w-2,rect.h-2)
+    local scale=function(n) return Device.screen:scaleBySize(n) end
+    HomeWidgets.button(c,_("Library").."  ›",scale(8),scale(8),rect.w-scale(16),scale(30),function() dispatch("all") end)
+    local d=snapshot.data or {}
+    local saved=d.freshness and d.freshness.saved
+    local wide=rect.h>=scale(144)
+    local half=math.floor((rect.w-scale(16))/2)
+    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(44),wide and half or rect.w-scale(16),20,false,true)
+    if wide then
+        HomeWidgets.button(c,(d.on_device~=nil and tostring(d.on_device) or "—").._(" on device").." ›",
+            scale(8)+half,scale(40),half,scale(50),function() dispatch("device") end)
+        for i,group in ipairs({"author","series"}) do
+            HomeWidgets.button(c,group=="author" and _("Authors ›") or _("Series ›"),scale(8)+(i-1)*half,
+                rect.h-scale(52),half,scale(50),function() dispatch("group",{group=group}) end)
+        end
+    end
+    return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
+end,function() return {op="library.summary",limit=1} end)
+-- The companion owns all measured rates and predictions; Lua only formats scalars.
+HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)
+    assert(Budgets.check(Budgets.get("widgets","battery"),{rows=1,bytes=snapshot.bytes,
+        snapshotBytes=snapshot.bytes,spawns=0,network=0,roundTrips=0}))
+    local model=BatteryWidgetPlan.model(snapshot.data)
+    local scale=function(n) return Device.screen:scaleBySize(n) end
+    local w,h=rect.w-2,rect.h-2
+    local c=HomeWidgets.canvas(w,h)
+    local pad=scale(8)
+    local compact=h<scale(120); local narrow=w<scale(190)
+    HomeWidgets.text(c,_(model.charging and "Battery · charging" or "Battery"),pad,pad,compact and math.max(1,w-scale(84)) or w-2*pad,16,false,true)
+    HomeWidgets.text(c,model.level_text,compact and w-scale(76) or pad,compact and pad or scale(32),
+        compact and scale(68) or w/2,compact and 18 or 28,false,true)
+    HomeWidgets.text(c,_(narrow and model.narrow_usual or model.usual),pad,scale(compact and 34 or 72),w-2*pad,compact and 12 or 14)
+    if model.fraction then
+        local bw=compact and w-2*pad or math.min(scale(100),math.floor(w/2)-pad)
+        HomeWidgets.put(c,HomeWidgets.ui().Progress:new{width=bw,height=scale(compact and 6 or 12),
+            percentage=model.fraction,radius=0,margin_h=0,margin_v=0},compact and pad or w-pad-bw,compact and h-pad-scale(6) or scale(42))
+    end
+    if not compact then
+        if narrow then
+            HomeWidgets.text(c,_(model.screen_on),pad,scale(100),w-2*pad,11)
+            HomeWidgets.text(c,_(model.standby),pad,scale(118),w-2*pad,11)
+        else
+            HomeWidgets.text(c,_(model.screen_on.." · "..model.standby),pad,scale(100),w-2*pad,12)
+            if h>=scale(220) then
+                HomeWidgets.text(c,_(model.reading),pad,scale(124),w-2*pad,12)
+                HomeWidgets.text(c,_(model.asleep),pad,scale(144),w-2*pad,12)
+                HomeWidgets.text(c,_(model.charge),pad,scale(168),w-2*pad,11)
+            elseif h>=scale(144) then HomeWidgets.text(c,_(model.charge),pad,scale(122),w-2*pad,11) end
+        end
+    end
+    return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
+end,function() return {op="battery",limit=1} end)

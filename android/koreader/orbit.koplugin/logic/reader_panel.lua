@@ -1,20 +1,23 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Display only: already joined, bounded library rows. No catalog or statistics work here.
 ReaderPanelPlan = {}
+-- Scalar display conversion only; all battery predictions are companion-owned.
+function ReaderPanelPlan.duration(value, minutes)
+    local hours=tonumber(value)
+    if not hours or hours~=hours or hours<0 or hours==math.huge then return nil end
+    if minutes and hours<1 then return math.floor(hours*60).." min" end
+    local whole=math.floor(hours)
+    local days,rest=math.floor(whole/24),whole%24
+    return days>0 and (days.." d "..rest.." h") or (rest.." h")
+end
 function ReaderPanelPlan.model(result, battery)
     local b = result.items and result.items[1] or {}
     local pct = tonumber(b.progress)
     if pct and (pct ~= pct or pct == math.huge or pct == -math.huge) then pct = nil end
     if pct then pct = math.max(0, math.min(100, pct)) end
     local stats = b.stats or {}
-    local hours = battery and tonumber(battery.hours_usual_use)
-    local battery_text = "Battery estimate not available yet"
-    if hours and hours == hours and hours >= 0 and hours < math.huge then
-        local whole = math.floor(hours)
-        local days, rest = math.floor(whole/24), whole%24
-        local duration = days > 0 and (tostring(days) .. " d " .. tostring(rest) .. " h") or (tostring(rest) .. " h")
-        battery_text = "≈ " .. duration .. " left at your usual use"
-    end
+    local duration=ReaderPanelPlan.duration(battery and battery.hours_usual_use)
+    local battery_text=duration and ("≈ "..duration.." left at your usual use") or "Battery estimate not available yet"
     return { key=b.key, title=b.title or "Book info not saved yet",
         author=table.concat(b.authors or {}, ", "), progress=pct and pct/100,
         progress_text=pct and (string.format("%d%% read", math.floor(pct+0.5))) or "Progress not saved yet",

@@ -126,10 +126,10 @@ class LibraryReadModel(
                 else -> mapOf("items" to listOf(summary), "freshness" to freshness(true), "detail_at" to detail?.second)
             }
         }
-        require(op == "window" || op == "counts" || op == "facets")
+        require(op == "window" || op == "counts" || op == "facets" || op == "library.summary")
         val f = a["query"] as? Map<*, *> ?: emptyMap<Any, Any>()
         BookOrbitLibrary.translate(f) // validates; same plan is available to future remote checks
-        val source = a["source"]
+        val source = if (op == "library.summary") "library/all" else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
         require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "series", "author", "search"))
@@ -192,6 +192,7 @@ class LibraryReadModel(
             val limit = ((a["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)
             return (facet?.page(offset, limit) ?: mapOf("items" to emptyList<Any>())) + mapOf("total" to total, "freshness" to freshness(true))
         }
+        if (op == "library.summary") return mapOf("total" to total, "on_device" to local?.let { selected.count { b -> b["local_path"] != null } }, "freshness" to freshness(true))
         val counts = selected.groupingBy { it["status"].toString() }.eachCount()
         if (op == "counts") return mapOf("total" to total, "statuses" to counts, "freshness" to freshness(true))
         selected.sortWith(LibraryFilter.comparator(filter))

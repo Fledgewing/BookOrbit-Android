@@ -56,14 +56,15 @@ function Editor:rowWidget(block,w,h,mt)
             end
         end
         local ink=delta<0 and BB.Color8 and BB.Color8(math.floor(math.min(200,-delta*60))) or BB.COLOR_BLACK
+        local border,padding=1,4
         local preview=require("ui/widget/textboxwidget"):new{
             text="She sat down on the iron bench with the book open on her knees.",
-            face=face,_face_adjusted=true,width=w-2*gutter,
+            face=face,_face_adjusted=true,width=math.max(1,w-2*gutter-2*border-2*padding),
             line_height=self.key=="spacing" and s.spacing-1 or .35,
             bold=delta>0,fgcolor=ink}
-        return require("ui/widget/container/framecontainer"):new{width=w,padding=0,padding_left=gutter,padding_right=gutter,
+        return require("ui/widget/container/framecontainer"):new{width=w,bordersize=border,margin=0,padding=0,padding_left=gutter,padding_right=gutter,
             background=self.key=="margins" and BB.COLOR_LIGHT_GRAY or BB.COLOR_WHITE,
-            require("ui/widget/container/framecontainer"):new{padding=4,background=BB.COLOR_WHITE,preview}}
+            require("ui/widget/container/framecontainer"):new{bordersize=0,margin=0,padding=padding,background=BB.COLOR_WHITE,preview}}
     end
     return EndSheet.rowWidget(self,block,w,h,mt)
 end

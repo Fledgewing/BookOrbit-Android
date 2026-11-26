@@ -68,6 +68,7 @@ function Library:read(op, args)
     if not ok then error(result,0) end
     return result
 end
+function Library:summary() return self:read("library.summary", {limit=1}) end
 function Library:accountState() return self:read("account.state", {limit=1}) end
 function Library:modeEstimates() return self:read("mode-estimates", {limit=3}) end
 function Library:battery() return self:read("battery", {limit=1}) end
