@@ -47,25 +47,18 @@ env:
   EXPECTED_CERT_SHA256: "F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"
 
 jobs:
-  # The emulated release tests on the release commit (release-tests.yml): the server kit and the
-  # companion's JVM tests, Robolectric's install-session states included. Nothing publishes
-  # unless they pass.
-  tests:
-    uses: ./.github/workflows/release-tests.yml
-    with:
-      platform: android
-      ref: ${{ github.event.inputs.tag || github.ref_name }}
-
-  # Unsigned build: no secrets and a read-only token while Gradle and its dependencies run.
-  build:
-    needs: tests
+  plan:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
     outputs:
       version: ${{ steps.ver.outputs.version }}
       prerelease: ${{ steps.ver.outputs.prerelease }}
       sha: ${{ steps.ver.outputs.sha }}
+      android_build: ${{ steps.plan.outputs.android_build }}
+      android_release_tests: ${{ steps.plan.outputs.android_release_tests }}
+      plugin_tests: ${{ steps.plan.outputs.plugin_tests }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,6 +94,63 @@ jobs:
           echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
           echo "Releasing $VER (pre-release: $PRE)"
 
+      - name: Plan from published inputs and passing tests
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          force=()
+          if [ "$PUBLISH" != true ] || [ "$(python3 tools/booksync-version.py unified)" != true ]; then
+            force+=(--force)
+            echo '{}' > "$RUNNER_TEMP/history.json"
+          else
+            python3 tools/releases/inputs.py collect > "$RUNNER_TEMP/history.json"
+          fi
+          python3 tools/releases/inputs.py plan --version "$VER" --history "$RUNNER_TEMP/history.json" "${force[@]}" > release-plan.json
+          python3 tools/releases/inputs.py outputs --plan release-plan.json >> "$GITHUB_OUTPUT"
+          python3 tools/releases/inputs.py notes --plan release-plan.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-plan
+          path: release-plan.json
+          if-no-files-found: error
+
+  # The emulated release tests on the release commit (release-tests.yml): the server kit and the
+  # companion's JVM tests, Robolectric's install-session states included. Nothing publishes
+  # unless they pass.
+  tests:
+    needs: plan
+    if: needs.plan.outputs.android_build == 'true' && needs.plan.outputs.android_release_tests == 'true'
+    uses: ./.github/workflows/release-tests.yml
+    with:
+      platform: android
+      ref: ${{ needs.plan.outputs.sha }}
+
+  # Unsigned build: no secrets and a read-only token while Gradle and its dependencies run.
+  build:
+    needs: [plan, tests]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.android_build == 'true' && (needs.tests.result == 'success' || (needs.tests.result == 'skipped' && needs.plan.outputs.android_release_tests == 'false')) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ needs.plan.outputs.version }}
+      prerelease: ${{ needs.plan.outputs.prerelease }}
+      sha: ${{ needs.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A release builds its tag; a test build the commit it was started on.
+          ref: ${{ env.PUBLISH == 'true' && env.TAG || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: android-plan
+
       # Downloads only, as in android.yml: Gradle User Home restored read-only from main's cache
       # (tags never write it). No Gradle build cache (org.gradle.caching is off) and no project
       # build/ directories, so the release still builds from a clean checkout.
@@ -108,18 +158,19 @@ jobs:
 
       # The same checks android.yml runs; the companion's JVM tests ran in release-tests stage 2.
       - uses: ./.github/actions/plugin-tests
+        if: needs.plan.outputs.plugin_tests == 'true'
         timeout-minutes: 5
 
       - uses: ./.github/actions/script-checks
 
       - name: Build the unsigned companion APK
         working-directory: android/companion
-        run: ./gradlew --no-daemon -PorbitVersion="${{ steps.ver.outputs.version }}" assembleRelease </dev/null
+        run: ./gradlew --no-daemon -PorbitVersion="${{ needs.plan.outputs.version }}" assembleRelease </dev/null
 
       - name: Stage the unsigned APK, the plugin zip and the license files
         run: |
           set -euo pipefail
-          VER="${{ steps.ver.outputs.version }}"
+          VER="${{ needs.plan.outputs.version }}"
           mkdir -p dist
           cp android/companion/app/build/outputs/apk/release/app-release-unsigned.apk "dist/orbit-companion-$VER-unsigned.apk"
           # The BookSync KOReader plugin, zipped with its version stamped into main.lua (the
@@ -128,6 +179,10 @@ jobs:
           # Licenses: the companion (MIT), the plugin (AGPL-3.0-or-later).
           cp android/companion/LICENSE dist/LICENSE-companion-MIT.txt
           cp android/koreader/LICENSE dist/LICENSE-koreader-plugin-AGPL-3.0.txt
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)"
+          "$AAPT" dump badging "dist/orbit-companion-$VER-unsigned.apk" | grep -F "versionName='$VER'"
+          python3 tools/releases/inputs.py published --plan release-plan.json --platforms app,plugin --tag "$TAG" > dist/RELEASE-INPUTS.json
+          python3 tools/releases/inputs.py notes --plan release-plan.json --platforms app,plugin > dist/PLATFORM-BUILDS.md
           ls -l dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -137,9 +192,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Record passing component inputs
+        run: python3 tools/releases/inputs.py receipt --platforms app,plugin --scope component > passed-inputs.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-release-android-component
+          path: passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
+
   firmware:
-    needs: [build, sign]
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+    needs: [plan, sign, feed]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && ((needs.sign.result == 'success' && needs.feed.result == 'success') || needs.plan.outputs.android_build == 'false') && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -147,7 +211,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.build.outputs.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
           persist-credentials: false
           sparse-checkout: |
             tools
@@ -165,6 +229,7 @@ jobs:
   # signs the APK, checks the signing certificate and publishes.
   sign:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -252,7 +317,7 @@ jobs:
           # The third-party notices the app shows in Settings (generated into the APK at build time).
           unzip -p "dist/orbit-companion-$VER.apk" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
           test -s dist/THIRD-PARTY-NOTICES.txt
-          (cd dist && sha256sum -- *.apk *.zip *.txt > SHA256SUMS)
+          (cd dist && sha256sum -- *.apk *.zip *.txt *.json *.md > SHA256SUMS)
           rm -rf orbify
           cat dist/SHA256SUMS
 
@@ -277,6 +342,7 @@ jobs:
             dist/*.zip
             dist/*.txt
             dist/SHA256SUMS
+            dist/RELEASE-INPUTS.json
 
       - name: Publish the release
         if: env.PUBLISH == 'true'
@@ -300,6 +366,7 @@ jobs:
           Licenses: the companion is MIT, the BookSync KOReader plugin is AGPL-3.0-or-later; bundled library notices are in \`THIRD-PARTY-NOTICES.txt\`.
           NOTES
           sed -i 's/^          //' notes.md
+          cat dist/PLATFORM-BUILDS.md >> notes.md
           TITLE="BookSync $(printf '%s' "$VER" | sed -E 's/-preview\.([0-9]+)$/ preview \1/; s/-rc\.([0-9]+)$/ RC \1/')"
           FLAGS=()
           [ "$PRERELEASE" = "true" ] && FLAGS+=(--prerelease) || FLAGS+=(--latest)
@@ -312,7 +379,7 @@ jobs:
 
   feed:
     needs: sign
-    if: github.event_name != 'workflow_dispatch' || inputs.publish
+    if: ${{ !cancelled() && needs.sign.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
     uses: ./.github/workflows/android-feed.yml
     permissions:
       contents: write

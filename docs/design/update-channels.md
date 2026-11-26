@@ -40,7 +40,7 @@ Changing to a stricter channel does not downgrade; normal version comparison wai
 for a newer eligible version. Existing signed-withdrawal recovery on Android is unchanged.
 
 The Android signed feed already retains every Android release. The Xteink feed retains
-a head for each product label plus the legacy numeric bridge heads for old readers.
+a head for each allowed product channel and device plus the legacy numeric bridge heads for old readers.
 Thus a newer Preview cannot hide the most recent RC. `release.yml` classifies both
 `-rc.N` and `-preview.N` as GitHub prereleases through its suffix check and publishes
 with `--prerelease`; stable alone uses `--latest`.

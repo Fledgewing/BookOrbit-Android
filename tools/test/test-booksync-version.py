@@ -56,7 +56,7 @@ class Versions(unittest.TestCase):
         def release(tag, pre, date, book=None):
             return dict(tag_name="xteink-v" + tag, name=tag, draft=False, prerelease=pre,
                         created_at=date, body=f"booksync_version={book}\n" if book else "",
-                        assets=[dict(name="firmware.bin", size=10, digest="sha256:abc",
+                        assets=[dict(name="firmware-x4-pro-v-test.bin", size=10, digest="sha256:abc",
                                      browser_download_url="https://example.invalid/fw.bin")])
         old = release("2.0.0.373+bookorbit.1-rc3", True, "1")
         bridge = release("2.0.0.400+bookorbit.1-rc3", True, "2", "0.11.3-rc.17")
@@ -77,21 +77,31 @@ class Versions(unittest.TestCase):
         bridge["created_at"] = "9"
         feed = F.build_feed([old, bridge, rc, stable, classic])
         self.assertIn(stable["tag_name"], [r["tag_name"] for r in feed])
-        self.assertIn(rc["tag_name"], [r["tag_name"] for r in feed])
+        # Stable supersedes its older RC in both the RC and Preview channels.
+        self.assertNotIn(rc["tag_name"], [r["tag_name"] for r in feed])
         earlier = release("0.12.0-preview.1", True, "8")
         self.assertIn(rc["tag_name"], [r["tag_name"] for r in F.build_feed([earlier, rc])])
 
     def test_three_channel_feed_ignores_github_and_upstream_labels(self):
-        def release(book, flag):
+        devices = ("firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4")
+        def release(book, flag, builds=devices):
             return dict(tag_name=f"xteink-v{book}+crossink.2.0.0.bookorbit.1-rc3",
-                        name=book, draft=False, prerelease=flag, created_at=book, assets=[])
+                        name=book, draft=False, prerelease=flag, created_at=book,
+                        assets=[dict(name=stem + "-v-test.bin") for stem in builds])
         stable = release("0.12.0", True)
-        rc = release("0.13.0-rc.2", False)
-        preview = release("0.14.0-preview.1", False)
-        feed = F.build_feed([stable, rc, preview, release("0.13.0-rc.1", True)])
-        self.assertEqual({"0.12.0", "0.13.0-rc.2", "0.14.0-preview.1"},
+        rc = release("0.13.0-rc.2", False, devices[:1])
+        previous_rc = release("0.13.0-rc.1", True)
+        preview = release("0.14.0-preview.1", False, devices[:1])
+        feed = F.build_feed([stable, rc, preview, previous_rc])
+        self.assertEqual({"0.12.0", "0.13.0-rc.1", "0.13.0-rc.2", "0.14.0-preview.1"},
                          {r["booksync_version"] for r in feed})
         self.assertTrue(all("-rc3" in r["tag_name"] for r in feed))
+        for i, device in enumerate(devices):
+            for minimum, expected in ((2, "0.12.0"), (1, "0.13.0-rc.2" if i == 0 else "0.13.0-rc.1"),
+                                      (0, "0.14.0-preview.1" if i == 0 else "0.13.0-rc.1")):
+                allowed = [r for r in feed if F.product_key(r)[3] >= minimum and
+                           any(a["name"].startswith(device + "-v") for a in r["assets"])]
+                self.assertEqual(expected, F.identity(max(allowed, key=F.product_key)))
 
 if __name__ == "__main__":
     unittest.main()
