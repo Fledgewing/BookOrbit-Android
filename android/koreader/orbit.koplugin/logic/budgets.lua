@@ -51,7 +51,7 @@ end
 
 -- Reader surfaces consume one book, capability row and optional battery row, in one batch.
 for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
-    Budgets.screens[id] = budget(3, 32768, 50)
+    Budgets.screens[id] = budget(3, 3 * 16384, 50)
 end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)

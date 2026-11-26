@@ -466,3 +466,11 @@ no metadata file or statistics database is parsed by the reader UI. The
 `progress.syncCurrent` capability advertises the existing explicit Sync action
 behind the library adapter, with no new sync writer. See
 [reader progress notes](../../docs/design/booksync-home/F12-H-NOTES.md).
+
+The owned Home host also uses `lists(limit)` on the library context. Its materialized
+rows contain opaque `key`, display `title` and cached `count`; incomplete membership
+is “Not saved yet”. Book windows may include `local_path` from the owner-scoped,
+worker-checked file ledger. The plugin opens only that local file through
+`Library.open`; no widget resolves identities or performs a download. A changed
+publication emits `library`; catalog publication emits `library_source`. These reuse
+the acknowledged event queue. They invalidate an already visible Home, never show it.

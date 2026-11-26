@@ -30,7 +30,7 @@ can call `ReaderPanel.details(key, ui)` with an opaque library key.
   end sheet. Home still uses `onOrbitGoHome`; this slice adds no finish writer.
 - `ko/home.lua:651`: existing plugin event dispatch, reused privately by the
   library adapter's explicit Sync action, with the existing Net/Wifi lifecycle.
-- `ko/library.lua:7`, `:20`, `:78`, `ko/store.lua:107`: existing paint contexts,
+- `ko/library.lua:7`, `:20`, `:88`, `ko/store.lua:107`: existing paint contexts,
   budget enforcement and bounded SQLite projection reads. No new Lua cache,
   database connection or transport. `ko/cache.lua:105` remains adapter-only.
 - Companion `LibraryReadModel.kt:5`, `CacheStore.kt:210`,
@@ -83,7 +83,7 @@ literal parser after removing that fixed settings header; it executes no Lua.
 
 Maintainer 2026-11-25: every **screen and widget** has strict limits; their library
 calls inherit those limits. Aggregation and joins run in the companion. Top panel,
-Book info and Details each have three materialized rows, 32 KiB total decoded,
+Book info and Details each have three materialized rows, 48 KiB total decoded (three bounded 16 KiB reads),
 zero subprocess spawns, zero network calls and at most one companion batch per
 paint. The shared reader-progress widget is one row, at most 16 KiB per snapshot.
 There are info-level call/paint/draw spans. Host timing is not device performance;
@@ -114,3 +114,7 @@ request this reader context through Library, including after opening Details.
 
 F12-G integration preserves `Library:facets`, the companion facet projection and
 filter picker budgets alongside the reader operations.
+
+F12-C integration reuses its worker-checked localPaths helper through the shared
+ledger reader. The Home book-details placeholder now opens ReaderPanel.details
+when a card has no local file; local Resume and the Home opt-in remain unchanged.

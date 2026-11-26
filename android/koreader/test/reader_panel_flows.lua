@@ -74,6 +74,8 @@ return function(here, test, ok, eq)
         ok(row(E,"3 days start to finish")); ok(row(E,"61 min reading time")); ok(row(E,"120 pages read"))
         row(E,"Details").action(); eq(E.ReaderPanel.sheet.screen,"details"); eq(W.reads[#W.reads-1],"reader","in-book Details keeps the native reader context")
         row(E,"Back to book").action(); eq(E.ReaderPanel.sheet,nil); eq(W.ui.document.file,"/books/fixture.epub")
+        E.ReaderPanel.details("opaque"); eq(W.reads[#W.reads-1],"book")
+        row(E,"Back").action(); eq(E.ReaderPanel.sheet,nil)
     end)
     test("reader panel: capabilities, missing data and asynchronous Sync never reopen a dismissed panel",function()
         local W,E=world(); W.caps={}; W.battery={}
@@ -107,7 +109,7 @@ return function(here, test, ok, eq)
         row(E,"KOReader menu").action(); eq(W.stock,2); eq(E.ReaderPanel.sheet,nil)
         E.ReaderPanel.show(W.ui,"reader-top-panel"); E.OrbitAndroid:onCloseWidget(); eq(E.ReaderPanel.sheet,nil)
         for _,s in ipairs({"reader-top-panel","book-info","details"}) do
-            local b=E.Budgets.get("screens",s); eq(b.rows,3); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
+            local b=E.Budgets.get("screens",s); eq(b.rows,3); eq(b.bytes,3*16384); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
         end
         eq(E.Budgets.get("widgets","reader-progress").snapshotBytes,16384)
         W.oversize=true

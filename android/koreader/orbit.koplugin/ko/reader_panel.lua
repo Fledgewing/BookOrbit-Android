@@ -29,7 +29,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
     local book = paint:widget("reader-progress")
     local result = key and book:book(key) or book:reader(ui.document.file)
     local battery = screen == "reader-top-panel" and paint:battery() or nil
-    local caps = paint:capabilities()
+    local caps = paint:read("capabilities", {limit=1})
     local m = ReaderPanelPlan.model(result, battery)
     paint:flush()
     local rows = {
@@ -75,7 +75,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             table.insert(rows, button("Details", function() ReaderPanel.show(ui, "details") end))
         end
     end
-    table.insert(rows, {kind="footer", text="Back to book", action=back})
+    table.insert(rows, {kind="footer", text=ui and ui.document and "Back to book" or "Back", action=back})
     local sheet
     if reuse then
         sheet = reuse

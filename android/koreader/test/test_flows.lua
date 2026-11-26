@@ -7112,6 +7112,8 @@ test("library ready model: real SQLite reads stay bounded and batch once", funct
     ok(success,err)
 end)
 
+dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
+
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 dofile(here .. "/reader_panel_flows.lua")(here, test, ok, eq)
 

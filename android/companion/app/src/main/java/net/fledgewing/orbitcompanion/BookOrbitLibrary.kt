@@ -11,12 +11,13 @@ object BookOrbitLibrary {
         if (ask?.get("owner") != owner) return null
         return (ask["books"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
     }
-    fun localBooks(store: CacheStore, owner: String): Set<Long>? {
+    fun localBooks(store: CacheStore, owner: String): Set<Long>? = localPaths(store, owner)?.keys
+    fun localPaths(store: CacheStore, owner: String): Map<Long, String>? {
         val entries = localEntries(store, owner) ?: return null
         return entries.mapNotNull { b ->
             val path = b["path"] as? String ?: return@mapNotNull null
-            (b["book_id"] as? Number)?.toLong()?.takeIf { java.io.File(LuaValue.utf8(path)).isFile }
-        }.toSet()
+            (b["book_id"] as? Number)?.toLong()?.takeIf { java.io.File(LuaValue.utf8(path)).isFile }?.let { it to path }
+        }.toMap()
     }
     fun namespace(owner: String): String = "bo:" + MessageDigest.getInstance("SHA-256").digest(owner.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
     fun key(owner: String, kind: String, id: Any) = "${namespace(owner)}:$kind:$id"

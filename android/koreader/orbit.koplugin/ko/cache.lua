@@ -148,7 +148,10 @@ end
 function OC.applyEvents(events)
     for _, ev in ipairs(events) do
         if type(ev) == "table" then
-            if ev.kind == "stored" then
+            if LibraryAdapter and (ev.kind == "checked" or ev.kind == "copies") then LibraryAdapter.changed(ev) end
+            if ev.kind == "library" or ev.kind == "library_source" then
+                LibraryAdapter.changed(ev)
+            elseif ev.kind == "stored" then
                 -- (0.11.x) nothing: the companion saves now.
             elseif ev.kind == "board_year" and LF then
                 LF.yearLanded(ev)
@@ -370,7 +373,7 @@ function OC.watchChecks()
             Copies.preparing, Copies.prepare_at, Copies.busy = nil, nil, nil
             Copies.stop("companion preparation timed out")
         end
-        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and (Copies.asked or Copies.prepare_at)) and not sleep_waits and not OC.recheck and not (LF and LF.year_waiting) then OC.watching = nil; return end
+        if not (LibraryAdapter and LibraryAdapter.watching) and next(OC.inflight) == nil and not OC.storage_asked and not (Copies and (Copies.asked or Copies.prepare_at)) and not sleep_waits and not OC.recheck and not (LF and LF.year_waiting) then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
