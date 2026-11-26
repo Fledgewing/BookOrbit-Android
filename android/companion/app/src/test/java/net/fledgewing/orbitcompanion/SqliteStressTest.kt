@@ -45,8 +45,12 @@ class SqliteStressTest {
             db.close()
         }
         reader.start()
-        // Until the reader has read enough pages (not a fixed 2 s: a slow CI runner gave it only 5).
-        val r = SqliteStress({ JdbcSql(file) }, log = { lines.add(it) }).run(60) { reads.get() > 40 }
+        // Require work from both connections: a fast reader can reach 40 reads while
+        // the writer has committed only a few pages. Neither relative speed ends the test early.
+        var pageChecks = 0
+        val r = SqliteStress({ JdbcSql(file) }, log = { lines.add(it) }).run(60) {
+            ++pageChecks > 30 && reads.get() > 40
+        }
         done.set(true)
         reader.join()
         assertEquals(0L, r.errors)
