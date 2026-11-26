@@ -40,7 +40,7 @@ function RS.refreshGeometry(s)
         return {size=size, height=safe and height or 0, face=face}
     end
     s.top = lane(top)
-    if s.ui.rolling and s.ui.rolling.cre_top_bar_enabled then s.top.height = 0 end
+    if s.top_visible==false or s.ui.rolling and s.ui.rolling.cre_top_bar_enabled then s.top.height = 0 end
     s.bottom = lane(bottom)
     if s.bottom_visible == nil then s.bottom_visible = true end
 end

@@ -48,7 +48,11 @@ function SheetLayout.height(block, m)
     elseif k == "stars" then h = m.star
     elseif k == "card" then h = m.card
     elseif k == "notice" then h = m.body
-    elseif k == "button" or k == "footer" or k == "reading-choices" then h = m.button
+    elseif k == "reader-position" then h = m.small
+    elseif k == "reader-lights" or k == "reader-grid" then h = m.small + m.button
+    elseif k == "reading-choices" and block.row.group_label then h = m.small + m.button
+    elseif k == "reader-tiles" then h = m.button + m.small
+    elseif k == "button" or k == "footer" or k == "reading-choices" or k == "reader-header" or k == "reader-actions" or k == "scrubber" or k == "reader-grid" then h = m.button
     else h = m.body end
     local measured = m.measured and m.measured[block]
     if measured and measured > h then h = measured end
