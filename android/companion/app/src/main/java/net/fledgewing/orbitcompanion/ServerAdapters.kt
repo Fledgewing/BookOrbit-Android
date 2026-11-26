@@ -28,7 +28,9 @@ object ServerAdapters {
         require(id == "bookorbit") { "unknown adapter" }
         val credentials = ServerCredentials(EncryptedAccountVault.android(ctx))
         val account = BookOrbitAccount(credentials.accountVault, AccountHttp, setupOnSignIn = { false })
-        return BookOrbitServerAdapter(credentials, account, ConnectorHttp)
+        return BookOrbitServerAdapter(credentials, account, ConnectorHttp) { creds, owner, key, done ->
+            AdapterWorker.acquireCover(ctx,creds,owner,key,done)
+        }
     }
     val cachedLists: CachedListProjection get() = SleepChoicesProjection
     val connector: ConnectorInstaller get() = ConnectorPlugin
