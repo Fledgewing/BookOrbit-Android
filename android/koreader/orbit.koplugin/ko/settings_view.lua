@@ -23,6 +23,7 @@ end
 function SettingsView:push(title,make,focus)
     self.stack[#self.stack+1]={title=self.title,make=self.make,offset=self.offset,focus=focus}
     self.title,self.make,self.offset,self.focus=title,make,0,1
+    self.choiceFocus=true
     self:paint()
 end
 function SettingsView:paint(attempt)
@@ -35,6 +36,12 @@ function SettingsView:paint(attempt)
     local screen=Device.screen
     local pageSize=math.max(1,math.min(5,math.floor((screen:getHeight()-screen:scaleBySize(300))/screen:scaleBySize(74))))
     self.offset=math.min(self.offset,math.max(0,math.floor((#items-1)/pageSize)*pageSize))
+    if self.choiceFocus then
+        self.choiceFocus=nil
+        for i,row in ipairs(items) do if row.checked_func and row.checked_func() then
+            self.offset=math.floor((i-1)/pageSize)*pageSize; self.focus=i-self.offset; break
+        end end
+    end
     local buttons,pending={},false
     for i=self.offset+1,math.min(#items,self.offset+pageSize) do
         local row=items[i]
@@ -44,7 +51,7 @@ function SettingsView:paint(attempt)
         if row.checked_func then text=(row.checked_func() and "● " or "○ ")..text end
         local enabled=row.enabled~=false and (not row.enabled_func or row.enabled_func())
         buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(S,Shared.mode()) or text,id=row.card_text and "mode-card" or row.id or "setting-"..i,align="left",enabled=enabled,
-            height=screen:scaleBySize(row.card_text and 180 or 64),text_font_size=row.card_text and 15 or 16,bordersize=row.section and 0 or nil,text_font_bold=row.section or nil,
+            height=screen:scaleBySize(row.card_text and 180 or row.height or 64),text_font_size=row.card_text and 15 or 16,bordersize=row.section and 0 or nil,text_font_bold=row.section or nil,
             callback=function()
                 if not self.alive then return end
                 self.focus=i-self.offset

@@ -71,3 +71,9 @@ function SettingsUI.toggleRule(value,id)
     if not found then if id=="library" then return {id} end; out[#out+1]=id end
     return out
 end
+
+SettingsUI.channelDescriptions={stable="Tested releases only",rc="The builds about to become stable",preview="Every test build, the earliest and roughest"}
+function SettingsUI.channelText(id,label,version)
+    local installed=SettingsUI.installed(version):match(" · (.+)$")
+    return label .. (installed==label and " · installed build" or "") .. "\n" .. (SettingsUI.channelDescriptions[id] or "")
+end

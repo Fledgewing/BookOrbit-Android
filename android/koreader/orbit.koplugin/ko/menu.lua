@@ -195,7 +195,8 @@ function OrbitAndroid:settingRow(key)
         row.sub_item_table = {}
         for _i, v in ipairs(d.values or {}) do
             local value = SettingsSync.fromWire(d, v.id)
-            table.insert(row.sub_item_table, {text=_(display(v.label)), radio=true,
+            table.insert(row.sub_item_table, {text=key=="update_channel" and SettingsUI.channelText(v.id,v.label,PATCH_VERSION) or _(display(v.label)),
+                height=key=="update_channel" and 96 or nil,radio=true,
                 checked_func=function() return SettingsSync.toWire(d, S[key]) == tostring(v.id) end,
                 callback=function() set(value) end})
         end
@@ -339,7 +340,8 @@ function OrbitAndroid:menuItems()
         group("updates", "Updates", function()
             local out = {{text="Installed: " .. SettingsUI.installed(PATCH_VERSION),enabled=false},self:settingRow("update_channel")}
             out[#out+1] = action("Check now", function() self:checkPatchUpdate() end)
-            out[#out+1] = action("What's new", function() self:showWhatsNew() end)
+            local news=action("What's new", function() self:showWhatsNew() end); news.read_only=true
+            out[#out+1]=news
             out[#out+1] = self:settingRow("auto_update_patch")
             out[#out+1] = self:settingRow("key_log")
             return out
@@ -409,7 +411,12 @@ function OrbitAndroid:settingsPresentation(items)
             row.sub_item_table_func=nil
             row.settings_rows=make
             if row.settings_group=="updates" or row.settings_group=="about" then
-                row.text_func=function() return row.text.." · "..SettingsUI.installed(PATCH_VERSION) end
+                row.text_func=function()
+                    if row.settings_group=="updates" then
+                        return row.text.." · "..SettingsUI.value(SCHEMA.byKey.update_channel,S.update_channel).." channel · "..PATCH_VERSION
+                    end
+                    return row.text.." · "..SettingsUI.installed(PATCH_VERSION)
+                end
             end
             row.callback=function(touchmenu)
                 if touchmenu and touchmenu.closeMenu then touchmenu:closeMenu() end
