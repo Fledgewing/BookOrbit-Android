@@ -18,10 +18,11 @@ class LibraryReadModel(
         fun initialize(db: Sql) = db.exec("CREATE TABLE IF NOT EXISTS library_views (owner TEXT, request TEXT, body BLOB, at INTEGER, PRIMARY KEY(owner,request)) WITHOUT ROWID")
     }
     /** Each request is its exact Lua literal: no hash collision or backend URL in the UI key. */
-    fun publish(owner: String, requests: List<*>) {
+    fun publish(owner: String, requests: List<*>): Boolean {
+        var changed = false
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
-        if (store.meta("owner") != owner) return
+        if (store.meta("owner") != owner) return false
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -33,12 +34,15 @@ class LibraryReadModel(
                 var body = LuaValue.encode(result)
                 val budget = ((args["bytes"] as? Number)?.toInt() ?: MAX_BYTES).coerceIn(256, MAX_BYTES)
                 if (body.size > budget) body = LuaValue.encode(mapOf("error" to "budget", "items" to emptyList<Any>(), "freshness" to freshness(false)))
+                val previous = store.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", CacheStore.u(owner), CacheStore.u(request)) { it.bytes(0) }.firstOrNull()
+                if (previous == null || !previous.contentEquals(body)) changed = true
                 store.db().exec("INSERT OR REPLACE INTO library_views VALUES (?,?,?,?)", CacheStore.u(owner), CacheStore.u(request), body, clock())
                 // Bounded projection cache; catalog and reading intents are untouched.
                 store.db().exec("DELETE FROM library_views WHERE (owner,request) IN (SELECT owner,request FROM library_views ORDER BY at DESC,request LIMIT -1 OFFSET 64)")
                 log("library ${args["op"]} ms=${(System.nanoTime()-start)/1_000_000} bytes=${body.size}")
             }
         }
+        return changed
     }
     private fun freshness(saved: Boolean): Map<String, Any?> = mapOf("saved" to saved,
         "generation" to store.meta("bulk_active"), "origin" to "cached-remote", "at" to if (saved) store.meta("bulk_at")?.toLongOrNull() else null)
@@ -54,6 +58,16 @@ class LibraryReadModel(
             "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
             "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
             "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
+        if (op == "lists") {
+            val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
+            if (store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
+            val limit = ((a["limit"] as? Number)?.toInt() ?: 8).coerceIn(1, MAX_ROWS)
+            val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val rows = store.db().query("SELECT id,name,n FROM bulk_sections WHERE g=? AND section='smart-scopes' ORDER BY pos LIMIT ? OFFSET ?", g, limit, offset) {
+                mapOf("key" to BookOrbitLibrary.key(owner, "list", it.text(0) ?: ""), "title" to it.text(1), "count" to it.long(2))
+            }
+            return mapOf("items" to rows, "freshness" to freshness(true))
+        }
         if (op == "job") {
             require(a["key"] == BookOrbitLibrary.key(owner, "job", "refresh"))
             val states = store.db().query("SELECT state,count(*) FROM jobs GROUP BY state") { (it.long(0) ?: 0) to (it.long(1) ?: 0) }.toMap()
@@ -88,7 +102,8 @@ class LibraryReadModel(
         val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
         if (kind in setOf("series", "list") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
-        val local = BookOrbitLibrary.localBooks(store, owner)
+        val localPaths = BookOrbitLibrary.localPaths(store, owner)
+        val local = localPaths?.keys
         if ((a["field"] == "where" || kind == "on-device" || f["where"] in setOf("on-device", "server-only")) && local == null) return empty(false)
         val membership = when (kind) {
             "list", "series" -> {
@@ -126,6 +141,7 @@ class LibraryReadModel(
                 val context = membership?.get(id).orEmpty()
                 val enriched = raw.entries.associate { it.key to it.value } + context
                 val b = BookOrbitLibrary.summary(owner, enriched, (context["_booksyncRank"] as? Number)?.toLong() ?: id, local?.contains(id)).toMutableMap()
+                b["local_path"] = localPaths?.get(id)
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 b["match"] = when { title == q -> 0; title.startsWith(q) -> 1; q in title -> 2; else -> 3 }

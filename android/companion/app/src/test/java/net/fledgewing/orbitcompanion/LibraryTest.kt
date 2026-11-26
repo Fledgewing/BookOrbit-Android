@@ -122,6 +122,32 @@ class LibraryTest {
         LibraryReadModel(st, {99}, {}).publish(owner,listOf(request))
         return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
     }
+    @Test fun homeListsAreBoundedNeutralAndNotEmptyUntilMembershipIsSaved() {
+        store().use { st ->
+            assertEquals("Not saved yet",read(st,mapOf("op" to "lists"))["empty"])
+            seed(st)
+            for (i in 1..10) st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'smart-scopes',?,?,?,?)",i,i.toString(),"List $i",i*2)
+            val result=read(st,mapOf("op" to "lists","limit" to 3,"offset" to 2))
+            val rows=result["items"] as List<*>
+            assertEquals(3,rows.size)
+            val first=rows[0] as Map<*,*>
+            assertEquals("List 3",first["title"]); assertEquals(6L,first["count"])
+            assertEquals(BookOrbitLibrary.key(owner,"list",3),first["key"])
+            assertFalse(first.containsKey("id"))
+            st.setMeta("bulk_complete",null)
+            assertEquals("Not saved yet",read(st,mapOf("op" to "lists"))["empty"])
+        }
+    }
+    @Test fun projectionEventsOnlyFireWhenAnOwnedSnapshotChanges() {
+        store().use { st ->
+            seed(st)
+            val model=LibraryReadModel(st,{99},{})
+            val request=String(LuaValue.encode(mapOf("op" to "lists")),Charsets.ISO_8859_1)
+            assertTrue(model.publish(owner,listOf(request)))
+            assertFalse(model.publish(owner,listOf(request)))
+            assertFalse(model.publish("other",listOf(request)))
+        }
+    }
     @Test fun readingStatsUsesExistingBoundedOwnerScopedProjection() {
         store().use { st ->
             val request=String(LuaValue.encode(mapOf("op" to "reading.stats", "limit" to 1, "bytes" to 16384)),Charsets.ISO_8859_1)
@@ -132,6 +158,7 @@ class LibraryTest {
             val result=st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) { it.bytes(0)!! }.single()
             assertTrue(result.size<=16384)
             assertEquals("empty",(LuaValue.parse(result) as Map<*,*>)["state"])
+
         }
     }
     @Test fun projectionsDistinguishMissingFromEmptyAndFilterBeforePaging() {
@@ -157,6 +184,8 @@ class LibraryTest {
             fun ledger(o: String) = ask.writeBytes(LuaValue.encode(mapOf("owner" to o,"books" to listOf(mapOf("book_id" to 1,"path" to file.path)))))
             ledger(owner)
             assertEquals(1L,read(st,mapOf("op" to "counts","source" to "on-device"))["total"])
+            val row=(read(st,mapOf("op" to "window","source" to "on-device"))["items"] as List<*>).single() as Map<*,*>
+            assertEquals(file.path,row["local_path"])
             assertEquals(4L,read(st,mapOf("op" to "counts","source" to "all","query" to mapOf("where" to "server-only")))["total"])
             file.delete(); assertEquals("No books",read(st,mapOf("op" to "window","source" to "on-device"))["empty"])
             ledger("other"); assertEquals("Not saved yet",read(st,mapOf("op" to "window","source" to "on-device"))["empty"])

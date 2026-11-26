@@ -98,6 +98,11 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo" } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+    -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
+    { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
+    { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
+    { "frontend/ui/widget/button.lua", { {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
+    { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
     -- Reading strips: temporary effective margins and native hidden-footer release.
     { "frontend/apps/reader/modules/readerfooter.lua", { "getHeight", "onToggleFooterMode",
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },

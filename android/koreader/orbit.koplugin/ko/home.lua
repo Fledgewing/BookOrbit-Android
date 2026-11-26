@@ -194,6 +194,7 @@ end
 -- and drops it when it has gone stale. Exceptions are only what the reader does in the book:
 -- menus they open, the end-of-book sheet.
 function reading()
+    if HomeHost and (HomeHost.opening or HomeHost.active and topWidget() == HomeHost.active) then return false end
     local ui = liveUI()
     if not (ui and ui.document) then return false end
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
@@ -559,6 +560,12 @@ end
 -- Home (android/docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
 -- "bookorbit" (home).
 function OrbitAndroid:smartHome(source, from_extra, mode, held)
+    if S.home_screen == "booksync" then
+        if (mode == nil or mode == "smart") and HomeHost.active and topWidget() == HomeHost.active and liveUI() and liveUI().document then
+            return HomeHost.active:onClose()
+        end
+        return HomeHost.show()
+    end
     mode = mode or "smart"
     -- Orbit's own sheets close first: they are not BookOrbit, and they'd cover whatever Home opens.
     if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
@@ -761,6 +768,7 @@ function OrbitAndroid:bookorbitMain(p, over, desc)
 end
 
 function OrbitAndroid:onOrbitGoHome()
+    if S.home_screen == "booksync" then return HomeHost.show() end
     if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
     local ui = liveUI()
     local p = bookorbit(ui)
