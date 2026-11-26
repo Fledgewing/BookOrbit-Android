@@ -165,15 +165,15 @@ function HomeHost.create()
             local need=HomeHostPlan.need(p)
             self:showList((p.settings or {}).title or (action=="device" and "On device" or "Library"),
                 action=="device" and "on-device" or p.widget=="library" and "library/all" or need.source,
-                action=="group" and {group=row.group} or need.query)
+                action=="group" and {group=row.group} or need.query,need.exclude_current)
         end
     end
-    function Host:showList(title,source,query)
+    function Host:showList(title,source,query,exclude_current)
         self.list_title=title or "Library"
         self.list_layout=Layout.default()
         self.list_layout.grids["android-tablet"].rows=3
         self.list_layout.pages={{id="list",tab="Library",name=self.list_title,placements={{instance="list-books",widget="booklist",version=1,
-            x=0,y=0,w=4,h=3,settings={title=self.list_title,source=source,query=query or {},offset=0,limit=8,style=1}}}}}
+            x=0,y=0,w=4,h=3,settings={title=self.list_title,source=source,query=query or {},exclude_current=exclude_current,offset=0,limit=8,style=1}}}}}
         local settings=self.list_layout.pages[1].placements[1].settings
         self.filter=FilterView.new{title=self.list_title,source=source,query=query,
             onChange=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
@@ -212,7 +212,7 @@ function HomeHost.create()
             return false
         end
         -- gate: user action (save filter)
-        UIManager:show(require("ui/widget/buttondialog"):new{title=_("Book list saved on Home"),buttons={{{text=_("Go to Home"),callback=function()
+        UIManager:show(require("ui/widget/buttondialog"):new{title=_("Book list saved on Home").." · "..(function() for _,pg in ipairs(document.pages) do if pg.id==page then return pg.name or pg.tab end end return "Home" end)(),buttons={{{text=_("Go to Home"),callback=function()
             -- Close this toast before rebuilding the initiating host.
             local toast=topWidget(); UIManager:close(toast)
             self.list_layout=nil; self.list_title=nil; self.filter=nil

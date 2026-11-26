@@ -142,3 +142,10 @@ end
 function Library.download(key,destination,callback)
     return LibraryAdapter.command("downloads.start",{key=key,destination=destination},callback)
 end
+
+-- Paged source names/counts, never a catalog delivered to the editor.
+function Library:sources(category, offset, limit, caps)
+    return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
+        allow_lists=not (caps and caps.lists and caps.lists.read==false),
+        allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
+end

@@ -743,3 +743,43 @@ the panel with Custom picked). Screens: `shots/*-r10-*.png`.
 **Rev 16 (critic approved round 10; four minors):** the margins, line spacing and contrast editors open with focus on +;
 the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values read Lighter / Normal / Darker instead of
 "Dark ±"; §23 now says Custom margins are stored per device. `flows3.js` 338/338. The critic's r10 scripts join `r3/all.sh`.
+
+### F12-P Android implementation (2026-11-26)
+
+Book lists reuse the Home editor draft, shared filter sheet and single Book list
+renderer. Friendly picker presets become `widget="booklist"` placements whose
+`settings` hold the approved cfg (`title`, `src`, `style`, `sort`, `cap`, neutral
+`query` for Custom filter). The layout engine's existing versioned placement
+format is retained; no second preset widget type or layout store is introduced.
+Source pages offer Built in, Your lists, Series and Authors. The companion
+materializes names, opaque source keys and counts; the plugin reads six rows and
+at most 16 KiB through `Library:sources` in one paint/batch. Empty or unavailable
+counts remain unknown. Reading now excludes the Continue reading book in the
+companion before filtering, sorting and paging, including after a sort change.
+
+Settings use a zero-read `booklist-config` budget; source pages have the bounded
+`booklist-sources` budget. Both log one draw span, and source reads also log the
+library call/paint spans. Editor moves remain geometry only. The existing widget
+budget limits each Book list snapshot to 16 KiB, with zero subprocesses and
+render-path network calls. Host tests enforce deterministic limits; the <500 ms
+Home, <50 ms widget and <100 ms editor targets still need device confirmation.
+
+Cancel discards configuration; Done updates the editor draft, and the editor's
+Done uses its existing atomic save. Saving a filter from an owned list persists a
+device-local widget and names the destination in the confirmation. Saving from
+configuration adds to the same editor draft, retains the selected widget and
+reports the destination plus the need to finish the editor. Classic More uses the
+same card, focusable source rows and Back paths; Title offers suggestions without
+a keyboard. Firmware implementation for X4 Pro, X4 and X3 follows Android under
+the maintainer's Android-first ruling. No device work or release is authorized.
+
+Reuse evidence: `logic/home_editor.lua:3` owns the draft and existing add/page
+operations; `ko/home_editor.lua:24` owns atomic layout saving;
+`ko/filter_sheet.lua:4` provides the shared sheet and callbacks;
+`logic/home_host.lua:90` provides Save to Home placement;
+`ko/home_widgets.lua:40` retains the one Book list renderer;
+`ko/library.lua:38` enforces bounded reads through the existing adapter;
+`LibraryReadModel.kt:24` publishes projections in the existing cache database.
+Paths without a directory prefix are under `android/koreader/orbit.koplugin/`;
+the companion file is under
+`android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.

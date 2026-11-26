@@ -71,3 +71,8 @@ for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
 end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
+
+-- Book list settings draw small configuration; source pages read one companion window.
+Budgets.screens["booklist-config"] = budget(0, 0, 100)
+Budgets.screens["booklist-config"].roundTrips = 0
+Budgets.screens["booklist-sources"] = budget(6, 16384, 50)

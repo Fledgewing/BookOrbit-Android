@@ -30,6 +30,13 @@ function HomeWidgets.button(canvas,text,x,y,w,h,callback)
     return HomeWidgets.put(canvas,HomeWidgets.ui().Button:new{text=text,width=w,height=h,padding=0,bordersize=0,
         text_font_size=16,avoid_text_truncation=false,callback=callback},x,y)
 end
+function HomeWidgets.caption(settings, book)
+    local cap=settings.cap or 0
+    if cap==1 then return book.added and tostring(book.added):sub(1,10) or "—" end
+    if cap==2 then return book.status=="finished" and _("Finished") or book.progress and string.format("%d%%",book.progress) or _("Not started") end
+    if cap==3 then return book.authors and book.authors[1] or "" end
+    return ""
+end
 function HomeWidgets.card(p, snapshot, dispatch, rect)
     local u=HomeWidgets.ui(); local scale=function(n) return Device.screen:scaleBySize(n) end
     local w,h=rect.w-2,rect.h-2
@@ -75,7 +82,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             HomeWidgets.button(cover,_("Open"),0,math.max(0,coverH-scale(32)),cw-scale(8),scale(32),function() dispatch("book",b) end)
             HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,cover},x,pad+scale(30))
             HomeWidgets.text(canvas,b.title or _("Untitled"),x,h-pad-scale(30),cw-scale(8),14,false,true)
-            HomeWidgets.text(canvas,b.authors and b.authors[1] or "",x,h-pad-scale(12),cw-scale(8),11)
+            HomeWidgets.text(canvas,HomeWidgets.caption(p.settings,b),x,h-pad-scale(12),cw-scale(8),11)
         end
     else
         local rowH=scale(48); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(30))/rowH)))
@@ -87,6 +94,8 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             local y=pad+scale(30)+(i-1)*rowH
             local progress=p.widget == "booklist" and tonumber(b.progress)
             if progress then label=label.."  ·  "..string.format("%d%%",math.max(0,math.min(100,progress))) end
+            local caption=p.widget=="booklist" and HomeWidgets.caption(p.settings,b) or ""
+            if caption~="" and (p.settings.cap~=2 or not progress) then label=label.." · "..caption end
             HomeWidgets.button(canvas,label,pad,y,w-2*pad,progress and rowH-scale(8) or rowH,function()
                 dispatch(p.widget == "lists" and "list" or "book",b)
             end)

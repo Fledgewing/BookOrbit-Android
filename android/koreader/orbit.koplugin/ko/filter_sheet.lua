@@ -94,7 +94,10 @@ function FilterView:paint(attempt)
             if r.divider then table.insert(buttons,#buttons,{}) end -- thin divider, no heading
         end
         local b=row("+ Save as a Book list on Home",function()
-            if self.onSave then self.onSave({source="custom-filter",base_source=Layout.copy(m.source),query=Layout.copy(m.query)}); self:close(true) end
+            if self.onSave then
+                local saved=self.onSave({source="custom-filter",base_source=Layout.copy(m.source),query=Layout.copy(m.query)})
+                if saved~=false then self:close(true) end
+            end
         end)
         b.enabled=self.onSave~=nil
         buttons[#buttons+1]={{text="Reset",callback=function() m:reset(); self:changed() end},

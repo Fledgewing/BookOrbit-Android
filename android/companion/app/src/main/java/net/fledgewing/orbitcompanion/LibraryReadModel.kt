@@ -88,6 +88,32 @@ class LibraryReadModel(
                 "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         }
+        if (op == "sources") {
+            val category=a["category"] as? String ?: "builtin"
+            require(category in setOf("builtin","lists","series","authors"))
+            val offset=((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val limit=((a["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
+            if (category=="lists" && a["allow_lists"]==false) return empty(true)
+            if (category=="lists" || category=="series") return BookOrbitLibrary.sourceSections(store,owner,category,offset,limit)
+            if (category=="authors") {
+                val page=project(owner,mapOf("op" to "facets","source" to "library/all","field" to "author","offset" to offset,"limit" to limit))
+                val rows=(page["items"] as? List<*>).orEmpty().map { raw ->
+                    val row=raw as Map<*,*>
+                    mapOf("src" to "author:${row["value"]}","title" to LuaValue.boundedText(LuaValue.utf8(row["label"].toString()),80),"count" to row["count"])
+                }
+                return page + mapOf("items" to rows,"total" to page["option_total"])
+            }
+            val definitions=listOf(Triple("custom","Custom filter","library/all"),Triple("recent","Recently added","recently-added"),
+                Triple("wtr","Want to read","want-to-read"),Triple("reading","Reading now","reading"),
+                Triple("finished","Finished","finished"),Triple("device","On this device","on-device"))
+                .filter { (src,_,_) -> !(src=="wtr" && a["allow_wtr"]==false || src=="device" && a["allow_device"]==false) }
+            val rows=definitions.drop(offset).take(limit).map { (src,title,source) ->
+                val count=project(owner,mapOf("op" to "counts","source" to source,"exclude_current" to (src=="reading")))
+                mapOf("src" to src,"title" to title,"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
+            }
+            return mapOf("items" to rows,"total" to definitions.size,"next" to (offset+rows.size).takeIf { it<definitions.size },
+                "freshness" to freshness(store.meta("bulk_active")!=null))
+        }
         if (op == "lists") {
             val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
             if (store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
@@ -166,6 +192,8 @@ class LibraryReadModel(
         val facet = if (op == "facets" && a["field"] != null) LibraryFacets(a["field"].toString(), filter, clock()) else null
         val selected = ArrayList<Map<String, Any?>>()
         // Bounded DB chunks; parsing, filter fallback, joins, sort and counts stay off KOReader.
+        var current: Map<String, Any?>? = null
+        val currentOrder=LibraryFilter.comparator(mapOf("sort" to "last","dir" to "desc"))
         var after = -1L
         while (true) {
             val batch = store.db().query("SELECT id,item FROM bulk_books WHERE g=? AND id>? ORDER BY id LIMIT 256", g, after) { it.long(0)!! to it.bytes(1)!! }
@@ -179,6 +207,8 @@ class LibraryReadModel(
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 b["match"] = when { title == q -> 0; title.startsWith(q) -> 1; q in title -> 2; else -> 3 }
+                if (a["exclude_current"]==true && kind=="reading" && LibraryFilter.matches(b,mapOf("show" to "reading")) &&
+                    (current==null || currentOrder.compare(b,current!!)<0)) current=b
                 if ((membership == null || id in membership) && LibraryFilter.matches(b, sourceFilter)) {
                     facet?.include(b)
                     if (LibraryFilter.matches(b, filter)) selected.add(b)
@@ -186,6 +216,7 @@ class LibraryReadModel(
             }
             after = batch.last().first
         }
+        if (a["exclude_current"]==true && kind=="reading" && current!=null) selected.removeAll { it["key"]==current!!["key"] }
         val total = selected.size
         if (op == "facets") {
             val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
