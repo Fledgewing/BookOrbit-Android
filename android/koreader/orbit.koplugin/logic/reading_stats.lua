@@ -28,7 +28,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         p.message='Reading days unavailable'; return p
     end
     if id == 'year-in-reading' then
-        assert(#data.year.intensity == 365)
+        assert(data.year.intensity[365] ~= nil and data.year.intensity[366] == nil)
         local size = math.max(1, math.floor(math.min((w-16)/53,(h-66)/7)))
         local offset=data.year.weekday or 0
         for i=1,365 do
@@ -39,7 +39,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         end
         label(8,h-20,tostring(data.year.days_read)..' days read · '..data.year.start)
     elseif id == 'this-week' then
-        assert(#data.week.seconds == 7 and #data.week.levels == 7)
+        assert(data.week.seconds[7] ~= nil and data.week.seconds[8] == nil and data.week.levels[7] ~= nil and data.week.levels[8] == nil)
         local separate=data.local_today_seconds ~= nil
         if separate then header=header+20 end
         local width=(w-16)/7; local height=math.max(1,h-92-header)
@@ -51,7 +51,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         label(8,28+(p.source and 16 or 0),tostring(math.floor(data.week.total_seconds/60))..' min this week')
         if separate then label(8,28+header,tostring(math.floor(data.local_today_seconds/60))..'m today · this reader (separate)') end
     elseif id == 'when-you-read' then
-        assert(#data.hour_levels == 24 and #data.hour_intensity == 24)
+        assert(data.hour_levels[24] ~= nil and data.hour_levels[25] == nil and data.hour_intensity[24] ~= nil and data.hour_intensity[25] == nil)
         local strip=rows == 1; local height=math.max(1,h-100-header); local width=(w-16)/24
         for i=1,24 do
             local bh=strip and math.min(22,height) or height*data.hour_levels[i]

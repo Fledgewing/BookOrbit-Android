@@ -19,6 +19,8 @@ end
 local sources = {recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
 function HomeHostPlan.need(p)
     local s=p.settings or {}
+    if p.widget == "library" then return {op="library.summary",limit=1} end
+    if p.widget == "battery" then return {op="battery",limit=1} end
     if p.widget == "lists" then return {op="lists",limit=8} end
     if p.widget == "continue-reading" then return {op="window",source="reading",query={},offset=0,limit=1} end
     local source = s.source or sources[s.src] or "recently-added"
@@ -44,8 +46,13 @@ function HomeHostPlan.snapshot(result)
         or not (result.freshness and result.freshness.saved) and "offline-without-data"
         or #(result.items or {}) == 0 and "empty"
         or (result.offline or result.freshness and result.freshness.offline) and "offline-with-data" or "ready"
-    return HomeHostPlan.immutable({state=state,items=result.items or {},count=#(result.items or {}),
-        total=result.total, next=result.next, error=result.error, freshness=result.freshness})
+    local snapshot={state=state,items=result.items or {},count=#(result.items or {}),
+        total=result.total, next=result.next, error=result.error, freshness=result.freshness,
+        data=not result.items and result or nil, bytes=#Cache.encode(result)}
+    if #Cache.encode(snapshot)>Budgets.MAX_SNAPSHOT then
+        snapshot={state="error",items={},count=0,error="Snapshot budget exceeded",data={state="error"},bytes=64}
+    end
+    return HomeHostPlan.immutable(snapshot)
 end
 -- Empty projections of future-only default pages are retained in data, skipped in navigation.
 function HomeHostPlan.resolve(document,registry,caps)
@@ -60,6 +67,9 @@ function HomeHostPlan.resolve(document,registry,caps)
             local supported=true
             if p.widget == "lists" and caps and type(caps.lists) == "table" and caps.lists.read == false then supported=false end
             if (p.widget == "booklist" or p.widget == "continue-reading") and caps and caps.catalog == false then supported=false end
+            if p.widget == "battery" and caps and caps.battery == false then supported=false end
+            if p.widget == "library" and caps and caps.catalog == false then supported=false end
+            if WidgetRegistry[p.widget] and WidgetRegistry[p.widget].dataNeeds[1].source == "reading.stats" and caps and caps.readingStats == false then supported=false end
             if need.source == "want-to-read" and caps and caps.wantToRead == false then supported=false end
             if need.source == "on-device" and caps and caps.onDevice == false then supported=false end
             if supported then placements[#placements+1]=p end
@@ -70,4 +80,25 @@ function HomeHostPlan.resolve(document,registry,caps)
     if #visible==0 then visible[1]=resolved.pages[1] end
     resolved.pages=visible
     return resolved
+end
+
+-- Reuse bounded placement and page operations, preserving every existing override.
+function HomeHostPlan.saveFilter(document, saved, title)
+    local id="filter-"..document.revision
+    local used={}
+    for _,page in ipairs(document.pages) do
+        used[page.id]=true
+        for _,p in ipairs(page.placements) do used[p.instance]=true end
+    end
+    while used[id] do id=id.."-new" end
+    local p={instance=id,widget="booklist",version=1,x=0,y=0,w=2,h=2,
+        settings={title=title or "Book list",source=Layout.copy(saved.base_source or "library/all"),
+            src="custom",query=Layout.copy(saved.query or {}),style=0}}
+    for _,page in ipairs(document.pages) do
+        local result=Layout.add(document,page.id,p)
+        if result then return result,page.id end
+    end
+    local result,err=Layout.page(document,"add",id)
+    if not result then return nil,err end
+    return Layout.add(result,id,p),id
 end

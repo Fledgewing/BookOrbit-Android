@@ -1,7 +1,7 @@
 return function(test,eq,ok,here,Cache)
     local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
     local root=here..'/../orbit.koplugin/'
-    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','ko/reading_stats.lua'}) do
+    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','logic/battery_widget.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
     end
     local data={state='ready',year={intensity={},days_read=7,start='2025-11-26'},
@@ -73,6 +73,27 @@ return function(test,eq,ok,here,Cache)
         eq(only.labels[1].text,'Local records unavailable'); eq(only.labels[3].text,'17 books this year')
         data.year=nil
         eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).message,'Reading days unavailable')
+    end)
+
+    test('battery widget: measured scalars format with the existing reader duration helper',function()
+        local d={level=78,hours_usual_use=54,hours_reading_nonstop=12.5,hours_standby_only=240,
+            screen_on={pct_per_hour=4.1},standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}}}
+        local before=Cache.encode(d)
+        local p=e.BatteryWidgetPlan.model(d)
+        eq(p.level_text,'78%'); eq(p.fraction,.78)
+        eq(p.usual,'≈ 2 d 6 h at your usual use'); eq(p.narrow_usual,'≈ 2 d 6 h · usual use')
+        eq(p.screen_on,'Screen on 4.1 %/h'); eq(p.standby,'Standby 0.6 %/h')
+        eq(p.charge,'Last charge 12% → 100%'); eq(Cache.encode(d),before)
+        eq(e.ReaderPanelPlan.duration(.5,true),'30 min')
+        eq(e.ReaderPanelPlan.duration(54),'2 d 6 h')
+    end)
+    test('battery widget: absent evidence and invalid values never become a sample estimate',function()
+        local p=e.BatteryWidgetPlan.model({level=101,hours_usual_use=0/0,
+            pct_used_per_day=setmetatable({}, {__index=function() error('history scan') end})})
+        eq(p.level,nil); eq(p.level_text,'—'); eq(p.fraction,nil)
+        eq(p.usual,'More measured use needed'); eq(p.screen_on,'Screen on —')
+        eq(e.BatteryWidgetPlan.model({level=0,hours_usual_use=0}).level_text,'0%')
+        eq(e.ReaderPanelPlan.duration(-1),nil); eq(e.ReaderPanelPlan.duration(math.huge),nil)
     end)
 
 end
