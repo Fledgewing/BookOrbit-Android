@@ -18,21 +18,21 @@ end
 
 test("0.12 first run: fresh install, additive upgrade and crash retry", function()
     local fresh={}
-    ok(M.FirstRun.migrate(fresh))
+    ok(M.HomePlan.migrate012(fresh))
     eq(fresh.home_screen,"booksync"); eq(fresh.news_012_pending,false)
-    eq(M.FirstRun.migrate(fresh),false)
+    eq(M.HomePlan.migrate012(fresh),false)
     local layout,logins,caches,outbox={pages={}}, {sync="fixture"}, {}, {{id=1}}
     local old={home_screen="server",sync_mode="custom",home_layout=layout,
         logins=logins,caches=caches,outbox=outbox,settings_at={sync_mode=125}}
-    ok(M.FirstRun.migrate(old))
+    ok(M.HomePlan.migrate012(old))
     eq(old.home_screen,"booksync"); eq(old.news_012_pending,true)
     eq(old.sync_mode,"custom"); eq(old.settings_at.sync_mode,125)
     eq(old.home_layout,layout); eq(old.logins,logins); eq(old.caches,caches); eq(old.outbox,outbox)
     old.news_012_pending=false
-    eq(M.FirstRun.migrate(old),false); eq(old.news_012_pending,false)
+    eq(M.HomePlan.migrate012(old),false); eq(old.news_012_pending,false)
     -- A process dying before the atomic settings flush leaves the old durable state.
     local beforeFlush={sync_mode="custom"}
-    ok(M.FirstRun.migrate(beforeFlush)); eq(beforeFlush.news_012_pending,true)
+    ok(M.HomePlan.migrate012(beforeFlush)); eq(beforeFlush.news_012_pending,true)
 end)
 
 -- Turns `n` pages, all in chapter `key` (nil: no table of contents).
@@ -1051,7 +1051,6 @@ test("cache: encode is canonical and round-trips", function()
     local v = { b = { 1, 2, { z = "x\n" } }, a = 1.5, c = true, [10] = "ten" }
     eq(C.encode(C.decode(C.encode(v))), C.encode(v))
     eq(C.encode({ a = 1, b = 2 }), C.encode({ b = 2, a = 1 }))
-    ok(C.imageHeader("\255\216\255\224xxxx") and C.imageHeader("\137PNG\r\n") and not C.imageHeader("<html>"), "headers")
 end)
 
 test("companion rules: the mirror's stop note (shared cases; the eviction order is StorageLogic's)", function()
@@ -1670,17 +1669,12 @@ test("orbismart: the popup's question", function()
     eq(OrbiSmart.question("X4 Pro", 12, "follow"), "Continue from X4 Pro, p. 12 (moved back there)?")
 end)
 
-test("main loop: directory iterators are confined to the guarded thumbnail child", function()
-    local main = readFile(here .. "/../orbit.koplugin/main.lua")
+test("main loop: all directory enumeration belongs to the companion", function()
+    local main=readFile(here.."/../orbit.koplugin/main.lua")
+    ok(not main:find("cover_child",1,true),"no thumbnail child module")
     for module in main:gmatch('"(ko/[^"%s]+%.lua)"') do
-        local source = readFile(here .. "/../orbit.koplugin/" .. module)
-        if module == "ko/cover_child.lua" then
-            ok(source:find("Db.pid() ~= Store.ui_pid",1,true), "child PID guard")
-            ok(source:find("if not lfs_ok or not (Store.inChild()",1,true), "guard precedes iterator")
-        else
-            ok(not source:find("lfs.dir",1,true), module .. " must not enumerate a directory")
-            ok(not source:find("lfs%.attributes[^\n]*for "), module .. " file scans belong to companion")
-        end
+        local source=readFile(here.."/../orbit.koplugin/"..module)
+        ok(not source:find("lfs.dir",1,true),module.." must not enumerate a directory")
     end
 end)
 

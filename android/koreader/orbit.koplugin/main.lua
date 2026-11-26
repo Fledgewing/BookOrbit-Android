@@ -43,8 +43,8 @@ local KO = {
     "ko/module.lua", "ko/server/bookorbit/lifecycle.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/server/bookorbit/reading_sync.lua",
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
-    "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/server/bookorbit/cache.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
-    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/series.lua", "ko/home_editor.lua", "ko/booklist_config.lua", "ko/settings_view.lua",
+    "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
+    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/covers.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/series.lua", "ko/home_editor.lua", "ko/booklist_config.lua", "ko/settings_view.lua",
     "ko/server/bookorbit/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }
 
@@ -75,7 +75,7 @@ load(LOGIC)
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = env.Schedule, Plan = env.Plan, Update = env.Update, WifiPlan = env.WifiPlan,
         HomePlan = env.HomePlan, disabledText = env.disabledText, Compat = env.Compat, Stats = env.Stats,
-        Clicks = env.Clicks, FirstRun = env.FirstRun, SetupPrompt = env.SetupPrompt, MenuLock = env.MenuLock,
+        Clicks = env.Clicks, SetupPrompt = env.SetupPrompt, MenuLock = env.MenuLock,
         SeriesPlan = env.SeriesPlan, ReadingStyle = env.ReadingStyle, BookList = env.BookList, HomeEditorPlan = env.HomeEditorPlan, Layout = env.Layout, WidgetRegistry = env.WidgetRegistry, Budgets = env.Budgets, FilterSheet = env.FilterSheet, RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, Cache = env.Cache, ServerCache = env.ServerCache, SheetLayout = env.SheetLayout, Recommended = env.Recommended, Caps = env.Caps, CopiesPlan = env.CopiesPlan, SleepPool = env.SleepPool, SettingsSync = env.SettingsSync, OrbiSmart = env.OrbiSmart, StatusLayout = env.StatusLayout, BatteryGlyph = env.BatteryGlyph, PATCH_VERSION = PATCH_VERSION }
 end
 

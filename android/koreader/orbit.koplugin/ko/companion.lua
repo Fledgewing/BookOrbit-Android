@@ -32,8 +32,6 @@ Companion.ACTION = {
     COPIES = Companion.PACKAGE .. ".action.COPIES",
     -- The sleep screen's pool: the companion lists, checks and fetches the covers (Sleep.refresh).
     SLEEP_REFRESH = Companion.PACKAGE .. ".action.SLEEP_REFRESH",
-    -- A Full refresh's covers on screen, asked again If-None-Match (OC.recheckCovers).
-    RECHECK = Companion.PACKAGE .. ".action.RECHECK",
     -- Debug: the shared-storage SQLite stress test's writer (ko/sqlite_stress.lua).
     SQLITE_STRESS = Companion.PACKAGE .. ".action.SQLITE_STRESS",
     PATCH = Companion.PACKAGE .. ".action.PATCH",

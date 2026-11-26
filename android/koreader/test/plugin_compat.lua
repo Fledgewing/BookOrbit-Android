@@ -112,7 +112,7 @@ for _, p in ipairs({ '"/koreader/plugin/catalog/root"', '"/koreader/plugin/catal
     '"/koreader/plugin/catalog/books/" .. tostring(book_id), { deviceId = self.device_id, variant = variant }' }) do
     has(api, p, "catalog path " .. p)
 end
-for _, name in ipairs({ "runConnected", "download", "fetchDeliveryBook", "supportedFiles", "requestBlocking", "runInSubprocess" }) do
+for _, name in ipairs({ "thumbnailEntry", "runThumbnailWorker", "stopThumbnailWorker", "runConnected", "download", "fetchDeliveryBook", "supportedFiles", "requestBlocking", "runInSubprocess" }) do
     need(name, "function")
 end
 has(api, '"subprocess_no_result"', "runInSubprocess reports a child without a result")

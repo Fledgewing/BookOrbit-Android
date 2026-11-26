@@ -870,7 +870,7 @@ A saved layout (including class overrides) remains authoritative; this cutover
 never resets it or copies catalogs, logins, outbox or reading intents.
 
 Reuse: `ko/settings.lua:52` owns the existing settings record;
-`logic/prompts.lua:11` owns prompt policy; `ko/home_host.lua:15` reads layouts
+`logic/home_plan.lua:81` owns the additive Home migration; `ko/home_host.lua:15` reads layouts
 through `ko/home_editor.lua:14`; `ko/store.lua:1` remains the file boundary.
 `ko/library.lua:15` owns paint budgets, and `logic/home_host.lua:46` projects
 small immutable snapshots. The companion's `SettingsStore.kt:51` already

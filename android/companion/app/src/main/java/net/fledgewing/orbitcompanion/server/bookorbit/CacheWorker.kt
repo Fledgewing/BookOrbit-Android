@@ -190,6 +190,12 @@ class CacheWorker(
         @Synchronized fun total(): Long = bytes
     }
     @Volatile private var coverUsage: CoverUsage? = null
+    private var coverUsageRoot: File? = null
+    private fun recordCover(file: File) {
+        val base=coverUsageRoot ?: return
+        if (file.toPath().startsWith(base.toPath()))
+            coverUsage?.replace("c:${file.relativeTo(base).path}",file.length()+File(file.path+".etag").length())
+    }
 
     // ------------------------------------------------------------------ the storage limit
 
@@ -220,7 +226,7 @@ class CacheWorker(
                 if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
                 val etag = File(f.path + ".etag")
                 val relative = f.relativeTo(dir).path
-                val currentAccount = f.parentFile == dir || f.parentFile.name == store.meta("owner")?.let(BookOrbitLibrary::namespace)
+                val currentAccount = f.parentFile == dir || f.parentFile?.name == store.meta("owner")?.let(BookOrbitLibrary::namespace)
                 items.add(StorageLogic.Item("c:$relative", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
                     if (currentAccount && f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (relative in keep) "mirror_cover" else "cover"))
             }
@@ -299,7 +305,7 @@ class CacheWorker(
             val f = allowed(path) ?: continue
             if (!f.name.endsWith(".jpg") || !f.isFile) continue
             f.setLastModified(now() * 1000)
-            coverUsage?.replace("c:${f.name}", f.length() + File(f.path + ".etag").length())
+            recordCover(f)
         }
     }
 
@@ -311,51 +317,6 @@ class CacheWorker(
         store.db().query("SELECT detail FROM books WHERE detail IS NOT NULL LIMIT ?", max.toLong()) { it.bytes(0) }.mapNotNull { b ->
             ((b?.let { LuaValue.parse(it) } as? Map<*, *>)?.get("tags") as? List<*>)?.mapNotNull { it as? String }
         }
-
-    /**
-     * A Full refresh's covers on screen, asked again If-None-Match (was the plugin's forked
-     * "cover recheck"). items: book id and the plugin's cover file, each with its .etag. Answers
-     * with a `covers_rechecked` event naming the replaced ones.
-     */
-    fun recheckCovers(why: String, creds: Creds, items: List<Pair<Long, String>>) {
-        val changed = ArrayList<Long>()
-        var failed = 0L
-        for ((id, asked) in items) {
-            checkpoint()
-            val f = allowed(asked)
-            if (f == null) { failed++; continue }
-            val path = f.path
-            val etagFile = allowed("$path.etag") ?: run { failed++; null } ?: continue
-            if (!f.isFile) continue
-            val head = ByteArray(16)
-            val n = f.inputStream().use { it.read(head) }
-            val magic = String(head, Charsets.ISO_8859_1)
-            val jpeg = n >= 3 && (head[0].toInt() and 255) == 255 && (head[1].toInt() and 255) == 216 && (head[2].toInt() and 255) == 255
-            val image = jpeg || magic.startsWith("\u0089PNG") || magic.startsWith("GIF8") || (magic.startsWith("RIFF") && magic.substring(8, 12) == "WEBP")
-            if (!image) {
-                f.delete(); etagFile.delete(); changed.add(id); continue
-            }
-            if (!etagFile.isFile) continue
-            val h = headers(creds, "image/jpeg,image/*").toMutableMap()
-            h["Accept-Encoding"] = "identity"
-            h["If-None-Match"] = etagFile.readText()
-            val part = allowed("$path.part") ?: run { failed++; null } ?: continue
-            part.delete()
-            val r = http.get(creds.server + "/koreader/plugin/catalog/books/$id/thumbnail", h, part, MAX_COVER)
-            when {
-                r.code == 304 -> { part.delete(); thumbnail(f) }
-                r.code == 200 && r.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
-                    thumbnail(f)
-                    if (r.etag != null) write(etagFile, r.etag.toByteArray()) else etagFile.delete()
-                    changed.add(id)
-                }
-                else -> { part.delete(); failed++ }
-            }
-            coverUsage?.replace("c:${f.name}", f.length() + etagFile.length())
-        }
-        log("worker: covers re-asked: ${items.size} checked, ${changed.size} replaced, $failed failed ($why)")
-        event(sortedMapOf("kind" to "covers_rechecked", "why" to why, "checked" to items.size.toLong(), "changed" to changed, "failed" to failed))
-    }
 
     /**
      * The plugin's COPIES: which copies on this reader changed in the library. The ask
@@ -489,30 +450,83 @@ class CacheWorker(
         return coverName(book)?.let { "$dir/$it" }
     }
 
+    /** A local reference is confined to the installed cover folder. Backend identity/version
+     * decoding and legacy-cache import belong here, never to the plugin renderer. */
+    fun acquireCoverReference(owner: String, reference: String, creds: Creds, directory: File, refresh: Boolean = false, onGrowth: (Long) -> Unit = {}): Map<String,Any?> {
+        checkpoint()
+        val current=store.meta("owner")
+        if (current!=null && current!=owner) throw ServerFailure("unauthorized")
+        val root=allowed(directory.path) ?: throw ServerFailure("forbidden")
+        val requested=allowed(reference) ?: throw ServerFailure("forbidden")
+        val owned=allowed(File(root,BookOrbitLibrary.namespace(owner)).path) ?: throw ServerFailure("forbidden")
+        if (requested.parentFile != root && requested.parentFile != owned) throw ServerFailure("forbidden")
+        val match=Regex("(a?)([1-9][0-9]{0,9})_([0-9]{1,32})\\.jpg").matchEntire(requested.name) ?: throw ServerFailure("missing")
+        val id=match.groupValues[2].toLong().also { require(it<=2147483647L) }
+        val portrait=match.groupValues[1]=="a"
+        if (!store.ownIfEmpty(owner)) throw ServerFailure("unauthorized")
+        val raw=mapOf("id" to id,"hasCover" to true,"updatedAt" to match.groupValues[3],"author_photo" to portrait)
+        val target=allowed(File(owned,requested.name).path) ?: throw ServerFailure("forbidden")
+        val before=target.length()+File(target.path+".etag").length()
+        if (!target.isFile && requested.isFile && requested.length() in 1..MAX_COVER) {
+            val head=requested.inputStream().use { input -> ByteArray(16).let { it.copyOf(input.read(it).coerceAtLeast(0)) } }
+            if (imageHeader(head)) {
+                target.parentFile?.let(NoMedia::directory)
+                val part=allowed(target.path+".import") ?: throw ServerFailure("forbidden")
+                try { requested.copyTo(part,overwrite=true); if (!part.renameTo(target)) throw ServerFailure("space") }
+                finally { part.delete() }
+                val tag=allowed(requested.path+".etag")
+                val out=allowed(target.path+".etag") ?: throw ServerFailure("forbidden")
+                if (tag?.isFile==true && tag.length() in 1..1024) write(out,tag.readBytes())
+            }
+        }
+        val result=acquireCover(owner,id,creds,owned,refresh,raw)
+        recordCover(target)
+        onGrowth(maxOf(0,target.length()+File(target.path+".etag").length()-before))
+        val ref=LuaValue.str(reference)
+        val key=MirrorLogic.hash(ref)
+        store.transaction {
+            val prior=store.meta("cover_ref_order")?.let { LuaValue.parse(it.toByteArray(Charsets.ISO_8859_1)) as? List<*> }.orEmpty().filterIsInstance<String>()
+            val order=(prior.filter { it!=key }+key).takeLast(64)
+            for (old in prior) if (old !in order) store.setMeta("cover_ref_$old",null)
+            store.setMeta("cover_ref_$key",String(LuaValue.encode(result+mapOf("reference" to ref)),Charsets.ISO_8859_1))
+            store.setMeta("cover_ref_order",String(LuaValue.encode(order),Charsets.ISO_8859_1))
+        }
+        return result
+    }
+
+    private fun imageHeader(bytes: ByteArray): Boolean =
+        bytes.size>=3 && (bytes[0].toInt() and 255)==255 && (bytes[1].toInt() and 255)==216 && (bytes[2].toInt() and 255)==255 ||
+        String(bytes,Charsets.ISO_8859_1).let { it.startsWith("\u0089PNG") || it.startsWith("GIF8") || it.startsWith("RIFF") && it.drop(8).startsWith("WEBP") }
+
     /** Explicit acquisition on the writer queue. Hits need no network. An older revision
      * stays available when conditional acquisition fails or the server is offline. */
-    fun acquireCover(owner: String, id: Long, creds: Creds, directory: File): Map<String, Any?> {
+    fun acquireCover(owner: String, id: Long, creds: Creds, directory: File, refresh: Boolean = false, source: Map<*,*>? = null): Map<String, Any?> {
         val start = clockMs()
         try {
             checkpoint()
             if (store.meta("owner") != owner)
                 throw ServerFailure("unauthorized")
-            val book = store.bookItem(id) as? Map<*, *> ?: throw ServerFailure("missing")
-            val plan = Plan(mapOf("cover_dir" to directory.path))
+            val book = source ?: store.bookItem(id) as? Map<*, *> ?: throw ServerFailure("missing")
+            val plan = Plan(mapOf("cover_dir" to directory.path,"force" to refresh))
             val path = coverPath(plan,book) ?: throw ServerFailure("missing")
             val target = allowed(path) ?: throw ServerFailure("forbidden")
             fun published(file: File, stale: Boolean = false): Map<String, Any?> {
-                store.setMeta("cover_file_$id",LuaValue.str(file.path))
-                store.setMeta("cover_stale_$id",true.takeIf { stale })
+                store.setMeta("cover_file_${if (book["author_photo"]==true) "a" else ""}$id",LuaValue.str(file.path))
+                store.setMeta("cover_stale_${if (book["author_photo"]==true) "a" else ""}$id",true.takeIf { stale })
                 return mapOf("local_path" to LuaValue.str(file.path),"stale" to stale)
             }
-            if (target.isFile && target.length() > 0) return published(target)
+            if (target.isFile && !target.inputStream().use { input -> imageHeader(ByteArray(16).let { it.copyOf(input.read(it).coerceAtLeast(0)) }) }) {
+                target.delete(); File(target.path+".etag").delete()
+            }
+            val hadTarget=target.isFile && target.length()>0
+            if (hadTarget && !refresh) return published(target)
+            val prefix=if (book["author_photo"]==true) "a$id" else "$id"
             val previous = directory.listFiles().orEmpty().filter {
-                it.name != target.name && it.name.matches(Regex("${id}_[0-9]+\\.jpg")) && it.isFile && it.length() in 1..MAX_COVER && allowed(it.path) != null
+                it.name != target.name && it.name.matches(Regex("${prefix}_[0-9]+\\.jpg")) && it.isFile && it.length() in 1..MAX_COVER && allowed(it.path) != null
             }.maxByOrNull { it.lastModified() }
             val tag = allowed(target.path + ".etag") ?: throw ServerFailure("forbidden")
             val oldTag = previous?.let { allowed(it.path + ".etag") }
-            if (previous != null && oldTag?.isFile == true && oldTag.length() <= 1024) {
+            if (!hadTarget && previous != null && oldTag?.isFile == true && oldTag.length() <= 1024) {
                 val copy = allowed(target.path + ".copy") ?: throw ServerFailure("forbidden")
                 copy.parentFile?.let(NoMedia::directory)
                 try {
@@ -532,11 +546,13 @@ class CacheWorker(
                 }
             } finally { part?.delete() }
             if (fetched.cover !in setOf("ok","not_modified")) {
+                if (hadTarget) return published(target,true)
                 target.delete(); tag.delete()
                 if (previous != null) return published(previous,true)
                 throw ServerFailure("unavailable")
             }
             if (!target.isFile || target.length() == 0L) throw ServerFailure("unavailable")
+            recordCover(target)
             return published(target)
         } finally { log("library.cover.acquire ms=${clockMs()-start}") }
     }
@@ -803,14 +819,18 @@ class CacheWorker(
         val etagFile = allowed("$path.etag") ?: return Landed(job, null, null, "none")
         val exists = f.isFile
         // A file the plugin saved without an ETag is left alone.
-        if (exists && !etagFile.isFile) return Landed(job, null, null, "kept", target = f)
+        if (exists && !etagFile.isFile && plan.m["force"]!=true) return Landed(job, null, null, "kept", target = f)
         val h = headers(creds, "image/jpeg,image/*").toMutableMap()
         h["Accept-Encoding"] = "identity"
-        if (exists) h["If-None-Match"] = etagFile.readText()
+        if (exists && etagFile.isFile) h["If-None-Match"] = etagFile.readText()
         val part = allowed("$path.part${Thread.currentThread().id}") ?: return Landed(job, null, null, "none")
         part.parentFile?.let(NoMedia::directory)
         part.delete()
-        val rep = try { http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER) }
+        val rep = try {
+            if (book["author_photo"]==true)
+                http.get(creds.server + "/koreader/plugin/catalog/authors/${job.id}/photo",h,part,MAX_COVER)
+            else http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail",h,part,MAX_COVER)
+        }
             catch (_: Exception) { part.delete(); Reply(0,err="transport") }
         if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
         return when {
@@ -1002,7 +1022,7 @@ class CacheWorker(
             // Closing rolls back uncommitted work; committed pages/cursors remain on disk.
             try { store.close() } catch (closing: Exception) { e.addSuppressed(closing) }
             throw e
-        } finally { coverUsage = null; runProtected = emptySet() }
+        } finally { coverUsage = null; coverUsageRoot=null; runProtected = emptySet() }
     }
 
     private fun runMirror(plan: Plan, creds: Creds, yieldTo: () -> Unit, r: Run): String {
@@ -1022,6 +1042,7 @@ class CacheWorker(
             r.done = r.pct
             writeStatus(r, true)
             if(plan.limit!=null)storage(StorageAsk("before refresh",plan.limit,plan.coverDir,plan.coversOn))
+            coverUsageRoot=allowed(plan.coverDir)
             coverUsage=if(plan.limit!=null)CoverUsage(storageItems(plan.coverDir,plan.coversOn)) else null
             val fast = FastCatalogRefresh(st, plan, { path ->
                 val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
@@ -1087,6 +1108,7 @@ class CacheWorker(
         // Prune browsing data before the first limit decision, using the same byte units and
         // db + live journal + covers + etags accounting as Storage settings.
         if (plan.limit != null) storage(StorageAsk("before refresh", plan.limit, plan.coverDir, plan.coversOn))
+        coverUsageRoot=allowed(plan.coverDir)
         coverUsage = if (plan.limit != null) CoverUsage(storageItems(plan.coverDir, plan.coversOn)) else null
         recount(r, false)
         log("mirror: ${st.meta("run_op")} (${plan.reason}): ${r.total - r.done} jobs to go, $parallel requests at a time")
@@ -1099,7 +1121,7 @@ class CacheWorker(
                 why = pump(r, creds, yieldTo)
             }
             why
-        } finally { coverUsage = null; runProtected = emptySet() }
+        } finally { coverUsage = null; coverUsageRoot=null; runProtected = emptySet() }
         val secs = (clockMs() - r.startedMs) / 1000.0
         recount(r, why == "finished")
         val rate = r.done / maxOf(0.001, secs)
@@ -1235,7 +1257,7 @@ class CacheWorker(
                         if (j.kind == "cover") {
                             // Existing images are mutated only by the writer, alongside eviction.
                             if (l.part == null && l.target != null && l.target.isFile) {
-                                coverUsage?.replace("c:${l.target.name}", l.target.length() + File(l.target.path + ".etag").length())
+                                recordCover(l.target)
                             }
                             if (l.part != null && l.target != null) {
                                 val tag = File(l.target.path + ".etag")
@@ -1250,7 +1272,7 @@ class CacheWorker(
                                 if (!l.part.renameTo(l.target)) { l.part.delete(); continue }
                                 if (shown > 0) l.target.setLastModified(shown)
                                 l.reply?.etag?.let { write(tag, it.toByteArray()) } ?: tag.delete()
-                                coverUsage?.replace("c:${l.target.name}", l.target.length() + tag.length())
+                                recordCover(l.target)
                             }
                             when (l.cover) {
                                 "ok" -> { r.covers[0]++; r.covers[3] += l.coverBytes; l.coverWritten?.let { if (r.written.size < WRITTEN_MAX) r.written.add(it) else r.writtenMore = true } }

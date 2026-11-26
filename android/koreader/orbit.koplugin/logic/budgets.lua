@@ -10,6 +10,9 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "batter
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
 Budgets.screens["account"] = budget(3, 16384, 50)
+-- Upgrade news is five static rows, with no read-model or worker access.
+Budgets.screens["whats-new"] = budget(5, 0, 50)
+Budgets.screens["whats-new"].roundTrips = 0
 -- Owned Search inherits the Library screen family; Home pages inherit home.
 Budgets.screens.search = Budgets.screens.library
 Budgets.screens.account.displayRows=12
@@ -92,10 +95,9 @@ Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 
--- Upgrade news is five static rows, with no read-model or worker access.
-Budgets.screens["whats-new"] = budget(5, 0, 50)
-Budgets.screens["whats-new"].roundTrips = 0
-
+-- One local cover reference per lookup. Acquisition is owned by the off-paint host.
+Budgets.screens["cover-cache"] = budget(1,16384,30)
+Budgets.screens["cover-cache"].roundTrips = 0
 -- Series/grouped windows charge summary, preview books and one capability row.
 Budgets.screens.series.rows = Budgets.MAX_ROWS + 1
 

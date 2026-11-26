@@ -49,7 +49,7 @@ for _i, d in ipairs(SCHEMA.settings) do
 end
 
 S = G_reader_settings:readSetting("orbit_android") or {}
-local first_run_changed = FirstRun.migrate(S)
+local first_run_changed = HomePlan.migrate012(S)
 for k, v in pairs(DEFAULTS) do
     if S[k] == nil then S[k] = v end
 end

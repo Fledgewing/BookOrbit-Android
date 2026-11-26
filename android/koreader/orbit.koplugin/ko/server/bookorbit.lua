@@ -57,6 +57,7 @@ function serverPlugin(ui)
     end
     -- Without isLoggedIn/settings nothing else is safe: behave as without the plugin.
     if p and not can(p, "core") then return nil end
+    if Server and Server.installCovers then Server.installCovers(Server.loaded("api"),Server.loaded("catalog")) end
     return p
 end
 
@@ -164,4 +165,73 @@ function Server.timeLegacy(wrap)
     for _,name in ipairs({"EOB","OSM","OC","LF","Sync","Mirror","Copies"}) do
         wrap(getfenv(1)[name],name)
     end
+end
+
+-- Covers have one owner even with legacy catalog caching disabled. Never call the upstream
+-- downloader: these low-level methods can be reached inside an upstream subprocess.
+function Server.installCovers(Api,Catalog)
+    if type(Api)~="table" then return false end
+    if not Api._booksync_covers then
+        Api._booksync_covers=true
+        for _,name in ipairs({"downloadCatalogThumbnail","downloadCatalogAuthorPhoto"}) do
+            Api[name]=function(_,_,path)
+                return Library.cachedCover(path) and true or nil,"companion-owned"
+            end
+        end
+    end
+    if type(Catalog)~="table" then return false end
+    if Catalog._booksync_covers then return true end
+    Catalog._booksync_covers=true
+    -- The upstream batch entry point no longer forks. Its timer calls this parent-side
+    -- asynchronous worker instead; a direct legacy call can only inspect local snapshots.
+    Catalog.downloadThumbnailBatch=function(self,batch)
+        local result={}
+        for _,book in ipairs(batch or {}) do
+            local entry=self:thumbnailEntry(book)
+            if entry then result[entry.reference:match("([^/]+)%.jpg$")]=entry.exists end
+        end
+        return result
+    end
+    local entry=Catalog.thumbnailEntry
+    if type(entry)=="function" then
+        Catalog.thumbnailEntry=function(self,book)
+            local row=entry(self,book)
+            if row then
+                row.reference=row.reference or row.path
+                local path=Library.cachedCover(row.reference)
+                row.path,row.exists=path or row.reference,path~=nil
+            end
+            return row
+        end
+    end
+    Catalog.runThumbnailWorker=function(self,generation)
+        local function valid() return not self.catalog_closed and self.thumbnail_generation==generation end
+        if not valid() then return self:stopThumbnailWorker(generation) end
+        local visible=true
+        local books=CoverQueue.take(self.thumbnail_queue)
+        if #books==0 then visible=false; books=CoverQueue.take(self.thumbnail_prefetch_queue) end
+        if #books==0 then self:stopThumbnailWorker(generation); return end
+        local rows={}
+        for _,book in ipairs(books) do
+            local row=self:thumbnailEntry(book)
+            if row then rows[#rows+1]={reference=row.reference,entry=row,key=row.reference:match("([^/]+)%.jpg$")} end
+        end
+        local written=false
+        CoverQueue.acquire(rows,false,valid,function(row,result)
+            if result.local_path then
+                row.entry.path,row.entry.exists=result.local_path,true
+                written=true
+                if self.thumbnail_failures then self.thumbnail_failures[row.key]=nil end
+            elseif self.thumbnail_failures then self.thumbnail_failures[row.key]=true end
+        end,function(ok)
+            if not ok then return self:stopThumbnailWorker(generation) end
+            if visible and written and not reading() and valid() then self:updateItems(nil,true) end
+            UIManager:scheduleIn(0.05,function() self:runThumbnailWorker(generation) end)
+        end)
+    end
+    -- These old maintenance paths enumerate/delete files. The companion owns storage policy.
+    for _,name in ipairs({"sweepThumbnailTemp","cleanLegacyThumbnails","maybePruneThumbnailCache","pruneThumbnailCache"}) do
+        Catalog[name]=function() end
+    end
+    return true
 end
