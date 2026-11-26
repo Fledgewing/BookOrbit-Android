@@ -26,12 +26,14 @@ Companion `LibraryReadModel.kt:20`/`:49` publishes/projects the existing views,
 `CacheStore.kt:15`/`:37` owns their database, and `Core.kt:600` retains the
 existing Home command path. No extra catalog, network client or worker is added.
 
-New library operations are deliberately small: `library.summary` reuses the
+The new library operation is deliberately small: `library.summary` reuses the
 worker's canonical catalog/filter projection and owner-checked local paths,
 returning total and an optional on-device count. Unknown local coverage stays
-unknown. `battery.stats` returns an explicit not-saved stub until battery history
-lands; it invents no charge level, rate or estimate. Both have Library methods
-and companion projection tests. All UI queries use Library, opaque list keys and
+unknown. After integrating F12-H (`609cc8e`), the widget reuses its existing
+`Library:battery()` operation and enriches its explicit not-saved stub until
+battery history lands; it invents no charge level, rate or estimate. Summary
+and battery have companion projection tests. Home book actions now inherit
+F12-H’s owned Details flow. All UI queries use Library, opaque list keys and
 neutral filters. Capabilities hide unsupported sources/statistics.
 
 Every Shelf title opens the shared bounded list screen; Lists rows, Library,

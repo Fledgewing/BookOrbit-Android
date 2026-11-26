@@ -80,6 +80,8 @@ Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library
 the batched read and read-model invalidation. Layout moves validate only their changed page, bounded by
 the placement count. Home pages and Settings groups inherit their screen-family budget. Owned list and Search screens inherit the Library screen-family budget. Filter picker pages inherit
 the filter screen budget; facet counts and zero-value ordering stay in the companion.
+Reader progress surfaces reuse a one-row widget budget, including Book info and
+Details; completion callbacks redraw only a still-visible user-opened panel.
 
 ## Read the source, not memory
 

@@ -99,7 +99,7 @@ class LibraryTest {
             val summary=read(st,mapOf("op" to "library.summary"))
             assertEquals(5L,summary["total"])
             assertNull(summary["on_device"])
-            val battery=read(st,mapOf("op" to "battery.stats"))
+            val battery=read(st,mapOf("op" to "battery"))
             assertEquals("not-saved",battery["state"])
             assertFalse(battery.containsKey("level"))
             assertTrue(LuaValue.encode(battery).size<=LibraryReadModel.MAX_BYTES)

@@ -24,7 +24,7 @@ return function(test,eq,ok,E,W,Widget)
             local a=E.Cache.decode(raw); reads[#reads+1]=a
             if a.op == "capabilities" then return {lists={read=true}},80 end
             if a.op == "library.summary" then return {total=7,on_device=2,freshness={saved=true}},100 end
-            if a.op == "battery.stats" then return {state="not-saved",message="Battery history not recorded yet"},100 end
+            if a.op == "battery" then return {state="not-saved",message="Battery history not recorded yet"},100 end
             if a.op == "reading.stats" then
                 local d={state="ready",year={intensity={},days_read=1,start="2026-01-01"},
                     week={seconds={0,0,0,0,0,0,60},levels={0,0,0,0,0,0,1},total_seconds=60},
@@ -239,4 +239,20 @@ return function(test,eq,ok,E,W,Widget)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false}})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)
+    test("Home host: server-only book cards open the owned Details surface",function()
+        withHost(function()
+            local open,panel=E.Library.open,E.ReaderPanel
+            local target
+            local success,err=pcall(function()
+                E.Library.open=function() return false end
+                E.ReaderPanel={details=function(key) target=key; return true end}
+                local h=E.HomeHost.create(); E.HomeHost.active=h
+                h:dispatch("book",{key="opaque-book"})
+                eq(target,"opaque-book")
+            end)
+            E.Library.open,E.ReaderPanel=open,panel
+            ok(success,err)
+        end)
+    end)
+
 end

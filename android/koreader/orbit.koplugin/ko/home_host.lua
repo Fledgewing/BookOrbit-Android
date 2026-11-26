@@ -141,7 +141,7 @@ function HomeHost.create()
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "book" then
             UIManager:close(self)
-            if not Library.open(row) then
+            if not Library.open(row) and not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
                 UIManager:show(TextViewer:new{title=row.title or _("Book details"),text=_("This book is not saved on this reader.")}) -- gate: user action (widget book)
             end
         elseif action == "list" then self:showList(row.title,{kind="list",key=row.key})

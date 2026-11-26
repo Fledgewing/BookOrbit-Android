@@ -20,7 +20,7 @@ local sources = {recent="recently-added",wtr="want-to-read",device="on-device",r
 function HomeHostPlan.need(p)
     local s=p.settings or {}
     if p.widget == "library" then return {op="library.summary",limit=1} end
-    if p.widget == "battery" then return {op="battery.stats",limit=1} end
+    if p.widget == "battery" then return {op="battery",limit=1} end
     if p.widget == "lists" then return {op="lists",limit=8} end
     if p.widget == "continue-reading" then return {op="window",source="reading",query={},offset=0,limit=1} end
     local source = s.source or sources[s.src] or "recently-added"
