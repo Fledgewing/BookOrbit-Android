@@ -127,3 +127,10 @@ ledger, cover references, source-specific watermarks, list discovery, refresh/jo
 controls and richer detail without exposing backend payloads to widgets. The current
 adapter uses the active published bulk generation; partial legacy-only catalogs
 remain `Not saved yet` until Full refresh publishes a generation.
+
+## Inherited CI prerequisite
+
+Initial PR validation exposed a pre-existing patch-application failure in Xteink
+patch 0056. The prerequisite was subsequently repaired in main PR #138 and merged
+into `feature/0.12`. This slice rebases onto that prerequisite; it contains no
+firmware changes. Existing cross-platform CI coverage remains in force.
