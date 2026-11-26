@@ -110,4 +110,30 @@ return function(here, test, ok, eq)
         local m=E.ReaderPanelPlan.model({items={{progress=200}}},{}); eq(m.progress,1)
         eq(E.ReaderPanelPlan.model({items={{progress=0/0}}},{}).progress,nil)
     end)
+    test("reader Sync adapter: existing writer, offline, document change and late timeout",function()
+        local ui={document={file="fixture.epub"}}
+        local up, reply, timeout, done, message, sent, released
+        sent,released=0,0
+        local E={liveUI=function() return ui end, bookorbit=function() return {} end,
+            hasHandler=function() return true end,
+            Wifi={acquire=function() end,release=function() released=released+1 end},
+            Net={up=function(_,_,cb) up=cb end},
+            UIManager={scheduleIn=function(_,_,cb) timeout=cb end},
+            pluginEvent=function(_,_,event,options)
+                eq(event,"BookOrbitSyncBook"); eq(options.quiet,true)
+                sent=sent+1; reply=options.on_done
+            end}
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        local function complete(ok,text) done,message=ok,text end
+        E.LibraryAdapter.syncCurrent(complete); up(false)
+        eq(sent,0); eq(released,1); eq(done,false); eq(message,"Offline · will sync when connected")
+        E.LibraryAdapter.syncCurrent(complete); ui.document={file="other.epub"}; up(true)
+        eq(sent,0); eq(released,2); eq(done,false)
+        E.LibraryAdapter.syncCurrent(complete); up(true)
+        eq(sent,1); reply(nil); eq(done,true); eq(message,"Synced"); eq(released,3)
+        timeout(); eq(released,3,"late timer cannot complete twice")
+        E.LibraryAdapter.syncCurrent(complete); up(true); timeout()
+        eq(done,false); eq(released,4); reply(nil); eq(released,4)
+    end)
+
 end

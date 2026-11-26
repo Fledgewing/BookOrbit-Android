@@ -48,11 +48,17 @@ function LibraryAdapter.syncCurrent(done)
         done(false, "Sync unavailable")
         return false
     end
+    local document = ui.document
     Wifi.acquire("reader-panel")
     Net.up(p, {reason="reader-panel", cap=20, need_server=true}, function(ok)
         if not ok then
             Wifi.release("reader-panel")
             done(false, "Offline · will sync when connected")
+            return
+        end
+        if liveUI() ~= ui or ui.document ~= document then
+            Wifi.release("reader-panel")
+            done(false, "Book closed · your place stays saved")
             return
         end
         local completed = false
