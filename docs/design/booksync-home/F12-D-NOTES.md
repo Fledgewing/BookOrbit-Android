@@ -33,8 +33,8 @@ mode matching uses the effective device Wi-Fi policy.
 Every shared sleep value stays visible, including values owned by the companion.
 Source choices use the shared schema; advanced saved lists and exclusions open
 its existing sleep page. Device power management remains in the companion/OS.
-Home currently exposes the existing Home-button policy. Owned Home selection,
-layout editing/reset/renaming, and reading presets need their owning slices' APIs;
+Home exposes the owned host's shared `home_screen` selector and the existing
+Home-button policy. Layout editing/reset/renaming and reading presets need their owning slices' APIs;
 this change does not add inert controls or a parallel layout store.
 
 Battery saver, Balanced and Always up to date set the six approved sync/power

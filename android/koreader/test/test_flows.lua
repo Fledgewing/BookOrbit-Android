@@ -6782,6 +6782,18 @@ test("settings: failed Sync now leaves the screen awake", function()
     W.server_code = 200
 end)
 
+test("settings: Home selector uses the host's shared setting and labels its button policy", function()
+    local _, m = newUI(false)
+    local home
+    for _, group in ipairs(m:menuItems()) do if group.settings_group == "home" then home = group.sub_item_table_func() end end
+    local old = RE.S.home_screen
+    home[1].sub_item_table[2].callback()
+    eq(RE.S.home_screen, "booksync")
+    ok(home[2].text_func():find("BookSync Home", 1, true), "button policy names the selected Home")
+    ok(lastBroadcast(".SETTINGS"), "shared settings transport")
+    RE.Shared.set("home_screen", old)
+end)
+
 test("settings: Full refresh uses the library and its connection message is neutral", function()
     local client, note = RE.bookorbit, RE.OC.note
     local message
@@ -7227,6 +7239,8 @@ test("library ready model: real SQLite reads stay bounded and batch once", funct
     st.conn:close(); os.execute("rm -rf '" .. dir .. "'")
     ok(success,err)
 end)
+
+dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 

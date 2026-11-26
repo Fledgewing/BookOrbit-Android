@@ -1752,6 +1752,7 @@ test("settings modes: approved presets use shared wire values and Balanced match
     eq(UI.mode(unset, "jit"), "balanced", "effective device Wi-Fi default")
     eq(UI.mode(balanced, "always_on"), "custom", "effective capability policy beats stored Wi-Fi preference")
     eq(UI.words("BookOrbit home"), "Server plugin's Home")
+    eq(UI.words("BookOrbit home", "booksync"), "BookSync Home")
     eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
 end)
 

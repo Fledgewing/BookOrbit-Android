@@ -26,9 +26,11 @@ function SettingsUI.modeLabel(settings, effectiveWifi)
     for _, mode in ipairs(SettingsUI.modes) do if mode.id == id then return mode.label end end
     return "Custom"
 end
-function SettingsUI.words(text)
-    return (text:gsub("BookOrbit home", "Server plugin's Home"):gsub("Back to my book, then home", "Back to my book, then Server plugin's Home"):gsub("BookOrbit", "Server plugin")
+function SettingsUI.words(text, home_screen)
+    local words = (text:gsub("BookOrbit home", "Server plugin's Home"):gsub("Back to my book, then home", "Back to my book, then Server plugin's Home"):gsub("BookOrbit", "Server plugin")
         :gsub("Tailscale", "VPN"):gsub("tailnet", "VPN"):gsub(" %(matches Xteink%)", ""))
+    if home_screen == "booksync" then words = words:gsub("Server plugin's Home", "BookSync Home") end
+    return words
 end
 function SettingsUI.value(d, value)
     if value == nil then value = d.default end

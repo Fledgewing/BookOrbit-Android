@@ -104,17 +104,20 @@ end
 -- All values and choices come from the shared schema; wire IDs stay unchanged.
 function OrbitAndroid:settingRow(key)
     local d = assert(SCHEMA.byKey[key], "Missing shared setting: " .. key)
+    local function display(text)
+        return SettingsUI.words(text, key == "home_button" and S.home_screen or nil)
+    end
     local function set(value)
         Shared.set(key, value)
         Shared.onChange(key, "settings")
     end
-    local row = { help_text = _(SettingsUI.words(d.line or "")) }
+    local row = { help_text = _(display(d.line or "")) }
     if d.type == "bool" then
-        row.text = _(SettingsUI.words(d.label))
+        row.text = _(display(d.label))
         row.checked_func = function() return S[key] == true end
         row.callback = function() set(not S[key]) end
     elseif d.type == "source" then
-        row.text = _(SettingsUI.words(d.label))
+        row.text = _(display(d.label))
         row.sub_item_table = {}
         for _i, choice in ipairs(d.values) do
             row.sub_item_table[#row.sub_item_table+1] = {text=_(choice.label),
@@ -129,11 +132,11 @@ function OrbitAndroid:settingRow(key)
         row.text_func = function() return _(d.label) .. ": " .. SettingsUI.value(d, S[key]) end
         row.callback = function() Sleep.openCompanion() end
     elseif d.type == "text" then
-        row.text_func = function() return _(SettingsUI.words(d.label)) .. ": " .. SettingsUI.value(d, S[key]) end
+        row.text_func = function() return _(display(d.label)) .. ": " .. SettingsUI.value(d, S[key]) end
         row.callback = function()
             local InputDialog = require("ui/widget/inputdialog")
             local dialog
-            dialog = InputDialog:new{title=_(SettingsUI.words(d.label)), input=SettingsSync.toWire(d, S[key]),
+            dialog = InputDialog:new{title=_(display(d.label)), input=SettingsSync.toWire(d, S[key]),
                 buttons={{
                     {text=_("Cancel"), callback=function() UIManager:close(dialog) end},
                     {text=_("Save"), callback=function()
@@ -147,12 +150,12 @@ function OrbitAndroid:settingRow(key)
         end
     else
         row.text_func = function()
-            return _(SettingsUI.words(d.label)) .. ": " .. _(SettingsUI.value(d, key == "wifi_mode" and Shared.mode() or S[key]))
+            return _(display(d.label)) .. ": " .. _(display(SettingsUI.value(d, key == "wifi_mode" and Shared.mode() or S[key])))
         end
         row.sub_item_table = {}
         for _i, v in ipairs(d.values or {}) do
             local value = SettingsSync.fromWire(d, v.id)
-            table.insert(row.sub_item_table, {text=_(SettingsUI.words(v.label)), radio=true,
+            table.insert(row.sub_item_table, {text=_(display(v.label)), radio=true,
                 checked_func=function() return SettingsSync.toWire(d, S[key]) == tostring(v.id) end,
                 callback=function() set(value) end})
         end
@@ -233,7 +236,7 @@ function OrbitAndroid:menuItems()
         group("reading", "Reading", function()
             return rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})
         end),
-        group("home", "Home", function() return rows({"home_button"}) end),
+        group("home", "Home", function() return rows({"home_screen", "home_button"}) end),
         group("sleep", "Sleep screen", function()
             -- Only shared values here: named-list/tag browsing stays in the companion until
             -- the library supplies bounded choice windows. Never decode scopes.json on paint.
