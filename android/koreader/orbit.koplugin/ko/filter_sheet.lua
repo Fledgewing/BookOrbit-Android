@@ -4,7 +4,7 @@ FilterView = {}
 function FilterView.new(context)
     context=context or {}
     local model=FilterSheet.new(context)
-    return setmetatable({model=model,onApply=context.onApply,onChange=context.onChange,
+    return setmetatable({model=model,exclude_current=context.exclude_current,onApply=context.onApply,onChange=context.onChange,
         onSave=context.onSave,title=context.title or "Library",sorts=context.sorts or
             (model.defaults.sort=="match" and {"match","title","author","added","rating"} or
                 model.defaults.sort=="series" and {"series","title","author","last","added","rating"} or {"order","title","author","last","added","rating"}),
@@ -42,7 +42,7 @@ end
 function FilterView:read()
     local paint=Library.paint(self.model.pick and "filter-picker" or "filter")
     local result=paint:facets(self.model.source,self.model.query,self.model.pick~="gs" and self.model.pick or nil,
-        self.model.offset,FilterSheet.PAGE_SIZE)
+        self.model.offset,FilterSheet.PAGE_SIZE,self.exclude_current)
     paint:flush()
     return result
 end
@@ -95,7 +95,7 @@ function FilterView:paint(attempt)
         end
         local b=row("+ Save as a Book list on Home",function()
             if self.onSave then
-                local saved=self.onSave({source="custom-filter",base_source=Layout.copy(m.source),query=Layout.copy(m.query)})
+                local saved=self.onSave({source="custom-filter",base_source=Layout.copy(m.source),query=Layout.copy(m.query),exclude_current=self.exclude_current})
                 if saved~=false then self:close(true) end
             end
         end)

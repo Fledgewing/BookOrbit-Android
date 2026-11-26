@@ -175,7 +175,7 @@ function HomeHost.create()
         self.list_layout.pages={{id="list",tab="Library",name=self.list_title,placements={{instance="list-books",widget="booklist",version=1,
             x=0,y=0,w=4,h=3,settings={title=self.list_title,source=source,query=query or {},exclude_current=exclude_current,offset=0,limit=8,style=1}}}}}
         local settings=self.list_layout.pages[1].placements[1].settings
-        self.filter=FilterView.new{title=self.list_title,source=source,query=query,
+        self.filter=FilterView.new{title=self.list_title,source=source,query=query,exclude_current=exclude_current,
             onChange=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
             onApply=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
             onSave=function(saved) self:saveFilter(saved) end}

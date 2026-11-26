@@ -97,7 +97,7 @@ function HomeHostPlan.saveFilter(document, saved, title)
     while used[id] do id=id.."-new" end
     local p={instance=id,widget="booklist",version=1,x=0,y=0,w=2,h=2,
         settings={title=title or "Custom filter",source=Layout.copy(saved.base_source or "library/all"),
-            src="custom",query=Layout.copy(saved.query or {}),style=0,sort=0,cap=0}}
+            src="custom",query=Layout.copy(saved.query or {}),exclude_current=saved.exclude_current,style=0,sort=0,cap=0}}
     for _,page in ipairs(document.pages) do
         local result=Layout.add(document,page.id,p)
         if result then return result,page.id end
