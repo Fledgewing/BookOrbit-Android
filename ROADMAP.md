@@ -27,6 +27,7 @@ design and mockup approval still apply.
 | Outcome | Platforms | Status |
 |---|---|---|
 | **BookSync Home** replaces the BookOrbit plugin's Home: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android; X4 Pro, X4 after | designing |
+| **BookSync library interface**: all platform UIs use one interface with BookOrbit/Grimmory adapters, capability-gated features and neutral filters with cached-catalog fallback ([BookSync Home owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)); maintainer rule 2026-11-26. | Android (KOReader plugin + companion), X4 Pro, X4, X3 | planned (0.12) |
 | **Equivalent settings controls**: expose the [parity gap 1](docs/FEATURES.md#prioritised-parity-bugs) controls, including a sleep sync budget aligned with Android's 10/15/20 s choices. | X4 Pro, X4 | planned (0.12) |
 | **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
 | **Discoverable settings**: make equivalent settings easy to find while retaining button navigation ([parity gap 3](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
