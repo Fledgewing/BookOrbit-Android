@@ -852,3 +852,8 @@ Copy maps a known installed face back to its preset index. An imported face outs
 the four presets appears as the selected copied choice, drawn in that face. It adds
 at most one row, keeping the font editor within its 12-row budget; choosing a preset
 replaces the imported face, and Undo restores the previous index and face exactly.
+
+The companion `BookOrbitLibrary` implementation lives in
+`server/bookorbit/BookOrbitLibrary.kt`, accessed through the neutral server adapter
+and owned read-model publisher. There is no root-package backend alias. Package
+and protocol guards enforce that boundary across production source variants.

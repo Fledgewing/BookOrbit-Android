@@ -124,6 +124,9 @@ class LibraryTest {
             assertEquals(0L,read(st,mapOf("op" to "counts","source" to author,"query" to mapOf("author" to listOf("Other"))))["total"])
         }
     }
+    @Test fun backendProjectionImplementationStaysInItsServerAdapterPackage() {
+        assertEquals("net.fledgewing.orbitcompanion.server.bookorbit.BookOrbitLibrary",BookOrbitLibrary::class.java.name)
+    }
     @Test fun bookListSourcesAreCountedPagedAndCapabilityGated() {
         store().use { st ->
             assertEquals(false,(read(st,mapOf("op" to "sources","category" to "series"))["freshness"] as Map<*,*>)["saved"])
