@@ -84,6 +84,18 @@ test("catalog actions: recommendation observation unwraps the saved native value
     E.OSM.savedPluginSetting=saved
     if not success then error(why) end
 end)
+test("catalog actions: leaving for Home schedules the existing writer after its paint",function() isolated(function()
+    local ui,m,b=fixture();local nextTick=t.UIManager.nextTick;local scheduled;local calls=0
+    E.FinishUI.jobs[b.digest]={};E.FinishUI.sending=nil
+    E.Library.catalogAction=function() end
+    E.Library.finishCurrent=function(done) calls=calls+1;done(true) end
+    t.UIManager.nextTick=function(_,fn) scheduled=fn end
+    local success,why=pcall(function()
+        E.FinishUI.leaveForHome(ui);eq(calls,0);ok(scheduled);scheduled();eq(calls,1)
+    end)
+    t.UIManager.nextTick=nextTick;E.FinishUI.sending=nil
+    if not success then error(why) end
+end) end)
 test("catalog actions: finish leaves and drains the existing writer before a remote download",function() isolated(function()
     local ui,m,b=fixture();local order={}
     E.Library.catalogAction=function(op,args,done) order[#order+1]=op;if done then done({error="offline"}) end end

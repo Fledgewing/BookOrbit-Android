@@ -28,7 +28,8 @@ function FinishUI.leaveForHome(ui)
     local b=book(ui)
     if b and FinishUI.jobs[b.digest] and not FinishUI.sending then
         FinishUI.sending=true
-        Library.finishCurrent(function() FinishUI.sending=nil end)
+        -- Home paints first; native writer/network setup never runs on its render path.
+        UIManager:nextTick(function() Library.finishCurrent(function() FinishUI.sending=nil end) end)
     end
     return had
 end
