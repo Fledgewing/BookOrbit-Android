@@ -206,6 +206,40 @@ const vend=await E(()=>{const P=window.__proto,S=P.S;const bad=[];P.act('nav:set
 ok(vend.length===0,'no server or vendor names on settings pages '+JSON.stringify(vend));
 const vers=await E(()=>{const P=window.__proto;P.act('nav:settings');const sum=[...document.querySelectorAll('#screen [data-fk^="sg-"]')].map(e=>e.innerText.replace(/\s+/g,' ')).filter(t=>/Updates|About/.test(t));P.act('setg:about');const ab=document.querySelector('#screen').innerText.match(/BookSync [0-9][^\n]*/g);P.act('back');P.act('setg:updates');const up=document.querySelector('#screen').innerText.match(/BookSync [0-9][^\n]*/g);return {sum,ab,up};});
 ok(vers.ab.every(v=>v.trim()==='BookSync 0.12.0-rc.2 · RC')&&vers.up.every(v=>v.trim()==='BookSync 0.12.0-rc.2 · RC')&&vers.sum.some(t=>/RC channel · 0\.12\.0-rc\.2/.test(t))&&!vers.sum.some(t=>/^Updates.*rc\.2 · RC/.test(t)),'one installed version: '+JSON.stringify(vers));
+// ---- round 10: Custom is your own values, editable in BookSync; no jump to KOReader ----
+await E(()=>{const P=window.__proto;P.restart(P.S.dev);P.act('nav:settings');P.act('setg:reading');});
+let t10=await scr();ok(!/From KOReader/.test(t10)&&/Custom font/.test(t10)&&/Custom margins/.test(t10),'Settings › Reading: Custom rows, no "From KOReader"');
+for(const [row,k] of [['set-cfont','font'],['set-cmarg','margins'],['set-cspace','spacing'],['set-ccont','contrast']]){
+ const r=await E(([row,k])=>{const P=window.__proto;const S=P.S;P.act('home');P.act('nav:settings');P.act('setg:reading');let e=document.querySelector('#screen [data-fk="'+row+'"]');
+  if(!e){const nx=[...document.querySelectorAll('#screen [data-act^=lp]')].pop();P.act(nx.dataset.act);e=document.querySelector('#screen [data-fk="'+row+'"]');}
+  if(!e)return {miss:row};const h=Math.round(e.getBoundingClientRect().height);P.act(e.dataset.act);const open=S.modal&&S.modal.k==='cedit'&&S.modal.ce===k;
+  const v0=document.querySelector('#screen .card .num').innerText;const pv=!!document.querySelector('#screen .cprev');P.act('ceadj:1');const v1=document.querySelector('#screen .card .num').innerText;
+  const tg=[...document.querySelectorAll('#screen .card [data-fk]')].map(x=>Math.round(Math.min(x.getBoundingClientRect().width,x.getBoundingClientRect().height)));
+  P.act('ceadj:-1');P.act('cedone');const back=S.fk;const row2=document.querySelector('#screen [data-fk="'+row+'"]').innerText;return {h,open,pv,ch:v0!==v1,back,min:Math.min(...tg),row2};},[row,k]);
+ ok(r.open&&r.pv&&r.ch&&r.back===row&&r.min>=50&&r.h>=50,'editor '+k+': opens from its row, live preview, stepper changes it, Done returns to the row '+JSON.stringify(r));}
+const ap=await E(()=>{const P=window.__proto;P.restart(P.S.dev);const S=P.S;P.openBook('b1');P.act('rd:bottom');const x4=S.dev!=='m8c';P.act('set:margins:2');const m0=eval('effMarg')();
+ const fk=x4?'x-margins-v':'set-margins-2';const e=document.querySelector('#screen [data-fk="'+fk+'"]');const act=e&&e.dataset.act;const txt=e&&e.innerText.replace(/\s+/g,' ');
+ P.act(act);const open=S.modal&&S.modal.k==='cedit';P.act('ceadj:1');const m1=eval('effMarg')();P.act('ceadj:-1');P.act('cedone');return {act,txt,open,m0,m1,back:S.fk,panel:P.S.stack.at(-1).panel}});
+ok(/^cedit:margins:/.test(ap.act)&&/Custom/.test(ap.txt)&&/px/.test(ap.txt)&&ap.open&&ap.m1>ap.m0&&ap.panel==='bottom'&&/margins/.test(ap.back),'panel: picking Custom applies it; tapping it again edits it live and returns to the panel '+JSON.stringify(ap));
+const pk=await E(()=>{const P=window.__proto,S=P.S;P.act('set:margins:0');const e=document.querySelector('#screen [data-fk="'+(S.dev==='m8c'?'set-margins-2':'x-margins-l')+'"]');return e.dataset.act});ok(/^(set:margins:2|cyc:margins)/.test(pk),'an unpicked Custom applies first, never opens anything ('+pk+')');
+const ko=await E(()=>{const P=window.__proto;P.restart(P.S.dev);const S=P.S;P.act('nav:settings');P.act('setg:reading');const nx=[...document.querySelectorAll('#screen [data-act^=lp]')].pop();
+ let e=document.querySelector('#screen [data-fk="set-kocopy"]');if(!e&&nx){P.act(nx.dataset.act);e=document.querySelector('#screen [data-fk="set-kocopy"]');}if(!e)return {none:true};
+ const sub=e.innerText;const before=eval('CUSTOM').marg.m8c;P.act('kocopy');const after=eval('CUSTOM').marg.m8c;const t=S.toast,ta=S.toastAct&&S.toastAct.lab;P.act('kocopyundo');return {sub:/once/.test(sub),before,after,t,ta,undone:eval('CUSTOM').marg.m8c===before}});
+if(dev==='m8c')ok(ko.sub&&ko.after!==ko.before&&ko.ta==='Undo'&&ko.undone,'"Use KOReader\'s current values": a one-time copy, with Undo '+JSON.stringify(ko));else ok(ko.none,'X4: no KOReader copy row');
+const md=await E(()=>{const P=window.__proto;P.restart(P.S.dev);P.act('nav:settings');P.act('setg:sync');P.act('sett:ssync');const t=document.querySelector('#screen').innerText;return [/Your own settings/.test(t),/Back to Balanced/.test(t),/\bCustom\b/.test(t)]});
+ok(md[0]&&md[1]&&!md[2],'sync mode card: "Your own settings" with Back to Balanced, no "Custom"');
+const rp=await E(()=>{const P=window.__proto,S=P.S;const nx=[...document.querySelectorAll('#screen [data-act^=lp]')].pop();let t=document.querySelector('#screen').innerText;if(!/Reading position/.test(t)&&nx){P.act(nx.dataset.act);t=document.querySelector('#screen').innerText;}const e=document.querySelector('#screen [data-fk="set-smode"]');return [/Reading position/.test(t),!!e,/Custom/.test(t)]});
+ok(dev==='m8c'?(rp[1]&&!rp[2]):(rp[0]&&!rp[1]),'Reading position: "KOReader decides" on the M8C; on the X4 no choice '+JSON.stringify(rp));
+if(dev==='m8c'){const kd=await E(()=>{const P=window.__proto;P.act('setc:smode:2');return document.querySelector('#screen [data-fk="set-smode"]').innerText});ok(/KOReader decides/.test(kd),'M8C: Reading position reads "KOReader decides"');}
+const r16=await E(()=>{const P=window.__proto,C=eval('CUSTOM');const g0=C.gamma;const out=[];for(const g of [-0.5,0,0.2]){C.gamma=g;P.S.modal={k:'cedit',ce:'contrast'};P.render();out.push(document.querySelector('#screen .card .num').innerText);}C.gamma=g0;
+ P.S.modal={k:'cedit',ce:'margins'};P.render();const here=document.querySelector('#screen [data-here]').dataset.fk;P.S.modal=null;P.render();
+ let fseg=null;if(P.S.dev==='m8c'){P.openBook('b1');P.act('rd:bottom');fseg=document.querySelector('#screen [data-fk="set-font-2"]').innerText.replace(/\s+/g,' ');P.act('home');}return {out,here,fseg}});
+ok(r16.out.join('|')==='Lighter 0.5|Normal|Darker 0.2'&&r16.here==='ce-inc'&&(dev!=='m8c'||/Baskerville \+1/.test(r16.fseg)),'rev 16: contrast words, stepper focus on +, font Custom shows its value '+JSON.stringify(r16));
+if(dev==='x4c'){await E(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:settings');P.act('setg:reading');P.S.fk='set-cmarg';P.render();});
+ await H('select');const c0=await E(()=>[window.__proto.S.modal&&window.__proto.S.modal.k,document.querySelector('#screen .kf').dataset.fk,eval('CUSTOM').marg.x4]);
+ await H('select');await H('select');const c1=await E(()=>[document.querySelector('#screen .kf').dataset.fk,eval('CUSTOM').marg.x4]);
+ await H('prev');await H('select');const c2=await E(()=>eval('CUSTOM').marg.x4);await H('back');const c3=await E(()=>[window.__proto.S.modal,document.querySelector('#screen .kf').dataset.fk]);
+ ok(c0[0]==='cedit'&&c0[1]==='ce-inc'&&c1[0]==='ce-inc'&&c1[1]===c0[2]+4&&c2===c0[2]+2&&!c3[0]&&c3[1]==='set-cmarg','Classic: Select opens the stepper with focus on +, Select steps, Prev reaches −, Back returns to the row '+JSON.stringify([c0,c1,c2,c3]));}
 // ---- Classic: buttons only ----
 if(dev==='x4c'){await E(()=>window.__proto.restart('x4c'));await A('nav:recent');await E(()=>{window.__proto.S.fk='s-filter';window.__proto.render()});await H('select');
  const f0=await E(()=>window.__proto.S.fk||document.querySelector('#screen .kf').dataset.fk);ok(f0==='f-show','Classic: focus starts on the Show row ('+f0+')');
