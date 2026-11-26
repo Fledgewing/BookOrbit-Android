@@ -396,18 +396,24 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activit
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
 --- a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
 +++ b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
-@@ -231,6 +231,10 @@
+@@ -1,3 +1,4 @@
++#include <Logging.h>
+ // The Home page: the current book, the reading tiles, the BookOrbit tile and the other
+ // books being read.
+ #include <GfxRenderer.h>
+@@ -231,6 +232,11 @@
    if (snapshot->generatedAt == 0 || now < static_cast<time_t>(snapshot->generatedAt)) return;
    const uint32_t minutes = static_cast<uint32_t>(now - snapshot->generatedAt) / 60u;
    char age[16];
 +  if (minutes == 0) {
++    LOG_INF("ORB", "Home sync stamp: Synced just now");
 +    tiles.drawFitted(UI_12_FONT_ID, tile.x + kPad, y - 2, "Synced just now", tile.width - 2 * kPad, true);
 +    return;
 +  }
    if (minutes < 60) {
      snprintf(age, sizeof(age), "%lu min", static_cast<unsigned long>(minutes));
    } else if (minutes < 48u * 60u) {
-@@ -252,7 +256,7 @@
+@@ -252,7 +258,7 @@
      tiles.drawTileFooter(tile, tr(STR_BROWSE));
      return;
    }

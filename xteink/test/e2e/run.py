@@ -511,6 +511,31 @@ def home_tile_refresh(ctx: Context, tmp: Path) -> None:
 
 
 @scenario("x4-pro")
+def home_refresh_completion_stamp(ctx: Context, tmp: Path) -> None:
+    """Ordinary Home refresh seeds offline windows and stamps its finish, not its start."""
+    import time
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
+    started = int(time.time())
+    run = ctx.sim.run(card, "refresh-counts", script=f"3000:TAP:{sx},{sy},120", timeout_s=100,
+                      env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"})
+    after(run.output, "Full refresh: Done")
+    counts = re.findall(r"Refresh progress: lists=(\d+)/(\d+) books=(\d+) covers=(\d+)", run.output)
+    assert len(counts) >= 2, f"refresh displayed no live counters: {counts}"
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    generation = (bulk / "active").read_text()
+    finished = int((bulk / generation / "at").read_text())
+    stamp = struct.unpack_from("<I", (card.crosspoint / "bookorbit_home.bin").read_bytes(), 8)[0]
+    assert finished > started + 5, "refresh did not exercise a delayed completion"
+    assert abs(stamp - finished) <= 2, f"Home age {stamp} was not stamped at completion {finished}"
+    ctx.faults("offline")
+    home = ctx.sim.run(card, "just-synced", script="3000:QUIT", timeout_s=10)
+    after(home.output, "Home sync stamp: Synced just now")
+
+
+@scenario("x4-pro")
 def home_tile_touch(ctx: Context, tmp: Path) -> None:
     """X8 by touch (X4 Pro, .167: a hold did nothing, a tap failed, a slow tap started a Full
     refresh). A tap held 700 ms (past the SDK's 500 ms long press) is still a refresh; a 1.3 s hold
