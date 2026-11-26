@@ -68,3 +68,9 @@ is neutral while stored wire values remain compatible.
 F12-E and F12-J integration keeps battery estimation local to the neutral publisher (one
 lazy snapshot per batch), and contains the added `library.summary` catalog join in the
 server projection. No renderer receives raw catalog fields or performs that aggregation.
+
+F12-N adds only neutral account/login commands to the shared provider port. Account display
+metadata and provisioning outcomes normalize in `server/bookorbit`; the private Lua binding
+caches the bounded lifecycle snapshot, so signed-out forms work without a catalog owner and
+Home still performs at most one batched worker read. Combined Home search/filter controls
+reserve space below the account status row; Custom editor and sign-in panel actions coexist.

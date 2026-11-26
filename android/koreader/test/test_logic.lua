@@ -1757,6 +1757,8 @@ test("settings modes: approved presets use shared wire values and Balanced match
     eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
 end)
 
+dofile(here .. "/test_account.lua")(test, eq, ok, here)
+
 dofile(here .. "/test_filter_sheet.lua")(test, eq, ok, here, M)
 dofile(here .. "/test_library.lua")(test, eq, ok, here, M.Cache)
 

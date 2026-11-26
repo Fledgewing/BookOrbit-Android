@@ -195,4 +195,17 @@ class AccountAdapterTest {
         assertEquals(true,k.adapter.state()["signedIn"]); assertEquals(true,k.set("opds"))
     }
 
+    @Test fun displayStateUsesEachLoginsOwnAddressAndNameWithoutExportingSecrets() {
+        val k = Kit(); k.user("sync"); k.account()
+        val state = k.adapter.state()
+        assertEquals("fixture", LuaValue.utf8(state["username"] as String))
+        assertEquals("https://library.invalid/api/v1", state["server"])
+        val sync = state["sync"] as Map<*, *>
+        assertEquals(k.credentials.login("sync")!!.server,sync["server"])
+        assertEquals(k.credentials.login("sync")!!.user,LuaValue.utf8(sync["username"] as String))
+        assertEquals("user",sync["origin"])
+        assertEquals("created",(state["opds"] as Map<*, *>)["outcome"])
+        for (key in listOf("password","secret","access","refresh","key")) assertFalse(state.toString(),state.toString().contains("$key="))
+    }
+
 }

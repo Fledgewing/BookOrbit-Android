@@ -42,6 +42,8 @@ function HomeHost.create()
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
         self.caps=caps
+        local account=caps.account or {}
+        self.account=account
         local previous=self.signatures or {}
         self.signatures,self.changed_rects={},{}
         local registry=HomeHost.installed()
@@ -50,19 +52,23 @@ function HomeHost.create()
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local scale=function(n) return Device.screen:scaleBySize(n) end
+        local status,kind=AccountPlan.sync(account,true)
+        local accountHeight=status and caps.account and scale(44) or 0
         local gap,top,bottom=scale(12),scale(self.list_layout and 158 or 108),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
+        top=top+accountHeight
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
         HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
+        if accountHeight>0 then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
-        HomeWidgets.button(canvas,_("Search"),gap,scale(54),scale(100),scale(50),function() self:search() end)
+        HomeWidgets.button(canvas,_("Search"),gap,scale(54)+accountHeight,scale(100),scale(50),function() self:search() end)
         if self.list_layout then
             local header=self.filter:header(self.list_result and self.list_result.total)
-            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54),scale(100),scale(50),header.callback)
+            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54)+accountHeight,scale(100),scale(50),header.callback)
             local x=gap
             for _,chip in ipairs(header.chips) do
                 if x+scale(140)>w-gap then break end
-                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106),scale(136),scale(46),chip.callback)
+                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106)+accountHeight,scale(136),scale(46),chip.callback)
                 x=x+scale(140)
             end
         end
@@ -155,6 +161,12 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "book" then
+            if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
+                local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}
+                self.download_prompt=prompt
+                UIManager:show(prompt) -- gate: user action (server-only book)
+                return
+            end
             if Library.open(row) then
                 if HomeHost.active==self then UIManager:close(self) end
             elseif not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then

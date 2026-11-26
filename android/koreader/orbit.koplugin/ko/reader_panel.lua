@@ -38,6 +38,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
     local result = key and book:book(key) or book:reader(ui.document.file)
     local battery = screen == "reader-top-panel" and paint:battery() or nil
     local caps = paint:read("capabilities", {limit=1})
+    local account=caps.account or {}
     local m = ReaderPanelPlan.model(result, battery)
     paint:flush()
     local rows = {
@@ -52,7 +53,10 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
                 ReaderPanel.show(ui, screen, key, ReaderPanel.sheet)
             end)) do table.insert(rows, row) end
         end
-        if caps.progress and caps.progress.syncCurrent then
+        local text,go
+        if caps.account then text,go=AccountView.syncAction(account) end
+        if text then table.insert(rows,button(text,function() back(); go() end))
+        elseif caps.progress and caps.progress.syncCurrent then
             local sync = button("Sync", function() end)
             local busy = false
             sync.action = function()

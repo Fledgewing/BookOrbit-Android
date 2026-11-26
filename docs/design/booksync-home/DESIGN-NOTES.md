@@ -782,3 +782,11 @@ The compact native-widget preview illustrates weight and contrast; the open EPUB
 receives the supported engine weight, spacing, margin and gamma values. PDFs retain
 the existing KOReader-menu escape. Android comes first under the 2026-11-25 approval;
 X4 Pro, X4 and X3 remain deferred, with their own device margin ranges.
+## Android F12-N implementation
+
+The approved §20–§22 forms now reuse the neutral library and companion account worker;
+see [F12-N implementation notes](F12-N-NOTES.md). Each screen/widget declares a strict
+budget inherited by library calls: bounded rows/decoded bytes, zero subprocesses and
+render-path network, ≤1 batch per Home paint and ≤16 KiB per widget. The companion owns
+heavy work. Account results redraw only a visible initiating form; cancellation drops stale
+results and clears transient password fields. X4 phone setup remains a labelled stub.
