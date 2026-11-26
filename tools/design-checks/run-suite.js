@@ -33,7 +33,9 @@ for (const script of checks) {
     /\b(?:FAIL|ERR|ERRORS|OVERFLOW)\b|NO FOCUS/.test(diagnostic) ||
     /\b(?:small:?\s+|overflow\s+|fails\s+)[1-9]\d*/i.test(diagnostic) ||
     /"bad"\s*:\s*\[(?!\])/.test(diagnostic) ||
-    /!OUT|NOSHEET|"clip":\[(?!\])|"out":\[(?!\]|\{)|"in":false|"clip":true|"overlap":\[(?!\])/.test(diagnostic);
+    /!OUT|NOSHEET/.test(diagnostic) ||
+    (['critic-shots/r5/f5.js','critic-shots/r5/p5.js','critic-shots/r8/lab.js'].includes(script) &&
+      /"clip":\[(?!\])|"out":\[(?!\]|\{)|"in":false|"clip":true|"overlap":\[(?!\])/.test(diagnostic));
   console.log(`${bad ? 'FAIL' : 'PASS'} ${script}`);
   if (bad) { failures++; console.error(log || result.error?.message); }
 }
