@@ -40,6 +40,8 @@ def obsolete_lines(path, text):
             continue
         if line.strip() in ALLOWED_LINES.get(path, set()):
             continue
+        if path in {'docs/repository-rename.md', 'tools/rename-to-booksync.sh'}:
+            line = line.replace('Fledgewing/Orbify', 'Fledgewing/BookSync')
         if OLD_NAME.search(line):
             yield f'{path}:{number}: {line.strip()}'
 

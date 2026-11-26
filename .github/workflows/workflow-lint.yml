@@ -6,9 +6,9 @@ name: Workflow lint
 on:
   push:
     branches: [main]
-    paths: [".github/**", "tools/test/test-workflows.py"]
+    paths: [".github/**", "stub/**", "tools/test/test-feed-stub.py", "tools/rename*", "tools/test/test-workflows.py"]
   pull_request:
-    paths: [".github/**", "tools/test/test-workflows.py"]
+    paths: [".github/**", "stub/**", "tools/test/test-feed-stub.py", "tools/rename*", "tools/test/test-workflows.py"]
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,9 @@ jobs:
           persist-credentials: false
 
       - name: Supply-chain rules
-        run: python3 tools/test/test-workflows.py </dev/null
+        run: |
+          python3 tools/test/test-workflows.py </dev/null
+          python3 tools/test/test-feed-stub.py </dev/null
 
       - name: actionlint
         run: |
@@ -38,3 +40,4 @@ jobs:
           echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color </dev/null
+          "$RUNNER_TEMP/actionlint" -color stub/.github/workflows/*.yml </dev/null

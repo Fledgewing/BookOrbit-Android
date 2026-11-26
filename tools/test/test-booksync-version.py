@@ -2,6 +2,8 @@
 """Exercise shared identity, package stamping, channel ordering and retained OTA bridges."""
 import importlib.util
 import json
+import os
+from unittest.mock import patch
 import sys
 sys.dont_write_bytecode = True
 from pathlib import Path
@@ -72,6 +74,10 @@ class Versions(unittest.TestCase):
             self.assertNotIn(old["tag_name"], [r["tag_name"] for r in feed])
             self.assertEqual(next(r["booksync_version"] for r in feed if r["tag_name"] == bridge["tag_name"]),
                              "0.11.3-rc.17")
+        with patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/canonical'}):
+            canonical = F.build_feed([classic])[0]
+        self.assertEqual('https://github.com/fixture/canonical/releases/download/xteink-v1.6.1.114/firmware.bin',
+                         canonical['assets'][0]['browser_download_url'])
         self.assertIsNone(F.identity(classic))
         # Rebuilding an old bridge later must retain the current unified release.
         bridge["created_at"] = "9"

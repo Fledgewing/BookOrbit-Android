@@ -36,9 +36,34 @@ class UpdaterUrlTest {
     fun signedFeedUsesCanonicalLocationWithOneLegacyLocationFallback() {
         assertEquals("https://raw.githubusercontent.com/Fledgewing/BookSync/android-feed/android/releases.json",
             AndroidReleaseFeed.URL)
-        assertEquals(AndroidReleaseFeed.LEGACY_URL, Updater.legacyRepoUrl(AndroidReleaseFeed.URL, 404))
         assertNull(Updater.legacyRepoUrl(AndroidReleaseFeed.LEGACY_URL, 404))
         assertNull(Updater.legacyRepoUrl(AndroidReleaseFeed.URL, 403))
+    }
+
+    @Test
+    fun everyFeedFailureTriesLegacyOnceAndSuccessDoesNot() {
+        for (failure in listOf(java.io.IOException("HTTP 503"),
+                java.net.SocketTimeoutException("timeout"), org.json.JSONException("bad JSON"),
+                IllegalArgumentException("bad signature"))) {
+            val attempts = mutableListOf<String>()
+            assertEquals("verified", AndroidReleaseFeed.fromLocations { url ->
+                attempts += url
+                if (url == AndroidReleaseFeed.URL) throw failure
+                "verified"
+            })
+            assertEquals(listOf(AndroidReleaseFeed.URL, AndroidReleaseFeed.LEGACY_URL), attempts)
+        }
+        val attempts = mutableListOf<String>()
+        assertEquals("verified", AndroidReleaseFeed.fromLocations { attempts += it; "verified" })
+        assertEquals(listOf(AndroidReleaseFeed.URL), attempts)
+        attempts.clear()
+        try {
+            AndroidReleaseFeed.fromLocations<String> { attempts += it; error("invalid feed") }
+            org.junit.Assert.fail("Neither invalid feed may be accepted")
+        } catch (e: IllegalStateException) {
+            assertEquals(1, e.suppressed.size)
+            assertEquals(listOf(AndroidReleaseFeed.URL, AndroidReleaseFeed.LEGACY_URL), attempts)
+        }
     }
 
     @Test

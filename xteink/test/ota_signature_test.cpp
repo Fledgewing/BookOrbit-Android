@@ -74,6 +74,16 @@ int main(int argc, char** argv) {
   const std::string feed = readText(dir + "/xteink-feed.json");
   CHECK(!feed.empty());
 
+  // A transport/HTTP failure or unusable manifest tries the old feed once.
+  for (bool transportOk : {false, true}) {
+    for (bool usable : {false, true}) {
+      CHECK(orbify::ota_manifest::needsFallback(transportOk, usable, true, false) ==
+            (!transportOk || !usable));
+      CHECK(!orbify::ota_manifest::needsFallback(transportOk, usable, false, false));
+      CHECK(!orbify::ota_manifest::needsFallback(transportOk, usable, true, true));
+    }
+  }
+
   // Certain non-JSON redirect bodies poison the old unfiltered parser. The
   // transport still follows the redirect; the status filter protects parsing.
   ReleaseJsonParser unfiltered(matchesDevice);

@@ -24,7 +24,8 @@ class FeedTest(unittest.TestCase):
             if '--slurp' in args and 'branches' in args[-1]:
                 return json.dumps([[{'name': 'android-feed'}]] if existing else [[]])
             if '--slurp' in args:
-                return json.dumps([[{'tag_name': 'v0.11.3-rc.9', 'draft': False},
+                return json.dumps([[{'tag_name': 'v0.11.3-rc.9', 'draft': False,
+                                     'assets': [{'name': 'companion.apk', 'browser_download_url': 'https://old.invalid/download'}]},
                                     {'tag_name': 'xteink-v2.0.0', 'draft': False}]])
             if args[0] == 'release':
                 return '{}'
@@ -48,6 +49,8 @@ class FeedTest(unittest.TestCase):
             self.assertTrue(all(c.kwargs['check'] for c in verify.call_args_list))
         payload = json.loads(published[0]['payload'])
         self.assertEqual(['v0.11.3-rc.9'], [r['tag_name'] for r in payload['releases']])
+        self.assertEqual('https://github.com/fixture/repo/releases/download/v0.11.3-rc.9/companion.apk',
+                         payload['releases'][0]['assets'][0]['browser_download_url'])
         expected = {'v0.11.3-rc.10', 'v0.11.3-rc.11', 'v0.11.3-rc.17'}
         if withdraw:
             expected.add(withdraw)

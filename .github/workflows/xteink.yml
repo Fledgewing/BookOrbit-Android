@@ -557,6 +557,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             tools/feed-keys
+            tools/xteink-feed.py
             shared
 
       - name: Write the feed

@@ -3,18 +3,79 @@
 The coordinator owns the GitHub rename. This change does not rename the remote repository,
 publish a release, move a tag or touch a device.
 
-**Verdict: hold an unconditional rename approval.** Every inspected update transport follows
-301/302/307 redirects across HTTPS hosts. However, shipped Xteink manifest handlers also feed
-redirect response bodies to the JSON parser. Certain non-JSON redirect bodies prevent the final
-feed from being parsed. The regression demonstrates this using a numeric status line followed by the feed.
-Patch 0055 fixes this for future firmware and supports the previous
-feed name before the rename. Merging it does not fix readers already in the field.
+**2026-11-25 maintainer decision:** keep a feed-only repository at `Fledgewing/Orbify`
+after moving the project to `Fledgewing/BookSync`. Direct HTTP 200 at the old raw URLs avoids
+shipped Xteink parsers consuming redirect bodies; no firmware rollout is needed for that
+part of the migration. `stub/` is the deployable template, not a second development checkout.
 
-The existing raw-content alias currently serves the feed directly with HTTP 200, so this
-problem is conditional, not an observed outage. For a guarantee independent of that service
-behaviour, first distribute and device-test the compatible firmware. CrossInk 1.6 is retired;
-its stable readers need continued direct HTTP 200 service at their existing feed URL until a
-compatible stable 2.x release reaches them. Do not claim those readers have received this fix.
+**Remaining blocker:** raw feeds are only part of the installed-client contract. Shipped
+Android companions and Lua patches read the old GitHub Releases API. Existing signed Android
+payloads and firmware feeds also contain old release-download URLs. Recreating the old
+repository removes GitHub's redirects for those paths ([GitHub rename guidance](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)); an empty release list or 404 download
+would strand those clients. A feed-only stub cannot serve GitHub's Releases API or redirect
+arbitrary release asset paths. Redirect support in the clients does not help if the endpoint
+no longer redirects. Resolve this with an approved release-metadata/asset compatibility
+mechanism before renaming; this PR does not create tags or releases to work around it.
+
+`tools/rename-to-booksync.sh` defaults to an offline dry-run plan. Its execution
+function contains the rename/create/seed/dispatch/direct-200 checks, but `--apply` deliberately
+refuses before any mutation until the release-endpoint blocker has been resolved in code.
+Do not remove that gate merely because raw-feed checks pass. No repositories have been
+renamed or created, and no physical-device validation has been performed.
+
+## Exact old URL inventory
+
+The two raw JSON feeds below are the complete default feed paths in the inspected clients.
+The detached Xteink signature is mirrored too, although shipped firmware checks per-image
+signatures and does not fetch that sidecar itself. Arbitrary user-specified test feeds are
+outside the mirror and never fall back to public feeds.
+
+| Old URL (query variants share the same endpoint) | Consumers and source evidence | Stub coverage |
+|---|---|---|
+| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json` | Retired stable `xteink-v1.6.1.114+bookorbit.9:xteink/tailnet/tailnet_build.py:24-27,395-396`; current `xteink/tailnet/tailnet_build.py:31-35,564-570`. All inspected 1.6/2.x firmware uses this layout. | `xteink-feed` branch, `xteink/releases.json`, exact bytes. |
+| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json.sig` | Publisher `.github/workflows/xteink.yml:603,626`; detached feed signature, not a separate client manifest. | Same branch, `xteink/releases.json.sig`, exact bytes, committed with the JSON. |
+| `https://raw.githubusercontent.com/Fledgewing/Orbify/android-feed/android/releases.json` | Signed-feed companion on main: `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidReleaseFeed.kt:9-10`; no separate plugin feed. | `android-feed` branch, `android/releases.json`, exact signed envelope bytes. |
+| `https://api.github.com/repos/Fledgewing/Orbify/releases/latest` and `/releases?per_page=N` | Shipped `v0.7.0:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,144-147`; `v0.11.3-rc.17:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,207-210`; Lua `v0.7.0:android/koreader-patch/2-orbit-android.lua:2312,2368` (`N=30` in that patch). | **Not covered. Blocking.** GitHub generates this API from releases, not raw branch files. |
+| `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest` and `/releases?per_page=N` | Earliest companion `v0.1.0:companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,110-113` (`N=5`); patch `v0.6.2:koreader-patch/2-orbit-android.lua:2310,2366`. | Historical alias must be checked separately; do not assume it chains through the recreated name. |
+| `https://github.com/Fledgewing/Orbify/releases/download/<tag>/<asset>` (also historical `BookOrbit-Android` paths) | URLs returned by those APIs and already stored in published feeds; `v0.11.3-rc.17:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:228-246`; firmware `OtaUpdater.cpp` uses the manifest's asset URL. | **Not covered. Blocking.** New generated feeds use canonical downloads; that cannot rewrite cached URLs or old signed envelopes. |
+
+The plugin from 0.8 has no independent update/feed HTTP reader:
+`android/koreader/orbit.koplugin/ko/updater.lua:25-30` delegates to the companion.
+Older Lua patches use the Releases API above, not a raw plugin feed.
+
+## Stub mirroring and verification
+
+`stub/feeds.json` is the single branch/path manifest used by the scheduled mirror and the
+coordinator's snapshot, seed and verification helpers. The workflow runs every five minutes,
+on `repository_dispatch` type `mirror-feeds`, and on `workflow_dispatch`. GitHub schedules can
+be delayed and may disable after inactivity; monitor the workflow and re-enable it as needed.
+The publisher can be dispatched manually after a release without a cross-repository secret.
+
+The mirror downloads all source files anonymously before changing anything, writes only feed
+files, and commits only changed bytes. Each branch's JSON and signature are published in one
+Git tree/commit; non-forced updates fail on concurrent writes instead of overwriting them.
+Only the stub's own `GITHUB_TOKEN` has write access. A missing source file fails closed and
+leaves existing feeds alone. Source code and full project history are never copied.
+
+For the coordinator, after release compatibility is resolved and the execution gate is
+removed by a reviewed change: snapshot the old feeds **before** renaming, rename the project,
+create the public stub from its template, seed both branches from that snapshot byte-for-byte,
+then dispatch the mirror. The initial snapshot preserves signatures; it may still contain old
+asset URLs. Regenerate both source feeds in BookSync's normal signing CI and mirror again
+before declaring completion. Their generators use `GITHUB_REPOSITORY` for canonical download
+URLs; signed payload edits are never made by the stub. The rename/create operation has a
+service gap, so perform it in a coordinated maintenance window and check both branches.
+
+`python3 tools/rename-feeds.py verify Fledgewing/Orbify Fledgewing/BookSync <temporary-directory>`
+uses `curl` **without `-L`**, requires direct HTTP 200 for every file on both repositories and
+compares the downloaded bytes. The execution function retries raw CDN publication delays, then fails on
+redirects, errors or different bytes. This proves raw-feed compatibility only. Also verify
+old API latest/list responses, historical aliases, and old/new downloads with their checksums
+before approving the migration. Never log expiring asset-host query strings.
+
+Keep the stub until **no pre-0.12 client remains**. There is no telemetry to establish that,
+so the default is to retain and maintain it indefinitely. Keep release compatibility for the
+same installed population; retiring raw branches alone does not retire cached asset URLs.
 
 ## Inspected clients
 
@@ -47,7 +108,10 @@ response (`components/esp_http_client/esp_http_client.c:306`, `:331` at v5.5.3),
 
 ## Signatures and durable identifiers
 
-The Xteink feed carries per-asset signatures, not a signature over the feed JSON or its full URL.
+Shipped Xteink firmware verifies per-asset signatures from the feed, rather than its detached
+whole-feed sidecar. The publisher also signs the exact JSON bytes as asset `releases.json`
+under tag `xteink-feed` (`.github/workflows/xteink.yml:603`); that sidecar does not include
+the fetch location. Mirroring both files byte-for-byte preserves it as well.
 `tools/feed-keys/feed-keys:73` signs the domain, tag, asset filename and SHA-256.
 `xteink/orbify/core/UpdateSignature.cpp:60` reconstructs those inputs; `:75` takes only the
 last path segment from the download URL. Old and new repository URLs therefore verify with
@@ -72,29 +136,20 @@ paths, NVS namespace, C++ symbols, signing domains, signature field, release ass
 and tag prefixes. Credits retain their exact meaning; only the project name changes.
 Published release notes and CHANGELOG entries remain historical.
 
-## Before and after the coordinator's rename
+## New-client fallback
 
-1. Merge this change with all checks green. Android and default firmware builds prefer the
-   new repository name and fall back once on HTTP 404 to the previous name. Explicit custom
-   firmware feeds never fall back to a public feed.
-2. The [shared-version bridge](design/unified-version.md) on main can carry this redirect fix
-   in the same rollout; its publication and device validation are still pending. Arrange a
-   device-tested compatible firmware rollout, or explicitly preserve direct HTTP
-   200 service at old raw feed URLs for every reader that remains on older firmware.
-3. Rename using GitHub's repository rename operation. Never create a second repository at
-   the old name: that removes the redirects, per [GitHub's rename guidance](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository).
-4. Verify old and new web, API, raw-feed and release-download URLs immediately. Check the
-   earliest Android alias too. Confirm the old raw feed returns 200 directly, valid JSON,
-   and the same release signatures. Follow downloads through the asset host and verify
-   SHA256SUMS. Do not log expiring asset-host query strings.
-5. Update local remotes after the rename. Existing checkouts need no directory rename.
+New companions try the canonical BookSync feed first, then the previous feed once on any
+fetch, JSON or signature failure (`AndroidReleaseFeed.kt:15-25`; `Updater.kt:208-210`). Both
+locations pass identical signature checks; neither failure enables unsigned metadata.
+Firmware patch `0055-booksync-ota-redirect.patch` follows the same order for transport/HTTP
+failures and unusable manifests. It clears parser/candidate state before changing URLs and
+never loops back from the legacy feed. Explicit custom firmware feeds have no public fallback.
+Firmware still checks the downloaded image's signature before installation; this fallback does
+not relax that check or retry a failed image installation with different metadata.
 
-Read-only probes on 2026-11-25 against the existing earliest Android alias found web 301,
-API 301, and raw feed 200 with zero redirects and two release records. These are observations
-of the existing alias, not a test of the future rename. No device validation was performed.
-
-The installer and run-ID sideload helpers also try the previous repository name, so the
-bridge can be tested before the rename. No device operation is part of those URL lookups.
+The installer and run-ID sideload helpers also try the previous repository name.
+Existing checkouts need only the remote commands printed by the dry-run script; directory
+names and internal IDs do not change.
 
 Older GitHub build attestations retain the repository identity at build time. The installer tries both exact repository identities for all artifacts together. For a manual
 check of a pre-rename artifact, use its historical `gh attestation verify --repo` identity; redirects

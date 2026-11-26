@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 BRANCH = 'android-feed'
@@ -47,7 +48,7 @@ def run(withdraw):
         pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100'))
         releases = [{
             'tag_name': r['tag_name'], 'draft': r['draft'], 'prerelease': r.get('prerelease', False),
-            'assets': [{'name': a['name'], 'browser_download_url': a['browser_download_url']}
+            'assets': [{'name': a['name'], 'browser_download_url': f"https://github.com/{repo}/releases/download/{quote(r['tag_name'], safe='')}/{quote(a['name'], safe='')}"}
                        for a in r.get('assets', [])],
         } for page in pages for r in page
             if re.match(r'^(?:android-)?v\d', r['tag_name']) and not r['draft']]
