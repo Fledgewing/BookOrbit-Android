@@ -38,8 +38,10 @@ function HomeHost.create()
         self:rebuild()
     end
     function Host:rebuild()
+        if self.widgetRefresh then UIManager:unschedule(self.widgetRefresh); self.widgetRefresh=nil end
         if self.series_key then return SeriesUI.paint(self) end
         if self.list_layout and self.filter.model.query.group~="none" and self.filter.model.query.group~=nil then return SeriesUI.groups(self) end
+        local refreshDelay
         local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
@@ -109,6 +111,8 @@ function HomeHost.create()
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
             local snapshot=HomeHostPlan.snapshot(result,caps.account)
+            local interval=WidgetRegistry[p.widget].refreshSeconds
+            if interval then refreshDelay=math.min(refreshDelay or interval,interval) end
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)
             if not rendered then card=HomeWidgets.card(p,HomeHostPlan.snapshot({error="Render failed"}),dispatch,rect) end
@@ -138,6 +142,16 @@ function HomeHost.create()
             HomeWidgets.button(canvas,"›",w-gap-scale(80),h-bottom,scale(80),bottom,function() self:turn(1) end)
         end
         self.metrics=paint:flush()
+        if refreshDelay then
+            self.widgetRefresh=function()
+                if HomeHost.active~=self then self.widgetRefresh=nil; return end
+                -- Keep the heartbeat until rebuild replaces it: a panel may cover Home
+                -- between this check and the queued redraw. Back must still refresh Clock.
+                UIManager:scheduleIn(refreshDelay,self.widgetRefresh)
+                if HomeHost.foreground() and topWidget()==self and not reading() then self:invalidate() end
+            end
+            UIManager:scheduleIn(refreshDelay,self.widgetRefresh)
+        end
         local old=self[1]
         self[1]=HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=0,background=HomeWidgets.ui().BB.COLOR_WHITE,canvas}
         if old then old:free() end
@@ -294,6 +308,7 @@ function HomeHost.create()
         return true
     end
     function Host:onCloseWidget()
+        if self.widgetRefresh then UIManager:unschedule(self.widgetRefresh); self.widgetRefresh=nil end
         for _,entry in ipairs(self.catalog_history or {}) do if entry.filter then entry.filter:close(false) end end
         self.catalog_history=nil
         if self.filter then self.filter:close(false); self.filter=nil end

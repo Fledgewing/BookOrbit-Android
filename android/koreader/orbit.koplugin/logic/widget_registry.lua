@@ -18,6 +18,7 @@ widget("year-in-reading", "reading.stats", {{4,3},{4,2}}, {{2,4},{2,3}})
 widget("when-you-read", "reading.stats", {{2,2},{2,3},{2,1},{4,1}}, {{2,1},{2,2},{1,2}})
 widget("reading-records", "reading.stats", {{3,2},{2,3},{2,2},{4,1}}, {{2,2},{2,3}})
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
+WidgetRegistry.clock.refreshSeconds = 60 -- host-owned refresh, only while visible
 -- The Library tile also displays local storage; both small needs share its budget and
 -- are part of the host's single batched snapshot, never separate render-time round trips.
 WidgetRegistry.library.dataNeeds[1].params.limit.maximum = 1
