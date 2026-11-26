@@ -30,7 +30,11 @@ class LibraryReadModel(
             val args = LuaValue.parse(request.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: continue
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
-                val result = try { if (args["op"] == "reading.stats") readingStats() else adapter.project(owner, args) } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
+                val result = try { when (args["op"]) {
+                    "reading.stats" -> readingStats()
+                    "battery" -> mapOf("available" to false, "freshness" to mapOf("saved" to false))
+                    else -> adapter.project(owner, args)
+                } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 var body = LuaValue.encode(result)
                 val budget = ((args["bytes"] as? Number)?.toInt() ?: MAX_BYTES).coerceIn(256, MAX_BYTES)
                 val rows = (result["items"] as? List<*>)?.size ?: 0

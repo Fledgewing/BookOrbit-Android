@@ -34,7 +34,7 @@ local LOGIC = {
     "logic/prompts.lua", "logic/server/bookorbit/group.lua", "logic/server/bookorbit/finish.lua", "logic/server/bookorbit/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua", "logic/server/bookorbit/cache.lua",
     "logic/server/bookorbit/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
     "logic/orbismart.lua", "logic/status_layout.lua",
-    "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua",
+    "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua", "logic/reader_panel.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
@@ -44,7 +44,7 @@ local KO = {
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
     "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/server/bookorbit/cache.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
-    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/home_host.lua",
+    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/home_host.lua",
     "ko/server/bookorbit/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }
 
