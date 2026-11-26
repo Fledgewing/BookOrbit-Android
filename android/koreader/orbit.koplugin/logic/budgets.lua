@@ -95,6 +95,9 @@ Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 -- One local cover reference per lookup. Acquisition is owned by the off-paint host.
 Budgets.screens["cover-cache"] = budget(1,16384,30)
 Budgets.screens["cover-cache"].roundTrips = 0
+-- Series/grouped windows charge summary, preview books and one capability row.
+Budgets.screens.series.rows = Budgets.MAX_ROWS + 1
+
 -- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
 Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
 Budgets.screens["settings-device"] = budget(1,16384,50)
