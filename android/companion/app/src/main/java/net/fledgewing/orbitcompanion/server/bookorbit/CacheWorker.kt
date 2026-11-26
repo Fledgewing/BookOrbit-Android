@@ -209,13 +209,20 @@ class CacheWorker(
         if (dir != null && dir.isDirectory) {
             val protected = protectedIds()
             val keep = if (mirrorCovers) st.coversKept() else emptySet()
-            for (f in dir.listFiles() ?: emptyArray()) {
+            val files = dir.listFiles().orEmpty().flatMap { entry ->
+                if (entry.isDirectory && entry.name.matches(Regex("bo:[0-9a-f]{24}")) && allowed(entry.path) != null)
+                    entry.listFiles().orEmpty().toList()
+                else listOf(entry)
+            }
+            for (f in files) {
                 checkpoint()
                 if (f.name.endsWith(".etag") && !File(f.path.removeSuffix(".etag")).isFile) { f.delete(); continue }
                 if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
-                val etag = File(dir, f.name + ".etag")
-                items.add(StorageLogic.Item("c:${f.name}", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
-                    if (f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (f.name in keep) "mirror_cover" else "cover"))
+                val etag = File(f.path + ".etag")
+                val relative = f.relativeTo(dir).path
+                val currentAccount = f.parentFile == dir || f.parentFile.name == store.meta("owner")?.let(BookOrbitLibrary::namespace)
+                items.add(StorageLogic.Item("c:$relative", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
+                    if (currentAccount && f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (relative in keep) "mirror_cover" else "cover"))
             }
         }
         return items

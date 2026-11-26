@@ -187,6 +187,26 @@ class CacheWorkerTest {
         } finally { w.store.close(); root.deleteRecursively() }
     }
 
+    @Test fun ownedCoverFoldersParticipateInExistingStorageAccountingAndEviction() {
+        val (root,_,w)=setup()
+        try {
+            val owner="opaque-account"
+            w.store.own(owner)
+            w.store.putItem(mapOf("id" to 7L,"hasCover" to true,"updatedAt" to "1"),1000)
+            val dir=File(root,"covers")
+            val owned=File(dir,BookOrbitLibrary.namespace(owner))
+            val result=w.acquireCover(owner,7,creds,owned)
+            val path=File(LuaValue.utf8(result["local_path"] as String))
+            val item=w.storageItems(dir.path,false).single { it.k.startsWith("c:") }
+            assertEquals("c:${owned.name}/7_1.jpg",item.k)
+            assertEquals(path.length()+File(path.path+".etag").length(),item.bytes)
+            w.storage(CacheWorker.StorageAsk("test",1,dir.path,false))
+            assertFalse(path.exists()); assertFalse(File(path.path+".etag").exists())
+            val snapshot=BookOrbitProjection(w.store).project(owner,mapOf("op" to "cover","key" to BookOrbitLibrary.key(owner,"book",7)))
+            assertNull(snapshot["local_path"])
+        } finally { w.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun missingOrUntrustedCoverCannotWriteOutsideAllowedRoots() {
         val (root,fake,w) = setup()
         val outside = Files.createTempDirectory("outside-cover").toFile()

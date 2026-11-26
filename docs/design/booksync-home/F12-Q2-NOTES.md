@@ -8,7 +8,8 @@ The library now exposes an explicit `acquireCover(key, callback)` command and a
 one-row `cover(key)` snapshot. `ServerAdapter.acquireCover` resolves an opaque key
 against the captured sync account and queues work on the existing cache writer.
 The companion uses account-scoped cover folders; an old account's file cannot
-satisfy another account's request. Existing installed legacy cover folders have
+satisfy another account's request. Account folders participate in the existing
+storage counter and eviction path. Existing installed legacy cover folders have
 not been imported. Unsupported adapters return an explicit unsupported result.
 
 Reuse: `ko/library.lua:20` owns paint counters, `ko/store.lua:29` owns generic
