@@ -6859,11 +6859,12 @@ test("settings: mode estimates come from one bounded library read; presets and C
     local requests, trips = 0, 0
     RE.LibraryAdapter.read = function(encoded)
         local args = RE.Cache.decode(encoded)
+        if args.op=="account.state" then eq(args.limit,1); return {signedIn=false},128 end
         eq(args.op, "mode-estimates"); eq(args.limit, 3)
         requests = requests + 1
         return {items={{id="saver", text="≈ 4 days at your usual use"}}}, 128
     end
-    RE.LibraryAdapter.request = function(batch) trips=trips+1; eq(#batch, 1); return true end
+    RE.LibraryAdapter.request = function(batch) trips=trips+1; eq(#batch, 2); return true end
     local row
     for _, group in ipairs(m:menuItems()) do
         if group.settings_group == "sync" then row = group.sub_item_table_func()[2] end

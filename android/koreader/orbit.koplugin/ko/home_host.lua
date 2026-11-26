@@ -31,6 +31,8 @@ function HomeHost.create()
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
         self.caps=caps
+        local account=caps.account or {}
+        self.account=account
         local previous=self.signatures or {}
         self.signatures,self.changed_rects={},{}
         local registry=HomeHost.installed()
@@ -39,10 +41,12 @@ function HomeHost.create()
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local scale=function(n) return Device.screen:scaleBySize(n) end
-        local gap,top,bottom=scale(12),scale(58),scale(#resolved.pages>1 and 52 or 12)
+        local gap,top,bottom=scale(12),scale(96),scale(#resolved.pages>1 and 52 or 12)
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
         HomeWidgets.text(canvas,"BookSync",gap,gap,w/2,24,false,true)
+        local status,kind=AccountPlan.sync(account,true)
+        if status and caps.account then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
         if not self.list_layout then
             HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(36),function() HomeEditor.show(self) end)
@@ -119,6 +123,12 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "book" then
+            if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
+                local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}
+                self.download_prompt=prompt
+                UIManager:show(prompt) -- gate: user action (server-only book)
+                return
+            end
             UIManager:close(self)
             if not Library.open(row) and not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
                 UIManager:show(TextViewer:new{title=row.title or _("Book details"),text=_("This book is not saved on this reader.")}) -- gate: user action (widget book)

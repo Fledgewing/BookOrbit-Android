@@ -10,6 +10,7 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "filter
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
 Budgets.screens["account"] = budget(3, 16384, 50)
+Budgets.screens.account.displayRows=12
 -- Editor draws only its current page; it never reads a catalog or widget snapshot.
 Budgets.screens.editor.drawNodes = 208
 Budgets.screens.editor.rows = 128
@@ -69,3 +70,7 @@ for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
 end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
+
+for _,id in ipairs({"summary","form","signout","remove","result"}) do
+    Budgets.screens["account-" .. id] = Budgets.screens.account
+end

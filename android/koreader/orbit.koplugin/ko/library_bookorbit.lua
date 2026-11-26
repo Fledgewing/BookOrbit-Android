@@ -11,10 +11,27 @@ function LibraryAdapter.owner()
     if type(settings) ~= "table" or not settings.username or not settings.server_url then return nil end
     return OC.owner(settings)
 end
-function LibraryAdapter.read(request)
+function LibraryAdapter.read(request,op)
+    if op=="account.state" and LibraryAdapter.account_snapshot then
+        return LibraryAdapter.account_snapshot, LibraryAdapter.account_bytes
+    end
     local owner = LibraryAdapter.owner()
-    if not owner then return nil end
+    if not owner then
+        if op=="capabilities" and LibraryAdapter.account_snapshot then
+            local result={account=LibraryAdapter.account_snapshot}
+            return result,#Cache.encode(result)
+        end
+        return nil
+    end
     local result, bytes = Store.library(owner, request)
+    if op=="capabilities" and LibraryAdapter.account_snapshot then
+        local merged={}
+        for k,v in pairs(result or {}) do merged[k]=v end
+        merged.account=LibraryAdapter.account_snapshot
+        bytes=#Cache.encode(merged)
+        if bytes>Budgets.MAX_SNAPSHOT then return nil end
+        result=merged
+    end
     LibraryAdapter.ready[owner .. request] = result ~= nil
     return result, bytes
 end
@@ -125,6 +142,11 @@ function LibraryAdapter.accountReturned(attempt)
         return false
     end
     if not result or result.ok ~= "1" then return false end
+    local body=result.body
+    if type(body)=="string" and #body<=Budgets.MAX_SNAPSHOT then
+        LibraryAdapter.account_snapshot=Cache.decode(body)
+        LibraryAdapter.account_bytes=#body
+    end
     local changed = LibraryAdapter.managed_owner ~= result.owner
     LibraryAdapter.managed_owner = result.owner
     if changed then LibraryAdapter.reset() end
@@ -145,7 +167,15 @@ function LibraryAdapter.command(op, args, callback)
         if type(body) ~= "string" or #body > Budgets.MAX_SNAPSHOT then callback({error="unavailable"}); return end
         local decoded = Cache.decode(body)
         if type(decoded) ~= "table" then callback({error="invalid"}); return end
-        if not decoded.pending then callback(decoded); return end
+        if not decoded.pending then
+            if decoded.state then
+                LibraryAdapter.account_snapshot=decoded.state
+                LibraryAdapter.account_bytes=#Cache.encode(decoded.state)
+                LibraryAdapter.managed_owner=decoded.state.owner
+                LibraryAdapter.reset()
+            end
+            callback(decoded); return
+        end
         if now_s() >= deadline then callback({error="unavailable"}); return end
         UIManager:scheduleIn(0.2,poll)
     end
