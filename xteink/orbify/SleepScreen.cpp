@@ -24,6 +24,9 @@
 #include <vector>
 
 #include "BookOrbitCredentialStore.h"
+#if CROSSINK_TAILNET_ORBIFY_CACHE
+#include "CacheStore.h"
+#endif
 #include "BookOrbitDownloadIndex.h"
 #include "BookOrbitSyncClient.h"
 #include "CrossPointSettings.h"
@@ -144,6 +147,14 @@ bool getJson(const std::string& path, JsonDocument& filter, JsonDocument& doc) {
   if (!OrbifyHeap::roomForRequest("Sleep screen")) return false;
   const int code = BookOrbitSyncClient::orbifyRequest("GET", path, nullptr, REPLY_PATH);
   const bool ok = code >= 200 && code < 300 && parseReply(filter, doc);
+#if CROSSINK_TAILNET_ORBIFY_CACHE
+  // Top-ups use the sync transport, bypassing CatalogClient's save hook. Keep
+  // their full source reply after parsing and before removing the temporary file.
+  if (ok) {
+    const auto url = BOOKORBIT_STORE.getBaseUrl() + path;
+    OrbifyCache::storeReply(OrbifyCache::lookup(url), url, REPLY_PATH);
+  }
+#endif
   if (!ok) LOG_INF(TAG, "Sleep screen: %s failed (http %d)", path.c_str(), code);
   Storage.remove(REPLY_PATH);
   return ok;

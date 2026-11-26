@@ -499,7 +499,9 @@ counting distinct successfully fetched identities in that run, grouped independe
 
 ### X4 refresh repair (0.11, maintainer request 2026-11-25)
 
-Normal Home refresh keeps its bounded flow. Its saved source pages (100 rows) and
+Normal Home refresh keeps its bounded flow. Its sync-transport top-ups now keep
+their raw replies through the catalog save hook before deleting the temporary file;
+previously they bypassed that hook. Those saved source pages (100 rows) and
 browser windows (20 rows, or the facet default) share an absolute-offset model;
 Full refresh continues to use the ranked SD catalog. All-format source rows are
 filtered locally before paging, including when the browser selects EPUB. Omitted
