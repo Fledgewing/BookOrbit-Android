@@ -81,7 +81,8 @@ subprocess spawns and render-path network calls, at most one batched companion r
 per Home paint, and at most 16 KiB per widget snapshot. Declare limits in
 `logic/budgets.lua`/the widget registry and test missing or exceeded budgets. Log one
 info-level timing span per call/paint; host timing is not a device performance test.
-Stats widgets share one materialized `reading.stats` row per paint; aggregate in the companion.
+Stats widgets share one materialized `reading.stats` row per paint; aggregate and resolve per-field
+server/local precedence and provenance in the companion, never in Lua.
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Owned Home widgets receive immutable snapshots and a dispatch handle; only their host owns
 the batched read and read-model invalidation. Layout moves validate only their changed page, bounded by

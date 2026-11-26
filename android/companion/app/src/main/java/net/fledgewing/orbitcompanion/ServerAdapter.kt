@@ -21,6 +21,7 @@ interface ServerAdapter {
     fun setProgress(owner: String, key: String, position: Map<String, Any?>): Map<String, Any?> = unsupported()
     fun setStatus(owner: String, key: String, status: String): Map<String, Any?> = unsupported()
     fun saveList(owner: String, key: String?, query: Map<String, Any?>): Map<String, Any?> = unsupported()
+    fun cachedReadingStats(owner: String): RemoteReadingStats? = null
     fun readingStats(owner: String): Map<String, Any?> = unsupported()
     fun signIn(server: String, user: String, secret: CharArray): Map<String, Any?> = try { unsupported() } finally { secret.fill('\u0000') }
     fun signOut(): Map<String, Any?> = unsupported()

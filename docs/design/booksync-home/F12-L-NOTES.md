@@ -49,5 +49,7 @@ published call/paint; host tests do not establish the device timing targets.
 
 `ServerAdapterTest` runs fake and acquisition-only backends through the same publisher,
 with distinct opaque key shapes/capabilities, unsupported operations, account isolation,
-secret clearing and an oversized response. Existing backend fixtures/tests moved into the
+secret clearing and an oversized response. The internal adapter method `cachedReadingStats` supplies F12-F's normalized cache input;
+`reading.stats` remains the existing UI operation with one aggregate per batch.
+Existing backend fixtures/tests moved into the
 adapter test package; reading and contract source guards now recurse into subpackages.
