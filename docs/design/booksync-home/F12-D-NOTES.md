@@ -12,7 +12,7 @@ The design branch is read without merging its unapproved implementation restrict
   changes with per-key timestamps; `ko/shared.lua:148` applies existing effects.
 - `ko/menu.lua:105` extends the existing menu, PIN handling and About action.
   Settings groups are lazy and use the same native menu navigation.
-- `ko/library.lua:7` supplies the caller budget and timing. `ko/store.lua:107`
+- `ko/library.lua:16` supplies the caller budget and timing. `ko/store.lua:107`
   reads bounded materialized views via the existing SQLite connection, rather
   than spawning a process. `LibraryReadModel.kt:13` materializes responses on
   the companion worker, in `CacheStore.kt:15`'s existing owned database.
@@ -42,6 +42,8 @@ position rule no longer overrides the visible sleep/wake/cadence settings:
 scheduled reading pulls still use the existing furthest-position decision and
 behind-hold protection, without an extra automatic pause timer.
 
+Sync now uses `Library.syncNow(reader)`, reusing the snapshot/drain operation
+with an explicit stay-awake option on success and failure.
 Full refresh uses `Library.fullRefresh()` and the adapter delegates to the
 existing `ko/cache.lua:786` command and companion job, preserving explicit
 refresh without exposing a backend client to Settings.

@@ -159,7 +159,8 @@ function sleepNow(reason)
     end
 end
 
-function OrbitAndroid:onOrbitSyncAndSleep()
+function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
+    stay_awake = stay_awake == true -- explicit Sync now; dispatcher events retain Sync and sleep
     if self.sas_running then return true end
     self.sas_running = true
     local cancelled, closing = false, false
@@ -167,7 +168,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
     local t0 = now_s()
     log("sync and sleep: start")
     local msg = InfoMessage:new{
-        text = _("Syncing…") .. "\n" .. _("BookOrbit · then sleep"),
+        text = _("Syncing…") .. (stay_awake and "" or ("\n" .. _("Then sleep"))),
         dismiss_callback = function()
             if not closing then
                 cancelled = true
@@ -194,12 +195,19 @@ function OrbitAndroid:onOrbitSyncAndSleep()
             Wifi.release("sync_and_sleep", true)
         end
         if cancelled then return end
+        if stay_awake then
+            UIManager:show(InfoMessage:new{ -- gate: user action (Sync now)
+                text = ok and _("Synced.") or _("Couldn't reach the server — saved on this device. It sends at the next sync."),
+                timeout = 3,
+            })
+            return
+        end
         state.sas_done_at = now_s()
         if ok then
             sleepNow("sync_and_sleep")
         else
             UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
-                text = _("Couldn't reach BookOrbit — saved on this device.") .. "\n"
+                text = _("Couldn't reach the server — saved on this device.") .. "\n"
                     .. _("It sends first when you next wake it. Sleeping now…"),
                 timeout = 3,
             })

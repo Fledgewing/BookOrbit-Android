@@ -6752,6 +6752,37 @@ test("settings: sync controls remain visible under either position rule", functi
     end
 end)
 
+test("settings: Sync now uses the existing snapshot/drain without sleeping", function()
+    local ui, m = newUI(true)
+    run(30)
+    W.broadcasts = {}; ui.bookorbit.calls = {}
+    RE.Library.syncNow(m)
+    run(5)
+    ok(has(ui.bookorbit.calls, "onSuspend"), "current position snapshotted")
+    ok(not lastBroadcast(".SLEEP_NOW"), "screen stays awake")
+end)
+
+test("settings: failed Sync now leaves the screen awake", function()
+    W.server_code = nil
+    local _, m = newUI(true)
+    run(30)
+    W.broadcasts = {}
+    RE.Library.syncNow(m)
+    run(40)
+    ok(not lastBroadcast(".SLEEP_NOW"), "failed sync also stays awake")
+    W.server_code = 200
+end)
+
+test("settings: Full refresh uses the library and its connection message is neutral", function()
+    local client, note = RE.bookorbit, RE.OC.note
+    local message
+    RE.bookorbit = function() return nil end
+    RE.OC.note = function(text) message = text end
+    RE.Library.fullRefresh()
+    RE.bookorbit, RE.OC.note = client, note
+    eq(message, "Connect to the server and sign in to refresh the catalog.")
+end)
+
 test("settings: every group has a budget and neutral screen text; one channel row opens its picker", function()
     local _, m = newUI(false)
     local groups = {}
@@ -6798,7 +6829,7 @@ test("settings: mode estimates come from one bounded library read; presets and C
     RE.LibraryAdapter.request = function(batch) trips=trips+1; eq(#batch, 1); return true end
     local row
     for _, group in ipairs(m:menuItems()) do
-        if group.settings_group == "sync" then row = group.sub_item_table_func()[1] end
+        if group.settings_group == "sync" then row = group.sub_item_table_func()[2] end
     end
     RE.LibraryAdapter.read, RE.LibraryAdapter.request = oldRead, oldRequest
     eq(requests, 1); eq(trips, 1)

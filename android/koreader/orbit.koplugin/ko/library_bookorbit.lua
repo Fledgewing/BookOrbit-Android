@@ -45,3 +45,5 @@ function LibraryAdapter.request(requests)
 end
 
 function LibraryAdapter.fullRefresh() return OC.menuFullRefresh() end
+
+function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end

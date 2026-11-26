@@ -2,7 +2,14 @@
 -- Thin 0.12 UI boundary. One host-owned context per paint; finish with :flush().
 Library = {}
 -- Explicit user command; the existing adapter/worker owns the full-refresh job.
-function Library.fullRefresh() return LibraryAdapter.fullRefresh() end
+local function command(id, run)
+    local finish = Budgets.span("library." .. id .. ".enqueue", now_s, log)
+    local result = run()
+    finish()
+    return result
+end
+function Library.fullRefresh() return command("full-refresh", LibraryAdapter.fullRefresh) end
+function Library.syncNow(reader) return command("sync-now", function() return LibraryAdapter.syncNow(reader) end) end
 local function counts()
     return {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}
 end

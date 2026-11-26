@@ -201,6 +201,7 @@ function OrbitAndroid:menuItems()
                     end}
             end
             local out = {{text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(S, Shared.mode())) end, sub_item_table=modes}}
+            table.insert(out, 1, action("Sync now", function() Library.syncNow(self) end))
             if SettingsUI.mode(S, Shared.mode()) == "custom" then out[#out+1] = action("Back to Balanced", modes[2].callback) end
             for _i, row in ipairs(rows(SettingsUI.syncKeys)) do out[#out+1] = row end
             -- Device sleep is owned by Android, reachable even when the companion cannot switch Wi-Fi.

@@ -7,7 +7,8 @@ return function(test, eq, ok, here, Cache)
     end
     test("library: explicit refresh reuses the adapter command", function()
         local calls = 0
-        local e = setmetatable({LibraryAdapter={fullRefresh=function() calls=calls+1; return true end}}, {__index=_G})
+        local e = setmetatable({LibraryAdapter={fullRefresh=function() calls=calls+1; return true end},
+            Budgets={span=function() return function() end end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         eq(e.Library.fullRefresh(), true); eq(calls, 1)
     end)
