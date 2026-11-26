@@ -20,6 +20,7 @@ function AccountView:close()
     self.alive=false; self.generation=self.generation+1; self.password=nil
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
     if AccountView.active==self then AccountView.active=nil end
+    Library.changed({kind="account"})
 end
 function AccountView:form(kind)
     self.kind=kind; self.page="form"; self.error=nil
