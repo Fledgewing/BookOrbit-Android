@@ -514,6 +514,7 @@ def home_tile_refresh(ctx: Context, tmp: Path) -> None:
 @scenario("x4-pro")
 def home_refresh_completion_stamp(ctx: Context, tmp: Path) -> None:
     """Ordinary Home refresh seeds offline windows and stamps its finish, not its start."""
+    import struct
     import time
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
