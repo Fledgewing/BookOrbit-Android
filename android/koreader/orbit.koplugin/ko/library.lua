@@ -78,6 +78,7 @@ function Library:window(source, query, offset, limit)
     return self:read("window", {source=source or "library/all", query=query or {}, offset=offset or 0, limit=limit})
 end
 function Library:book(key) return self:read("book", {key=key, limit=1}) end
+function Library:cover(key) return self:read("cover", {key=key, limit=1}) end
 function Library:counts(source, query) return self:read("counts", {source=source or "library/all", query=query or {}}) end
 -- Reader identity stays opaque to the UI; the worker joins the local file ledger.
 function Library:reader(path)
@@ -169,4 +170,14 @@ function Library.storageCommand(op,args,done)
         end
         done(result)
     end) end)
+end
+
+-- Explicit background acquisition; paints consume local references from their snapshots.
+function Library.acquireCover(key,done)
+    return command("covers.acquire",function()
+        return LibraryAdapter.command("covers.acquire",{key=key},function(result)
+            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
+            if done then done(result) end
+        end)
+    end)
 end

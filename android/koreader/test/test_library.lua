@@ -12,6 +12,26 @@ return function(test, eq, ok, here, Cache)
         setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         eq(e.Library.fullRefresh(), true); eq(calls, 1)
     end)
+    test("library: cover acquisition is explicit and paints read one local snapshot", function()
+        local commands, reads, batches = 0, 0, 0
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,
+            LibraryAdapter={reset=function() end,command=function(op,args,done)
+                commands=commands+1; eq(op,"covers.acquire"); eq(args.key,"opaque")
+                done({local_path="/fixture/cover.jpg"}); return true
+            end,read=function(request)
+                local args=Cache.decode(request); eq(args.op,"cover"); eq(args.limit,1)
+                reads=reads+1; return {local_path="/fixture/cover.jpg",freshness={saved=true}},96
+            end,request=function(batch) batches=batches+1; eq(#batch,1); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        local p=e.Library.paint("details")
+        eq(p:cover("opaque").local_path,"/fixture/cover.jpg")
+        eq(commands,0); eq(reads,1)
+        local usage=p:flush(); eq(usage.network,0); eq(usage.spawns,0); eq(usage.roundTrips,1); eq(batches,1)
+        local result
+        eq(e.Library.acquireCover("opaque",function(r) result=r end),true)
+        eq(commands,1); eq(result.local_path,"/fixture/cover.jpg")
+    end)
     test("reader display: unknown values, clamp, and ready stats", function()
         local e=setmetatable({}, {__index=_G})
         setfenv(assert(loadfile(root .. "logic/reader_panel.lua")),e)()

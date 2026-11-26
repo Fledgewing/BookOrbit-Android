@@ -40,6 +40,13 @@ class ServerAdapterTest {
         override fun <T> transaction(block: () -> T): T = sql.transaction(block)
         override fun close() = sql.close()
     }
+    @Test fun coverAcquisitionCanBeUnsupportedWithoutTransport() {
+        var called=false
+        AcquisitionOnlyAdapter().acquireCover("opaque") { result,error ->
+            called=true; assertNull(result); assertEquals("unsupported",error)
+        }
+        assertTrue(called)
+    }
     @Test fun registryAndPublisherDoNotAssumeBackendOrIdentityShape() {
         val registry = AdapterRegistry(listOf(
             "fake" to { _, _ -> FakeAdapter() }, "acquisition" to { _, _ -> AcquisitionOnlyAdapter() },

@@ -106,6 +106,24 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    /** Uses the existing sole cache writer; credentials never cross the plugin boundary. */
+    fun acquireCover(ctx: Context, credentials: CacheWorker.Creds, owner: String, id: Long,
+        done: (Map<String, Any?>?, String?) -> Unit) {
+        app = ctx.applicationContext
+        BulkWork.attach(ctx)
+        synchronized(lock) {
+            patches.addLast {
+                val result = runCatching {
+                    val directory = java.io.File(ConnectorPlugin.coverCacheDir(Environment.getExternalStorageDirectory()),BookOrbitLibrary.namespace(owner))
+                    worker().acquireCover(owner,id,credentials,directory)
+                }
+                result.fold({ done(it,null) }, { done(null,(it as? ServerFailure)?.kind ?: "unavailable") })
+            }
+            lock.notifyAll()
+        }
+        start()
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null
