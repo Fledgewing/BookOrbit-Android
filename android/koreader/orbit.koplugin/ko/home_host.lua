@@ -46,6 +46,10 @@ function HomeHost.create()
         local canvas=HomeWidgets.canvas(w,h)
         HomeWidgets.text(canvas,"BookSync",gap,gap,w/2,24,false,true)
         local status,kind=AccountPlan.sync(account,true)
+        if status~=self.account_status then
+            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
+            self.account_status=status
+        end
         if status and caps.account then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
         if not self.list_layout then

@@ -133,4 +133,31 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Home host: account setup actions use the right form and invalidate the subtitle region",function()
+        withHost(function()
+            local read,open=E.LibraryAdapter.read,E.AccountView.open
+            local state={signedIn=false,sync={available=false},opds={available=false}}
+            local kind
+            E.AccountView.open=function(k) kind=k or "summary" end
+            E.LibraryAdapter.read=function(raw)
+                if E.Cache.decode(raw).op=="capabilities" then return {account=state},256 end
+                return read(raw)
+            end
+            local success,err=pcall(function()
+                local h=E.HomeHost.create(); E.HomeHost.active=h
+                local canvas=h[1][1]
+                eq(canvas[2].text,"Not signed in · Sign in"); canvas[2].callback(); eq(kind,"summary")
+                state={signedIn=true,sync={available=false},opds={available=false}}
+                h:rebuild(); canvas=h[1][1]
+                eq(canvas[2].text,"No sync login · Set up"); canvas[2].callback(); eq(kind,"sync")
+                eq(h.changed_rects[1].y,0); ok(h.changed_rects[1].h>0)
+                h:dispatch("book",{key="remote-only"})
+                eq(h.download_prompt.title,"No OPDS login, so it can't download")
+                h.download_prompt.buttons[1][2].callback(); eq(kind,"opds")
+            end)
+            E.LibraryAdapter.read,E.AccountView.open=read,open
+            ok(success,err)
+        end)
+    end)
+
 end
