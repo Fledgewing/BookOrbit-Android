@@ -60,7 +60,12 @@ function Library:counts(source, query) return self:read("counts", {source=source
 -- Reader identity stays opaque to the UI; the worker joins the local file ledger.
 function Library:reader(path) return self:read("reader", {path=path, limit=1}) end
 -- An explicit user action, never invoked by paint/read.
-function Library.syncCurrent(done) return LibraryAdapter.syncCurrent(done) end
+function Library.syncCurrent(done)
+    local finish = Budgets.span("library.progress.sync", now_s, log)
+    local result = LibraryAdapter.syncCurrent(done)
+    finish()
+    return result
+end
 function Library:progress(key) return self:read("progress", {key=key, limit=1}) end
 function Library:status(key) return self:read("status", {key=key, limit=1}) end
 function Library:job(key) return self:read("job", {key=key, limit=1}) end
