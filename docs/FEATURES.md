@@ -20,10 +20,10 @@ Counts include settings exposure as separate rows; they are not feature quality 
 
 | Platform | ✅ | 🟡 | ❌ | ➖ |
 |---|---:|---:|---:|---:|
-| Android (M8C / Boox) | 75 | 1 | 1 | 3 |
-| X4 Pro | 55 | 12 | 1 | 12 |
-| X4 classic | 54 | 12 | 1 | 13 |
-| X3 | 20 | 16 | 31 | 13 |
+| Android (M8C / Boox) | 75 | 2 | 1 | 3 |
+| X4 Pro | 55 | 12 | 2 | 12 |
+| X4 classic | 54 | 12 | 2 | 13 |
+| X3 | 20 | 16 | 32 | 13 |
 
 ## Behaviour
 
@@ -76,6 +76,7 @@ Counts include settings exposure as separate rows; they are not feature quality 
 | Reapply frontlight after first boot paint | ➖ Android firmware controls frontlight; **not applicable: Android firmware controls frontlight**. [android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Vendor.kt:19](../android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Vendor.kt#L19) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) Boot repaint patch enabled. [xteink/tailnet/tailnet_build.py:251](../xteink/tailnet/tailnet_build.py#L251), [xteink/overlay/patches/v2.0/0024-frontlight-reapply.patch:102](../xteink/overlay/patches/v2.0/0024-frontlight-reapply.patch#L102) | ➖ No frontlight on this hardware; **not applicable: no frontlight**. [platformio.ini:603](https://github.com/agosez/CrossInk-Bookorbit/blob/87e2e1984481e8a3d996f12b34b50a383f9013b8/platformio.ini#L603) | ➖ No frontlight on this hardware; **not applicable: no frontlight**. [libs/hardware/BoardConfig/include/BoardConfig.h:1091](https://github.com/Free-Ink/freeink-sdk/blob/9d5bba3ef02a1c35363ecadbb50ad0e1ac279653/libs/hardware/BoardConfig/include/BoardConfig.h#L1091) |
 | Persist crash summary and deduplicate diagnostic report at boot | ❌ Logs exist; no BookSync persisted crash-record equivalent; **gap — no reason**. [android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReadingLogic.kt:11](../android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReadingLogic.kt#L11), [android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Pages.kt:18](../android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Pages.kt#L18) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) Core-dump summary logged; not automatic remote upload. [xteink/orbify/CrashRecord.cpp:19](../xteink/orbify/CrashRecord.cpp#L19) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) Core-dump summary logged; not automatic remote upload. [xteink/orbify/CrashRecord.cpp:19](../xteink/orbify/CrashRecord.cpp#L19) | ❌ Crash summary implementation is S3-only; **hardware: firmware core-dump implementation gated to S3**. [xteink/orbify/CrashRecord.cpp:6](../xteink/orbify/CrashRecord.cpp#L6) |
 | In-product project credit and licence notices | ✅ (v0.11.3-rc.17) Public About ships notice asset. [android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt:9](../android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt#L9) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) About credit enabled. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) About credit enabled. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) | ❌ In-product BookSync About credit omitted; **hardware: About strings excluded for flash; distribution licences still shipped**. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) |
+| Owned reusable filter sheet (0.12 foundation; unreleased) | 🟡 Nine-row component, bounded companion facets, chips/reset and Home save callback; owned host wiring follows; **deliberately deferred: owned list/search and Home hosts integrate the component in their 0.12 slices**. [android/koreader/orbit.koplugin/ko/filter_sheet.lua:3](../android/koreader/orbit.koplugin/ko/filter_sheet.lua#L3) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) |
 
 ## Settings exposure
 

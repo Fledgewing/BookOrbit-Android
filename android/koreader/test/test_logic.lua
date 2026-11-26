@@ -1733,6 +1733,7 @@ end)
 
 dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON)
 
+dofile(here .. "/test_filter_sheet.lua")(test, eq, ok, here, M)
 dofile(here .. "/test_library.lua")(test, eq, ok, here, M.Cache)
 
 print(string.format("%d passed, %d failed", passed, failed))

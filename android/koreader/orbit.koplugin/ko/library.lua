@@ -55,6 +55,9 @@ function Library:window(source, query, offset, limit)
 end
 function Library:book(key) return self:read("book", {key=key, limit=1}) end
 function Library:counts(source, query) return self:read("counts", {source=source or "library/all", query=query or {}}) end
+function Library:facets(source, query, field, offset, limit)
+    return self:read("facets", {source=source or "library/all", query=query or {}, field=field, offset=offset or 0, limit=limit})
+end
 function Library:progress(key) return self:read("progress", {key=key, limit=1}) end
 function Library:status(key) return self:read("status", {key=key, limit=1}) end
 function Library:job(key) return self:read("job", {key=key, limit=1}) end

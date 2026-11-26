@@ -43,6 +43,8 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose" } },
+    { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },
     { "frontend/ui/trapper.lua", { "wrap", "info" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
         "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
@@ -130,7 +132,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_DARK_GRAY", F }, { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
