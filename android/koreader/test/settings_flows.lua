@@ -60,6 +60,11 @@ return function(test,eq,ok,E,W,Widget)
             button(v,"back").callback()
             eq(#v.stack,0); eq(v.dialog.focus[2],3)
             for _,line in ipairs(v.dialog.buttons) do for _,b in ipairs(line) do ok(b.height>=50) end end
+            local child=E.SettingsView.open("Nested choices",function() return {{text="Choice"}} end,"settings-home")
+            local previous=v.dialog
+            child:back()
+            eq(E.SettingsView.active,v); ok(v.dialog~=previous,"return refreshes checked shared values")
+            eq(v.dialog.focus[2],3,"nested return retains parent focus")
             v.dialog:onClose(); eq(v.alive,false)
         end)
     end)

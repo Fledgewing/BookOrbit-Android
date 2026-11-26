@@ -2,16 +2,19 @@
 -- Owned presentation over menu.lua's shared row owners. Small pages and native focus/Back.
 SettingsView = {}
 function SettingsView.open(title, make, screen, onBack)
-    local v=setmetatable({title=title,make=make,screen=screen or "settings",offset=0,stack={},alive=true,onBack=onBack}, {__index=SettingsView})
+    local v=setmetatable({title=title,make=make,screen=screen or "settings",offset=0,stack={},alive=true,onBack=onBack,parent=SettingsView.active}, {__index=SettingsView})
     SettingsView.active=v
     v:paint(); return v
 end
 function SettingsView:close()
     self.alive=false
-    if SettingsView.active==self then SettingsView.active=nil end
+    if SettingsView.active==self then SettingsView.active=self.parent and self.parent.alive and self.parent or nil end
     if self.retry then UIManager:unschedule(self.retry); self.retry=nil end
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
-    if self.onBack then local back=self.onBack; self.onBack=nil; back() end
+    if self.onBack then local back=self.onBack; self.onBack=nil; back()
+    elseif self.parent and self.parent.alive and UIManager:getTopmostVisibleWidget()==self.parent.dialog then
+        self.parent:paint()
+    end
 end
 function SettingsView:back()
     local parent=table.remove(self.stack)
