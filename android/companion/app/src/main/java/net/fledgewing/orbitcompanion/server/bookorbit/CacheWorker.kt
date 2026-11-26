@@ -141,14 +141,14 @@ class CacheWorker(
         if (c.template != null && c.template != st.meta("detail_template")) st.setMeta("detail_template", c.template)
         val saved = st.read(c.key, c.path, template)
         val t = now()
-        if (saved != null && !LuaValue.changed(saved.body, reply)) {
+        if (saved != null && !CacheRules.changed(saved.body, reply)) {
             st.validated(saved, t)
             ev["unchanged"] = true
             ev["saved"] = true
             return event(ev)
         }
         try {
-            st.save(c.key, c.path, LuaValue.settle(saved?.body, reply, c.mode), t, template)
+            st.save(c.key, c.path, CacheRules.settle(saved?.body, reply, c.mode), t, template)
         } catch (e: Exception) {
             ev["err"] = "not saved"
             return event(ev)
@@ -660,7 +660,7 @@ class CacheWorker(
                 val stamp = item["updatedAt"]?.let { LuaValue.text(it) } ?: continue
                 if (stamp > target) target = stamp
                 if (stamp < newest) { older = true; continue }
-                if (LuaValue.changed(store.bookItem(id), item) || !store.hasDetail(id) || store.meta("incremental_dirty_$id") != null) {
+                if (CacheRules.changed(store.bookItem(id), item) || !store.hasDetail(id) || store.meta("incremental_dirty_$id") != null) {
                     changed = true
                     store.transaction {
                         for (identity in store.db().query("SELECT DISTINCT identity FROM list_items WHERE book_id = ?", id) { LuaValue.str(it.text(0)!!) }) {
@@ -797,7 +797,7 @@ class CacheWorker(
         val changedBooks = if (recheck && w.kind == "books") (body["items"] as? List<*> ?: emptyList<Any?>()).mapNotNull { b ->
             val item = b as? Map<*, *> ?: return@mapNotNull null
             val id = item["id"] as? Long ?: return@mapNotNull null
-            id.takeIf { !store.hasDetail(id) || LuaValue.changed(store.bookItem(id), item) }
+            id.takeIf { !store.hasDetail(id) || CacheRules.changed(store.bookItem(id), item) }
         }.toSet() else emptySet()
         val changed = store.putWindow(w.identity, w.kind, w.section, (job.page - 1) * job.size, body, t)
         val total = (body["total"] as? Number)?.toInt() ?: 0

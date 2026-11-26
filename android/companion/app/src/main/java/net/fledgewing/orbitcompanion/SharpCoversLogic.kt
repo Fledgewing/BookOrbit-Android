@@ -1,7 +1,5 @@
 package net.fledgewing.orbitcompanion
 
-import java.net.URLDecoder
-import java.net.URLEncoder
 import kotlin.math.min
 import kotlin.math.roundToInt
 

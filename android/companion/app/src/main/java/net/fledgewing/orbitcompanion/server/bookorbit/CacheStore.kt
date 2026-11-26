@@ -127,7 +127,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         }
         if (before == null) return false
         val after = window(identity, null, maxOf(1, items.size), offset)
-        return LuaValue.changed(before, after)
+        return CacheRules.changed(before, after)
     }
 
     /** A check found the saved copy unchanged. */

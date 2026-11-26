@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
-package net.fledgewing.orbitcompanion
+package net.fledgewing.orbitcompanion.server.bookorbit
+
+import net.fledgewing.orbitcompanion.*
 
 import org.junit.Assert.*
 import org.junit.Test

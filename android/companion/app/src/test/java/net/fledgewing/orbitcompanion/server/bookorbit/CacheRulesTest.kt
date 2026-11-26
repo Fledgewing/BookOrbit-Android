@@ -27,7 +27,7 @@ class CacheRulesTest {
         val all = cases.getJSONArray("settle").objects()
         assertTrue(all.isNotEmpty())
         for (c in all) {
-            val got = LuaValue.settle(LuaValue.fromJsonValue(c.get("cached")), LuaValue.fromJsonValue(c.get("reply")), c.getString("mode"))
+            val got = CacheRules.settle(LuaValue.fromJsonValue(c.get("cached")), LuaValue.fromJsonValue(c.get("reply")), c.getString("mode"))
             assertEquals(c.getString("name"), lua(LuaValue.fromJsonValue(c.get("expect"))), lua(got))
         }
     }

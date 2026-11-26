@@ -219,7 +219,7 @@ class FastCatalogRefresh(
             val fresh = ask(request).filterKeys { it != "_bulkBytes" }
             val saved = old?.let { prior -> db.query("SELECT body FROM bulk_replies WHERE g=? AND path=?",prior,CacheStore.u(request)) {LuaValue.parse(it.bytes(0)!!)}.firstOrNull() }
             val full = if(plan.op=="resume") (store.meta("run_op") ?: "full")=="full" else plan.op=="full"
-            val body = LuaValue.settle(saved,fresh,if(full) "full" else "refresh")
+            val body = CacheRules.settle(saved,fresh,if(full) "full" else "refresh")
             store.transaction { db.exec("INSERT OR REPLACE INTO bulk_replies VALUES (?,?,?)", generation, CacheStore.u(request), LuaValue.encode(body)); mark(request) }
         }
     }

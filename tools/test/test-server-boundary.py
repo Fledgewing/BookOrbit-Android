@@ -12,7 +12,7 @@ KOTLIN = Path('android/companion/app/src/main/java')
 LUA = Path('android/koreader/orbit.koplugin')
 REGISTRY = KOTLIN / 'net/fledgewing/orbitcompanion/ServerAdapters.kt'
 LUA_REGISTRY = LUA / 'main.lua'
-PROTOCOL = re.compile(r'/api/v1|/?koreader/plugin\b|/catalog/(?:books|sections|dashboard)|\b(?:readStatus|progressPercentage|smartScopeId|seriesName|seriesId|seriesIndex|lastReadAt|addedAt|contentVersion|thumbnailUrl|detailUrl|downloadUrl|userkey|server_url)\b|BookOrbit|bookorbit[_./]')
+PROTOCOL = re.compile(r'/api/v1|/?koreader/plugin\b|/catalog/(?:books|sections|dashboard)|\b(?:readStatus|progressPercentage|smartScopeId|seriesName|seriesId|seriesIndex|lastReadAt|addedAt|updatedAt|contentVersion|hasCover|seriesSummary|libraryVersion|generatedAt|finishedThisYear|readingGoal|thumbnailUrl|detailUrl|downloadUrl|userkey|server_url)\b|BookOrbit|bookorbit[_./]')
 IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)/server/|[\"\']bookorbit_)')
 
 
@@ -45,7 +45,7 @@ def violations(path, source):
         if wiring:
             # Remove only implementation identifiers/imports and quoted module paths. Endpoint
             # and field checks run before this mask, so embedding a route in an ID cannot hide it.
-            if re.search(r'/api/v1|/?koreader/plugin\b|/catalog/(?:books|sections|dashboard)|\b(?:readStatus|progressPercentage|smartScopeId|seriesName|seriesId|seriesIndex|lastReadAt|addedAt|contentVersion|thumbnailUrl|detailUrl|downloadUrl|userkey|server_url)\b', line):
+            if re.search(r'/api/v1|/?koreader/plugin\b|/catalog/(?:books|sections|dashboard)|\b(?:readStatus|progressPercentage|smartScopeId|seriesName|seriesId|seriesIndex|lastReadAt|addedAt|updatedAt|contentVersion|hasCover|seriesSummary|libraryVersion|generatedAt|finishedThisYear|readingGoal|thumbnailUrl|detailUrl|downloadUrl|userkey|server_url)\b', line):
                 errors.append(f'{path}:{n}: protocol in composition root: {line.strip()}')
             protocol_line = re.sub(r'BookOrbit\w*|bookorbit(?:[/._a-z]*)', 'adapter', line)
         if PROTOCOL.search(protocol_line): errors.append(f'{path}:{n}: server protocol outside adapter: {line.strip()}')

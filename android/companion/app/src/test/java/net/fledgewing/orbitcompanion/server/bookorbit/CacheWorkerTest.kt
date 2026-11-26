@@ -53,7 +53,7 @@ class CacheWorkerTest {
         assertEquals(String(want, Charsets.ISO_8859_1), String(lit, Charsets.ISO_8859_1))
         val back = LuaValue.parse(want) as Map<*, *>
         assertTrue(LuaValue.encode(back).contentEquals(want))
-        assertFalse(LuaValue.changed(back["body"], body))
+        assertFalse(CacheRules.changed(back["body"], body))
     }
 
     @Test fun coverNamesMatchThePlugin() {

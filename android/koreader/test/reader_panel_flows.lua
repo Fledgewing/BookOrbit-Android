@@ -130,7 +130,7 @@ return function(here, test, ok, eq)
                 eq(event,"BookOrbitSyncBook"); eq(options.quiet,true)
                 sent=sent+1; reply=options.on_done
             end}
-        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
         eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
         ui.view.footer.percent_finished=0/0
