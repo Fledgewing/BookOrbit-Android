@@ -785,3 +785,8 @@ operations; `ko/home_editor.lua:24` owns atomic layout saving;
 Paths without a directory prefix are under `android/koreader/orbit.koplugin/`;
 the companion file is under
 `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.
+
+The existing companion `BookOrbitLibrary` implementation now lives in
+`server/bookorbit/BookOrbitLibrary.kt`; the root-package type alias keeps its
+read-model API stable. A package guard prevents moving this backend projection
+implementation outside the server adapter.
