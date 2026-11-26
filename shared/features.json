@@ -5414,6 +5414,58 @@
       }
     },
     {
+      "id": "home-editor",
+      "feature": "On-device Home widget and page editor (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Opt-in BookSync Home: add/remove, arrow move, allowed-size resize, page names/order, reset and atomic save",
+          "reason": "deliberately deferred: device visual/performance acceptance; Android implementation is unreleased",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/home_editor.lua",
+              "line": 1
+            }
+          ],
+          "version": "0.12 (implemented; unreleased)"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Firmware editor follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 20
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Firmware editor follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 20
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Firmware editor follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 20
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "server-account",
       "feature": "Independent account, sync and OPDS logins (0.12 Android foundation)",
       "category": "Behaviour",

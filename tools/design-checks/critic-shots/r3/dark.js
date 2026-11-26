@@ -1,0 +1,21 @@
+const {prototypeURL, OUT}=require('../../runtime.js');
+const {chromium}=require('playwright');
+const O=OUT+'critic-shots/r3/';
+(async()=>{const b=await chromium.launch({executablePath:process.env.PWX});
+const p=await b.newPage({viewport:{width:1500,height:1200},deviceScaleFactor:2});const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
+await p.addInitScript(()=>{window.__noscale=1});
+await p.goto(prototypeURL+'?dev=x4c');await p.waitForTimeout(200);
+const H=x=>p.evaluate(x=>window.__proto.hw(x),x);const A=a=>p.evaluate(a=>window.__proto.act(a),a);
+const fk=()=>p.evaluate(()=>window.__proto.S.fk);
+const goTo=async(target,max=60)=>{for(let i=0;i<max;i++){if(await fk()===target)return true;await H('next');}return false};
+const clip=async(name)=>{const box=await p.evaluate(()=>{const e=document.querySelector('#screen .kf');if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x-14,y:r.y-14,width:r.width+28,height:r.height+28}});if(!box){console.log(name,'NO FOCUS');return;}await p.screenshot({path:O+'dk-'+name+'.png',clip:box});console.log(name,'ok',JSON.stringify(box));};
+console.log('b14',await goTo('recent-b14'));await clip('cover-black');
+console.log('b13',await goTo('recent-b13',40));await clip('cover-gray');
+// filter sheet
+await A('nav:recent');await p.waitForTimeout(50);console.log('list fks',await p.evaluate(()=>[...document.querySelectorAll('#screen [data-fk]')].filter(e=>e.offsetParent).map(e=>e.dataset.fk+'='+e.dataset.act).join(' ')));
+console.log('filter btn',await goTo('lst-filter',30), await fk());
+await H('select');await p.waitForTimeout(50);console.log('after select',await fk(), await p.evaluate(()=>{const S=window.__proto.S;return JSON.stringify({modal:S.modal&&S.modal.k})}));
+const sheetfks=await p.evaluate(()=>[...document.querySelectorAll('#screen [data-fk]')].filter(e=>e.offsetParent).map(e=>e.dataset.fk).join(' '));console.log('sheet fks',sheetfks);
+await p.locator('#screen').screenshot({path:O+'x4c-filter-open.png'});
+let seq=[];for(let i=0;i<20;i++){seq.push(await fk());const k=await fk();if(k&&/show|unread|go|apply/i.test(k)){await clip('filter-'+k.replace(/[^a-z0-9-]/gi,''));}await H('next');}console.log('FILTER NEXT',seq.join(' '));
+console.log('ERR',errs);await b.close();})();
