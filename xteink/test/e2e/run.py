@@ -519,7 +519,7 @@ def home_refresh_completion_stamp(ctx: Context, tmp: Path) -> None:
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
     started = int(time.time())
-    run = ctx.sim.run(card, "refresh-counts", script=f"3000:TAP:{sx},{sy},120", timeout_s=100,
+    run = ctx.sim.run(card, "refresh-counts", script=f"3000:TAP:{sx},{sy},120", after_reboot="", timeout_s=100,
                       env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"})
     after(run.output, "Full refresh: Done")
     counts = re.findall(r"Refresh progress: lists=(\d+)/(\d+) books=(\d+) covers=(\d+)", run.output)

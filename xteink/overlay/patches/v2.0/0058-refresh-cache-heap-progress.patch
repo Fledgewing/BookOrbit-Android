@@ -378,7 +378,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
  #endif
 -  renderer.displayBuffer();
 -}
-+  renderer.displayBuffer((state==State::Refreshing || state==State::Mirroring) ? HalDisplay::FAST_REFRESH : HalDisplay::HALF_REFRESH);
++  renderer.displayBuffer();  // FAST_REFRESH: also used for the once-per-second progress counts
 +}
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.h
