@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 /**
  * M8C 11-23 22:47: Update tapped on the Status page, and after the replace the user was in
  * KOReader (the patch install's COMMAND=restart brought it to the front). An update started
- * from one of our pages restores its progress page, then completes the plugin update in KOReader.
+ * from one of our pages restores that page after both halves of the plugin restart.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -216,6 +216,88 @@ class UpdateReturnTest {
             p.patchAwaitVersion = ""
             p.patchRestartNow = ""
             p.patchRestartSentFor = ""
+        }
+    }
+
+    @Test
+    fun companionUpdateReturnsToItsSettingsStackAfterTheNewPluginLoads() {
+        Robolectric.buildActivity(LauncherActivity::class.java).create()
+        Robolectric.buildActivity(SettingsActivity::class.java).create()
+        val section = Robolectric.buildActivity(SettingsSectionActivity::class.java,
+            SettingsPage.section(app, "updates")).create().get()
+        install(section)
+        Updater.onReplaced(app)
+        val stack = drain().filter { it.component?.packageName == app.packageName }
+        restartAndLoadPlugin(fromCompanion = true)
+        val returned = drain()
+        assertEquals(stack.map { it.component }, returned.map { it.component })
+        assertEquals("updates", returned.last().getStringExtra(SettingsPage.EXTRA_SECTION))
+        assertEquals(SettingsPage.UPDATE_ROW, returned.last().getStringExtra(SettingsPage.EXTRA_FOCUS))
+        assertEquals("v0.11.4-preview.3 · Updated · KOReader restarted", Prefs(app).updateStatus)
+        PatchInstaller.onPatchSeen(app, "0.11.4-preview.3")
+        UpdateReturn.onPluginLoaded(app)
+        assertTrue("completion returns only once", drain().isEmpty())
+    }
+
+    @Test
+    fun completedRestartBringsTheExistingCompanionTaskForwardWithoutDuplicatingPages() {
+        val section = Robolectric.buildActivity(SettingsSectionActivity::class.java,
+            SettingsPage.section(app, "updates")).create().get()
+        install(section)
+        Updater.onReplaced(app)
+        val top = drain().last()
+        val task = org.robolectric.shadows.ShadowAppTask.newInstance()
+        shadowOf(task).setTaskInfo(android.app.ActivityManager.RecentTaskInfo().apply {
+            topActivity = top.component
+        })
+        shadowOf(app.getSystemService(android.app.ActivityManager::class.java)).setAppTasks(listOf(task))
+        restartAndLoadPlugin(fromCompanion = true)
+        assertTrue("the original task returns with its existing back stack", shadowOf(task).hasMovedToFront())
+        assertTrue("no second stack is started", drain().isEmpty())
+    }
+
+    @Test
+    fun koreaderUpdateFinishesInKoreaderAndReopensItsBook() {
+        install(app) // KOReader opens the installer without a companion page origin.
+        Updater.onReplaced(app)
+        drain()
+        restartAndLoadPlugin(fromCompanion = false)
+        assertTrue("no companion page covers the reopened book", drain().isEmpty())
+        assertEquals("v0.11.4-preview.3 · Updated · KOReader restarted", Prefs(app).updateStatus)
+    }
+
+    /** Both activity starts must finish before the new plugin's version can complete the return. */
+    private fun restartAndLoadPlugin(fromCompanion: Boolean) {
+        val p = Prefs(app)
+        p.patchVersionSeen = "0.11.4-preview.2"
+        p.patchAwaitVersion = "0.11.4-preview.3"
+        p.patchRestartNow = p.patchAwaitVersion
+        p.patchRestartSentFor = ""
+        p.koreaderBook = "1"
+        val trusted = KoreaderTrust.signersOf
+        KoreaderTrust.signersOf = { _, _ -> setOf("AA:01") }
+        try {
+            assertTrue(PatchInstaller.follow(app, "app update"))
+            assertEquals(HomeCommands.RESTART, drain().single().getStringExtra(Contract.EXTRA_COMMAND))
+            assertEquals("1", p.restartReopen)
+            assertTrue(p.restartUserStarted)
+            PatchInstaller.onPatchSeen(app, "0.11.4-preview.2")
+            assertTrue("the old plugin cannot complete the return", drain().isEmpty())
+            Koreader.restartRead()
+            assertTrue(Koreader.relaunch(app, "restart after patch update",
+                UpdateFlow.relaunchCommand(p.restartReopen == "1"), plugin = p.patchAwaitVersion,
+                fromCompanion = fromCompanion, userStarted = p.restartUserStarted))
+            assertEquals(HomeCommands.REOPEN_BOOK, drain().single().getStringExtra(Contract.EXTRA_COMMAND))
+            PatchInstaller.onPatchSeen(app, "0.11.4-preview.3")
+        } finally {
+            KoreaderTrust.signersOf = trusted
+            Koreader.restartRead()
+            p.patchVersionSeen = ""
+            p.patchAwaitVersion = ""
+            p.patchRestartNow = ""
+            p.patchRestartSentFor = ""
+            p.restartUserStarted = false
+            p.restartReopen = ""
         }
     }
 

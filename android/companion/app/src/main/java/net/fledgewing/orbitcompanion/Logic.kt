@@ -799,7 +799,7 @@ object UpdateFlow {
         return r >= w
     }
 
-    fun doneLine(app: String) = "Updated to v$app (KOReader loaded it)"
+    fun doneLine(app: String) = "v$app · Updated · KOReader restarted"
 
     /**
      * The patch is installed. [now]: the user started the update, KOReader restarts at once;

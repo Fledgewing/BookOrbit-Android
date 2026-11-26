@@ -17,8 +17,9 @@ import android.os.SystemClock
  * and Back from it fell out to KOReader). It lands once: after the reopened page has shown, a
  * Home press is an ordinary Home press ([forHome]).
  *
- * The pages reopen to show installation progress. A user-confirmed update then finishes in
- * KOReader with the new plugin loaded ([restartNow]), including updates started on our pages.
+ * The pages reopen to show installation progress. Android starts KOReader activities in the
+ * foreground for both halves of its restart. Once the new plugin reports that it loaded,
+ * [onPluginLoaded] brings this same task back, preserving the update origin through that restart.
  * Kept in its own preferences file: the mark must outlive the process that wrote it.
  */
 object UpdateReturn {
@@ -31,6 +32,8 @@ object UpdateReturn {
     private const val FILE = "update_return"
     private const val KEY_FROM = "from"
     private const val KEY_AT = "at"
+    private const val KEY_FINISH_PAGES = "finish_pages"
+    private const val KEY_FINISH_AT = "finish_at"
 
     /** The mark for an update started on [top]: its back stack, one intent URI per line. */
     fun encode(top: Activity): String = encode(EinkActivity.returnStack(top))
@@ -109,9 +112,28 @@ object UpdateReturn {
         }
         sp.edit().clear().apply()
         if (replaced.isEmpty()) return null
+        // Keep the final return durable too: the companion process may die during the restart.
+        sp.edit().putString(KEY_FINISH_PAGES, encode(replaced))
+            .putLong(KEY_FINISH_AT, System.currentTimeMillis()).apply()
         reopenedAt = SystemClock.elapsedRealtime()
         open(ctx, replaced, "after the update")
         return top()
+    }
+
+    /** The replacement plugin is running: finish on the originating page, once per update. */
+    @Synchronized
+    fun onPluginLoaded(ctx: Context) {
+        val sp = prefs(ctx)
+        val pages = pages(sp.getString(KEY_FINISH_PAGES, null), sp.getLong(KEY_FINISH_AT, 0),
+            System.currentTimeMillis(), ctx.packageName)
+        sp.edit().remove(KEY_FINISH_PAGES).remove(KEY_FINISH_AT).apply()
+        if (pages.isEmpty()) return
+        // Reuse the restored stack; only reconstruct it if Android removed its task.
+        if (bringToFront(ctx, pages)) {
+            OLog.i("update: back to ${describe(pages)} (KOReader restarted)")
+        } else {
+            open(ctx, pages, "KOReader restarted")
+        }
     }
 
     private fun top(): String? = replaced.lastOrNull()?.component?.className

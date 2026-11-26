@@ -2144,19 +2144,19 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "User-started updates finish in KOReader with book/Home restored; restart deliveries are acknowledged once",
+          "note": "Companion-started updates return to their screen and back stack after KOReader restarts; KOReader-started updates restore book/Home; restart deliveries are acknowledged once",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/updater.lua",
-              "line": 17
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/UpdateReturn.kt",
+              "line": 124
             }
           ],
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
           "status": "supported",
-          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
+          "note": "OTA screen return marker; standalone firmware has no Android companion task to restore",
           "reason": null,
           "evidence": [
             {
@@ -2172,7 +2172,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
+          "note": "OTA screen return marker; standalone firmware has no Android companion task to restore",
           "reason": null,
           "evidence": [
             {
@@ -2188,7 +2188,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
+          "note": "OTA screen return marker; standalone firmware has no Android companion task to restore",
           "reason": null,
           "evidence": [
             {

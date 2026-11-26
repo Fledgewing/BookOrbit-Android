@@ -1107,7 +1107,7 @@ class UpdateFlowTest {
         assertFalse(UpdateFlow.loaded("0.5.1", null))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.1"))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.2"))
-        assertEquals("Updated to v0.5.1 (KOReader loaded it)", UpdateFlow.doneLine("0.5.1"))
+        assertEquals("v0.5.1 · Updated · KOReader restarted", UpdateFlow.doneLine("0.5.1"))
         assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > BookSync plugin"))
     }
 }
