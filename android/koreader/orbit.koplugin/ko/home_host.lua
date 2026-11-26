@@ -3,6 +3,7 @@
 HomeHost = {}
 function HomeHost.document()
     -- Layout editor publishes the same validated layout-as-data in reader settings.
+    HomeEditor.load()
     local d=S.home_layout
     if d and Layout.validate(d) then return d end
     return Layout.default()
@@ -43,6 +44,9 @@ function HomeHost.create()
         local canvas=HomeWidgets.canvas(w,h)
         HomeWidgets.text(canvas,"BookSync",gap,gap,w/2,24,false,true)
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
+        if not self.list_layout then
+            HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(36),function() HomeEditor.show(self) end)
+        end
         for _,p in ipairs(page.placements) do
             local rect=HomeHostPlan.rect(p,resolved.grid,w-2*gap,h-top-bottom,gap)
             rect.x,rect.y=rect.x+gap,rect.y+top

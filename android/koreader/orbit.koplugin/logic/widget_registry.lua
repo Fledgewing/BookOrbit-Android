@@ -23,3 +23,18 @@ widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 WidgetRegistry.library.dataNeeds[1].params.limit.maximum = 1
 WidgetRegistry.library.dataNeeds[2] = {source="storage.summary", params={limit={type="integer", maximum=1}},
     budget=Budgets.widgets.library}
+
+-- Picker copy belongs to the existing widget contract, shared by every host.
+local descriptions={
+    ["continue-reading"]={"Continue reading","Your current book, with progress and a Resume button."},
+    booklist={"Book list","A shelf of books from a source you choose."},
+    lists={"Lists","Your saved lists and their book counts."},
+    library={"Library","Your library and storage at a glance."},
+    battery={"Battery","Battery remaining at your usual use."},
+    ["this-week"]={"This week","Your reading across the week."},
+    ["year-in-reading"]={"Year in reading","A calendar of your reading days."},
+    ["when-you-read"]={"When you read","Your reading by hour of day."},
+    ["reading-records"]={"Reading records","Your reading streaks and records."},
+    clock={"Clock","The time on your Home page."},
+}
+for id,copy in pairs(descriptions) do WidgetRegistry[id].name=copy[1]; WidgetRegistry[id].description=copy[2] end
