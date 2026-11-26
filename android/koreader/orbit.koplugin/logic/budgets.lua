@@ -91,3 +91,6 @@ Budgets.screens.battery.bytes = 16384
 Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
+
+-- Series/grouped windows charge summary, preview books and one capability row.
+Budgets.screens.series.rows = Budgets.MAX_ROWS + 1

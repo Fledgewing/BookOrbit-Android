@@ -13,6 +13,54 @@ class LibraryTest {
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,
         "pages" to 200, "rating" to 4, "added" to "2026-11-01", "rank" to 0, "last_read" to "2026-11-03")
 
+    @Test fun nestedRowsCannotUnderreportTheInheritedCallerBudget() {
+        store().use { st ->
+            val adapter=object : ServerAdapter {
+                override val id="fixture"
+                override fun project(owner: String, request: Map<*,*>): Map<String,Any?> = mapOf(
+                    "items" to listOf(mapOf("books" to List(24) { mapOf("key" to "$it") })),"row_count" to 1)
+            }
+            val request=String(LuaValue.encode(mapOf("op" to "groups","limit" to 24)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,{99},{},adapter=adapter).publish(owner,listOf(request))
+            val result=st.db().query("SELECT body FROM library_views WHERE request=?",request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+            assertEquals("budget",result["error"])
+        }
+    }
+    @Test fun seriesUsesCompletePrimaryAndSecondaryMembershipAndNeverLeaksOrExceedsBudget() {
+        store().use { st ->
+            seed(st)
+            val key=BookOrbitLibrary.key(owner,"series",9)
+            st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'series',0,'series:9','Orbit',5)")
+            for (i in 1..5) st.db().exec("INSERT INTO bulk_members(g,kind,value,id,context) VALUES(1,'seriesId','9',?,?)",i,
+                LuaValue.encode(mapOf("seriesId" to 9,"seriesName" to "Orbit","seriesIndex" to 6-i)))
+            val args=mapOf("op" to "series","key" to key,"limit" to 8)
+            val series=read(st,args)
+            assertEquals(5L,series["total"])
+            assertEquals(listOf(1L,2L,3L,4L),(series["items"] as List<*>).map { (it as Map<*,*>)["number"] })
+            assertEquals("Orbit",series["title"])
+            assertTrue((series["row_count"] as Number).toInt()<=8)
+            assertTrue(LuaValue.encode(series).size<=16384)
+            assertFalse(series.toString().contains("seriesIndex"))
+            assertEquals("missing",read(st,args+("key" to BookOrbitLibrary.key("another-owner","series",9)))["error"])
+            assertEquals("budget",read(st,args+("bytes" to 256))["error"])
+            st.setMeta("bulk_complete",null)
+            assertEquals(false,(read(st,args)["freshness"] as Map<*,*>)["saved"])
+            assertTrue((read(st,args)["items"] as List<*>).isEmpty())
+        }
+    }
+    @Test fun groupedWindowsApplySearchBeforeGroupingAndChargeNestedBooksToCaller() {
+        store().use { st ->
+            seed(st)
+            val args=mapOf("op" to "groups","source" to "search","query" to mapOf("q" to "Book","group" to "series"),"limit" to 8)
+            val groups=read(st,args)
+            val row=(groups["items"] as List<*>).single() as Map<*,*>
+            assertEquals("Not in a series",row["title"]); assertEquals("All 5",row["count_text"])
+            assertEquals(4L,groups["row_count"])
+            assertEquals(3,(row["books"] as List<*>).size)
+            assertEquals("budget",read(st,args+("limit" to 1))["error"])
+            assertEquals(1L,read(st,args+("query" to mapOf("q" to "Book 1","group" to "author")))["total"])
+        }
+    }
     @Test fun batteryIsOneBoundedLocalProjectionWithoutACatalog() {
         store().use { st ->
             val logs=mutableListOf<String>()
