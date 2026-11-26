@@ -84,6 +84,7 @@ class MirrorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             def curl(args, **kwargs):
+                self.assertEqual(['curl', '--disable'], args[:2])
                 self.assertNotIn('-L', args)
                 self.assertNotIn('--location', args)
                 Path(args[args.index('--output') + 1]).write_bytes(b'signed bytes\r\n')

@@ -14,7 +14,7 @@ spec.loader.exec_module(mirror)
 def direct(repo, branch, path, output):
     output.parent.mkdir(parents=True, exist_ok=True)
     status = subprocess.check_output([
-        'curl', '--silent', '--show-error', '--max-time', '60',
+        'curl', '--disable', '--silent', '--show-error', '--max-time', '60',
         '--output', str(output), '--write-out', '%{http_code}',
         f'https://raw.githubusercontent.com/{repo}/{branch}/{path}',
     ], text=True)
