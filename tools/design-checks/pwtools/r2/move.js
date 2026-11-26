@@ -1,0 +1,34 @@
+const {prototypeURL, OUT}=require('../../runtime.js');
+const {chromium}=require('playwright');
+
+(async()=>{const b=await chromium.launch({executablePath:process.env.PWX});const res=[];const ok=(n,c,x)=>res.push((c?'PASS ':'FAIL ')+n+(x?' '+x:''));
+let p=await b.newPage({viewport:{width:1500,height:1150}});await p.goto(prototypeURL+'?dev=m8c');
+// The maintainer's example: Reading records (4x1) at row 3 with Also reading + Library on the left, Lists on the right, Recently added at the bottom.
+let r=await p.evaluate(()=>{const P=window.__proto,S=P.S;S.layouts.m8c[0].tiles=[{w:'hero',x:0,y:0,cw:4,ch:2},{w:'records',x:0,y:2,cw:4,ch:1},{w:'also',x:0,y:3,cw:2,ch:2},{w:'library',x:0,y:5,cw:2,ch:1},{w:'scopes',x:2,y:3,cw:2,ch:3},{w:'recent',x:0,y:6,cw:4,ch:2}];
+ S.page=0;S.edit=true;P.act('sel:1');const down=!document.querySelector('#screen [data-fk="mv-D"]').classList.contains('dis');P.act('mv:0:1');return {down,t:S.layouts.m8c[0].tiles.map(t=>t.w+'@'+t.x+','+t.y)};});
+ok('m8c Down arrow enabled though blocked',r.down);
+const want=['hero@0,0','records@0,5','also@0,2','library@0,4','scopes@2,2','recent@0,6'];ok('m8c Down on Reading records jumps above Recently added',JSON.stringify(r.t)===JSON.stringify(want),r.t.join(' '));
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;P.act('mv:0:1');return {t:S.layouts.m8c[0].tiles.map(t=>t.w+'@'+t.x+','+t.y),toast:S.toast,lab:S.toastAct&&S.toastAct.lab};});
+ok('m8c next Down swaps past Recently added',r.t.includes('records@0,7')&&r.t.includes('recent@0,5'),r.t.join(' '));
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;P.act('mv:0:1');return {toast:S.toast,lab:S.toastAct&&S.toastAct.lab,dis:document.querySelector('#screen [data-fk="mv-D"]').classList.contains('dis')};});
+ok('m8c Down at the page edge is greyed',r.dis);
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;S.layouts.m8c[0].tiles=[{w:'hero',x:0,y:0,cw:4,ch:3},{w:'records',x:0,y:3,cw:4,ch:1},{w:'also',x:0,y:4,cw:2,ch:2},{w:'scopes',x:2,y:4,cw:2,ch:3},{w:'library',x:0,y:6,cw:2,ch:2},{w:'recent',x:2,y:7,cw:2,ch:1}];
+ P.act('sel:3');P.act('mv:0:-1');return {toast:S.toast,lab:S.toastAct&&S.toastAct.lab};});
+ok('no valid jump offers a page move',!!r.lab,r.toast+' / '+r.lab);
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;const n=S.layouts.m8c.length;P.act('tilePage');return {page:S.page,n:S.layouts.m8c.length,on:S.layouts.m8c[S.page].tiles.some(t=>t.w==='scopes'),gone:!S.layouts.m8c[0].tiles.some(t=>t.w==='scopes')};});
+ok('page move puts it on the next page',r.page===1&&r.on&&r.gone,JSON.stringify(r));
+await p.close();
+p=await b.newPage({viewport:{width:1500,height:1150}});await p.goto(prototypeURL+'?dev=x4pro');
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;S.page=0;S.edit=true;P.act('sel:0');P.act('mv:1:0');return S.layouts.x4[0].tiles.map(t=>t.w+'@'+t.x+','+t.y);});
+ok('x4 Right on Continue reading 1x2 swaps with Also reading (a Book list)',r[0]==='hero@1,0'&&r[1]==='booklist@0,0',r.join(' '));
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;P.act('mv:-1:0');return S.layouts.x4[0].tiles.map(t=>t.w+'@'+t.x+','+t.y);});
+ok('x4 Left swaps back',r[0]==='hero@0,0'&&r[1]==='booklist@1,0',r.join(' '));
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;S.layouts.x4[0].tiles=[{w:'hero',x:0,y:0,cw:1,ch:2},{w:'booklist',x:1,y:0,cw:1,ch:2,cfg:{title:'Also reading',src:'reading',style:1,sort:3,cap:2}},{w:'scopes',x:0,y:2,cw:2,ch:3},{w:'booklist',x:0,y:5,cw:2,ch:2,cfg:{title:'Recently added',src:'recent',style:0,sort:0,cap:1}}];S.sel=null;P.act('sel:0');P.act('mv:0:1');return S.layouts.x4[0].tiles.map(t=>t.w+'@'+t.x+','+t.y);});
+const tt=await p.evaluate(()=>window.__proto.S.toastAct&&window.__proto.S.toastAct.lab);ok('x4 Down on 1x2 under a 2-wide band cannot jump: offers a page move, nothing overlaps',r[0]==='hero@0,0'&&!!tt,r.join(' ')+' / '+tt);
+const valid=await p.evaluate(()=>{const S=window.__proto.S;const o={};for(const t of S.layouts.x4[0].tiles)for(let y=t.y;y<t.y+t.ch;y++)for(let x=t.x;x<t.x+t.cw;x++){if(o[x+','+y])return false;o[x+','+y]=1;}return true;});ok('x4 no overlaps after moves',valid);
+await p.close();
+p=await b.newPage({viewport:{width:1500,height:1150}});await p.goto(prototypeURL+'?dev=x4c');
+r=await p.evaluate(()=>{const P=window.__proto,S=P.S;P.act('home');P.act('m:edit');const f1=S.fk;P.hw('select');const sel=S.sel;P.hw('next');const a=S.layouts.x4[0].tiles.map(t=>t.w+'@'+t.x+','+t.y);P.hw('back');const b2=S.layouts.x4[0].tiles.map(t=>t.w+'@'+t.x+','+t.y);return {f1,sel,a,b2};});
+ok('x4c edit first focus is the first tile',r.f1==='tile-0',r.f1);ok('x4c Select picks it up',r.sel===0);
+ok('x4c Next carries with the move rule',r.a[0]==='hero@1,0'&&r.a[1]==='booklist@0,0',r.a.join(' '));ok('x4c Back cancels the move',r.b2[0]==='hero@0,0',r.b2.join(' '));
+await p.close();console.log(res.join('\n'));await b.close();})();

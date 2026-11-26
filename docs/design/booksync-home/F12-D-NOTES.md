@@ -3,7 +3,7 @@
 Approved Android-first build, maintainer ruling 2026-11-25. This implements the
 Settings groups from `origin/design/booksync-home`'s prototype and design notes,
 including rev 11 §19's single update-channel row. X4 Pro, X4 and X3 follow later.
-The design branch is read without merging its unapproved implementation restrictions.
+The approved design documentation now lives on `feature/0.12`; Android authorisation follows the maintainer ruling above.
 
 ## Reuse and boundaries
 
