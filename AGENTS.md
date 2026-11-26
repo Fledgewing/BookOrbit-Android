@@ -64,6 +64,20 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   version-skew handling. One check (`Companion.workerProblem`): missing or another version shows
   "BookSync Companion needed" or "Update BookSync Companion" and nothing heavy runs.
 
+## Screen and widget performance budgets
+
+Maintainer rule 2026-11-25: every screen and widget declares a strict budget; library
+interface calls inherit the caller's budget. Keep filtering, sorting, grouping, counts,
+search, stats, battery estimates and catalog joins in the companion; Lua only reads small,
+ready-to-draw windows. Enforce deterministic row/window and decoded-byte limits, zero
+subprocess spawns and render-path network calls, at most one batched companion round-trip
+per Home paint, and at most 16 KiB per widget snapshot. Declare limits in
+`logic/budgets.lua`/the widget registry and test missing or exceeded budgets. Log one
+info-level timing span per call/paint; host timing is not a device performance test.
+Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
+<30 ms, editor move <100 ms. Layout moves validate only their changed page, bounded by
+the placement count. Home pages and Settings groups inherit their screen-family budget.
+
 ## Read the source, not memory
 
 `tools/upstreams` checks out BookOrbit (server, web app, `koreader-plugin/`), CrossInk-Bookorbit

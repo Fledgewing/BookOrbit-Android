@@ -21,6 +21,11 @@ The release after 0.11.4 graduates from previews and release candidates. Built i
 of [backend independence](#planned-backend-independence): BookSync owns the screens and BookOrbit
 becomes a data source.
 
+**Widget layout engine and budgeted host contracts:** versioned layouts, immutable class
+projections, M8C defaults, pure editing and previous-valid recovery — Android building
+(maintainer-approved 2026-11-25); X4 Pro, X4 and X3 deferred to the firmware implementation.
+The engine exposes no new screen yet; the renderer/editor host is the next slice.
+
 All four remaining parity gaps below ship in 0.12 (maintainer ruling 2026-11-25);
 design and mockup approval still apply.
 
