@@ -107,6 +107,9 @@ class CacheWorker(
         if (n > 0) log("store: removed $n files of the cache before the database")
     }
 
+    /** Publication retains this worker's timing logger (including host test injection). */
+    internal fun publishLibrary(owner: String,requests: List<String>) = LibraryReadModel(store,log=log).publish(owner,requests)
+
     /** The detail template saved with the last plan (what a check of a detail path needs). */
     private fun detailTemplate(): String? = store.meta("detail_template")
 

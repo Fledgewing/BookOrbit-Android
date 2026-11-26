@@ -107,6 +107,11 @@ class CatalogWorkflowTest {
         assertTrue(w.calls.any { it.startsWith("DOWNLOAD") && it.contains("selection=revision") })
         val identity=w.events().single { it["kind"]=="copy.identity" }
         assertEquals(w.hash,identity["after"]);assertEquals(1,w.copies().size)
+        val request=String(LuaValue.encode(mapOf("op" to "copies.state","limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)
+        LibraryReadModel(w.worker.store,log={}).publish(w.owner,listOf(request))
+        val snapshot=w.worker.store.db().query("SELECT body FROM library_views WHERE request=?",request) { it.bytes(0)!! }.single()
+        assertTrue(snapshot.size<=16384)
+        val counts=LuaValue.parse(snapshot) as Map<*,*>;assertEquals(1L,counts["pending"]);assertEquals(1L,counts["row_count"])
         w.run("copies.ack",mapOf("token" to identity["token"]));assertTrue(w.copies().isEmpty())
     }
     @Test fun failedTransferKeepsOldBytesAndDurableQueue()=World().use { w ->
@@ -180,6 +185,10 @@ class CatalogWorkflowTest {
         val result=FinishLogic.snapshot(w.worker.store,w.owner,mapOf("path" to w.old.path))
         assertEquals(3,result["row_count"]);assertNotNull(result["next"]);assertNotNull(result["suggestion"])
         assertTrue(LuaValue.encode(result).size<=16384);assertFalse(result.containsKey("seriesMembers"));assertTrue(w.calls.isEmpty())
+        val request=String(LuaValue.encode(mapOf("op" to "reader.finish","path" to w.old.path,"limit" to 2,"bytes" to 16384)),Charsets.ISO_8859_1)
+        LibraryReadModel(w.worker.store,log={}).publish(w.owner,listOf(request))
+        val bounded=w.worker.store.db().query("SELECT body FROM library_views WHERE request=?",request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+        assertEquals("budget",bounded["error"])
     }
     @Test fun nextGapIsNotSkippedAndReadSuggestionsAreExcluded()=World().use { w ->
         w.run("initialize");w.worker.store.putDetail(7,w.detail()+mapOf("seriesId" to 1L,"seriesIndex" to 1L,
