@@ -13,6 +13,7 @@ class LocalWidgetsTest {
             LibraryReadModel.initialize(sql)
             val store=object: ProjectionStore {
                 override fun db()=sql
+                override val root=dir
                 override fun meta(k:String)=if(k=="owner") "fixture" else null
                 override fun <T> transaction(block:()->T):T=sql.transaction(block)
                 override fun close()=Unit
