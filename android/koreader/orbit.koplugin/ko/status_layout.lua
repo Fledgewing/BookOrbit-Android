@@ -31,13 +31,19 @@ function RS.refreshGeometry(s)
     s.geometry_key = key
     local size = StatusLayout.fontSize(S.status_orbit_size)
     local face = s.Font:getFace("ffont", size)
-    local text = s.Text:new{ text="Ag", face=face, bold=true, padding=0, fgcolor=s.BB.COLOR_BLACK }
-    local height = StatusLayout.stripHeight(text:getSize().h, math.max(1, Device.screen:scaleBySize(1)))
+    local bold = StatusLayout.fontBold(S.status_orbit_size)
+    local text = s.Text:new{ text="Ag", face=face, bold=bold, padding=0, fgcolor=s.BB.COLOR_BLACK }
+    local text_height = text:getSize().h
+    local height = StatusLayout.stripHeight(text_height, math.max(1, Device.screen:scaleBySize(1)))
+    -- TextWidget has now selected the actual regular/bold face. Measure ink above
+    -- the baseline: getSize().h includes ascenders, descenders and line spacing.
+    local cap = s.RenderText:sizeUtf8Text(0, nil, text.face, "H", false, text.bold).y_top
+    local battery_height = StatusLayout.batteryHeight(cap, text_height)
     text:free()
     local function lane(available)
         -- EPUB reserves only missing space in the engine, never in saved margins.
         local safe = not s.ui.paging and s.view.view_mode ~= "scroll" or available >= height
-        return {size=size, height=safe and height or 0, face=face}
+        return {size=size, height=safe and height or 0, face=face, bold=bold, battery_height=battery_height}
     end
     s.top = lane(top)
     if s.ui.rolling and s.ui.rolling.cre_top_bar_enabled then s.top.height = 0 end
@@ -68,12 +74,12 @@ function RS.paint(s, bb, x, y, bottom_only)
     if width <= 0 then return end
     local lane = s.top
     local function measure(value)
-        local w = s.Text:new{ text=value, face=lane.face, fgcolor=s.BB.COLOR_BLACK, bold=true, padding=0 }
+        local w = s.Text:new{ text=value, face=lane.face, fgcolor=s.BB.COLOR_BLACK, bold=lane.bold, padding=0 }
         local width = w:getSize().w; w:free(); return width
     end
     local function text(value, px, py)
         if value == "" then return end
-        local w = s.Text:new{ text = value, face = lane.face, fgcolor = s.BB.COLOR_BLACK, bold = true, padding = 0 }
+        local w = s.Text:new{ text = value, face = lane.face, fgcolor = s.BB.COLOR_BLACK, bold = lane.bold, padding = 0 }
         w:paintTo(bb, x + math.floor(px), y + math.floor(py + (lane.height-w:getSize().h)/2))
         w:free()
     end
@@ -97,7 +103,7 @@ function RS.paint(s, bb, x, y, bottom_only)
     s.battery = battery
     local icon = "▱"
     local glyph = s.battery_program
-    local icon_size = math.max(0, (lane.height - 2 * Device.screen:scaleBySize(1)) / glyph.height)
+    local icon_size = math.max(0, lane.battery_height / glyph.height)
     local icon_w = glyph.width * icon_size
     local battery_text = string.format("%d%%", battery)
     local percent_w = measure(battery_text)
@@ -156,7 +162,7 @@ function RS.enable(ui)
     if RS.session or not ui or not ui.document or not ui.view or not ui.view.footer then return end
     local s = { ui=ui, view=ui.view, footer=ui.view.footer, undo={},
         Geom=require("ui/geometry"), Text=require("ui/widget/textwidget"),
-        Font=require("ui/font"), BB=require("ffi/blitbuffer"),
+        Font=require("ui/font"), RenderText=require("ui/rendertext"), BB=require("ffi/blitbuffer"),
         inset=math.max(1, Device.screen:scaleBySize(4)), gap=math.max(1, Device.screen:scaleBySize(4)) }
     RS.releaseHiddenFooter(ui)
     RS.session = s
