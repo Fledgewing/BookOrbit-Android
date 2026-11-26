@@ -42,7 +42,7 @@ class CommandProvider : ContentProvider() {
         val COMMANDS = setOf(
             Contract.NET_UP, Contract.NET_DONE, Contract.WIFI_OFF, Contract.SLEEP_NOW, Contract.SETTINGS, Contract.STATS,
             Contract.RELAUNCH, Contract.SETUP_LATER, Contract.REPORT, SleepScreen.ACTION_POOL,
-            Worker.ACTION_STORAGE, Worker.ACTION_COPIES, Worker.ACTION_SLEEP_REFRESH,
+            Worker.ACTION_STORAGE, Worker.ACTION_SLEEP_REFRESH,
             Worker.ACTION_SQLITE_STRESS, Worker.ACTION_PATCH, Updater.ACTION_UPDATE,
         )
 

@@ -126,3 +126,60 @@ model bytes to/from UTF-8 exactly once; byte limits charge UTF-8 bytes. A real J
 stand-in and companion codec tests cover non-ASCII owner/query/path round-trips.
 The package gate asserts the protocol inventory is absent from the plugin zip;
 its companion copy remains checked against the shared inventory fixture.
+
+
+## Step 4: copies, grouped lists, recommendations and finish
+
+Android-only maintainer ruling continues. Deleted the four catalog-side Lua adapter modules:
+`copies.lua`, `grouping.lua`, `recommended.lua` and `endofbook.lua`. The plugin dispatches
+neutral commands through `ko/library.lua`; local native settings/reader hooks remain behind
+that interface. Catalog HTTP, backend JSON, file sampling, downloads, comparisons, grouping,
+next-book/suggestion selection, counts and review labels now run in the companion.
+
+Reuse evidence (current paths/lines):
+
+- `server/bookorbit/CacheWorker.kt:318` extends its saved-detail lookup as `changedCopies`;
+  `:338` retains sidecar/statistics migration. `CopiesLogic.kt:35` retains candidate rules and
+  now also selects readable delivery files; `HashSidecar` retains hash-keyed folder migration.
+- `LibraryReadModel.kt:26` retains bounded publication and owner checks; `BookOrbitProjection.kt:249`
+  extends its existing membership boundary with neutral native-list selection scope, then reuses
+  its group projection at `:330`. No second catalog or full-list cache is added in Lua.
+- `BookOrbitLibrary.kt:36` retains the account-scoped local file ledger; the worker now refreshes
+  it from persisted native state, including account-specific filenames. No Lua catalog scan is sent.
+- `ko/endsheet.lua` retains the approved sheet renderer; `ko/home_host.lua` retains owned list and
+  Series navigation. `ko/library.lua` retains existing bounded paints, commands and batched reads.
+  `ko/base.lua` now owns the common native-hook chain previously hidden in grouping.
+
+`CatalogWorkflow` uses the existing sole cache writer, `ConnectorHttp`, `CopiesLogic` and
+read model. It persists account-scoped workflow files outside cache ownership resets. Legacy
+copy, finish and deferred-download queues remain intact; a source-owner claim and durable
+migration checkpoint prevent cross-account replay and resurrection after acknowledgement.
+Replacement bytes are sampled/verified before atomic rename; an interrupted rename/identity
+handoff resumes from its saved phase. Identity and finish writeback are idempotent, acknowledged
+phases. Finish event tokens reject older events after a newer mark. Native lifecycle/position
+queues and the existing position writer are not replaced. The temporary `EOB` handle preserves
+the parallel sync worker's stale-push/session contract without retaining a second finish sender.
+
+`RecommendationPlan` supplies at most eight native-setting descriptors, decisions, review rows,
+labels/counts and backups; only observed native settings are written on the reader, with a
+compare-before-write check. Review JSON is written by the companion. Use/Keep/Undo and bulk
+review retain capability-aware Wi-Fi handling. Backups are saved before native actions.
+
+Budgets: finish screen/widget three rows (summary plus two cards), recommendation screen/widget
+eight rows, copies state one local row; each snapshot <=16 KiB. Zero plugin network/forks,
+one batched read per paint, and info spans for calls/paints/draws. Queue checkpoints remain
+available while reading; background transfers pause. Device timing targets remain unconfirmed.
+
+Tests move the retired network/interpreter assertions into companion workflow/projection tests,
+including the recorded delivery-variant fixture (registry reader moves from Lua to Kotlin).
+Lua tests exercise neutral dispatch, bounded sheets, stale-push holds, gated copy commands,
+callback visibility and budgets. Existing native sync/reading/SQLite-lock/owned UI tests remain.
+The boundary guard rejects copy/finish transport even inside a Lua adapter and checks all four
+retired paths stay absent. Final sync/root transport cleanup belongs to F12-Q and step 5.
+
+Pinned upstream evidence at `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`:
+`koreader-plugin/bookorbit.koplugin/bookorbit_api.lua:705`/`:709` define status/rating writes;
+`:737`/`:741` define delivery detail/file acquisition. `bookorbit_delivery.lua:32` defines
+variant precedence; `bookorbit_state_manager.lua:233` defines private account identity;
+`bookorbit_state.lua:34` selects the native account filename. These bindings are now private
+companion adapter concerns. No devices, releases, tags or firmware changes are involved.

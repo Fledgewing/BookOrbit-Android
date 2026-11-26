@@ -55,14 +55,14 @@ end
 function EndSheet:onTapAnywhere(_arg, ges)
     local y0 = self.screen_h - (self.sheet_h or 0)
     if ges and ges.pos and ges.pos.y < y0 then
-        Server.endAction("back")
+        Library.endAction("back")
         return true
     end
     return false
 end
 
 function EndSheet:onClose()
-    Server.endAction("back")
+    Library.endAction("back")
     return true
 end
 
@@ -80,32 +80,32 @@ function EndSheet:rows()
     local ui, b = self.ui, self.book
     local function add(r) table.insert(rows, r) end
     local status = { kind = "status", text = m.status }
-    if m.undo then status.label, status.action = "Undo", function() Server.endAction("undo",ui, b) end
-    elseif m.can_mark then status.label, status.action = "Mark as finished", function() Server.endAction("mark",ui, b) end end
+    if m.undo then status.label, status.action = "Undo", function() Library.endAction("undo",ui, b) end
+    elseif m.can_mark then status.label, status.action = "Mark as finished", function() Library.endAction("mark",ui, b) end end
     add(status)
     add({ kind = "title", text = m.title })
-    if m.author then add({ kind = "author", text = "by " .. m.author .. " ›", action = function() Server.endAction("author",ui, b, m.author) end }) end
+    if m.author then add({ kind = "author", text = "by " .. m.author .. " ›", action = function() Library.endAction("author",ui, b, m.author) end }) end
     if m.series_line then add({ kind = "series", text = m.series_line }) end
     for n = 1, 5 do
-        add({ kind = "star", n = n, text = (m.stars and n <= m.stars) and "★" or "☆", action = function() Server.endAction("star",ui, b, n) end })
+        add({ kind = "star", n = n, text = (m.stars and n <= m.stars) and "★" or "☆", action = function() Library.endAction("star",ui, b, n) end })
     end
     add({ kind = "hint", text = m.stars and "Tap a star · tap it again to clear" or "Tap a star to rate it" })
-    add({ kind = "review", text = "Review ›", action = function() Server.endAction("review",ui) end })
+    add({ kind = "review", text = "Review ›", action = function() Library.endAction("review",ui) end })
     local function card(c)
         local busy = cs and cs.book_id == c.book_id
         if busy and cs.failure == "failed" then
             add({ kind = "notice", text = "Couldn't connect · your finish is saved and will be sent later" })
-            add({ kind = "button", text = "Try again", action = function() Server.endAction("retry",ui, b, c.book_id, c.title) end })
-            add({ kind = "button", text = "Get it at the next sync", secondary = true, action = function() Server.endAction("later",ui, b, c.book_id, c.title) end })
+            add({ kind = "button", text = "Try again", action = function() Library.endAction("retry",ui, b, c.book_id, c.title) end })
+            add({ kind = "button", text = "Get it at the next sync", secondary = true, action = function() Library.endAction("later",ui, b, c.book_id, c.title) end })
             return
         elseif busy and cs.failure == "error" then
             add({ kind = "notice", text = "Download failed: " .. tostring(cs.err or "server error") })
-            add({ kind = "button", text = "Try again", action = function() Server.endAction("retry",ui, b, c.book_id, c.title) end })
+            add({ kind = "button", text = "Try again", action = function() Library.endAction("retry",ui, b, c.book_id, c.title) end })
             return
         end
         add({ kind = "card", text = tostring(c.title), sub = busy and cs.text or c.sub, book = c.book,
             label = busy and cs.text and "" or (c.action == "open" and "Open" or "Download & open"),
-            action = function() Server.endAction("book",ui, b, c.book_id, c.title) end })
+            action = function() Library.endAction("book",ui, b, c.book_id, c.title, c.local_path) end })
     end
     local nxt = m.next
     if nxt then
@@ -117,18 +117,14 @@ function EndSheet:rows()
         add({ kind = "label", text = s.line })
         card(s)
     end
-    add({ kind = "footer", text = "‹ Back to book", action = function() Server.endAction("back") end })
-    add({ kind = "footer", text = "Home", action = function() Server.endAction("home",ui) end })
+    add({ kind = "footer", text = "‹ Back to book", action = function() Library.endAction("back") end })
+    add({ kind = "footer", text = "Home", action = function() Library.endAction("home",ui) end })
     return rows
 end
 
 -- The cover for a card: the plugin's cached thumbnail when the catalog has one, else nil.
 local function coverPath(book)
-    local p = serverPlugin(liveUI())
-    local cat = p and p.catalog_browser
-    if not (cat and book and Compat.callable(cat.thumbnailDisplay)) then return nil end
-    local okc, path = pcall(cat.thumbnailDisplay, cat, book)
-    return okc and type(path) == "string" and path or nil
+    return type(book)=="table" and book.cover_path or nil
 end
 
 -- One row's widget at width w and planned height h.
@@ -239,6 +235,7 @@ function EndSheet:rowWidget(block, w, h, mt)
 end
 
 function EndSheet:build()
+    local finish=Budgets.span("end-of-book.draw",now_s,log)
     local Blitbuffer = require("ffi/blitbuffer")
     local Geom = require("ui/geometry")
     local BottomContainer = W("container/bottomcontainer")
@@ -282,4 +279,5 @@ function EndSheet:build()
     }
     self.rule_widget = rule
     self[1] = BottomContainer:new{ dimen = Geom:new{ w = self.screen_w, h = self.screen_h }, self.frame }
+    finish()
 end

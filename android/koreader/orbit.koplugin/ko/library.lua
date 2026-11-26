@@ -6,6 +6,9 @@ if not rawget(getfenv(1),"LibraryAdapter") then
 LibraryAdapter={sent={},order={},ready={}}
 function LibraryAdapter.owner() return LibraryAdapter.managed_owner end
 function LibraryAdapter.read(request,op)
+    if op=="settings.recommendations" and LibraryAdapter.recommendations then
+        return LibraryAdapter.recommendations,#Cache.encode(LibraryAdapter.recommendations)
+    end
     if op=="account.state" and LibraryAdapter.account_snapshot then
         return LibraryAdapter.account_snapshot, LibraryAdapter.account_bytes
     end
@@ -264,6 +267,9 @@ function Library.subscribe(callback)
     end
 end
 function Library.changed(event)
+    if FinishUI and FinishUI.sheet and event.kind=="library" then
+        local sheet=FinishUI.sheet;FinishUI.refreshSheet(sheet.ui,sheet.book)
+    end
     if Library.listener then Library.listener(event) end
 end
 function Library.open(row)
@@ -490,7 +496,35 @@ if OrbitAndroid then
         local result=init(self,...)
         if Library.connectorReady then Library.connectorReady() end
         Library.accountReturned()
+        Library.catalogAction("initialize",{},function() end)
         Library.watchEvents()
         return result
     end
 end
+
+function Library.catalogAction(action,args,done)
+    args=args or {};args.action=action;args.owner=LibraryAdapter.owner()
+    if not args.owner then if done then done({error="unavailable"}) end;return false end
+    return command(action,function() return LibraryAdapter.command("catalog.action",args,done or function() end) end)
+end
+function Library.recommendations(args,done)
+    return command("recommendations",function() return LibraryAdapter.command("settings.recommendations",args,function(result)
+        if not result.error and not args.definitions then LibraryAdapter.recommendations=result end
+        done(result)
+    end) end)
+end
+function Library.endAction(name,...) return FinishUI.actions[name](...) end
+function Library.openGrouped(title,source,query)
+    if HomeHost.show() and HomeHost.active then HomeHost.active:showList(title,source,query) end
+end
+function Library.copiesTick(why)
+    if S.keep_copies_current==false or reading() or Library.copies_pending then return end
+    if Library.copies_at and now_s()-Library.copies_at<600 and why~="full refresh" then return end
+    Library.copies_at=now_s();Library.copies_pending=true
+    local ui=liveUI()
+    return Library.catalogAction("copies.check",{enabled=true,open_path=ui and ui.document and ui.document.file},function()
+        Library.copies_pending=nil
+    end)
+end
+
+function Library.cachedAccountState() return LibraryAdapter.account_snapshot or {} end

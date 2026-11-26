@@ -16,7 +16,7 @@ end
 
 compat_seen = setmetatable({}, { __mode = "k" })
 compat_logged = {}
-Grouping = nil -- lists by series and by author; defined with the catalog hooks below
+EOB=setmetatable({}, {__index=function(_,key) return FinishUI and FinishUI[key] end}) -- lifecycle bridge until library initialization
 
 -- The plugin's version (main.lua:54/95: BookOrbit.PLUGIN_VERSION; _meta.lua has none).
 function pluginVersion(p)
@@ -132,7 +132,7 @@ function Server.cacheBusy() if OC and OC.busy then return OC.busy() end end
 function Server.refreshLibrary(...) return OC.menuFullRefresh(...) end
 function Server.resumeCache(...) if Mirror and Mirror.kick then return Mirror.kick(...) end end
 function Server.fullRefreshNotice() return Mirror and (Mirror.notices or Mirror.fullRunning()) end
-function Server.installGrouping(...) return Grouping.install(...) end
+function Server.installGrouping(...) return Server.installGroupViews(...) end
 function Server.positionOn() return OSM and OSM.on() end
 function Server.positionWakeMinimum() return OSM.WAKE_MIN_S end
 function Server.pullThenDrain(...) return OSM.pullThenDrain(...) end
@@ -142,27 +142,26 @@ function Server.clearPullDebounce(...) return Sync.clearPullDebounce(...) end
 function Server.countStorage(...) if OC and OC.storageCount then return OC.storageCount(...) end end
 function Server.refreshCovers(...) if Mirror and Mirror.coverPass then return Mirror.coverPass(...) end end
 function Server.positionModeChanged(...) if OSM and OSM.modeChanged then return OSM.modeChanged(...) end end
-function Server.reportRecommended(...) if Rec then return Rec.report(...) end end
-function Server.applyRecommended(...) if Rec then return Rec.applyChoices(...) end end
-function Server.capabilitiesLost(...) if Rec then return Rec.capsLost(...) end end
-function Server.capabilitiesGained(...) if Rec then return Rec.pass(...) end end
-function Server.endSheetOpen() return EOB and EOB.sheet~=nil end
-function Server.leaveEndSheet(...) return EOB and EOB.leaveForHome(...) end
-function Server.endAction(name,...) return EOB.actions[name](...) end
+function Server.reportRecommended(...) if Recommendations then return Recommendations.report(...) end end
+function Server.applyRecommended(...) if Recommendations then return Recommendations.applyChoices(...) end end
+function Server.capabilitiesLost(...) if Recommendations then return Recommendations.pass("caps lost",nil,true) end end
+function Server.capabilitiesGained(...) if Recommendations then return Recommendations.pass("capabilities gained") end end
+function Server.endSheetOpen() return FinishUI and FinishUI.sheet~=nil end
+function Server.leaveEndSheet(...) return FinishUI and FinishUI.leaveForHome(...) end
+function Server.endAction(name,...) return Library.endAction(name,...) end
 function Server.localBookId(path)
     local cat=Mirror and Mirror.catalog and Mirror.catalog()
     if not (path and cat and type(cat.on_device)=="table") then return nil end
     for id,p in pairs(cat.on_device) do if p==path then return tonumber(id) end end
 end
 function Server.quietLegacy(quiet)
-    quiet(Copies,{"ask","tick","pump","found","prepared"})
     quiet(OC,{"watchChecks","applyEvents","landed","redraw_soon","redraw","storageCount","storageCounted","rechecked"})
     quiet(Mirror,{"tick","kick","poll","ran","finish","coverPass"})
     quiet(LF,{"quiet","paintTiles","quietSwitch"})
     quiet(OSM,{"pause","pullThenDrain"})
 end
 function Server.timeLegacy(wrap)
-    for _,name in ipairs({"EOB","OSM","OC","LF","Sync","Mirror","Copies"}) do
+    for _,name in ipairs({"OSM","OC","LF","Sync","Mirror"}) do
         wrap(getfenv(1)[name],name)
     end
 end
@@ -251,16 +250,6 @@ function OC.client()
     if p and p.catalog_browser and p.catalog_browser.client then return p.catalog_browser.client end
     return p and Compat.callable(p.newClient) and p:newClient() or nil
 end
-function OC.state()
-    if not OC._state then
-        local state=Cache.decode(Store.readFile(Store.dir().."/plugin-state.lua") or "")
-        OC._state=type(state)=="table" and state or {}
-    end
-    return OC._state
-end
-function OC.saveState()
-    if not Companion.workerProblem() then Companion.send(Companion.ACTION.PATCH,{plugin_state=Cache.encode(OC.state())}) end
-end
 function OC.watchChecks() return Library.watchEvents() end
 function OC.drainEvents() return Library.pollEvents() end
 function OC.applyEvents(events) return Library.applyEvents(events) end
@@ -305,7 +294,7 @@ function Mirror.tick(why)
 end
 function Mirror.kick(why)
     if Sleep and Sleep.kick then Sleep.kick(why) end
-    if Copies and Copies.tick then pcall(Copies.tick,why) end
+    if Library and Library.copiesTick then pcall(Library.copiesTick,why) end
     UIManager:scheduleIn(1,function() Mirror.tick(why) end)
 end
 -- The parent explicitly revalidates the visible local references through the library.
@@ -348,13 +337,9 @@ end
 
 function Server.installCatalogRuntime()
     Store.directory=OC.dir
+    Server.bindCatalogActions()
     Library.compatTick=function(t)
         if OC.storage_asked and t-OC.storage_asked>=60 then OC.storage_asked=nil end
-        if Copies and Copies.asked and t-Copies.asked>=Copies.WAIT_S then Copies.asked=nil end
-        if Copies and Copies.prepare_at and t-Copies.prepare_at>=Copies.WAIT_S then
-            Copies.preparing,Copies.prepare_at,Copies.busy=nil,nil,nil
-            Copies.stop("companion preparation timed out")
-        end
         if LF and LF.year_waiting and t-LF.year_waiting>60 then LF.year_waiting=nil end
         if Sleep and Sleep.waited then Sleep.waited(t) end
     end
@@ -387,10 +372,8 @@ function Server.installCatalogRuntime()
                 OC.storageCounted(ev)
     elseif ev.kind == "sleep_pool" and Sleep then
                 Sleep.landed(ev)
-    elseif ev.kind == "copy_prepared" and Copies then
-                Copies.prepared(ev)
-    elseif ev.kind == "copies" and Copies then
-                Copies.found(ev)
+    elseif ev.kind=="copy.identity" or ev.kind=="finish.applied" or ev.kind=="download.saved" then
+                Server.applyCatalogEvent(ev)
     end
     end
     Library.catalogStarted=function()
@@ -417,7 +400,7 @@ function Server.installCatalogRuntime()
     end
     Library.catalogFinished=function(status)
         Server.catalogChanged({owner=LibraryAdapter.owner()})
-        if Copies and Copies.tick then pcall(Copies.tick,"catalog refresh") end
+        if Library.copiesTick then pcall(Library.copiesTick,"catalog refresh") end
     end
     LibraryAdapter.syncCurrent=Server.syncCurrent
     Library.watchEvents()
@@ -625,4 +608,117 @@ function Server.catalogChanged(event)
         if event.owner and event.owner~=LibraryAdapter.owner() then return end
         if LF and Compat.callable(cat.refreshCurrent) then LF.refreshKeepingCovers(cat) end
     end)
+end
+
+-- Minimal native binding. UI and shared lifecycle hooks call the neutral Library/FinishUI.
+function Server.installGroupViews()
+    local cat=Server.loaded("catalog")
+    if type(cat)~="table" or not Compat.callable(cat.listSortSheetModel) or not Compat.callable(cat.listRun) then return false end
+    wrap(cat,"listSortSheetModel",function(stock) return function(self,sheet)
+        local m=stock(self,sheet)
+        if m and m.rows and self:listKind()=="books" then
+            table.insert(m.rows,1,{label="By author",action={kind="booksync-group",group="author"}})
+            table.insert(m.rows,1,{label="By series",action={kind="booksync-group",group="series"}})
+        end
+        return m
+    end end,"owned-groups")
+    wrap(cat,"listRun",function(stock) return function(self,action,region,hold)
+        if not hold and type(action)=="table" and action.kind=="booksync-group" then
+            local context=self.current_context or {};local p=context.params or {}
+            local names={libraryId="library",collectionId="collection",smartScopeId="list",seriesId="series",author="author",ids="ids",q="search",readStatus="status",format="format",sort="sort",order="direction"}
+            local selection={};for k,n in pairs(names) do if p[k]~=nil then selection[n]=tostring(p[k]) end end
+            Library.openGrouped(context.title or "Library",{kind="selection",selection=selection},{group=action.group})
+            return true
+        end
+        return stock(self,action,region,hold)
+    end end,"owned-groups")
+    return true
+end
+
+function Server.bindCatalogActions()
+    EOB=FinishUI -- temporary compatibility for F12-Q's lifecycle/push holds; no second outbox
+    Library.nativeReader=function(ui)
+        local p=ui and ui.bookorbit
+        if not (p and ui.document and ui.doc_settings) then return end
+        local ok,digest=pcall(p.getDocumentDigest,p);if not ok or type(digest)~="string" then return end
+        local state=Server.loaded("state_manager")
+        local b=state and state.getBook and state.getBook(digest)
+        local pct=LibraryAdapter.readerPosition(ui.document.file)
+        return {digest=digest,file=ui.document.file,key=b and b.bookId and true,book_id=b and b.bookId,
+            percentage=pct,summary=ui.doc_settings:readSetting("summary") or {},doc_settings=ui.doc_settings,plugin=p}
+    end
+    Library.noteReaderMark=function(b) if LocalState then LocalState.noteMark(b,b.summary.status) end end
+    Library.noteReaderLeave=function(b)
+        if LocalState then LocalState.put(b.digest,{pending=true,bookId=b.book_id,percent=b.percentage and b.percentage*100,status=b.summary.status}) end
+        if LF and LF.noteOnDevice then LF.noteOnDevice(b.book_id,b.file) end
+    end
+    Library.observeSetting=function(item)
+        local p=serverPlugin(liveUI())
+        if not p then return {available=false,reason="Connector unavailable"} end
+        local defaults=p.default_settings or {}
+        local current=p.settings[item.key]
+        if OSM and OSM.savedPluginSetting then current=OSM.savedPluginSetting(item.key,current) end
+        return {available=true,current=current,default=defaults[item.key]}
+    end
+    Library.writeSetting=function(item,value)
+        local p=serverPlugin(liveUI());if not p then return false end
+        if OSM and OSM.setSavedPluginSetting and OSM.setSavedPluginSetting(item.key,value) then G_reader_settings:flush();return true end
+        if item.key=="auto_sync" then
+            if (p.settings.auto_sync==true)~=(value==true) then pluginEvent(liveUI(),p,Server.events.auto,value==true,true,true) end
+        else p.settings[item.key]=value end
+        G_reader_settings:flush();return true
+    end
+    Library.installFinishHooks=function(p)
+        local cls=getmetatable(p) and getmetatable(p).__index
+        if type(cls)~="table" then return end
+        if Compat.callable(cls.enqueueLifecycleSnapshot) then wrap(cls,"enqueueLifecycleSnapshot",function(stock) return function(self,snap,reason)
+            if type(snap)=="table" and FinishUI.hold(snap.digest,snap.percentage,snap.status) then snap.percentage,snap.progress=nil,nil end
+            if LocalState and type(snap)=="table" then pcall(LocalState.noteSnapshot,snap) end
+            return stock(self,snap,reason)
+        end end,"finish") end
+        for _,name in ipairs({"updateProgress","pushProgressAfterBookSync"}) do
+            if Compat.callable(cls[name]) then wrap(cls,name,function(stock) return function(self,...)
+                local ui=self.ui;local digest=ui and FinishUI.page_digests[ui] and FinishUI.page_digests[ui].digest
+                local summary=ui and ui.doc_settings and ui.doc_settings:readSetting("summary") or {}
+                if digest and FinishUI.hold(digest,LibraryAdapter.readerPosition(ui.document.file),summary.status) then return end
+                return stock(self,...)
+            end end,"finish") end
+        end
+    end
+    local stock=Sync.waitOutbox
+    if not Server.finish_wait_bound then
+        Server.finish_wait_bound=true
+        Sync.waitOutbox=function(p,cap,done) return stock(p,cap,function(ok,why,elapsed)
+            if not ok then return done(ok,why,elapsed) end
+            FinishUI.drain(p,false,function() done(ok,why,elapsed) end)
+        end) end
+    end
+end
+function Server.applyCatalogEvent(ev)
+    if ev.owner~=LibraryAdapter.owner() then return end
+    local sm=Server.loaded("state_manager")
+    if ev.kind=="copy.identity" and sm and sm.repairFileIdentity then
+        sm.repairFileIdentity(ev.path,ev.before,ev.after)
+        Library.catalogAction("copies.ack",{token=ev.token})
+    elseif ev.kind=="download.saved" and sm and sm.linkFile then
+        sm.linkFile(ev.document,ev.file_reference,ev.reference,ev.path)
+        if ev.deferred then Gate.show("downloaded book",function()
+            UIManager:show(require("ui/widget/infomessage"):new{text="Downloaded: "..tostring(ev.title or "Book"),timeout=3}) -- gate: Gate.show
+        end) end
+    elseif ev.kind=="finish.applied" then
+        local epoch=FinishUI.intent[ev.document] or 0
+        Library.catalogAction("finish.validate",{document=ev.document,token=ev.token},function(result)
+            if not result.apply or ev.owner~=LibraryAdapter.owner() or epoch~=(FinishUI.intent[ev.document] or 0) then return end
+            local side=Server.loaded("sidecar")
+            if not (side and sm and sm.mutate) then return end
+            local st={status_known=ev.complete,status=ev.complete and "complete" or nil,status_modified=ev.date,rating_known=ev.rated,rating=ev.rating}
+            local ui=liveUI()
+            if ui and ui.document and ui.document.file==ev.path then side.applyServerStateLive(ui,st)
+            elseif ev.path then side.applyServerStateSidecar(ev.path,st) end
+            sm.mutate(function(session) local b=session:getBook(ev.document);if b then side.rememberServerState(b,st) end end)
+            if LocalState then LocalState.noteSent(ev.document) end
+            FinishUI.jobs[ev.document]=nil
+            Library.catalogAction("finish.ack",{document=ev.document,token=ev.token})
+        end)
+    end
 end

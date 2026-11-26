@@ -11,9 +11,11 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     private val coverReferenceJob: (CacheWorker.Creds?, String, String, Boolean, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, _, done -> done(null,"unsupported") },
     private val legacyAccount: () -> LegacyCoverSource.Account? = { null },
+    private val actionJob: (CacheWorker.Creds, String, String, Map<*,*>, (Map<String,Any?>?,String?) -> Unit) -> Unit = { _,_,_,_,done -> done(null,"unsupported") },
     private val catalogJob: (CacheWorker.Creds, String, String, Boolean, (Map<String,Any?>?,String?) -> Unit) -> Unit = { _,_,_,_,done -> done(null,"unsupported") },
     private val coverJob: (CacheWorker.Creds, String, Long, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, done -> done(null,"unsupported") }) : ServerAdapter {
+    override fun recommendedSettings()=RecommendedSettings.items
     override val id = "bookorbit"
     internal interface ConnectorTransport {
         fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply
@@ -139,6 +141,13 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val result = mapOf("items" to rows, "next" to (page + 1).takeIf { parsed.hasNext }, "freshness" to mapOf("saved" to true, "origin" to "cached-remote"))
         require(LuaValue.encode(result).size <= 16384)
         return result
+    }
+    override fun catalogAction(owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) {
+        require(owner == owner())
+        val c=credentials.login("sync")?.takeIf { it.owner()==owner }?.let { login("sync") }
+        val legacy=legacyAccount()?.takeIf { it.owner==owner }
+        val creds=c?.let { CacheWorker.Creds(it.server,it.user,it.secret) } ?: legacy?.credentials ?: throw ServerFailure("unauthorized")
+        actionJob(creds,owner,action,args,done)
     }
     override fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {
         require(owner.length in 1..4096)

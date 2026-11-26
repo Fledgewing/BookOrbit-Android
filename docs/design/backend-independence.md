@@ -201,10 +201,14 @@ in a later transport/sole-sync-owner slice, are:
   copy/finish event and state contracts. Catalog getters read only neutral local snapshots;
   refresh actions dispatch `catalog.control`. Cover acquisition uses neutral commands and
   local references. No legacy catalog transport or SQL interpreter is installed.
-- `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
-  existing finish outbox. Preserve sole-writer ordering when moving these.
-- `ko/server/bookorbit/grouping.lua`: legacy grouping over bounded local catalog snapshots. Its whole-list Lua aggregation is the next catalog slice.
-  Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
+- Catalog-side copy, grouping, recommendation and finish modules are retired (F12-Q2 step 4).
+  `ko/library.lua` dispatches neutral `catalog.action`/`settings.recommendations` commands and
+  reads bounded snapshots. `CopiesLogic`, `CacheWorker`, `BookOrbitProjection` and the existing
+  read model own catalog work in Kotlin. Native reader/settings bindings remain in the temporary
+  root until the parallel sync cutover; they contain no catalog HTTP requests.
+  `CatalogWorkflow` checkpoints account-scoped copy/finish queues before acknowledging native
+  identity/writeback. Legacy sources stay intact, and position/lifecycle queues are untouched.
+  Each sheet/widget has a deterministic budget and timing span; no full-catalog work runs in Lua.
 - `ko/server/bookorbit/sync.lua`, `reading_sync.lua` and `lifecycle.lua`: legacy outbox,
   pull/push, remote-progress parsing and upstream snapshot/settings bindings. Root start/sleep/
   Wi-Fi flows call the adapter facade; the guard also forbids upstream primitive API names.

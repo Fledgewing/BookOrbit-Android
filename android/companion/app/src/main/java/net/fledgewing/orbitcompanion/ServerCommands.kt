@@ -10,7 +10,7 @@ object ServerCommands {
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("device.sleep","sync.read","sync.write","catalog.window","catalog.control","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
+        require(op in setOf("device.sleep","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -35,6 +35,8 @@ object ServerCommands {
                 LibraryAccount.position(ctx,document,update,::finish)
             }
             "catalog.window" -> LibraryAccount.catalog(ctx,(args["page"] as? Number)?.toInt() ?: 1,(args["limit"] as? Number)?.toInt()?.coerceIn(1,24) ?: 24,::finish)
+            "settings.recommendations" -> LibraryAccount.recommendedSettings(ctx,args,::finish)
+            "catalog.action" -> LibraryAccount.catalogAction(ctx,args["owner"] as? String ?: throw IllegalArgumentException("owner"),text("action"),args,::finish)
             "catalog.control" -> LibraryAccount.catalogControl(ctx,args["owner"] as? String ?: throw IllegalArgumentException("owner"),text("action"),args["manual"]==true,::finish)
             "covers.acquire" -> if (args["reference"] != null)
                 LibraryAccount.acquireCoverReference(ctx,text("reference"),args["refresh"]==true,args["owner"] as? String ?: throw IllegalArgumentException("owner"),::finish)

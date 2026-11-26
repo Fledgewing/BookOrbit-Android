@@ -43,3 +43,11 @@ function fmt(seconds)
 end
 
 ---------------------------------------------------------------------------------------------
+
+-- Shared native-hook chain, once per feature. No transport or catalog interpretation.
+function wrap(Cls,name,make,feature)
+    local stock=rawget(Cls,"__orbit_stock") or {};rawset(Cls,"__orbit_stock",stock)
+    local key=feature and (feature..":"..name) or name
+    if stock[key] then return end
+    stock[key]=Cls[name];Cls[name]=make(stock[key])
+end

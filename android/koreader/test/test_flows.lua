@@ -927,9 +927,6 @@ local function fresh(mode, idle)
 end
 local function done() W.simulate_companion = false; W.radio, W.wifi, W.owner = nil, true, nil end
 
-test("wifi: KOReader asks for Wi-Fi silently (turn_on), in every mode", function()
-    ok(store.wifi_enable_action == "turn_on", "wifi_enable_action")
-end)
 
 test("wifi: wake with Wi-Fi off brings it up, then restores it off after the pull", function()
     fresh("always_on")
@@ -1342,6 +1339,12 @@ test("contract: every command, call, page, launch command, status key, file and 
     for _, k in ipairs(C.status) do ok(src:find("%." .. k .. "%f[^%w_]"), "status key " .. k .. " is read") end
     local mailbox_file = assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/EventMailbox.kt", "rb"))
     local mailbox_source = mailbox_file:read("*a"); mailbox_file:close()
+    local workflows=assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/LibraryAccount.kt","rb"))
+    mailbox_source=mailbox_source..workflows:read("*a");workflows:close()
+    local cache=assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CacheWorker.kt","rb"))
+    mailbox_source=mailbox_source..cache:read("*a");cache:close()
+    local actions=assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CatalogWorkflow.kt","rb"))
+    mailbox_source=mailbox_source..actions:read("*a");actions:close()
     for _, f in ipairs(C.files) do
         local name = f.path:gsub("/$", ""):match("[^/]+$")
         local source = f.reader == "companion" and (src .. mailbox_source) or src
@@ -1383,7 +1386,7 @@ local function recWorld(in_book)
     ui.gestures.data.gesture_reader = { two_finger_swipe_north = { increase_frontlight = 0 } }
     store.orbit_android.recommended, store.orbit_android.recommended_backup = nil, nil
     store.wifi_enable_action = nil
-    RE.Rec.session_applied, RE.Rec.line_pending = 0, false
+    RE.Recommendations.session_applied, RE.Recommendations.line_pending = 0, false
     RE.installed_cache.at = -1000
     W.shown = {}
     return ui, m, p
@@ -1404,150 +1407,12 @@ local function pressDialog(label)
     error("no dialog button " .. label)
 end
 
-test("recommended: a fresh KOReader at first start: every item applied with a backup, one line off-book", function()
-    local ui, m, p = recWorld(false)
-    m:recommendedPass("start")
-    ok(p.settings.auto_sync == true, "auto-sync through the plugin's toggle")
-    ok(p.settings.sync_forward == 2, "Silent")
-    ok(p.settings.catalog_auto_open == "home", "Make library home")
-    ok(store.wifi_enable_action == "turn_on", "KOReader turns Wi-Fi on")
-    local g = ui.gestures.data.gesture_reader
-    ok(g.hold_top_right_corner.orbit_sync_and_sleep and g.hold_top_left_corner.bookorbit_sync_now
-        and g.one_finger_swipe_bottom_edge_right.bookorbit_this_book and g.two_finger_swipe_north.orbit_open_apps, "gestures")
-    ok(ui.gestures.flushed, "gestures flushed")
-    local b = store.orbit_android.recommended_backup
-    ok(b["g.apps"].had and b["g.apps"].prior.increase_frontlight == 0, "backup of the frontlight gesture")
-    ok(b["ko.wifi_on"] and not b["ko.wifi_on"].had, "backup: Wi-Fi action was unset")
-    ok(shownText("Applied 8 recommended settings · Review"), "the line")
-    ok(m:recommendedMenuText() == "Recommended settings: Applied 8 recommended settings · Review", m:recommendedMenuText())
-    -- A second start: nothing new, silent, and a value changed by hand since stays.
-    p.settings.sync_forward = 3
-    W.shown = {}
-    m:recommendedPass("start")
-    ok(p.settings.sync_forward == 3, "never changed back")
-    ok(#W.shown == 0, "silent")
-    -- The review page clears the line.
-    local menu = m:showRecommended("test")
-    ok(menuRow(menu, "Applied"), "Applied section")
-    ok(m:recommendedMenuText() == "Recommended settings", "line cleared once seen")
-    run(1)
-end)
 
-test("recommended: a customised KOReader keeps every changed value; review offers Use BookSync's / Keep mine", function()
-    local ui, m, p = recWorld(false)
-    p.settings.sync_forward = 3
-    ui.gestures.data.gesture_reader.hold_top_left_corner = { toc = true }
-    m:recommendedPass("start")
-    ok(p.settings.sync_forward == 3, "the user's value stays")
-    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "the user's gesture stays")
-    ok(p.settings.auto_sync == true, "at-default items still applied")
-    ok(shownText("Applied 6 · 2 to review"), "the line counts both")
-    local menu = m:showRecommended("test")
-    local row = menuRow(menu, "BookOrbit › When BookOrbit is further ahead")
-    ok(row and row.mandatory == "yours: Don't sync · BookSync's: Silent", row and row.mandatory)
-    row.callback()
-    pressDialog("Use BookSync's")
-    ok(p.settings.sync_forward == 2, "Use BookSync's applies")
-    ok(store.orbit_android.recommended.items["bo.sync_forward"] == "applied", "recorded")
-    run(1)
-    menu = m.rec_menu
-    menuRow(menu, "Gesture in books: hold top-left corner").callback()
-    pressDialog("Keep mine")
-    ok(store.orbit_android.recommended.items["g.sync_all"] == "kept", "kept")
-    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "kept unchanged")
-    run(1)
-    -- Kept stays kept on later passes.
-    m:recommendedPass("start")
-    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "a pass never revisits kept")
-    run(1)
-end)
 
-test("recommended: Undo restores the backup; a value changed since is left as is; Undo all", function()
-    local ui, m, p = recWorld(false)
-    m:recommendedPass("start")
-    local menu = m:showRecommended("test")
-    menuRow(menu, "Gesture in books: two-finger swipe up").callback()
-    pressDialog("Undo")
-    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "frontlight back")
-    ok(store.orbit_android.recommended.items["g.apps"] == "kept", "then shown under Kept yours")
-    run(1)
-    -- Changed by hand after Orbit set it: Undo leaves it.
-    p.settings.catalog_auto_open = "filemanager"
-    menuRow(m.rec_menu, "BookOrbit › Make BookOrbit home").callback()
-    pressDialog("Undo")
-    ok(p.settings.catalog_auto_open == "filemanager", "left as is")
-    ok(shownText("Changed since; left as is."), "says so")
-    run(1)
-    menuRow(m.rec_menu, "Undo all").callback()
-    ok(p.settings.auto_sync == false and p.settings.sync_forward == 1, "plugin values back")
-    ok(ui.gestures.data.gesture_reader.hold_top_right_corner == nil, "gesture back to nothing")
-    ok(store.wifi_enable_action == "turn_on", "KOReader's Wi-Fi action stays while Wi-Fi switching needs it")
-    ok(shownText("Wi-Fi switching needs it"), "says why")
-    run(1)
-end)
 
-test("recommended: in a book the settings are written, the line waits for the file browser", function()
-    local ui, m, p = recWorld(true)
-    m:recommendedPass("start")
-    ok(p.settings.auto_sync == true, "written in a book")
-    ok(not shownText("Applied"), "no line in a book")
-    local ui2, m2 = newUI(false)
-    m2:maybeSetupPrompt("home")
-    ok(shownText("Applied 8 recommended settings"), "shown off the book")
-    run(1)
-end)
 
-test("recommended: missing pieces wait: no BookOrbit plugin, Gestures off; applied on the start they appear", function()
-    local ui, m, p = recWorld(false)
-    ui.bookorbit = nil
-    local gestures = ui.gestures
-    ui.gestures = nil
-    m:recommendedPass("start")
-    local items = store.orbit_android.recommended.items
-    ok(items["bo.auto_sync"] == "unavailable" and items["g.apps"] == "unavailable", "unavailable, not failed")
-    ok(items["ko.wifi_on"] == "applied", "the rest applied")
-    local menu = m:showRecommended("test")
-    ok(menuRow(menu, "Gesture in books: hold top-right corner").mandatory == "Turn on KOReader's Gestures plugin", "the reason")
-    run(1)
-    ui.bookorbit, ui.gestures = p, gestures
-    m:recommendedPass("start")
-    ok(items["bo.auto_sync"] == "applied" and items["g.apps"] == "applied", "applied once they load")
-    run(1)
-end)
 
-test("recommended: at load, KOReader's Wi-Fi action is set only with the companion, and backed up", function()
-    recWorld(false)
-    W.companion = false
-    RE.installed_cache.at = -1000
-    RE.silentWifiOn()
-    ok(store.wifi_enable_action == nil, "no companion: left alone")
-    W.companion = true
-    RE.installed_cache.at = -1000
-    RE.silentWifiOn()
-    ok(store.wifi_enable_action == "turn_on", "with the companion")
-    ok(store.orbit_android.recommended_backup["ko.wifi_on"], "with a backup")
-    -- A value the user chose is never overwritten: listed instead.
-    recWorld(false)
-    store.wifi_enable_action = "ignore"
-    RE.silentWifiOn()
-    ok(store.wifi_enable_action == "ignore", "kept")
-    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "conflict", "to review")
-    store.wifi_enable_action = "turn_on"
-end)
 
-test("recommended: Keep mine on KOReader's Wi-Fi action offers to turn Wi-Fi switching off instead", function()
-    local ui, m = recWorld(false)
-    store.wifi_enable_action = "ignore"
-    m:recommendedPass("start")
-    local menu = m:showRecommended("test")
-    menuRow(menu, "KOReader › Action when Wi-Fi is off").callback()
-    pressDialog("Turn Wi-Fi switching off")
-    ok(store.orbit_android.wifi_via_companion == false, "switching off")
-    ok(store.wifi_enable_action == "ignore", "theirs kept")
-    store.orbit_android.wifi_via_companion = true
-    store.wifi_enable_action = "turn_on"
-    run(1)
-end)
 
 ---------------------------------------------------------------- companion caps (addon-mode §6)
 
@@ -1606,38 +1471,7 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     run(5)
 end)
 
-test("caps: without Wi-Fi switching, KOReader's Wi-Fi action is left alone at load", function()
-    capsReset()
-    capsFile("addon", ADDON)
-    recWorld(false)
-    capsFile("addon", ADDON)
-    RE.Companion.cap_set = nil
-    RE.silentWifiOn()
-    ok(store.wifi_enable_action == nil, "left alone")
-    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "unavailable", "waits for the capability")
-    capsReset()
-    store.wifi_enable_action = "turn_on"
-end)
 
-test("caps: Full → Add-on undoes KOReader's Wi-Fi action and the apps gesture only; back to Full re-applies them", function()
-    capsReset()
-    local ui, m, p = recWorld(false)
-    capsFile("full", FULL)
-    RE.Shared.refresh("test")
-    m:recommendedPass("start")
-    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "applied in Full")
-    capsFile("addon", ADDON)
-    RE.Shared.refresh("resume")
-    ok(store.wifi_enable_action == nil, "Wi-Fi action undone")
-    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "apps gesture undone")
-    ok(p.settings.auto_sync == true and ui.gestures.data.gesture_reader.hold_top_right_corner.orbit_sync_and_sleep, "reading settings stay")
-    capsFile("full", FULL)
-    RE.Shared.refresh("resume")
-    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "picked up again")
-    capsReset()
-    store.wifi_enable_action = "turn_on"
-    run(5)
-end)
 
 test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never quits with nobody to relaunch it", function()
     capsReset()
@@ -1655,30 +1489,6 @@ test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never 
     capsReset()
 end)
 
-test("report: signed in yes/no and the recommended state go to the companion, never the login itself", function()
-    capsReset()
-    local ui, m, p = recWorld(false)
-    p.settings.sync_forward = 3
-    W.broadcasts = {}
-    RE.Rec.last_report = nil
-    m:recommendedPass("start")
-    local r = lastBroadcast(".REPORT")
-    ok(r, "REPORT sent")
-    ok(r.extras.signed_in == "1" and r.extras.recommended == "partial" and r.extras.conflicts == "1", "fields")
-    for k, v in pairs(r.extras) do
-        ok(not tostring(v):find("example.test", 1, true), "no server in " .. k)
-    end
-    ok(r.extras.server_url == nil and r.extras.username == nil and r.extras.userkey == nil, "no login fields")
-    -- Unchanged: not sent again on a refresh; a sign-out is.
-    W.broadcasts = {}
-    RE.Shared.refresh("resume")
-    ok(not lastBroadcast(".REPORT"), "nothing new: no report")
-    p.signed_out = true
-    RE.Shared.refresh("resume")
-    ok(lastBroadcast(".REPORT") and lastBroadcast(".REPORT").extras.signed_in == "0", "sign-out reported")
-    p.signed_out = nil
-    run(2)
-end)
 
 test("commands: signin opens BookOrbit's sign-in; recommended opens the review page", function()
     local ui, m, p = recWorld(false)
@@ -2877,129 +2687,10 @@ local lists_server = { urls = {}, books = {
 local LCat, LApi = fakeCatalogClass(lists_server)
 local stock_listRun, stock_fetch = LCat.listRun, LCat.fetch
 
-test("lists: a plugin without a hook -> the feature stays off, the plugin unchanged", function()
-    local header = LCat.listHeader
-    LCat.listHeader = nil
-    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = LCat, LApi
-    newUI(false)
-    ok(LCat.listRun == stock_listRun and LCat.fetch == stock_fetch, "nothing wrapped")
-    ok(rawget(LCat, "__orbit_stock") == nil, "no marks")
-    LCat.listHeader = header
-end)
 
-test("lists: By series on a collection reads its books once and opens the plugin's Series view", function()
-    newUI(false) -- installs now that every hook is there
-    ok(LCat.listRun ~= stock_listRun, "wrapped")
-    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Kids shelf", params = { collectionId = 4, readStatus = "unread", sort = "author", page = 2 } })
-    local m = cat:listSortSheetModel({})
-    ok(m.rows[1].key == "orbit-series" and m.rows[2].key == "orbit-authors" and m.rows[3].key == "device", "rows at the top")
-    cat:listRun({ kind = "orbit-group", section = "series" })
-    run(1)
-    ok(#lists_server.urls == 3, "three pages of two: " .. #lists_server.urls)
-    for _, u in ipairs(lists_server.urls) do
-        ok(u:find("collectionId=4", 1, true) and u:find("readStatus=unread", 1, true) and u:find("size=100", 1, true), "the list's filters: " .. u)
-        ok(not u:find("orbit", 1, true), "no marks sent")
-    end
-    ok(cat.labels[2] == "Reading 2 of 5 books…", "progress: " .. tostring(cat.labels[2]))
-    local ctx = cat.current_context
-    ok(ctx.kind == "section" and ctx.section == "series" and ctx.orbit_group, "the Series view, tagged")
-    ok(lists_server.sections == nil, "the sections endpoint never asked")
-    ok(ctx.total == 3 and #ctx.entries == 2, "a screen of 2 of 3 series")
-    ok(ctx.entries[1].title == "Nsibidi" and ctx.buckets[1].key == "N", "A-Z with buckets")
-    ok(cat:listHeader("series", ctx).title == "Series in Kids shelf", "header")
-    -- Paging (listGoPage -> reloadSection -> loadSection replace) stays in the list.
-    cat:loadSection("series", { replace = true, offset = 2 })
-    ok(cat.current_context.orbit_group and cat.current_context.entries[1].title == "Skyward", "page 2 from the held books")
-    ok(#lists_server.urls == 3, "no new reads")
-    -- A row: the server's series page with the collection ANDed in.
-    cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
-    local p = cat.loaded.params
-    ok(p.collectionId == 4 and p.series == "Skyward" and p.readStatus == "unread" and p.ids == nil, "collection + series")
-    ok(p.orbitGroup == ctx.orbit_group.token, "marked")
-    -- That page's header and its Whole series chip.
-    local page = { kind = "books", title = "Skyward", params = p, total = 1, books = { lists_server.books[3] } }
-    cat.current_context = page
-    ok(cat:listHeader("seriespage", page).sub == "Brandon Sanderson · 1 book in Kids shelf", "sub: " .. tostring(cat:listHeader("seriespage", page).sub))
-    local tb = cat:listToolbar("seriespage", page)
-    ok(tb[1].key == "tb-sort" and tb[2].key == "orbit-whole-series", "Whole series chip")
-    cat:listRun(tb[2].action)
-    ok(cat.loaded.params.series == "Skyward" and cat.loaded.params.collectionId == nil and cat.loaded.params.orbitGroup == nil, "the whole series")
-    -- Back on the list, By series again: no new reads.
-    cat.current_context = { kind = "books", title = "Kids shelf", params = { collectionId = 4 }, orbit_snapshot = ctx.orbit_group.token }
-    cat:listRun({ kind = "orbit-group", section = "series" })
-    ok(#lists_server.urls == 3 and cat.current_context.orbit_group, "instant the second time")
-end)
 
-test("lists: By author on a list; an author by series; Not in a series; the chips", function()
-    lists_server.urls = {}
-    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Unread fantasy", params = { smartScopeId = 3 } })
-    cat:listRun({ kind = "orbit-group", section = "authors" })
-    run(1)
-    local ctx = cat.current_context
-    ok(ctx.section == "authors" and ctx.total == 3, "3 authors")
-    ok(cat:listHeader("authors", ctx).title == "Authors in Unread fantasy", "header")
-    local bs = ctx.entries[1]
-    ok(bs.title == "Brandon Sanderson" and bs.count == 2, "Brandon first A-Z")
-    cat:listRun({ kind = "open-author", entry = bs })
-    local by = cat.current_context
-    ok(by.section == "series" and by.orbit_group.author == "Brandon Sanderson", "the author's books by series")
-    ok(cat.pushed == true, "pushed: Back returns to the authors")
-    ok(by.total == 2 and by.entries[1].title == "Skyward" and by.entries[2].title == "Not in a series", "series, then Not in a series")
-    local h = cat:listHeader("series", by)
-    ok(h.title == "Brandon Sanderson" and h.sub == "2 books in Unread fantasy · by series", "header: " .. tostring(h.sub))
-    local chips = cat:listToolbar("series", by)
-    ok(#chips == 3 and chips[1].on and chips[1].label == "By series" and chips[3].label == "All by author", "chips")
-    -- A list's series: by id (the server ignores other filters with smartScopeId).
-    cat:listRun({ kind = "open-series", entry = by.entries[1] })
-    local p = cat.loaded.params
-    ok(p.ids == "3" and p.smartScopeId == nil and p.series == "Skyward" and p.author == "Brandon Sanderson", "ids + series + author")
-    cat:listRun({ kind = "open-series", entry = by.entries[2] })
-    ok(cat.loaded.params.ids == "4" and cat.loaded.params.series == nil and cat.loaded.title == "Not in a series", "standalones, flat")
-    cat:listRun(chips[2].action)
-    ok(cat.loaded.params.ids == "3,4" and cat.loaded.push == false, "All books: flat, in place")
-    cat:listRun(chips[3].action)
-    ok(cat.loaded.params.author == "Brandon Sanderson" and cat.loaded.params.ids == nil and cat.loaded.params.orbitGroup == nil, "All by author: no list filter")
-    ok(#lists_server.urls == 3, "read once")
-end)
 
-test("lists: a smart-scope series past 200 books comes from the books held here", function()
-    lists_server.urls = {}
-    local saved = lists_server.books
-    lists_server.books = {}
-    for i = 1, 201 do lists_server.books[i] = { id = i, title = "Vol " .. i, authors = { "A" }, seriesId = 1, seriesName = "Long", seriesIndex = tostring(i) } end
-    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Big", params = { smartScopeId = 5 } })
-    cat:listRun({ kind = "orbit-group", section = "series" })
-    run(1)
-    cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
-    local p = cat.loaded.params
-    ok(p.orbitLocal == "1" and p.ids == nil, "held")
-    local before = #lists_server.urls
-    local body = cat.client:catalogBooks({ orbitGroup = p.orbitGroup, orbitLocal = "1", orbitSeries = p.orbitSeries, seriesId = 1, sort = "series", size = 100, page = 3 })
-    ok(#lists_server.urls == before, "answered here")
-    ok(body.total == 201 and #body.items == 1 and body.items[1].id == 201, "page 3 of the held books")
-    cat.client:catalogManifest({ orbitGroup = p.orbitGroup, orbitLocal = "1", orbitSeries = p.orbitSeries })
-    ok(lists_server.manifest:find("ids=1,2,3", 1, true) and not lists_server.manifest:find("orbit", 1, true), "Download all goes by id")
-    lists_server.books = saved
-end)
 
-test("lists: pass-through when nothing is marked", function()
-    lists_server.urls = {}
-    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Search", params = { sort = "title", q = "sky" } })
-    ok(#cat:listSortSheetModel({}).rows == 1, "a search: no rows")
-    cat:listRun({ kind = "back" })
-    ok(cat.stock_run == "back", "other actions: the plugin's")
-    cat.current_context = { kind = "section", section = "series" }
-    cat:listRun({ kind = "open-series", entry = { title = "X" } })
-    ok(cat.stock_run == "open-series", "the server-wide Series view: the plugin's")
-    cat:loadSection("series", { replace = true })
-    ok(lists_server.sections == 1 and cat.current_context.orbit_group == nil, "the server answers")
-    ok(cat:listHeader("series", cat.current_context).title == "Series", "header unchanged")
-    ok(cat:listToolbar("series", cat.current_context)[1].key == "tb-sort", "toolbar unchanged")
-    ok(cat.client:query("/books", { sort = "title" }) == "/books?sort=title", "query unchanged")
-    cat.client:catalogBooks({ sort = "title", page = 1 })
-    ok(#lists_server.urls == 1, "books from the server")
-    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = nil, nil
-end)
 
 
 ---------------------------------------------------------------- end of book (ROADMAP 1, 2)
@@ -3050,155 +2741,12 @@ local series_detail = { id = 42, title = "Sea of Monsters", authors = { "Rick Ri
     relatedSections = {} }
 eob.details = { [42] = series_detail, [43] = { id = 43, title = "Titan's Curse", files = { { id = 9, format = "epub" } } } }
 
-test("end of book: a plugin without a module -> KOReader's own end screen", function()
-    package.loaded["bookorbit_state_manager"] = nil
-    local ui = bookUI()
-    W.stock_end = 0
-    ui.status:onEndOfBook()
-    ok(W.stock_end == 1 and E.EOB.sheet == nil, "stock end screen")
-    ok(ui.doc_settings.data.summary.status == "reading", "nothing marked")
-end)
 
-test("end of book: the last page marks it finished, opens the sheet; Undo takes it back", function()
-    eobModules()
-    E.EOB.remember(series_detail)
-    local ui = bookUI()
-    W.stock_end = 0
-    ui.status:onEndOfBook()
-    ok(W.stock_end == 0, "the BookSync sheet instead of KOReader's")
-    ok(ui.doc_settings.data.summary.status == "complete", "marked finished")
-    local job = E.EOB.queue()["d1"]
-    ok(job and job.book_id == 42 and job.ready == false, "a job, not sent while the book is open")
-    ok(sheetRow("status", "Marked as finished") and sheetRow("author", "Rick Riordan"), "status and author")
-    ok(sheetRow("label", "Next in series · Book 3"), "next card: " .. tostring((sheetRow("label") or {}).text))
-    ok(sheetRow("card", "Titan's Curse"), "download and open the next book")
-    sheetRow("status").action()
-    ok(ui.doc_settings.data.summary.status == "reading" and E.EOB.queue()["d1"] == nil, "Undo: reading, no job")
-    ok(E.EOB.sheet == nil, "sheet closed")
-    -- Auto-mark off: the sheet offers the mark instead.
-    E.S.eob_auto = false
-    ui.status:onEndOfBook()
-    ok(ui.doc_settings.data.summary.status == "reading" and sheetRow("status", "Not marked"), "not marked")
-    sheetRow("status").action()
-    ok(E.EOB.queue()["d1"] and sheetRow("status", "Marked as finished"), "marked from the sheet")
-    E.S.eob_auto = true
-    sheetRow("status").action()
-end)
 
-test("end of book: stars, leave, sync -> guard read, read-status, rating, written back", function()
-    eobModules()
-    local ui, m = bookUI()
-    ui.status:onEndOfBook()
-    sheetRow("star", nil) -- first star row
-    local stars = {}
-    for _, r in ipairs(E.EOB.sheet:rows()) do if r.kind == "star" then table.insert(stars, r) end end
-    stars[4].action()
-    ok(E.EOB.queue()["d1"].rating == 4 and ui.doc_settings.data.summary.rating == 4, "4 stars kept")
-    E.EOB.actions.back()
-    eob.calls = {}
-    E.Sync.waitOutbox(ui.bookorbit, 10, function() end)
-    run(5)
-    ok(#eob.calls == 0 or not table.concat(eob.calls, ","):find("status:", 1, true), "nothing sent with the book open")
-    m:onCloseWidget()
-    ReaderUI.instance = nil -- KOReader destroys the reader after CloseWidget
-    ok(E.EOB.queue()["d1"].ready, "ready once the book is left")
-    E.Sync.waitOutbox(ui.bookorbit, 10, function() W.waited = true end)
-    run(5)
-    local c = table.concat(eob.calls, ",")
-    ok(c:find("book:42,status:42:read,rating:42:4", 1, true), "in order: " .. c)
-    ok(E.EOB.queue()["d1"] == nil and W.waited, "sent, then the caller goes on")
-    ok(eob.state and eob.state.server and eob.state.server.status == "complete" and eob.state.server.rating == 4, "written back")
-end)
 
-test("end of book: a server error retries later; 404 drops", function()
-    eobModules()
-    local ui, m = bookUI()
-    ui.status:markBook(true)
-    m:onCloseWidget()
-    ReaderUI.instance = nil -- the book was closed; the next sync runs outside reading
-    eob.fail, eob.calls = 503, {}
-    E.EOB.drain(ui.bookorbit, false)
-    local job = E.EOB.queue()["d1"]
-    ok(job and job.attempts == 1 and job.next_try_at and job.next_try_at > os.time(), "kept with a backoff")
-    eob.fail = 404
-    E.EOB.drain(ui.bookorbit, true)
-    ok(E.EOB.queue()["d1"] == nil, "dropped on 404")
-    eob.fail = nil
-end)
 
-test("end of book: Download and open, offline -> Couldn't connect, Get it at the next sync", function()
-    eobModules()
-    local ui = bookUI()
-    ui.status:onEndOfBook()
-    W.wifi, W.vpn = false, false
-    W.companion = false
-    sheetRow("card", "Titan's Curse").action()
-    run(60)
-    ok(sheetRow("notice", "Couldn't connect"), "the card says so")
-    sheetRow("button", "Get it at the next sync").action()
-    ok(E.EOB.downloads()["43"], "remembered for the next sync")
-    W.wifi, W.vpn, W.companion = true, true, true
-    E.EOB.wants_download = {}
-    E.EOB.save()
-end)
 
-test("end of book: Download and open sends the finish first, downloads through the plugin, opens it", function()
-    eobModules()
-    local DCat = {}
-    DCat.__index = DCat
-    function DCat:downloadDefaultFile(detail, file) self:checkDownloadFile("/books/titan.epub", detail, file) end
-    function DCat:downloadFile(path, detail, file, rep)
-        ok(self.client and self.bookMode == false, "headless, the plugin's client")
-        table.insert(eob.calls, "download:" .. detail.id)
-        rep.progress(512, 1024)
-        rep.finished(true, nil, path)
-    end
-    function DCat:loadBooks() end
-    package.loaded["bookorbit_catalog"] = DCat
-    local ui = bookUI()
-    ui.status:onEndOfBook()
-    eob.calls, W.opened = {}, nil
-    sheetRow("card", "Titan's Curse").action()
-    run(60)
-    local c = table.concat(eob.calls, ",")
-    ok(c:find("status:42:read", 1, true) and c:find("download:43", 1, true)
-        and c:find("status:42:read", 1, true) < c:find("download:43", 1, true), "finish, then download: " .. c)
-    ok(W.opened == "/books/titan.epub", "opened: " .. tostring(W.opened))
-    ok(E.EOB.sheet == nil, "sheet closed")
-    package.loaded["bookorbit_catalog"] = nil
-end)
 
-test("end of book: Download and open uses the reader's delivery variant and a supported file (hash_mismatch on M8C)", function()
-    eobModules()
-    local JSON = dofile(here .. "/json_mini.lua")
-    -- @fixture bookorbit/catalog-book.delivery-variants.json
-    local fx = JSON.fixture(here, "bookorbit/catalog-book.delivery-variants.json")
-    local DCat = {}
-    DCat.__index = DCat
-    function DCat:fetchDeliveryBook(id) table.insert(eob.calls, "delivery:" .. id); return fx.with_variant end
-    function DCat:supportedFiles(detail)
-        local out = {}
-        for _, f in ipairs(detail.files) do if f.format == "epub" then table.insert(out, f) end end
-        return out
-    end
-    function DCat:downloadDefaultFile(detail, file) self:checkDownloadFile("/books/titan.epub", detail, file) end
-    function DCat:downloadFile(path, detail, file, rep)
-        eob.file = file
-        rep.finished(true, nil, path)
-    end
-    function DCat:loadBooks() end
-    package.loaded["bookorbit_catalog"] = DCat
-    local ui = bookUI()
-    ui.status:onEndOfBook()
-    eob.calls, eob.file = {}, nil
-    sheetRow("card", "Titan's Curse").action()
-    run(60)
-    local c = table.concat(eob.calls, ",")
-    ok(c:find("delivery:43", 1, true) and not c:find("book:43", 1, true), "the plugin's delivery detail: " .. c)
-    ok(eob.file and eob.file.id == 902 and eob.file.selection == "sel-902", "the EPUB with its selection")
-    ok(eob.file.fileHash == "hash-audioless-artifact", "checked against the artifact's hash")
-    package.loaded["bookorbit_catalog"] = nil
-end)
 
 -- Keep book copies current: BookOrbit rewrote the library files (tags), every copy is
 -- position-incompatible; each is downloaded again in place, one at a time, never while reading.
@@ -3346,26 +2894,6 @@ test("background notices: start and wake pulls are silent, including delayed cal
     restore()
 end)
 
-test("background notices: copy replacements and their completion callbacks are silent", function()
-    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
-    local burst, restore = noticeFixture()
-    copiesUI(false)
-    local Cat = package.loaded["bookorbit_catalog"]
-    local download = Cat.downloadFile
-    function Cat:downloadFile(path, detail, file, rep)
-        burst("copy download")
-        UIManager:nextTick(function() burst("copy completion"); download(self, path, detail, file, rep) end)
-    end
-    W.shown, W.presented = {}, {}
-    E.Copies.tick("background")
-    run(10)
-    eq(#W.presented, 0, "background copies show zero notices")
-    eq(#E.Copies.state().queue, 0, "copy replacements still finish")
-    eq(#copies.repaired, 2, "both copies carried their identity")
-    ok(noticeLog("copy download: Loading book...") and noticeLog("copy completion: Trapper"), "copy notice texts logged")
-    restore()
-    copiesTeardown()
-end)
 
 test("background notices: yielding scope is isolated, error safe, and timers still cancel", function()
     local burst, restore, Trapper = noticeFixture()
@@ -3394,135 +2922,12 @@ test("background notices: yielding scope is isolated, error safe, and timers sti
     restore()
 end)
 
-test("copies: changed copies are replaced in place, one at a time, and their hashes move on", function()
-    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
-    copiesUI(false)
-    E.Copies.tick("test")
-    run(10)
-    local c = table.concat(copies.calls, ",")
-    ok(c == "delivery:1,download:/books/a.epub,delivery:2,download:/books/b.epub", "one at a time: " .. c)
-    ok(table.concat(copies.repaired, ",") == "/books/a.epub:old1>new1,/books/b.epub:old2>new2", "state re-keyed: " .. table.concat(copies.repaired, ","))
-    ok(#E.Copies.state().queue == 0, "queue done")
-    copiesTeardown()
-end)
 
-test("copies: never while reading; the queue waits on disk and goes once the book closes", function()
-    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2" })
-    local _ui, m = copiesUI(true)
-    E.Copies.tick("test")
-    E.Copies.ask("test")
-    run(5)
-    ok(#copies.calls == 0, "nothing while reading")
-    eq(#E.Copies.state().queue,0,"durable companion event waits until reading ends")
-    m:onCloseWidget()
-    copiesUI(false)
-    run(10)
-    ok(#copies.calls == 4, "replaced after the close: " .. table.concat(copies.calls, ","))
-    copiesTeardown()
-end)
 
-test("copies: offline or turned off, nothing is downloaded; a copy already current is left alone", function()
-    copiesSetup(copyBooks(), { ["/books/a.epub"] = "new1", ["/books/b.epub"] = "old2" })
-    copiesUI(false)
-    store.orbit_android.keep_copies_current = false
-    E.Copies.tick("test")
-    run(5)
-    ok(#copies.calls == 0, "off")
-    store.orbit_android.keep_copies_current = true
-    W.wifi = false
-    E.Copies.tick("test")
-    run(5)
-    ok(#copies.calls == 0, "offline")
-    W.wifi = true
-    E.Copies.scanned_at = nil
-    E.Copies.tick("test")
-    run(10)
-    local c = table.concat(copies.calls, ",")
-    ok(not c:find("download:/books/a.epub", 1, true), "a already matches the library: " .. c)
-    ok(c:find("download:/books/b.epub", 1, true), "b replaced")
-    copiesTeardown()
-end)
 
-test("copies: BookSync Companion finds the changed copies; the UI thread reads no saved detail and checks no file", function()
-    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
-    copiesUI(false)
-    local reads, exists = 0, 0
-    local get, lfs = E.OC.get, require("libs/libkoreader-lfs")
-    local attributes = lfs.attributes
-    E.OC.get = function(...) reads = reads + 1; return get(...) end
-    lfs.attributes = function(f, ...) if not W.in_companion and tostring(f):find("^/books/") then exists = exists + 1 end return attributes(f, ...) end
-    W.broadcasts = {}
-    E.Copies.tick("test")
-    local b = lastBroadcast(".COPIES")
-    ok(b and b.extras.reason == "test" and b.extras.userkey == nil, "asked the companion, no login")
-    local ask = E.Cache.decode(b.extras.ask or "")
-    ok(ask and #ask.books == 3, "the ask lists the books from memory")
-    run(10)
-    E.OC.get, lfs.attributes = get, attributes
-    ok(copies.fc.copies_asks == 1, "the companion looked")
-    ok(reads == 0 and exists == 0, "no detail read, no file checked on the UI thread: " .. reads .. " " .. exists)
-    ok(#copies.calls == 4, "the two changed copies replaced: " .. table.concat(copies.calls, ","))
-    -- Without the companion of this version nothing is checked.
-    copies.problem = "BookSync Companion needed"
-    E.Copies.scanned_at = nil
-    E.Copies.tick("test"); run(5)
-    ok(copies.fc.copies_asks == 1, "not asked")
-    copies.problem = nil
-    copiesTeardown()
-end)
 
-test("end of book: Home from the companion with the sheet open closes it, opens library home, sends the finish", function()
-    eobModules()
-    local ui, m = bookUI()
-    ui.status:onEndOfBook()
-    ok(E.EOB.sheet and W.shown[#W.shown] == E.EOB.sheet, "sheet on top")
-    eob.calls = {}
-    m:onSuspend(); W.clock = W.clock + 0.5
-    command(m, "home")
-    m:onResume()
-    run(30)
-    ok(E.EOB.sheet == nil, "sheet closed")
-    local cb = ui.bookorbit.catalog_browser
-    ok(cb and W.shown[#W.shown] == cb, "library home on top: " .. tostring(W.shown[#W.shown] and W.shown[#W.shown].name))
-    ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
-    cb.close_callback()
-    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = nil
-end)
 
-test("end of book: the sheet's Home opens library home (never its menu) and sends the finish", function()
-    eobModules()
-    local ui, m = bookUI()
-    ui.status:onEndOfBook()
-    eob.calls = {}
-    sheetRow("footer", "Home").action()
-    run(30)
-    local top = W.shown[#W.shown]
-    ok(ui.bookorbit.catalog_browser and top == ui.bookorbit.catalog_browser, "library home on top: " .. tostring(top and top.name))
-    ok(not has(ui.bookorbit.calls, "menu_sheet"), "no menu sheet")
-    local noted = E.LocalState.load().books["d1"]
-    ok(noted and noted.pending and noted.status == "complete", "the open book noted for Home's first paint")
-    ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
-    -- Home again with library home already on top: it stays, no menu sheet.
-    m:onOrbitGoHome()
-    run(5)
-    ok(not has(ui.bookorbit.calls, "menu_sheet") and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "still Home, no menu")
-    ui.bookorbit.catalog_browser.close_callback()
-end)
 
-test("end of book: a finish marked here leaves Continue reading at once (plugin ids as strings)", function()
-    eobModules()
-    package.loaded["bookorbit_state_manager"].getBook = function(d) return d == "d1" and { bookId = "42" } or nil end
-    local ui = bookUI()
-    ui.status:onEndOfBook()
-    E.EOB.actions.back()
-    local body = { continueReading = { { id = 42, title = "Sea of Monsters", readStatus = "reading", progressPercentage = 99 },
-        { id = 8, title = "Dare", readStatus = "reading" } }, readingGoal = { goalBooks = 10, completedBooks = 2 } }
-    local out = E.LocalFirst.overlay(body, E.LocalState.view())
-    ok(#out.continueReading == 1 and out.continueReading[1].id == 8, "dropped from Continue reading")
-    ok(out.readingGoal.completedBooks == 3, "counted toward the goal")
-    ui.status:markBook(false)
-    E.LocalState.data.books["d1"] = nil
-end)
 
 test("outbox: an entry backing off (not drainable) neither holds Wi-Fi nor runs the wait to its cap", function()
     local ui = newUI(true)
@@ -3539,23 +2944,6 @@ test("outbox: an entry backing off (not drainable) neither holds Wi-Fi nor runs 
     ok(E.Wifi.busy(), "a drainable entry still holds Wi-Fi")
 end)
 
-test("end of book: a finished book's stale position is held", function()
-    eobModules()
-    local PCls = {}
-    PCls.__index = PCls
-    function PCls:enqueueLifecycleSnapshot(snap) eob.snap = snap end
-    function PCls:updateProgress() eob.live_push = true end
-    local ui, m = bookUI({ status = "complete" })
-    setmetatable(ui.bookorbit, PCls)
-    E.EOB.installPluginHooks(ui.bookorbit)
-    E.EOB.queue()["d1"] = E.Finish.newJob({ hash = "d1", book_id = 42, final_pos = { percentage = 1 }, now = os.time() })
-    E.EOB.session["d1"] = { forward = 0 }
-    ui.bookorbit:enqueueLifecycleSnapshot({ digest = "d1", percentage = 0.5, progress = "x", status = "complete" }, "close")
-    ok(eob.snap and eob.snap.percentage == nil, "position held")
-    ui.bookorbit:enqueueLifecycleSnapshot({ digest = "d1", percentage = 0.95, status = "complete" }, "close")
-    ok(eob.snap.percentage == 0.95, "near the end: sent")
-    E.EOB.queue()["d1"] = nil
-end)
 
 
 ---------------------------------------------------------------- local-first Home (ROADMAP 3)
@@ -4155,40 +3543,6 @@ end)
 
 ---------------------------------------------------------------- v0.11.2 (M8C test of v0.11.1)
 
-test("lists: All books and Recently updated offer By series and By author; read in 100-book pages, grouped once (v0.11.2)", function()
-    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = LCat, LApi
-    newUI(false)
-    for _, params in ipairs({ { sort = "title" }, { sort = "recently_updated", order = "desc" } }) do
-        lists_server.urls = {}
-        W.logs = {}
-        local cat = newCatalog(LCat, LApi, { kind = "books", title = params.sort == "title" and "All books" or "Recently updated", params = params })
-        local m = cat:listSortSheetModel({})
-        ok(m.rows[1].key == "orbit-series" and m.rows[2].key == "orbit-authors", params.sort .. ": the rows are offered")
-        cat:listRun({ kind = "orbit-group", section = "series" })
-        run(1)
-        ok(#lists_server.urls == 3, params.sort .. ": three pages of two: " .. #lists_server.urls)
-        for _, u in ipairs(lists_server.urls) do
-            ok(u:find("size=100", 1, true) and u:find("sort=title", 1, true) and not u:find("recently", 1, true), "the paged read: " .. u)
-        end
-        local ctx = cat.current_context
-        ok(ctx.section == "series" and ctx.orbit_group and ctx.total == 3, "the Series view of the whole library")
-        local grouped, read
-        for _, l in ipairs(W.logs) do
-            if l:find("lists: grouped 5 books of all by series in", 1, true) then grouped = (grouped or 0) + 1 end
-            if l:find("lists: read 5 books of all", 1, true) and l:find(" ms (3 page(s))", 1, true) then read = true end
-        end
-        ok(grouped == 1 and read, "timed in the log: " .. table.concat(W.logs, " | "))
-        -- Page 2 of the view reuses the groups.
-        cat:loadSection("series", { replace = true, offset = 2 })
-        grouped = 0
-        for _, l in ipairs(W.logs) do if l:find("lists: grouped", 1, true) then grouped = grouped + 1 end end
-        ok(grouped == 1 and #lists_server.urls == 3, "built once per list")
-        -- A row: the server's series page with the list's filters (no ids).
-        cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
-        ok(cat.loaded.params.ids == nil and cat.loaded.params.orbitGroup, "a series of the library, from the server")
-    end
-    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = nil, nil
-end)
 
 test("reading gate: BookOrbit over the book is not reading, whatever floats on top; Wi-Fi agrees (v0.11.2)", function()
     RE.Gate.queue = {}
@@ -4959,19 +4313,17 @@ test("reading: a locked cache cannot delay page turns or cold/warm cache reads",
     st:close()
 end)
 
-test("reading: finish sync skips catalog calls and file writes, then completes outside reading", function()
-    local reading, usable = RE.reading, RE.EOB.usable
-    local done, touched = 0, 0
-    RE.reading = function() return true end
-    RE.EOB.usable = function() touched = touched + 1; return false end
-    RE.EOB.drain({}, false, function() done = done + 1 end)
-    eq(touched, 0, "reading returns before any finish/detail work")
-    eq(done, 1, "the outbox callback is not held")
-    RE.reading = function() return false end
-    RE.EOB.drain({}, false, function() done = done + 1 end)
-    eq(touched, 1, "the next sync outside reading can do the deferred work")
-    eq(done, 2)
-    RE.reading, RE.EOB.usable = reading, usable
+test("reading: finish sync returns immediately and dispatches only outside reading", function()
+    local reading,action=RE.reading,RE.Library.catalogAction
+    local done,calls=0,0
+    RE.Library.catalogAction=function(op,args,cb) eq(op,"finish.drain");calls=calls+1;cb({ok=true}) end
+    RE.reading=function() return true end
+    RE.FinishUI.drain({},false,function() done=done+1 end)
+    eq(calls,0);eq(done,1)
+    RE.reading=function() return false end
+    RE.FinishUI.drain({},false,function() done=done+1 end)
+    eq(calls,1);eq(done,2)
+    RE.reading,RE.Library.catalogAction=reading,action
 end)
 
 test("network: even an unanswered probe runs only in a background worker", function()
@@ -5962,6 +5314,7 @@ if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
         assert(executed[name], "required reader flow did not run: " .. name)
     end
 end
+dofile(here .. "/catalog_actions_flows.lua")({E=RE,W=W,test=test,eq=eq,ok=ok,newUI=newUI,UIManager=UIManager,store=store})
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

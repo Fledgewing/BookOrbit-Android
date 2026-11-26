@@ -117,6 +117,8 @@ construct a full bookmark index on a panel paint. Native actions stay behind Lib
 
 Cover lookups use a one-row, 16 KiB local-only budget with zero round-trips; post-paint
 cover batches are limited to four and only the companion fetches or writes images.
+Copy replacement and finish outboxes are companion-owned, account scoped and checkpointed before legacy sources retire. Grouped lists and end-of-book cards are bounded projections; local recommendation review has eight rows. No catalog transport or whole-list aggregation runs in Lua. Keep queue checkpoints available while reading; pause background transfer work, never persistence of reader intent.
+
 Catalog progress is one companion-published row (16 KiB) with zero polling round-trips.
 Catalog/root windows decode at most 24 display rows; native Home batches count every nested
 book/name plus their stats row. Plans, query interpretation, refresh policy and search stay

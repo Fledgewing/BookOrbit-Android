@@ -76,6 +76,36 @@ object LibraryAccount {
         var result: Map<String,Any?>? = null
         command(ctx, { result = it.catalog(page,limit) }, { done(result,it) }, invalidate = false)
     }
+    fun recommendedSettings(ctx:Context,args:Map<*,*>,done:(Map<String,Any?>?,String?)->Unit) {
+        val app=ctx.applicationContext
+        queue.execute {
+            val start=System.nanoTime()
+            val result=runCatching {
+                val definitions=adapter(app).recommendedSettings()
+                if(args["definitions"]==true) mapOf("items" to definitions) else {
+                    val result=RecommendationPlan.evaluate(definitions,args)
+                    val destination=java.io.File(android.os.Environment.getExternalStorageDirectory(),"koreader/settings/orbit-recommended.json")
+                    destination.parentFile?.mkdirs()
+                    val tmp=java.io.File(destination.path+".new")
+                    val rows=(result["items"] as? List<*>).orEmpty().map { raw ->
+                        val row=raw as Map<*,*>;row.filterKeys { it in setOf("id","label","state","yours","orbit","was","reason") }
+                    }
+                    tmp.writeText(org.json.JSONObject(mapOf("v" to 1,"at" to System.currentTimeMillis(),"items" to rows)).toString())
+                    check(tmp.renameTo(destination));result
+                }
+            }
+            OLog.i("library.recommendations ms=${(System.nanoTime()-start)/1_000_000}")
+            main.post { result.fold({done(it,null)},{done(null,"unavailable")}) }
+        }
+    }
+    fun catalogAction(ctx: Context, owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) {
+        val app=ctx.applicationContext
+        queue.execute {
+            try { adapter(app).catalogAction(owner,action,args) { value,error -> main.post { done(value,error) } } }
+            catch(e: ServerFailure) { main.post { done(null,e.kind) } }
+            catch(_: Exception) { main.post { done(null,"unavailable") } }
+        }
+    }
     fun catalogControl(ctx: Context, owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {
         val app=ctx.applicationContext
         queue.execute {

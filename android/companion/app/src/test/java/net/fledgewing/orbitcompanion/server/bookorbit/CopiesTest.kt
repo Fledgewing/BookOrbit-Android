@@ -14,37 +14,12 @@ class CopiesTest {
 
     private fun files(id: Long, hash: String) = listOf(sortedMapOf<String, Any?>("id" to id, "fileHash" to hash))
 
-    @Test fun preparationFetchesDeliveryVariantAndSamplesTheFileInTheWorker() {
-        val base = Files.createTempDirectory("copy-prepare").toFile()
-        val root = File(base, "orbit-cache")
-        try {
-            val file = File(base, "Books/book.epub").apply { parentFile!!.mkdirs(); writeText("synthetic book bytes") }
-            var requested = ""
-            CacheWorker(root, { url, _, _, _ ->
-                requested = url
-                CacheWorker.Reply(200, "{\"id\":7,\"title\":\"Synthetic\",\"files\":[{\"id\":70,\"fileHash\":\"new\"}]}".toByteArray())
-            }, log = {}, openSql = { JdbcSql(it) }, bookRoots = listOf(base)).let { w ->
-                w.prepareCopy(mapOf("path" to file.path, "book_id" to 7L),
-                    "/koreader/plugin/catalog/books/${MirrorLogic.SENTINEL}?variant=audioless_epub",
-                    CacheWorker.Creds("https://books.example", "reader", "key"))
-                assertEquals("https://books.example/koreader/plugin/catalog/books/7?variant=audioless_epub", requested)
-                val ev = LuaValue.parse(File(root, "events").listFiles()!!.single { it.extension == "lua" }.readBytes()) as Map<*, *>
-                assertEquals("copy_prepared", ev["kind"])
-                assertEquals(7L, (ev["detail"] as Map<*, *>)["id"])
-                val hash = java.security.MessageDigest.getInstance("MD5").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
-                assertEquals(hash, ev["md5"])
-            }
-        } finally { base.deleteRecursively() }
-    }
-
     @Test fun detailPersistenceRunsFromTheCompanionSnapshot() {
         val base = Files.createTempDirectory("detail-persist").toFile()
         try {
             CacheWorker(File(base, "orbit-cache"), { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = { JdbcSql(it) }).let { w ->
                 w.store.putDetail(7, mapOf("id" to 7L, "title" to "Synthetic", "files" to files(70, "hash")), 1)
                 w.rememberDetail(7)
-                w.savePluginState(String(LuaValue.encode(mapOf("detail_variant" to "original")), Charsets.ISO_8859_1))
-                assertEquals("original", (LuaValue.parse(File(base, "orbit-cache/plugin-state.lua").readBytes()) as Map<*, *>)["detail_variant"])
                 val saved = LuaValue.parse(File(base, "orbit-detail-cache.lua").readBytes()) as Map<*, *>
                 assertEquals("Synthetic", (((saved["books"] as Map<*, *>)["7"]) as Map<*, *>)["title"])
             }
@@ -81,12 +56,11 @@ class CopiesTest {
             "eob" to sortedMapOf("2" to sortedMapOf<String, Any?>("files" to files(20, "old2"), "saved_at" to 100L),
                 "4" to sortedMapOf<String, Any?>("files" to files(40, "cur4"), "saved_at" to 100L)),
             "owner" to owner, "server" to server, "detail_template" to template, "sentinel" to "987654321")))
-        w.copies("test")
-        val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
-        assertEquals("copies", ev["kind"])
-        assertEquals(3L, ev["checked"])
-        assertEquals(listOf("${books.path}/b.epub"), (ev["found"] as List<*>).map { (it as Map<*, *>)["path"] })
-        assertEquals("the changed copy no longer on the reader", 1L, ev["gone"])
+        val ask=LuaValue.parse(File(root,"copies/ask.lua").readBytes()) as Map<*,*>
+        val result=w.changedCopies((ask["books"] as List<*>).map { it as Map<*,*> },ask["eob"] as Map<*,*>)
+        assertEquals(3,result.checked)
+        assertEquals(listOf("${books.path}/b.epub"),result.found.map { it["path"] })
+        assertEquals(1,result.gone)
         root.deleteRecursively()
     }
 }

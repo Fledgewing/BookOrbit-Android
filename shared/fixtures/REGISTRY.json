@@ -335,7 +335,7 @@
       "rule": "Recorded book detail with and without a delivery variant",
       "owner": "server",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {

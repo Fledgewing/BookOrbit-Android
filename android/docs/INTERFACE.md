@@ -49,10 +49,9 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `SLEEP_REFRESH` | `reason`, `from`, `rules`, `open_id`, `every`, `storage_limit_mb`, `server`, `user`, `userkey`; or `reason`, `scopes_only=1` and the login | Cap `cache_worker`: refresh the sleep screen's pool on the worker thread (`SleepPoolBuilder`): Leave out's member lists once a day, the shuffle bag, the books checked and their covers fetched by ETag, then `pool.json`, `covers/`, `bag.lua`, `leave_out.lua` and `scopes.json` written and the picture redrawn. With `scopes_only` it writes the pickers' files only (`scopes.json`, `tags.json`), never a pool. Each refresh counts the tags again. Answers with a `sleep_pool` event. Needs no service. The login is never written or logged. |
 | `SQLITE_STRESS` | `seconds` (default 120) | Debug (docs/design/sqlite-cache.md "Stress test"): writes `orbit-cache/stress.db` nonstop for that long, one 100-row page per transaction, then logs `sqlite-stress writer: …` and writes `orbit-cache/stress-writer.lua` `{writes, errors, max_wait_ms, integrity, first_error, at}`. No login, no service. |
 | `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
-| `PATCH` | `reason`, `id` (a book id, or empty), `fields` (a Lua literal of the changed fields, or empty), `stale_home` (`"1"`/`"0"`); or `wipe` = `"1"`; `remember_id`, `plugin_state`; `old_hash`, `new_hash`, `copy_path` | Cap `cache_worker`: a write the plugin made (`Cache.writeEffect`), patched into the saved book, the lists that name it and other saved replies; Home marked stale. `wipe` empties the database. In order with the checks. `plugin_state` atomically persists the in-memory plugin state; `remember_id` persists the saved detail for the end-of-book sheet; copy identity migration updates sidecar/statistics in the worker. No login. Needs no service. |
+| `PATCH` | `reason`, `library_batch`, `owner`, `drain_events`, `events_ack`, `board_year`, `board_key`, `board_now` | Bounded neutral read-model batches, durable mailbox acknowledgement and the remaining calendar compatibility projection. Copy/finish queues and their identity migration use `catalog.action`; no plugin state or raw copy-detail template is accepted. |
 | `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything BookSync stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
 | `PATCH` (0.12 library) | `library_batch` (Lua literal array of encoded neutral requests, ≤16 entries, ≤128 KiB), `owner` | Same caller-checked worker queue. No login or network. Materializes bounded results in `library_views` in the existing owned SQLite database, with owner checks before and inside publication. The plugin reads ready results through `Library`; filtering, grouping, sorting, counts and joins stay in Kotlin. See [F12-A notes](../../docs/design/booksync-home/F12-A-NOTES.md) for operations, budgets and pending/empty states. |
-| `COPIES` | `reason`, `ask` (Lua literal); or `prepare` (one queued copy), `template`, `server`, `user`, `userkey` | Cap `cache_worker`: which copies on the reader changed in the library (docs/design/keep-copies-current.md), from the in-memory `ask`, persisted by the companion in `koreader/settings/orbit-cache/copies/ask.lua` (below): the newer of the end-of-book cache's, the cache's and the database's saved details per book, compared with each copy's hash, and only copies whose file is on the reader. Answers with a `copies` event; the plugin queues and downloads them. `prepare` fetches the delivery detail using the supplied template and samples the existing file hash, answering with `copy_prepared` (`path`, `detail`, `md5`, or `err`). Only preparation needs a login. Needs no service. |
 | `UPDATE` | `reason` | The plugin's "Check for updates" (it downloads nothing itself: the plugin and the companion ship together). A check by hand, as from the companion's Update page: a newer release installs the companion and then the plugin of that release; an up-to-date companion installs the plugin of its own release when the one on disk is older (PatchInstaller). Every mode; needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
@@ -113,9 +112,9 @@ read-only. The small files beside it are Lua literals in the cache's format (`Ca
 | File | Written by | Holds |
 |---|---|---|
 | `orbit.db`, `.nomedia` | companion | lists by position naming books by id, each book once (its list item, detail and search text), other replies by key, the covers kept, the Full refresh's jobs, `meta` (owner, detail template, storage totals, the run's %) |
-| `plugin-state.lua` | companion, from `PATCH.plugin_state` | the detail variant it reads and the copies queue |
-| `events/<n>.lua` | companion (private spool; never enumerated by the plugin) | a check's answer: `{kind = "checked", key, changed, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); a copies lookup: `{kind = "copies", why, checked, found = {{md5, path, book_id, file_id, why}}, gone}`; a storage count: `{kind = "storage", why, totals, removed = {cache, cover, mirror_cover}, used, after, limit}` |
-| `copies/ask.lua` | companion, from each `COPIES.ask` | `books` (`md5`, `path`, `book_id`, `file_id`, `incompatible`), `eob` (book id -> `files`, `saved_at`), `owner`, `server`, `detail_template`, `sentinel` |
+| `plugin-state.lua` | retained legacy source, companion reads only | the old copies queue remains intact after its account-scoped workflow checkpoint |
+| `events/<n>.lua` | companion (private spool; never enumerated by the plugin) | a check's answer: `{kind = "checked", key, changed, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); neutral copy identity, download-link and finish writeback acknowledgements; a storage count: `{kind = "storage", why, totals, removed = {cache, cover, mirror_cover}, used, after, limit}` |
+| `copies/ask.lua` | companion | account-scoped local file ledger, refreshed from persisted native state; never constructed or decoded by Lua |
 | covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
 
 W27 startup maintenance uses `PATCH` variants on the same required worker:
@@ -124,8 +123,6 @@ W27 startup maintenance uses `PATCH` variants on the same required worker:
   only that batch's spool files and atomically publishes the next batch (at most eight events,
   under 64 KiB). The plugin reads one fixed filename; duplicate ids are ignored. Child-process
   metadata travels with the subprocess result, with no directory spool or UI scan.
-- `old_hash`, `new_hash` copies a hash sidecar on the worker. Only two 32-character lowercase
-  hex hashes are accepted; paths derive from KOReader's fixed `hashdocsettings` folder.
 - `board_year` (Lua literal), `board_key`, `board_now` computes the dashboard calendar and reads
   local daily statistics on the worker; a `board_year` event returns `{key, data={values,start,today}}`.
   The UI uses the last snapshot while the next one is pending.
@@ -522,8 +519,8 @@ counts nested books/names and its stats row, and materializes one batched reques
 The Lua connector translates display records into its existing widget inputs;
 it never receives backend response JSON. Cached windows open offline without asking
 to connect. New materializations redraw only their still-visible initiating view.
-Remaining grouping, copies, recommendations and end-of-book transport are separate
-follow-up slices. No replacement sync/lifecycle writer is enabled here.
+Grouping, copies, recommendations and end-of-book now use companion commands/projections
+(see below). No replacement sync/lifecycle writer is enabled here.
 
 JNI replies include `id`, `body`, `owner` and `pending` in addition to the original
 status/proof fields. Bundle strings carry Unicode text; encoded Lua model values
@@ -531,3 +528,35 @@ convert through UTF-8 exactly once, with 8 KiB request and 16 KiB result byte li
 The model's ISO-8859-1 byte-string convention is only for model values/local files,
 not Java Bundle text. `SERVER_STATE` accepts `reload="1"` for a lifecycle refresh
 of cached identity; polling uses `reload="0"` and performs no server transport.
+
+
+### Companion-owned catalog actions (0.12, F12-Q2 step 4)
+
+`SERVER_COMMAND` operation `catalog.action` accepts one opaque `owner`, a neutral `action`
+and bounded arguments. The existing adapter resolves credentials privately and queues work
+on the sole cache writer. Supported actions are `initialize`, `copies.check`, `copies.ack`,
+`finish.prepare`, `finish.mark`, `finish.rate`, `finish.leave`, `finish.drain`, `finish.validate`,
+`finish.ack` and `finish.download` (including `later=true`). Reader actions identify one local
+`path`/`document`; download actions carry an opaque book `key`. No URL, backend detail JSON,
+auth header or native query template comes from Lua.
+
+Account-scoped files under `orbit-cache/workflows/` retain copy/finish jobs and deferred
+downloads independently of cache resets. Legacy queue files remain intact after checkpointing;
+a durable source-owner claim prevents cross-account migration. Copy transfer verifies the
+prepared delivery artifact before atomic rename and checkpoints identity repair for replay.
+Finish status/rating follows the existing native outbox, with backoff and deliberate remote
+status precedence; token-validated writeback acknowledgement cannot retire a newer mark.
+Native position/lifecycle queues and their sole writer are unchanged.
+
+`reader.finish` is a ready-to-draw summary plus at most two selected cards (three charged rows,
+16 KiB). `copies.state` is one local count row. Native list selections use the existing bounded
+`groups`/`window` projections through the owned list UI; the companion interprets the selection.
+Screen/widget budgets are declared in `logic/budgets.lua`; paints use zero network/forks and
+at most one batched materialization request, with info-level spans.
+
+`SERVER_COMMAND` operation `settings.recommendations` supplies eight neutral native-setting
+binding descriptors or evaluates eight observations and review choices. Its bounded snapshot
+contains decisions, compare-before-write operations, backup/Undo state, labels and counts.
+Only KOReader applies native settings; the companion writes `orbit-recommended.json` for its
+review page. Review paints read the lifecycle-cached library snapshot with zero round-trips.
+Small queue checkpoints remain available while reading; background transfers pause.
