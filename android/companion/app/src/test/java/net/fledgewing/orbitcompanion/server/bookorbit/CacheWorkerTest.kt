@@ -5,6 +5,8 @@ import net.fledgewing.orbitcompanion.*
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.fail
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -129,6 +131,96 @@ class CacheWorkerTest {
     }
 
     private val creds = CacheWorker.Creds(S, "alice", "secret-key")
+
+    @Test fun explicitCoverAcquisitionUsesWorkerAndThenReadsOffline() {
+        val (root,fake,w) = setup()
+        try {
+            val owner = "opaque-account"
+            w.store.own(owner)
+            w.store.putItem(mapOf("id" to 7L,"hasCover" to true,"updatedAt" to "1"),1000)
+            val dir = File(root,"covers")
+            val result = w.acquireCover(owner,7,creds,dir)
+            val path = File(LuaValue.utf8(result["local_path"] as String))
+            assertTrue(path.isFile)
+            assertEquals(1,fake.asked.size)
+            assertTrue(fake.asked.single().endsWith("/books/7/thumbnail"))
+            fake.down = true
+            assertEquals(result,w.acquireCover(owner,7,creds,dir))
+            assertEquals(1,fake.asked.size)
+            val projection = BookOrbitProjection(w.store).project(owner,mapOf("op" to "cover","key" to BookOrbitLibrary.key(owner,"book",7)))
+            assertEquals(result["local_path"],projection["local_path"])
+            assertTrue(LuaValue.encode(projection).size <= LibraryReadModel.MAX_BYTES)
+            assertEquals(1,fake.asked.size)
+            w.store.own("another-account")
+            try { w.acquireCover(owner,7,creds,dir); fail() }
+            catch (e: ServerFailure) { assertEquals("unauthorized",e.kind) }
+            assertEquals(1,fake.asked.size)
+        } finally { w.store.close(); root.deleteRecursively() }
+    }
+
+    @Test fun coverRevisionRevalidatesWithEtagAndKeepsOldOfflineCopy() {
+        val (root,fake,w) = setup()
+        try {
+            val owner = "opaque-account"
+            val dir = File(root,"covers")
+            w.store.own(owner)
+            fun item(revision: String) = w.store.putItem(mapOf("id" to 7L,"hasCover" to true,"updatedAt" to revision),1000)
+            item("1")
+            val first = w.acquireCover(owner,7,creds,dir)
+            item("2")
+            val second = w.acquireCover(owner,7,creds,dir)
+            assertNotEquals(first["local_path"],second["local_path"])
+            assertEquals("\"e1\"",fake.headersSeen.last()["If-None-Match"])
+            assertTrue(File(LuaValue.utf8(first["local_path"] as String)).isFile)
+            assertTrue(File(LuaValue.utf8(second["local_path"] as String)).isFile)
+            item("3"); fake.down = true
+            val fallback = w.acquireCover(owner,7,creds,dir)
+            assertEquals(true,fallback["stale"])
+            assertTrue(File(LuaValue.utf8(fallback["local_path"] as String)).isFile)
+            assertFalse(File(dir,"7_3.jpg").exists())
+            // A failed revision is retried, rather than pinning the stale image forever.
+            val before = fake.asked.size
+            fake.down = false; fake.forceCover = true
+            assertEquals(false,w.acquireCover(owner,7,creds,dir)["stale"])
+            assertEquals(before+1,fake.asked.size)
+            assertTrue(File(dir,"7_3.jpg").isFile)
+        } finally { w.store.close(); root.deleteRecursively() }
+    }
+
+    @Test fun ownedCoverFoldersParticipateInExistingStorageAccountingAndEviction() {
+        val (root,_,w)=setup()
+        try {
+            val owner="opaque-account"
+            w.store.own(owner)
+            w.store.putItem(mapOf("id" to 7L,"hasCover" to true,"updatedAt" to "1"),1000)
+            val dir=File(root,"covers")
+            val owned=File(dir,BookOrbitLibrary.namespace(owner))
+            val result=w.acquireCover(owner,7,creds,owned)
+            val path=File(LuaValue.utf8(result["local_path"] as String))
+            val item=w.storageItems(dir.path,false).single { it.k.startsWith("c:") }
+            assertEquals("c:${owned.name}/7_1.jpg",item.k)
+            assertEquals(path.length()+File(path.path+".etag").length(),item.bytes)
+            w.storage(CacheWorker.StorageAsk("test",1,dir.path,false))
+            assertFalse(path.exists()); assertFalse(File(path.path+".etag").exists())
+            val snapshot=BookOrbitProjection(w.store).project(owner,mapOf("op" to "cover","key" to BookOrbitLibrary.key(owner,"book",7)))
+            assertNull(snapshot["local_path"])
+        } finally { w.store.close(); root.deleteRecursively() }
+    }
+
+    @Test fun missingOrUntrustedCoverCannotWriteOutsideAllowedRoots() {
+        val (root,fake,w) = setup()
+        val outside = Files.createTempDirectory("outside-cover").toFile()
+        try {
+            w.store.own("owner")
+            try { w.acquireCover("owner",7,creds,File(root,"covers")); fail() }
+            catch (e: ServerFailure) { assertEquals("missing",e.kind) }
+            w.store.putItem(mapOf("id" to 7L,"hasCover" to true),1000)
+            try { w.acquireCover("owner",7,creds,outside); fail() }
+            catch (e: ServerFailure) { assertEquals("missing",e.kind) }
+            assertTrue(fake.asked.isEmpty())
+            assertTrue(outside.listFiles().orEmpty().isEmpty())
+        } finally { w.store.close(); root.deleteRecursively(); outside.deleteRecursively() }
+    }
 
     @Test fun fullRefreshSavesSeedThenListsThenDetailsThenCovers() {
         val (root, fake, w) = setup()

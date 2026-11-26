@@ -68,6 +68,19 @@ object LibraryAccount {
         var result: Map<String,Any?>? = null
         command(ctx, { result = it.catalog(page,limit) }, { done(result,it) }, invalidate = false)
     }
+    fun acquireCover(ctx: Context, key: String, done: (Map<String, Any?>?, String?) -> Unit) {
+        val app = ctx.applicationContext
+        queue.execute {
+            val start = System.nanoTime()
+            fun complete(result: Map<String, Any?>?, error: String?) {
+                OLog.i("library.cover.acquire ms=${(System.nanoTime()-start)/1_000_000}")
+                main.post { done(result,error) }
+            }
+            try { adapter(app).acquireCover(key,::complete) }
+            catch (e: ServerFailure) { complete(null,e.kind) }
+            catch (_: Exception) { complete(null,"unavailable") }
+        }
+    }
     fun download(ctx: Context, key: String, destination: File, done: (String?) -> Unit) = command(ctx, {
         require(Places.inside(destination.path,Places.roots()) != null)
         if (!it.download(key,destination)) throw ServerFailure("unavailable")

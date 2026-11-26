@@ -10,7 +10,7 @@ object ServerCommands {
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("sync.read","sync.write","catalog.window","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
+        require(op in setOf("sync.read","sync.write","catalog.window","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -34,6 +34,7 @@ object ServerCommands {
                 LibraryAccount.position(ctx,document,update,::finish)
             }
             "catalog.window" -> LibraryAccount.catalog(ctx,(args["page"] as? Number)?.toInt() ?: 1,(args["limit"] as? Number)?.toInt()?.coerceIn(1,24) ?: 24,::finish)
+            "covers.acquire" -> LibraryAccount.acquireCover(ctx,text("key"),::finish)
             "downloads.start" -> {
                 val key = args["key"] as? String ?: throw IllegalArgumentException("key")
                 val destination = File(LuaValue.utf8(args["destination"] as? String ?: throw IllegalArgumentException("destination")))
