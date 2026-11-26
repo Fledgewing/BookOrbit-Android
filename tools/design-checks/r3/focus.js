@@ -39,4 +39,13 @@ await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.openBook('b1');P
 await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:recent');P.act('filter');P.act('fset:show:1');P.act('fset:group:1');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filtersheet',30);
 await p.evaluate(()=>{const P=window.__proto;P.act('fpickopen:gs');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filter-groupsort',30);
 await p.evaluate(()=>{const P=window.__proto;P.act('fpickdone');P.act('fpickopen:show');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filter-show',20);
+await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:settings');P.act('setg:updates');P.act('modal:chan');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('channel-picker',10);
+await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.S.acct={in:false,name:'reader',srv:'books.example.net',sync:{st:'user'},opds:{st:null}};P.act('nav:settings');P.act('setg:account');P.act('modal:signin');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('signin-phone',10);
+await p.evaluate(()=>{const P=window.__proto;P.act('sitype');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('signin-form',10);
+await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'sidone'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('signin-done',6);
+await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'signout'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('signout',6);
+await p.evaluate(()=>{const P=window.__proto;P.S.acct.in=true;P.S.acct.opds={st:'user'};P.S.modal={k:'login',w:'opds',srv:'x',usr:'y'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('login-form',10);
+await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'lremove',w:'opds'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('login-remove',6);
+await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'sicode',w:'sync'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('login-phone',8);
+await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'sicode',err:'old'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('phone-too-old',4);
 console.log(out.join('\n'));console.log('FOCUS steps',n,'dark',darkN,'fails',fails,'ERR',errs);await b.close();})();

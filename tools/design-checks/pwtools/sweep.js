@@ -5,8 +5,8 @@ const {chromium}=require('playwright');
 for(const dev of ['m8c','x4pro']){const p=await b.newPage({viewport:{width:1500,height:1150}});p.on('pageerror',e=>out.push('ERR '+e.message));
  await p.addInitScript(()=>{window.__noscale=1});await p.goto(prototypeURL+'?dev='+dev);
  const list=await p.evaluate(()=>{const S=window.__proto.S;const k=S.dev==='m8c'?'m8c':'x4';return eval('ORDER_PICK').map(w=>[w,eval('W')[w].sizes[k]])});
- for(const [w,sizes] of list){for(const [cw,ch] of sizes){
-  const o=await p.evaluate(([w,cw,ch])=>{const S=window.__proto.S;const k=S.dev==='m8c'?'m8c':'x4';S.layouts[k][0].tiles=[{w,x:0,y:0,cw,ch}];S.page=0;window.__proto.render();
+ for(const [w,sizes] of list){for(const [cw,ch] of sizes){for(const so of (['year','week','hours','records'].includes(w)?[false,true]:[false])){
+  const o=await p.evaluate(([w,cw,ch,so])=>{const S=window.__proto.S;if(S.acct||true){window.__proto.S.acct=Object.assign(window.__proto.S.acct||{name:'reader',srv:'books.example.net',sync:{st:'acct',how:'found'},opds:{st:'acct',how:'created'}},{in:!so});}const k=S.dev==='m8c'?'m8c':'x4';S.layouts[k][0].tiles=[{w,x:0,y:0,cw,ch}];S.page=0;window.__proto.render();
    const t=document.querySelector('#screen .tile');const tr=t.getBoundingClientRect();const bad=[];
    t.querySelectorAll('.tin *').forEach(e=>{if(e.ownerSVGElement)return;const r=e.getBoundingClientRect();if(!r.width||!r.height)return;if(r.bottom>tr.bottom+0.5||r.right>tr.right+0.5)bad.push(e.tagName+'.'+e.className+' '+(e.textContent||'').slice(0,20)+' by '+Math.round(Math.max(r.bottom-tr.bottom,r.right-tr.right)));});
    // also text clipped horizontally in nowrap non-ell
@@ -18,8 +18,10 @@ for(const dev of ['m8c','x4pro']){const p=await b.newPage({viewport:{width:1500,
    // round 5: the battery estimate always says what it assumes, and that phrase is never clipped
    if(w==='battery'){const bl=t.querySelector('.batleft');if(!bl)bad.push('battery: no estimate line');else{const r=bl.getBoundingClientRect();const txt=bl.textContent;const full=/≈ .+ at your usual use$/.test(txt),short=/≈ .+ · usual use$/.test(txt);if(!full&&!short)bad.push('battery: estimate says "'+txt+'"');if(short&&tr.width>=260)bad.push('battery: short form on a wide tile');if(r.right>tr.right-4||bl.scrollWidth>bl.clientWidth+1)bad.push('battery: estimate clipped "'+txt+'"');
      const rg=document.createRange();rg.selectNodeContents(bl);const rr=rg.getBoundingClientRect();if(rr.right>tr.right-4)bad.push('battery: estimate text past the tile by '+Math.round(rr.right-tr.right+4));}}
-   return bad;},[w,cw,ch]);
-  o.forEach(x=>out.push(dev+' '+w+' '+cw+'x'+ch+': '+x));
-  const box=await p.locator('#screen .tile').boundingBox();await p.screenshot({path:OUT+`sweep/${dev}-${w}-${cw}x${ch}.png`,clip:box});
- }}await p.close();}
+   // round 8: signed out, Stats widgets carry the "This reader only" note, fully visible
+   if(so){const n=t.querySelector('.srcnote');if(!n)bad.push('no source note');else{const r=n.getBoundingClientRect();if(r.right>tr.right-4)bad.push('source note clipped');}}
+   return bad;},[w,cw,ch,so]);
+  o.forEach(x=>out.push(dev+' '+w+' '+cw+'x'+ch+(so?' (signed out)':'')+': '+x));
+  const box=await p.locator('#screen .tile').boundingBox();await p.screenshot({path:OUT+`sweep/${dev}-${w}-${cw}x${ch}${so?'-out':''}.png`,clip:box});
+ }}}await p.close();}
 console.log(out.join('\n')||'no overflow');await b.close();})();

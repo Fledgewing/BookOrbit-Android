@@ -1,4 +1,4 @@
-# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 10, round 6)
+# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 14, round 9 sign-off)
 
 Prototype: `prototype.html` (one file, no network). Screens: `shots/` (M8C at device scale factor 2, its native 1404×1872; X4 at 480×800).
 All books, authors, numbers, battery and storage figures are invented.
@@ -10,7 +10,7 @@ app. The companion stays for first-time setup on the M8C and for the few things 
 one group with a mode chooser built on the real settings schema. There is one filter sheet behind every filter button, and it
 can save a Book list on Home. Pages can be renamed and name themselves after their first widget. Lists gains a 1×3 size,
 the X4 default. The Classic focus ring is visible on black. And there is a BookSync library interface (section 12) so the UI
-never names a server. Findings and checks are in sections 14 and 15; round 4 is section 16, round 5 section 17, round 6 section 18.
+never names a server. Findings and checks are in sections 14 and 15; round 4 is section 16, round 5 section 17, round 6 section 18, round 7 section 19, round 8 (sign in to your server) section 20.
 
 ## 1. Design system
 
@@ -233,16 +233,19 @@ and visible current values. No scrolling. Every row is one focus stop: Select st
 
 | Group | Rows |
 |---|---|
-| Account & server | Connection, Server, Signed in as (read-only) · Sign in again… · Sign out |
+| **Your server** (section 20) | Signed in: Signed in as · Your server · Connection · What BookSync set up ("Sync login: found · OPDS: created · stats from all your devices") · Sign in again… · Sign out (asks first). Signed out: Sign in to your server · Until you sign in (stats from this reader only) |
 | **Sync, Wi-Fi & power** | Sync now · **Mode** card · (Back to Balanced, only when Custom) · What the mode does: Wi-Fi, Off after idle, Sync while reading, Sync when the reader sleeps, Sleep sync limit, Sync when it wakes · Android only: Let BookSync switch Wi-Fi for syncs, Wake VPN for syncs · Reading position · Power: Sleep after, Battery › |
 | Library & downloads | Storage › · Download folder · Keep downloaded copies current · Offline catalog storage · Mirror covers · Full refresh |
 | Reading | **Font choices** (one merged row; its subtitle shows what the panel offers: Book's own · your font · Custom with its value) · Margin, Line spacing and Contrast presets (custom presets show their value, e.g. "Custom · 14 px") · Custom (from KOReader) · Status bar · Status bar shows · Status bar size · End of book sheet |
 | Home | Edit layout · Reset layout · Home screen (BookSync / Server plugin's Home; the summary reads "BookSync Home · 2 pages") · **Page names ›** |
 | Sleep screen | Cover shown · Never show · Text · Battery level · Text placement |
-| Updates | **Update channel: Stable / RC / Preview**, each with a description · Check now · **Installed: BookSync 0.12.0-rc.2 · RC** · What's new. Summary: "RC channel · 0.12.0-rc.2" |
+| Updates | **Update channel** (one row: "Update channel · RC" with the channel's one-line description; it opens a picker) · Check now · **Installed: BookSync 0.12.0-rc.2 · RC** · What's new. Summary: "RC channel · 0.12.0-rc.2" |
 | About & help | Version (**BookSync 0.12.0-rc.2 · RC**, the same string as Updates › Installed; summary the same) · This reader · Help and guides · Advanced: open companion app (Android only) |
 
-Update channels: **Stable**, the releases most people should run; **RC**, the builds about to become Stable, for people who
+Update channels are chosen in a **picker**, the same pattern as the filter sheet's single-value pickers (maintainer: "picking
+channel should be a dropdown not selector"): radio rows, each with its one-line description, the current one marked and
+the installed build's channel labelled "installed build". Picking one returns to Updates; Back returns without changing it.
+On the Classic, Select on the row opens it with focus on the current channel. The channels: **Stable**, the releases most people should run; **RC**, the builds about to become Stable, for people who
 want fixes a week early; **Preview**, every test build, which may break. The installed row always names the channel of the
 build you have.
 
@@ -308,16 +311,16 @@ tappable. It is its own focus stop on the Classic. **"Sync now" is no longer in 
 Day to day, everything is on the reader: account, sync, downloads, storage, reading presets, status bar, Home, sleep screen,
 Wi-Fi and power, battery, updates.
 
-**First-time setup differs by device** (this replaces round 2's contradictory row):
-- **M8C (Android):** the companion app does first-time setup (server, sign-in, KOReader install and defaults), because
-  BookSync isn't configured yet. After that, Sign in again… is on the reader with KOReader's keyboard.
-- **X4 (no companion, no Android):** setup reuses what the firmware already has. **Sign in** rows open the firmware's own
-  on-device keyboard (`KeyboardEntryActivity`, the one the BookOrbit sync sign-in already uses). Or choose **"Type it on a
-  phone or computer instead"**: the reader starts its **File Transfer** web server and shows a QR code and
-  `http://<reader-ip>/settings` (shown as an address because mDNS is missing on some builds). The `/settings` page takes the
-  server, user and password and asks for the settings PIN first if one is set. Tailscale sign-in stays a QR in Settings ›
-  Tailscale. First boot uses the same two paths.
-- **X3:** the same File Transfer address as text: `Sign in: open http://192.0.2.10/settings on a phone`.
+**Signing in** is one sign-in with your server account (section 20):
+- **M8C (Android):** the form on the reader, typed with KOReader's keyboard. The companion still does first-time install
+  (KOReader and defaults).
+- **X4:** typing a password with five buttons is impractical, so Sign in shows **"Sign in from your phone"**: a short code
+  (K7Q 4M2) and a QR. The phone, on the same Wi-Fi, scans it (it opens the reader's own sign-in page, served by the
+  firmware's File Transfer web server) or enters the code in the companion app under **Add a reader**; you sign in to your
+  server there and the reader finishes by itself. "Type it on this reader instead" opens the same form with the firmware's
+  keyboard. This replaces round 3's `/settings` page as the main path.
+- **X3:** `Sign in: on your phone open the companion app › Add a reader › code K7Q 4M2`, then a line that changes to
+  `Signed in as reader`.
 
 The companion is still needed (M8C only) for:
 | Task | Why only the companion |
@@ -418,7 +421,7 @@ locally, refreshed from the server).
 | `reading.stats()` | local | Year, This week, When you read, Records |
 | `battery.stats()` | local | Battery widget and page, mode estimates |
 | `storage.summary()` / `storage.free(action)` | local | Storage page, low-space sheets |
-| `account.status()` / `account.signIn()` | server | Account & server, sign-in sheets |
+| `account.status()` / `account.signIn(server, user, password)` / `account.pairCode()` / `account.signOut()` | server | Your server, sign-in sheets; `signIn` returns what it set up (`{sync: found|created, opds: found|created}`) or an error code (`wrongPassword`, `unreachable`, `twoStep`, `tooOld`) |
 | `updates.check(channel)` | server (release feed) | Updates |
 
 - **Capabilities, not server names:** the adapter reports `lists.save`, `ratings`, `wantToRead`, `customFields`, …. A missing
@@ -434,7 +437,7 @@ fields map to server fields; *On this device* and *Group* always stay local; lis
 in 0.12**: the KOReader sync credential BookSync uses cannot write lists, and no write key is added in this release. So 0.12
 offers only "Save as a Book list on Home" (device-local, source Custom filter); "Save to server lists" is hidden behind
 `lists.save` (no disabled row).
-**Later:** an optional "Allow BookSync to save lists to your server" grant in Account & server would create a revocable write
+**Later:** an optional "Allow BookSync to save lists to your server" grant in Your server would create a revocable write
 key on the server; lists saved through it are always private, and *On this device* and *Group* stay on the device.
 
 ## 13. Critic round-1 findings: what changed
@@ -507,8 +510,8 @@ Headless Chromium with Playwright on M8C, X4 Pro and X4 Classic. **No console er
 | `pwtools/r2/bl.js` | 35/35 (grouping through the filter sheet; headers counted as rows, since complete groups have no link) |
 | `pwtools/r2/flows.js` | 63/63 (8 settings groups; low space blocks only below the floor) |
 | `pwtools/r2/sync.js` | 45/45 |
-| `r3/flows3.js` | 137/137 (round 6 adds: footer = list subtitle; author counts equal the other-filters rule with Length = Short; zero-count authors last with no number; a ticked zero-count author stays; page bar only with more than one page; Series has none; no Where row in On device. Round 5 added: the sheet is one page of 9 rows ≥ 50 px that all end above the footer, every row opens a picker, no cycling rows or segments, changed rows are marked; Show, Where, Length, Rating and Added pickers are radio rows with counts; Author, Series and Tags are checkbox rows; Group & sort is one page with Group, Sort by, Order; Classic: Select opens the picker on the current choice, choosing returns, Back closes the picker and then the sheet. Round 4 added: a complete author group has no "All N"; no BookOrbit / Tailscale / Grimmory / tailnet text on any page of any settings group; About, Updates › Installed and the Updates summary show one version). Earlier: add a page → "Page 4" → add Year → "Stats" → rename → pager; Settings › Page names; filter on Recently added (count, chips, subtitle, filled icon, chip removal, save to Home); Search (Best match, chip, save); Source › Custom filter; Classic Next/Select/Back |
-| `r3/focus.js` | 137 steps, 15 dark (ink, black controls, selected segments, dark covers), 0 fails; walks the filter sheet and its pickers |
+| `r3/flows3.js` | 147/147 (round 7 adds: Updates has one channel row ≥ 50 px and no inline radios; the picker has 3 radio rows with descriptions, current marked; picking Preview returns to Updates showing it; Classic: Select opens on the current channel, Select picks and returns, Back returns. Round 6 added: footer = list subtitle; author counts equal the other-filters rule with Length = Short; zero-count authors last with no number; a ticked zero-count author stays; page bar only with more than one page; Series has none; no Where row in On device. Round 5 added: the sheet is one page of 9 rows ≥ 50 px that all end above the footer, every row opens a picker, no cycling rows or segments, changed rows are marked; Show, Where, Length, Rating and Added pickers are radio rows with counts; Author, Series and Tags are checkbox rows; Group & sort is one page with Group, Sort by, Order; Classic: Select opens the picker on the current choice, choosing returns, Back closes the picker and then the sheet. Round 4 added: a complete author group has no "All N"; no BookOrbit / Tailscale / Grimmory / tailnet text on any page of any settings group; About, Updates › Installed and the Updates summary show one version). Earlier: add a page → "Page 4" → add Year → "Stats" → rename → pager; Settings › Page names; filter on Recently added (count, chips, subtitle, filled icon, chip removal, save to Home); Search (Best match, chip, save); Source › Custom filter; Classic Next/Select/Back |
+| `r3/focus.js` | 141 steps (now including the channel picker), 15 dark (ink, black controls, selected segments, dark covers), 0 fails; walks the filter sheet and its pickers |
 
 Test fixtures updated for deliberate round-3 changes (not to hide failures): `move.js` builds the 2-wide-band layout it
 tests (the X4 default changed); `bl.js` groups via the filter sheet; `flows.js` expects 8 groups, enters a password before
@@ -546,3 +549,153 @@ Sign in, and uses the below-floor space state.
 | 3 | "Page 1 of 1" with dead arrows in checkbox pickers | The page bar appears only when there are 2+ pages, so the Classic never stops on dead arrows. |
 | 4 | Where can't change anything inside On device | Hidden there. Reading now keeps it: books in progress can be on the server only. |
 | — | "1 books" in the list subtitle | "1 book". |
+
+## 19. Round 7: Update channel picker
+
+| Ask | Change |
+|---|---|
+| "picking channel should be a dropdown not selector like you did" | Settings › Updates shows one row, "Update channel · RC", with the channel's description. It opens a picker of three radio rows, each with its line; the current one is marked and focused first; picking returns to Updates. Same pattern as the filter sheet's single-value pickers. X3: `Update channel: RC  [Select: choose]`, then a numbered list. |
+
+## 20. Round 8: sign in to your server
+
+> Round 9 (§21) replaces the signed-out wording, the "What BookSync set up" row, the sign-out text and the shell's Server
+> control. The form, the errors table and the stats label below still hold.
+
+Maintainer: BookSync asks for the real server account once, then uses it for everything: stats across every device, and it
+sets up the sync login and the OPDS login itself.
+
+**Settings › Your server** (renamed from Account & server; the summary says "Signed in as reader · connected" or "Not signed
+in · stats from this reader only").
+- **Signed out:** "Sign in to your server" (once, with your server account; BookSync then sets up sync and OPDS) and
+  "Until you sign in: stats come from this reader only, and your place doesn't sync".
+- **Signed in:** Signed in as reader · Your server · Connection · **What BookSync set up**: "Sync login: found · OPDS: created ·
+  stats from all your devices" · Sign in again… · **Sign out**, which asks first: "Your downloaded books and your place in them
+  stay on this reader. Sync, and stats from your other devices, stop until you sign in again. The sync and OPDS logins
+  BookSync set up stay on your server." Focus starts on Stay signed in.
+
+**The form (M8C; also "type it here" on the X4):** Server, User name, Password rows, each opening the keyboard ("Each row
+opens the keyboard"; the toast says "The keyboard typed…"). "KOReader" is named here only on the M8C, where it helps
+recognise the login (see §21); Sign in is off until all three are filled. Pressing it shows **Signing in…** in place of the buttons
+and locks the rows. **Back during Signing in… cancels the attempt:** the sheet returns to its rows with "Sign-in cancelled",
+and a late answer from the server is dropped. Then either a result sheet, "Signed in as reader", listing what BookSync set up (Sync login: found,
+already on your server / created for this reader; OPDS login: the same; Stats: from all your devices), or an error box at the
+top of the form, in plain words:
+
+| Error | What the reader says | Then |
+|---|---|---|
+| Wrong password | "That user name and password didn't work. Check both and try again. Passwords are case-sensitive." | Password cleared, focus on it |
+| Can't reach | "Can't reach your server. Check the address, and that this reader is on Wi-Fi. If your server is only reachable over a VPN, turn that on first." | Focus on Server |
+| Two-step account | "This account uses two-step sign-in. The reader can't show the second step. Sign in from your phone instead…" | Offers "Sign in from your phone or companion app" |
+| Server too old | "Your server is too old for this. It can't set up sync and OPDS by itself. Update your server and try again. Until then, stats come from this reader only." | — |
+
+**X4: sign in from your phone.** The sheet shows the QR and the code K7Q 4M2 ("lasts 10 minutes"), "Waiting for your phone…",
+and rows **I've signed in on my phone** (focus starts here; the real reader also checks by itself) and **Type it on this reader
+instead**, then Cancel. The same busy state, result sheet and errors apply.
+
+**Where stats come from.** Signed in, stats are from all your devices and nothing extra is shown. Signed out, Year in reading,
+This week, When you read and Reading records each carry a small outlined "This reader only" label beside their title (the
+header's secondary text gives way to it; on 1-wide tiles it wraps under the title). Battery is always this reader's, so it
+never carries the label.
+
+**No server names on screen:** "your server" everywhere; flows3 checks the four sign-in sheets for product names.
+
+**Prototype controls:** the shell has "Server: Signed in / Signed out" and "Sign-in result: Works / Wrong password / Can't reach
+server / Two-step account / Server too old".
+
+**Checks:** `flows3.js` 184/184 (round 8 adds, per device: signed-in rows and the setup line; Sign out asks first with focus on
+Stay signed in; signed-out rows; "This reader only" on every Stats widget only when signed out; M8C: Sign in off until filled,
+each of the four errors shows Signing in… then its plain-words message, wrong password clears and focuses the password,
+two-step offers the phone; X4: code, QR, companion app, focus on the check row, "type it here" opens the form, an error, the
+busy state; success lists Sync login, OPDS login and Stats; back to Your server signed in; no product names). `focus.js` 155
+steps, 19 dark, 0 fails (adds the phone sheet, the form, the result sheet and the sign-out confirm). `sweep.js` now also
+renders the four Stats widgets signed out at every size: the label is present and never clipped. `pwtools/r2/flows.js` 66/66
+(re-sign-in now waits for the result sheet and checks it names the OPDS login).
+
+## 21. Round 9: three logins, two signed-out states, sign-out honours how you signed in
+
+Maintainer: "Sign in should ALSO support entering your KOReader and/or OPDS credentials separately", and "honor how they
+signed in. If I click 'Sign out' and I used it to sign in, it should sign out all the accounts". The critic (REVISE on
+rounds 7-8) also found the signed-out page contradicting Home ("your place doesn't sync" beside "Synced 12 min ago").
+
+**Model.** Your server holds three logins, each optional and set on its own:
+
+| Login | What it does | States |
+|---|---|---|
+| Server account | Stats from all your devices; sets up the other two | Signed in / Not signed in |
+| Sync login | Position sync (on the M8C: "the one KOReader uses for your place") | Set up by your account · Set by you · Not set |
+| OPDS login | Catalog browsing and downloads | Set up by your account · Set by you · Not set |
+
+A login the account found already on your server counts as the account's. Signing in fills only the logins that are Not set;
+one you entered stays, and the result sheet says "Kept: the one you set" with a pointer to **Replace with the account's**
+(an explicit row on that login's form, shown only when signed in and the login is yours).
+
+**Settings › Your server.** Account rows first, then a "Logins" heading with Sync login and OPDS login, each showing its state
+on the right and opening its own small form: a state chip, one line on what it does ("It works with or without your server
+account"), Server / User name / Password rows (empty server reads "Your server address"), then, when set, "Replace with the
+account's" (if it applies) and "Remove sync login…", then Cancel / Save. Save shows Signing in…, and a wrong password or an
+unreachable server gets the same plain-word boxes as the account form. Remove asks first ("Remove the sync login? This
+reader stops syncing your place until a sync login is set again. Nothing changes on your server.", focus on Keep it).
+Cancel, Back, Save and Remove all return focus to that login's row.
+
+**Signed-out states (shell: Server = Signed in / Signed out · own logins / Nothing set up; plus Sync login and OPDS login
+controls).**
+- **Signed out, your own sync login set:** sync works as before; Home keeps "Synced 12 min ago". Your server says "Not signed
+  in · Position sync uses your sync login · Stats from this reader only", then "Sign in to your server: for stats from all
+  your devices and automatic setup".
+- **Nothing set up:** Home's status line reads "Not signed in · Sign in" and opens Your server; the reader's top panel Sync
+  button becomes a "Sign in to sync" pill; Sync, Wi-Fi & power's first row is "Sign in to sync" with the note "Not signed in,
+  so nothing syncs: not your place, highlights or new books." Its group summary says "not signed in".
+- **Signed in but no sync login** (you removed it): the same places say "No sync login · Set up" / "Set up sync", and open the
+  Sync login form.
+- **No OPDS login:** tapping a book that isn't on the reader says "No OPDS login · set one in Your server to download".
+
+**Sign-out honours how each login was set.** The confirmation lists exactly what stops, built from the three states:
+"Signs out of your account, and removes the sync login and the OPDS login it set up. Sync stops on this reader. Browsing and
+downloading from your server stop." With your own sync login: "…removes the OPDS login it set up. … Your own sync login
+stays, so sync keeps working." Afterwards the page shows the true state: nothing set up, or only your own logins. The Sign out
+row's sub line says "Also removes the logins your account set up".
+
+**X4: one phone path for all three.** Sign in, and any login that is Not set, opens the code + QR sheet ("Enter the sync
+login from your phone"); a set login opens its form, where "Enter it from your phone" is the first row under the fields. "Type it on this
+reader instead" opens the matching form. On a single-login sheet the check row reads "I've entered it on my phone".
+
+**Phone-sheet errors in phone words.** Wrong password: "Your phone couldn't sign in. Try again on the phone, or get a new
+code." with a **Get a new code** row (shows a fresh code). Can't reach: "Your phone couldn't reach your server…". Too old:
+the error with a single **Close** (focus on it) in place of the waiting rows. A two-step account succeeds on the phone sheet,
+since the phone does the second step.
+
+**Wording.** "Sync login" and "OPDS login" everywhere. "KOReader" appears on the M8C only, where it helps recognise the
+login: the Sync login row and the Sync login form's description. Keyboards are just "the keyboard". No server or
+product names (flows3 checks the login forms).
+
+**Classic focus.** Stay signed in returns to Sign out; Back from the question does too; after signing out focus is on Sign in.
+
+**Removed:** the dead second sign-in branch (the old Sign in again sheet left inside the What's new block).
+
+**Checks:** `flows3.js` 288/288 (round 9 adds, per device: both signed-out states on Home, Your server, Sync, Wi-Fi & power and
+the top panel; the three sign-out cases (account only: nothing works; your sync login + account: sync stays; mixed: sign-in
+keeps your OPDS login, Replace, Remove asks first); X4 phone path for a login; phone errors, Get a new code, Too old Close,
+two-step succeeds; Back cancels Signing in…; empty server hint; Classic focus returns; "KOReader" only on the M8C).
+`focus.js` 171 steps, 23 dark, 0 fails (adds the login form, Remove, the login phone sheet and Too old). The critic's r8
+scripts (si, form, lab, so, so2) join the check set (run on M8C and X4 Classic) via `r3/all.sh`.
+
+Critic r8 scripts are exploratory (no pass/fail): all run with no page errors on M8C and X4 Classic. Two of their probes now
+report "cannot reach" by design: si.js X4 after Two-step (the phone sheet now signs in, so there is no Sign in row left) and
+form.js's last probe for "Sign in again" on the signed-out page. so.js uses Server = Signed out, which is now "own logins",
+so Home correctly still says Synced. Full run: `zsh r3/all.sh` (log `r3/all-r13.log`). Round 9 screens: `shots/*-r9-*.png`.
+
+## 22. Round 9 sign-off minors (rev 14)
+
+Critic approved round 9 and the maintainer signed off. Five minors from `critic-shots/r9/`:
+1. Keyboard wording: "Each row opens the keyboard" and the toast "The keyboard typed…"; "KOReader" only on the M8C Sync
+   login row and form description.
+2. Classic focus after Done on the sign-in result goes to the first login the account set up (Sync login, else OPDS
+   login), or to Sign in again when it changed none.
+3. Home's "No sync login · Set up" opens the Sync login form, like the top panel's "Set up sync".
+4. The single-login phone sheet says "I've entered it on my phone".
+5. Tapping a server-only book with no OPDS login: toast "No OPDS login, so it can't download" with a **Set up** action that
+   opens the OPDS login form.
+
+Also: a "Set by you" form shows that login's own user name (reader-sync / reader-opds in the demo), not the account's; §21
+now places "Enter it from your phone" where the form shows it (first row under the fields).
+Checks: `flows3.js` 303/303 (adds each minor); full `r3/all.sh` plus the critic's r9 scripts.

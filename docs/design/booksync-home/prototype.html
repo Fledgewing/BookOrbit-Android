@@ -185,6 +185,10 @@ inset 0 0 0 4px #fff,inset 0 0 0 7px #000 !important}
 .fsheet .fzero, .fsheet .fzero *{color:var(--g1) !important}
 .x4 .fsheet .fzero, .x4 .fsheet .fzero *{color:#808080 !important}
 .fsheet .fzero span[style*="border:2px"]{border-color:currentColor !important}
+/* where stats come from: shown only when they are this reader's alone */
+.tile .srcnote{flex:none;margin-left:8px;font-size:11px;font-weight:700;border:1.5px solid #000;border-radius:999px;padding:1px 7px;white-space:nowrap}
+.tile:has(.srcnote) .th > .meta, .tile:has(.srcnote) .th > span[style*='margin-left:auto']{display:none}
+.tile:has(.srcnote) .th{flex-wrap:wrap;row-gap:3px}
 .fsheet .sf{display:flex;align-items:center;justify-content:space-between;padding:4px 16px;font-size:var(--fc);font-weight:600;border-top:1px solid var(--g3)}
 .sg{display:flex;
 border:1.5px solid #000;border-radius:12px;overflow:hidden;height:calc(var(--tap) + 3px)}
@@ -262,7 +266,7 @@ border:1.5px solid #000;border-radius:12px;overflow:hidden;height:calc(var(--tap
         <button data-dev="x4pro">X4 Pro · touch</button>
         <button data-dev="x4c">X4 Classic · buttons</button>
       </div>
-      <label class="tog"><input type="checkbox" id="offline"> Offline</label><label class="tog">Space <select id="lowspace" style="font:inherit"><option value="0">Normal</option><option value="1">Low</option><option value="2">Nearly full</option></select></label>
+      <label class="tog"><input type="checkbox" id="offline"> Offline</label><label class="tog">Space <select id="lowspace" style="font:inherit"><option value="0">Normal</option><option value="1">Low</option><option value="2">Nearly full</option></select></label><label class="tog">Server <select id="acct" style="font:inherit"><option value="1">Signed in</option><option value="0">Signed out · own logins</option><option value="none">Nothing set up</option></select></label><label class="tog">Sync login <select id="slog" style="font:inherit"><option value="acct">By account</option><option value="user">Set by you</option><option value="none">Not set</option></select></label><label class="tog">OPDS login <select id="olog" style="font:inherit"><option value="acct">By account</option><option value="user">Set by you</option><option value="none">Not set</option></select></label><label class="tog">Sign-in result <select id="sires" style="font:inherit"><option value="ok">Works</option><option value="wrong">Wrong password</option><option value="unreach">Can't reach server</option><option value="twostep">Two-step account</option><option value="old">Server too old</option></select></label>
       <button class="sbtn" id="restart">Restart demo</button>
     </div>
     <div class="scalebox" id="scalebox"><div id="framewrap"></div></div>
@@ -1176,7 +1180,8 @@ function back(){
   if (S.modal){ const m = S.modal; // the filter sheet: Back closes a picker first; closing applies (it edits live)
     if (m.k === 'filter' && m.pick){ S.fk = 'f-' + m.pick; m.pick = null; render(); return; }
     if (m.k === 'filter' && m.ret){ S.modal = m.ret; S.fk = 'cfg-filter'; render(); return; }
-    S.modal = null; if (m.k === 'filter') S.fk = 's-filter'; render(); return; }
+    if (m.busy){ m.busy = false; m.gen = (m.gen || 0) + 1; S.fk = null; toast('Sign-in cancelled'); return; }
+    S.modal = null; if (m.k === 'filter') S.fk = 's-filter'; if (m.k === 'chan') S.fk = 'set-chan'; if (m.k === 'signout') S.fk = 'set-out'; if (m.w) S.fk = LFK(m.w); render(); return; }
   const c = cur();
   if (c.n === 'reader'){ if (c.grab){ c.grab = false; render(); return; } if (c.sheet){ c.sheet = null; render(); return; } if (c.panel){ c.panel = null; render(); return; } if (c.end){ c.end = false; S.pages[c.id] = c.id && B[c.id].pages - 1; render(); return; } }
   if (S.edit){ if (S.sel != null){ const pg = S.layouts[dk()][S.page]; const t = pg.tiles[S.sel]; if (t && S.selOrig) Object.assign(t, S.selOrig); S.fk = 'tile-' + S.sel; S.sel = null; render(); return; } S.edit = false; render(); return; }
@@ -1189,6 +1194,7 @@ function tapBook(id){
   const b = B[id];
   if (S.downloads[id] != null) return;
   if (b.dev){ openBook(id); return; }
+  if (!ACC().opds.st){ toast('No OPDS login, so it can\'t download', {lab:'Set up', act:'lopen:opds'}); return; }
   if (S.offline){ S.modal = {k:'connect', ids:[id], open:id}; render(); return; }
   if (!fitsDl(parseFloat(b.size))){ S.modal = {k:'space', mb:parseFloat(b.size)}; render(); return; }
   startDownload([id], id); if (LOW()) toast(`Downloading · low space, ${fmtGB(STORE().free)} free`);
@@ -1235,7 +1241,7 @@ function render(){
   SC.innerHTML = html;
   scale(); restoreFocus(); renderSide(); renderKeys();
   document.querySelectorAll('#devseg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.dev === S.dev));
-  $('#offline').checked = S.offline; $('#lowspace').value = String(S.lowspace || 0);
+  $('#offline').checked = S.offline; $('#lowspace').value = String(S.lowspace || 0); $('#acct').value = ACC().in ? '1' : (ACC().sync.st || ACC().opds.st) ? '0' : 'none'; $('#slog').value = ACC().sync.st || 'none'; $('#olog').value = ACC().opds.st || 'none'; $('#sires').value = S.sires || 'ok';
 }
 function scale(){
   const g = GEO[dk()]; const fr = $('#framewrap .frame'); if (!fr) return;
@@ -1256,7 +1262,7 @@ function homeView(g){
     h += editHead(g, pages, pg);
   } else {
     h += `<div class="hdr" style="height:${g.head}px"><div style="flex:${x4 ? '0 1 auto' : 1};min-width:0"><div class="ttl ell">${esc(pg.name)}</div>
-      <div class="sub">${S.offline ? `<span class="offchip">${ic('cloudoff', 13, 2.4)}Offline</span> saved library` : `<span class="hs" data-act="hsync" data-fk="h-sync" style="display:inline-flex;align-items:center;gap:5px;min-height:var(--tap);margin:-16px -10px -16px -10px;padding:0 10px;font-weight:${S.hsync ? 700 : 'inherit'}">${ic(S.hsync === 'busy' ? 'sync' : 'check', 13, 2.6)}${S.hsync === 'busy' ? 'Syncing…' : S.hsync === 'done' ? 'Synced just now' : 'Synced 12 min ago'}${S.hsync ? '' : `<span style="text-decoration:underline;text-underline-offset:2px;margin-left:4px">Sync</span>`}</span>`}</div></div>
+      <div class="sub">${S.offline ? `<span class="offchip">${ic('cloudoff', 13, 2.4)}Offline</span> saved library` : NOSYNC() ? `<span class="hs" data-act="${ACC().in ? 'lopen:sync' : 'setg:account'}" data-fk="h-sync" style="display:inline-flex;align-items:center;gap:5px;min-height:var(--tap);margin:-16px -10px -16px -10px;padding:0 10px">${ic('user', 13, 2.6)}${ACC().in ? 'No sync login' : 'Not signed in'} ·<span style="text-decoration:underline;text-underline-offset:2px;font-weight:700">${ACC().in ? 'Set up' : 'Sign in'}</span></span>` : `<span class="hs" data-act="hsync" data-fk="h-sync" style="display:inline-flex;align-items:center;gap:5px;min-height:var(--tap);margin:-16px -10px -16px -10px;padding:0 10px;font-weight:${S.hsync ? 700 : 'inherit'}">${ic(S.hsync === 'busy' ? 'sync' : 'check', 13, 2.6)}${S.hsync === 'busy' ? 'Syncing…' : S.hsync === 'done' ? 'Synced just now' : 'Synced 12 min ago'}${S.hsync ? '' : `<span style="text-decoration:underline;text-underline-offset:2px;margin-left:4px">Sync</span>`}</span>`}</div></div>
       ${x4 ? '<div style="flex:1"></div>' : ''}
       <div class="searchpill" data-act="search" data-fk="h-search" style="${x4 ? 'padding:0 14px 0 11px' : ''}">${ic('search', 20, 2.2)}${x4 ? 'Search' : `Search <span class="mute">${fmtN(LIB.total)} books</span>`}</div>
       <div class="iconbtn" data-act="menu" data-fk="h-menu">${ic('more', 22)}</div></div>`;
@@ -1267,6 +1273,8 @@ function homeView(g){
     const r = tilePx(g, {x:tl.x, y:tl.y, w:tl.cw, h:tl.ch}); const wd = W[tl.w];
     const t = {w:r.w, h:r.h, dev:dk(), tp:g.tp, cw:tl.cw, ch:tl.ch, cfg:tl.cfg};
     let inner = ''; try { inner = wd.render(t); } catch(e){ console.error(e); inner = `<div class="tin">${wd.name}</div>`; }
+    // Stats come from every device once signed in; signed out they are this reader's alone, and only then the widget says so.
+    if (!ACC().in && STATS_W.includes(tl.w)) inner = inner.replace(/(<span class="lab"[^>]*>[^<]*<\/span>)/, '$1<span class="srcnote">This reader only</span>');
     const ed = S.edit ? ` ed${S.sel === i ? ' sel' : ''}` : '';
     h += `<div class="tile${wd.ink ? ' ink' : ''}${ed}" data-tile="${i}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;--tp:${g.tp}px">${inner}
       ${S.edit ? `<div class="edcover" data-act="sel:${i}" data-fk="tile-${i}"></div><div class="edtag">${ic(tileIcon(tl), 14, 2.4)}${esc(tileName(tl))} · ${tl.cw}×${tl.ch}</div>` : ''}</div>`;
@@ -1522,18 +1530,76 @@ const customLabel = k => 'Custom · ' + ({margins:CUSTOM.marg[dk()] + ' px', spa
 function presetNames(k){ if (k === 'margins') return [...MARG_P[SETV.margP].map(i => MARG_N[i]), customLabel(k)]; if (k === 'spacing') return [...SPACE_P[SETV.spaceP].map(i => SPACE_N[i]), customLabel(k)]; if (k === 'contrast') return [...CONT_P[SETV.contP].map(i => CONT_N[i]), customLabel(k)]; return [fontOf(0).n, fontOf(1).n, customLabel('font')]; }
 
 // Row kinds: cyc (Select/tap steps through the options), tog, act (does something), nav, info (read-only).
+// ---------- Your server: one sign-in with the real server account ----------
+// BookSync asks for the account once, then uses it for everything: stats from every device, and it sets up the sync login and
+// the OPDS login by itself (found if they already exist, created if not). The UI says "your server", never a product name.
+const ACC = () => S.acct || (S.acct = {in:true, name:'reader', srv:'books.example.net', sync:{st:'acct', how:'found'}, opds:{st:'acct', how:'created'}});
+const SI_ERR = {
+  wrong:['That user name and password didn\'t work', 'Check both and try again. Passwords are case-sensitive.', 'pw'],
+  unreach:['Can\'t reach your server', 'Check the address, and that this reader is on Wi-Fi. If your server is only reachable over a VPN, turn that on first.', 'server'],
+  twostep:['This account uses two-step sign-in', 'The reader can\'t show the second step. Sign in from your phone instead: your phone does the second step and passes the sign-in to this reader.', 'phone'],
+  old:['Your server is too old for this', 'It can\'t set up sync and OPDS by itself. Update your server and try again. Until then, stats come from this reader only.', null]};
+const SI_CODE = 'K7Q 4M2';
+// Signed out has two cases: a sync login is still set up (position sync works), or nothing is set up (nothing syncs).
+// Three logins, each optional and set on its own: the server account (stats from all devices; fills the other two
+// when they are Not set), the sync login (position sync) and the OPDS login (catalog and downloads). st: 'acct' | 'user' | null.
+const NOSYNC = () => !ACC().sync.st;
+const LN = {sync:'Sync login', opds:'OPDS login'};
+const LST = l => l.st === 'user' ? 'Set by you' : l.st === 'acct' ? 'Set up by your account' : 'Not set';
+// Sign-out honours how each login was set: the ones the account set up (or found) go with it; ones you entered stay.
+function signoutText(a){ const set = ['sync', 'opds'].filter(w => a[w].st === 'acct'), own = ['sync', 'opds'].filter(w => a[w].st === 'user'); const nm = w => w === 'sync' ? 'the sync login' : 'the OPDS login';
+  let t = 'Signs out of your account' + (set.length ? ', and removes ' + set.map(nm).join(' and ') + ' it set up.' : '.');
+  if (set.includes('sync')) t += ' Sync stops on this reader.';
+  if (set.includes('opds')) t += ' Browsing and downloading from your server stop.';
+  if (own.includes('sync')) t += ' Your own sync login stays, so sync keeps working.';
+  if (own.includes('opds')) t += ' Your own OPDS login stays, so you can still download.';
+  return t + ' Your downloaded books and your place in them stay on this reader. Stats from your other devices stop.'; }
+const LUSR = (w, l) => (l && l.usr) || (w === 'sync' ? 'reader-sync' : 'reader-opds');
+const LFK = w => w === 'sync' ? 'set-slog' : 'set-olog';
+const LWHAT = w => w === 'opds' ? 'For browsing your server\'s catalog and downloading books.' : dk() === 'm8c' ? 'The sync login KOReader uses to send your place between devices.' : 'Sends your place between your devices.';
+// The phone sheet's errors happen on the phone, so they say so.
+const SI_PHONE = {
+  wrong:['Your phone couldn\'t sign in', 'Try again on the phone, or get a new code.'],
+  unreach:['Your phone couldn\'t reach your server', 'Check that the phone is on the same Wi-Fi and can open your server, then try again on the phone.'],
+  old:SI_ERR.old};
+const STATS_W = ['year', 'week', 'hours', 'records'];
+function qrSvg(seed, px){ const r = rng(seed); const N = 21; let q = ''; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){ const fin = (a, b) => x >= a && x < a + 7 && y >= b && y < b + 7; const inF = fin(0, 0) || fin(N - 7, 0) || fin(0, N - 7); const on = inF ? (() => { const fx = x < 7 ? x : x - (N - 7), fy = y < 7 ? y : y - (N - 7); return fx === 0 || fy === 0 || fx === 6 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4); })() : r() > .52; if (on) q += `<rect x="${x}" y="${y}" width="1" height="1"/>`; }
+  return `<svg width="${px}" height="${px}" viewBox="-2 -2 25 25" style="flex:none;background:#fff;border:1.5px solid #000" shape-rendering="crispEdges"><g fill="#000">${q}</g></svg>`; }
+// The outcome comes from the shell's "Sign-in result" control, so every error can be shown.
+// Back while busy cancels the attempt: it bumps m.gen, so the pending result is dropped.
+// On the phone sheet, two-step succeeds: the phone does the second step.
+function siFinish(m, gen){ if (S.modal !== m || m.gen !== gen || !m.busy) return; m.busy = false; const r0 = S.sires || 'ok'; const res = r0 === 'twostep' && m.k === 'sicode' ? 'ok' : r0;
+  if (m.w){ // a single login (form or phone): only a wrong login or an unreachable server can fail
+    if (r0 === 'wrong' || r0 === 'unreach'){ m.err = r0; if (m.k === 'login') m.pw = 0; S.fk = null; render(); return; }
+    ACC()[m.w] = {st:'user', usr:m.k === 'login' ? m.usr : LUSR(m.w)}; S.modal = null; S.fk = LFK(m.w); toast(LN[m.w] + ' saved'); return; }
+  if (res === 'ok'){ const a = ACC(); a.in = true; a.name = 'reader'; const kept = [], changed = [];
+    // the account fills only logins that are Not set; one you set yourself is kept
+    for (const w of ['sync', 'opds']){ if (!a[w].st){ a[w] = {st:'acct', how:w === 'sync' ? 'found' : 'created'}; changed.push(w); } else if (a[w].st === 'user') kept.push(w); }
+    S.modal = {k:'sidone', kept, changed}; S.fk = null; render(); return; }
+  m.err = res;
+  if (m.k === 'signin' && m.err === 'wrong') m.pw = 0; S.fk = null; render(); }
 function SETTINGS(){
   const x4 = dk() === 'x4'; const and = !x4;
   const R = (k, l, kind, o = {}) => ({k, l, kind, ...o});
+  const logins = [R('lsec', 'Logins', 'sec', {span:.6}),
+    R('slog', 'Sync login', 'act', {act:'lopen:sync', sub:() => (ACC().in ? '' : 'Works without the account · ') + (dk() === 'm8c' ? 'the one KOReader uses for your place' : 'sends your place'), v:() => LST(ACC().sync)}),
+    R('olog', 'OPDS login', 'act', {act:'lopen:opds', sub:'Catalog browsing and downloads', v:() => LST(ACC().opds)})];
   return [
-    {id:'account', n:'Account & server', i:'user', sum:() => S.offline ? 'Offline · books.example.net' : 'Connected · books.example.net', rows:[
+    {id:'account', n:'Your server', i:'user', sum:() => ACC().in ? `Signed in as ${ACC().name} · ${S.offline ? 'offline' : 'connected'}` : NOSYNC() ? 'Not signed in · nothing syncs yet' : 'Not signed in · sync uses your sync login', rows:ACC().in ? [
+      R('usr', 'Signed in as', 'info', {v:() => ACC().name}),
+      R('srv', 'Your server', 'info', {v:() => ACC().srv}),
       R('st', 'Connection', 'info', {v:() => S.offline ? 'Offline' : 'Connected'}),
-      R('srv', 'Server', 'info', {v:() => 'books.example.net'}),
-      R('usr', 'Signed in as', 'info', {v:() => 'reader'}),
       R('resign', 'Sign in again…', 'act', {act:'modal:signin', sub:'If your password changed or sync says you are signed out'}),
-      R('out', 'Sign out', 'act', {act:'toast:Sign out asks to confirm in the real build', sub:'Keeps your downloaded books'})]},
-    {id:'sync', n:'Sync, Wi-Fi & power', i:'sync', sum:() => `${modeName(modeOf())} · ${S.offline ? 'waiting for Wi-Fi' : 'synced 12 min ago'} · ${BAT.level}% battery`, rows:[
-      R('now', 'Sync now', 'act', {act:'sync', sub:() => S.offline ? 'Offline · will sync when Wi-Fi is back' : 'Last sync 12 min ago · 3 new books, 2 progress updates'}),
+      R('out', 'Sign out', 'act', {act:'modal:signout', sub:'Asks first. Also removes the logins your account set up'}), ...logins] : [
+      ...(NOSYNC() ? [
+      R('signin', 'Sign in to your server', 'act', {act:'modal:signin', sub:'Once, with your server account. BookSync then sets up sync and OPDS for you'}),
+      R('st', 'Not signed in', 'info', {sub:'Nothing syncs yet · Stats from this reader only', v:() => ''})] : [
+      R('st', 'Not signed in', 'info', {sub:'Position sync uses your sync login · Stats from this reader only', v:() => ''}),
+      R('signin', 'Sign in to your server', 'act', {act:'modal:signin', sub:'For stats from all your devices and automatic setup'})]), ...logins]},
+    {id:'sync', n:'Sync, Wi-Fi & power', i:'sync', sum:() => `${modeName(modeOf())} · ${NOSYNC() ? (ACC().in ? 'no sync login' : 'not signed in') : S.offline ? 'waiting for Wi-Fi' : 'synced 12 min ago'} · ${BAT.level}% battery`, rows:[
+      NOSYNC() ? (ACC().in ? R('now', 'Set up sync', 'act', {act:'lopen:sync', sub:'Add a sync login', note:() => 'No sync login, so your place and highlights don\'t sync.'})
+        : R('now', 'Sign in to sync', 'act', {act:'modal:signin', sub:'Once with your server account, or set a sync login in Your server', note:() => 'Not signed in, so nothing syncs: not your place, highlights or new books.'}))
+        : R('now', 'Sync now', 'act', {act:'sync', sub:() => S.offline ? 'Offline · will sync when Wi-Fi is back' : 'Last sync 12 min ago · 3 new books, 2 progress updates'}),
       R('mode', 'Mode', 'mode', {span:2}),
       ...(modeOf() === 3 ? [R('reset', 'Back to Balanced', 'act', {act:'smode:1', sub:'Sets all of the settings below to Balanced'})] : []),
       R('sec1', () => modeOf() === 3 ? 'Your settings' : 'What ' + modeName(modeOf()) + ' does', 'sec', {span:.6}),
@@ -1583,7 +1649,7 @@ function SETTINGS(){
       R('slplace', 'Text placement', 'cyc', {opts:['Bottom band','Top band','Corner']})]},
     {id:'updates', n:'Updates', i:'upd', sum:() => `${CHAN[SETV.chan].n} channel · ${INSTALLED.v}`, rows:[
       R('ver', 'Installed', 'info', {v:() => `BookSync ${INSTALLED.v} · ${INSTALLED.ch}`}),
-      R('chan', 'Update channel', 'chan', {span:() => dk() === 'x4' ? 1.5 : 2.6}),
+      R('chan', 'Update channel', 'chan', {span:1}),
       R('check', 'Check now', 'act', {act:() => `toast:BookSync ${INSTALLED.v} is the latest ${CHAN[SETV.chan].n} build`, sub:'Checked yesterday'}),
       R('new', "What's new", 'act', {act:'modal:whatsnew'})]},
     {id:'about', n:'About & help', i:'info', sum:() => `BookSync ${INSTALLED.v} · ${INSTALLED.ch}`, rows:[
@@ -1616,10 +1682,8 @@ function setRow(r, h){
       <div style="font-size:var(--fc);margin-top:3px;line-height:1.35">${m === 3 ? 'You changed a setting below. Each one keeps your choice.' : esc(MODES[m].line)}</div>
       <div style="display:flex;align-items:center;gap:6px;font-size:var(--fc);font-weight:700;margin-top:6px">${batGlyph(20, BAT.level)}${esc(modeBat(m))}</div></div>`;
   }
-  if (r.kind === 'chan'){ // three channels, each with its line; Select steps through them on the X4
-    return `<div class="lrow" data-act="setc:chan:3" data-fk="set-chan" style="display:block;padding:6px 0 8px;border-bottom:1px solid var(--g3)"><div style="display:flex;align-items:center"><span style="font-size:var(--fb);font-weight:600;flex:1">Update channel</span>${x4 ? `<b style="font-size:var(--fs)">${CHAN[SETV.chan].n}</b>${ic('chevR', 16, 2.6)}` : ''}</div>
-      ${(x4 ? [SETV.chan] : [0, 1, 2]).map(i => `<div style="display:flex;gap:10px;align-items:flex-start;margin-top:${x4 ? 2 : 8}px">${x4 ? '' : `<span style="width:20px;height:20px;border-radius:20px;border:2px solid #000;display:grid;place-items:center;flex:none;margin-top:1px">${i === SETV.chan ? '<i style="width:10px;height:10px;border-radius:10px;background:#000;display:block"></i>' : ''}</span>`}<div style="min-width:0"><b style="font-size:var(--fs)">${x4 ? '' : CHAN[i].n}</b><div class="meta" style="font-size:var(--fc);line-height:1.3">${CHAN[i].d}</div></div></div>`).join('')}</div>`;
-  }
+  if (r.kind === 'chan') // one row, like any other choice; it opens the channel picker (the filter sheet's single-value pattern)
+    return `<div style="border-bottom:1px solid var(--g3)"><div class="lrow" data-act="modal:chan" data-fk="set-chan" style="min-height:${h}px;gap:14px"><div style="flex:1;min-width:0;padding:6px 0"><div style="font-size:var(--fb);font-weight:600">Update channel</div><div class="meta" style="font-size:var(--fc);margin-top:2px">${esc(CHAN[SETV.chan].d)}</div></div><span style="font-size:var(--fs);font-weight:700">${CHAN[SETV.chan].n}</span>${ic('chevR', 16, 2.6)}</div></div>`;
   const off = r.off && r.off();
   // A setting that has no effect in the current combination stays changeable (nothing is locked); it just says why it is idle.
   if (off) return `<div style="border-bottom:1px solid var(--g3)"><div class="lrow" data-act="setc:${r.k}:${r.opts.length}" data-fk="set-${r.k}" style="min-height:${h}px;gap:14px"><div style="flex:1;min-width:0;padding:6px 0"><div style="font-size:var(--fb);font-weight:600">${esc(L)}</div><div class="meta" style="font-size:var(--fc);margin-top:2px;display:flex;gap:5px;align-items:center">${ic('info', 13, 2.4)}${esc(off)}</div></div><span style="font-size:var(--fs);font-weight:700">${esc(setValue(r))}</span>${ic('chevR', 16, 2.6)}</div></div>`;
@@ -1707,7 +1771,7 @@ function topPanel(b, c, g, cc, cs, p){
     <div style="display:flex;align-items:center;gap:10px">
       <div class="pill wh sm" data-act="home" data-fk="tp-home" style="padding:0 14px 0 10px">${ic('home', 18, 2.2)}Home</div>
       <div style="flex:1;min-width:0;text-align:center"><div class="ser ell" style="font-size:${x4 ? 17 : 19}px;font-weight:700">${esc(b.t)}</div><div class="ell" style="font-size:var(--fc);color:var(--g1);margin-top:1px">${esc(b.a)}</div></div>
-      <div class="iconbtn" data-act="bsync" data-fk="tp-sync" style="${S.bsync ? 'border-style:dashed' : ''}" title="${S.bsync ? 'Syncing…' : 'Sync this book'}">${ic(S.bsync ? 'spin' : 'sync', 22, 2.2)}</div>
+      ${NOSYNC() ? `<div class="pill wh sm" data-act="${ACC().in ? 'lopen:sync' : 'modal:signin'}" data-fk="tp-sync" style="padding:0 12px;white-space:nowrap">${ACC().in ? 'Set up sync' : 'Sign in to sync'}</div>` : `<div class="iconbtn" data-act="bsync" data-fk="tp-sync" style="${S.bsync ? 'border-style:dashed' : ''}" title="${S.bsync ? 'Syncing…' : 'Sync this book'}">${ic(S.bsync ? 'spin' : 'sync', 22, 2.2)}</div>`}
       <div class="iconbtn" data-act="sgo" data-fk="tp-set">${ic('gear', 22, 2)}</div>
       <div class="iconbtn" data-act="mark" data-fk="tp-mark" style="${marked ? 'border-width:2.5px' : ''}">${ic(marked ? 'bmplusf' : 'bmplus', 22, 2.2)}</div>
     </div>
@@ -1888,27 +1952,55 @@ function modalView(){
       <div class="cap" style="padding:2px 0 2px">Group</div>${['None', 'Author', 'Series'].map((l, i) => opt('grp:' + i, 'grp-' + i, grp === i, l)).join('')}
       <div class="hair" style="margin:6px 0"></div><div class="cap" style="padding:2px 0 2px">Sort</div>${BL_SORTS.map((l, i) => opt('sort:' + i, 'sort-' + i, so === i, l)).join('')}
       <div style="display:flex;gap:10px;margin-top:10px">${grp || so ? `<div class="pill wh" style="flex:1" data-act="lfreset" data-fk="lf-reset">Reset</div>` : ''}<div class="pill" style="flex:1" data-act="closeModal" data-fk="lf-done">Done</div></div></div>`; }
-  // X4: the firmware's own File Transfer web page (QR code + address) takes the sign-in from a phone or computer.
-  if (m.k === 'siweb'){ const r = rng(42); const N = 21; let q = ''; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){ const fin = (a, b) => x >= a && x < a + 7 && y >= b && y < b + 7; const inF = fin(0, 0) || fin(N - 7, 0) || fin(0, N - 7); const on = inF ? (() => { const fx = x < 7 ? x : x - (N - 7), fy = y < 7 ? y : y - (N - 7); return fx === 0 || fy === 0 || fx === 6 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4); })() : r() > .52; if (on) q += `<rect x="${x}" y="${y}" width="1" height="1"/>`; }
-    return `<div class="scrim" data-act="closeModal"></div><div class="card" style="left:50%;top:50%;transform:translate(-50%,-50%);width:420px;padding:18px;border-radius:18px">
-      <div class="ser" style="font-size:var(--fm);font-weight:700">Sign in from a phone</div>
-      <div style="font-size:var(--fs);margin-top:6px;line-height:1.4">On a phone or computer on the same Wi-Fi, scan the code or open:</div>
-      <div style="display:flex;gap:16px;align-items:center;margin-top:12px"><svg width="132" height="132" viewBox="-2 -2 25 25" style="flex:none;background:#fff;border:1.5px solid #000" shape-rendering="crispEdges"><g fill="#000">${q}</g></svg>
-        <div style="min-width:0"><div class="num" style="font-size:17px;font-weight:800;line-height:1.25">http://192.0.2.10<br>/settings</div>
-<div style="font-size:var(--fc);margin-top:6px;line-height:1.4">Fill in Account: server, user and password, then Save. This screen closes when the reader has them.</div></div></div>
-      <div style="font-size:var(--fc);margin-top:10px;line-height:1.4">This is the reader's File Transfer page (Settings › File Transfer). If a settings PIN is set, it asks for it first.</div>
-      <div class="pill wh" data-act="modal:signin" data-fk="sw-back" style="margin-top:14px;width:100%;box-sizing:border-box">${ic('chevL', 18, 2.6)}Back to the reader keyboard</div></div>`; }
-  if (m.k === 'signin' || m.k === 'whatsnew'){
-
-    const w = x4 ? 420 : 560; const isS = m.k === 'signin';
-    const fld = (k, l, v) => `<div class="lrow" data-act="sikey:${k}" data-fk="si-${k}" style="height:var(--tap);border-bottom:1px solid var(--g3);font-size:var(--fs);gap:10px"><span style="font-weight:600;flex:1">${l}</span><b class="ell" style="max-width:60%">${v}</b>${ic('keyboard', 18, 2)}</div>`;
-    const pw = (m.pw ? '••••••••' : '<span class="meta" style="font-weight:400">Not entered</span>');
-    const body = isS ? `<div class="ser" style="font-size:var(--fm);font-weight:700">Sign in again</div><div class="meta" style="font-size:var(--fs);margin-top:6px">BookSync keeps your books and progress. Only the sign-in is renewed.</div>
-      <div style="margin-top:8px">${fld('server', 'Server', 'books.example.net')}${fld('user', 'User', 'reader')}${fld('pw', 'Password', pw)}</div>
-      <div class="meta" style="font-size:var(--fc);margin-top:8px;line-height:1.4">${x4 ? 'Each row opens the reader\'s own keyboard (Prev/Next move, Select types).' : 'Each row opens the reader\'s own keyboard (KOReader\'s).'}</div>
-      ${x4 ? `<div class="lrow" data-act="modal:siweb" data-fk="si-web" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700;margin-top:6px">${ic('device', 18, 2.2)}<span style="flex:1">Type it on a phone or computer instead</span>${ic('chevR', 16, 2.6)}</div>` : ''}
-      <div style="display:flex;gap:10px;margin-top:14px"><div class="pill wh" data-act="closeModal" data-fk="si-cancel" style="flex:1">Cancel</div><div class="pill${m.pw ? '' : ' dis'}" data-act="signin" data-fk="si-ok" style="flex:1">Sign in</div></div>`
-      : `<div class="ser" style="font-size:var(--fm);font-weight:700">What's new in 0.12</div><div style="font-size:var(--fs);line-height:1.5;margin-top:10px">${['Home is a widget grid you can edit','Lists (your saved filters) on Home','BookSync settings on the reader: the companion is rarely needed','Battery widget with time left at your usual use'].map(x => `<div style="display:flex;gap:10px;padding:6px 0">${ic('check', 18, 2.6)}<span>${x}</span></div>`).join('')}</div><div class="pill" data-act="closeModal" data-fk="wn-ok" style="margin-top:14px">Done</div>`;
+  // Sign in to your server. M8C: a form typed with KOReader's keyboard. X4: typing is impractical, so it shows a code and a QR
+  // for your phone or the companion app (with "type it on this reader instead" as a fallback). One busy state, plain-word errors.
+  if (m.k === 'siweb') m.k = 'sicode';
+  if (m.k === 'signin' || m.k === 'sicode' || m.k === 'sidone' || m.k === 'signout' || m.k === 'login' || m.k === 'lremove'){
+    const W2 = x4 ? 440 : 580; const a = ACC(); const card = body => `<div class="scrim" data-act="${m.busy ? 'noop' : 'closeModal'}"></div><div class="card" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${W2}px;padding:${x4 ? 18 : 24}px;border-radius:18px">${body}</div>`;
+    const busy = `<div class="lrow" data-act="noop" data-fk="si-busy" data-here="1" style="height:var(--tap);justify-content:center;gap:10px;font-size:var(--fb);font-weight:700;border:2px solid #000;border-radius:999px;margin-top:14px">${ic('spin', 20, 2.4)}Signing in…</div>`;
+    const err = m.err ? `<div class="sierr" style="display:flex;gap:10px;border:2px solid #000;border-radius:12px;padding:10px 12px;margin-top:10px">${ic('warn', 20, 2.4)}<div><div style="font-size:var(--fs);font-weight:800">${SI_ERR[m.err][0]}</div><div style="font-size:var(--fc);margin-top:2px;line-height:1.35">${SI_ERR[m.err][1]}</div></div></div>` : '';
+    const phoneRow = `<div class="lrow" data-act="modal:sicode" data-fk="si-phone"${m.err === 'twostep' ? ' data-here="1"' : ''} style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700">${ic('device', 18, 2.2)}<span style="flex:1">Sign in from your phone or companion app</span>${ic('chevR', 16, 2.6)}</div>`;
+    if (m.k === 'signout') return card(`<div style="font-size:var(--fm);font-weight:700">Sign out of your server?</div><div style="font-size:var(--fb);margin-top:10px;line-height:1.45">${signoutText(a)}</div>
+      <div style="display:flex;gap:10px;margin-top:20px"><div class="pill wh" style="flex:1" data-act="socancel" data-fk="so-cancel" data-here="1">Stay signed in</div><div class="pill" style="flex:1" data-act="dosignout" data-fk="so-ok">Sign out</div></div>`);
+    if (m.k === 'sidone') return card(`<div style="display:flex;gap:10px;align-items:center;font-size:var(--fm);font-weight:700">${ic('check', 22, 2.8)}Signed in as ${esc(a.name)}</div><div style="font-size:var(--fs);margin-top:8px;line-height:1.4">BookSync used your server account to set up the rest:</div>
+      <div style="margin-top:6px">${[...['sync', 'opds'].map(w => [LN[w], a[w].st === 'user' ? 'Kept: the one you set' : a[w].how === 'found' ? 'Found: already on your server' : 'Created for this reader']), ['Stats', 'From all your devices']].map(([l, v]) => `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--g3);font-size:var(--fs)"><b style="flex:1">${l}</b><span>${v}</span></div>`).join('')}</div>
+      ${(m.kept || []).length ? `<div class="meta" style="font-size:var(--fc);margin-top:8px;line-height:1.4">To use the account's instead, open it in Your server and choose Replace with the account's.</div>` : ''}
+      <div class="pill" data-act="sddone" data-fk="sd-ok" data-here="1" style="margin-top:16px">Done</div>`);
+    const pe = m.err && SI_PHONE[m.err]; const perr = pe ? `<div class="sierr" style="display:flex;gap:10px;border:2px solid #000;border-radius:12px;padding:10px 12px;margin-top:10px">${ic('warn', 20, 2.4)}<div><div style="font-size:var(--fs);font-weight:800">${pe[0]}</div><div style="font-size:var(--fc);margin-top:2px;line-height:1.35">${pe[1]}</div></div></div>` : '';
+    if (m.k === 'lremove') return card(`<div style="font-size:var(--fm);font-weight:700">Remove the ${LN[m.w].toLowerCase().replace('opds', 'OPDS')}?</div><div style="font-size:var(--fb);margin-top:10px;line-height:1.45">${m.w === 'sync' ? 'This reader stops syncing your place until a sync login is set again.' : 'This reader can\'t browse or download from your server until an OPDS login is set again. Downloaded books stay.'} Nothing changes on your server.</div>
+      <div style="display:flex;gap:10px;margin-top:20px"><div class="pill wh" style="flex:1" data-act="lclose" data-fk="lr-keep" data-here="1">Keep it</div><div class="pill" style="flex:1" data-act="ldel" data-fk="lr-ok">Remove</div></div>`);
+    if (m.k === 'login'){ const l = a[m.w]; const fl = (k, lb, v, ph) => `<div class="lrow${m.busy ? ' dis' : ''}" data-act="sikey:${k}" data-fk="si-${k}"${m.err && SI_ERR[m.err][2] === k ? ' data-here="1"' : ''} style="height:var(--tap);border-bottom:1px solid var(--g3);font-size:var(--fs);gap:10px"><span style="font-weight:600;width:${x4 ? 92 : 120}px;flex:none">${lb}</span><b class="ell" style="flex:1;text-align:right;${v ? '' : 'font-weight:400;color:var(--g1)'}">${v || ph}</b>${ic('keyboard', 18, 2)}</div>`;
+      const rowA = (act, fk, icn, t) => `<div class="lrow" data-act="${act}" data-fk="${fk}" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700;border-top:1px solid var(--g3)">${ic(icn, 18, 2.2)}<span style="flex:1">${t}</span>${ic('chevR', 16, 2.6)}</div>`;
+      const ready = m.srv && m.usr && m.pw;
+      return card(`<div style="display:flex;align-items:baseline;gap:10px"><div class="ser" style="font-size:var(--fm);font-weight:700;flex:1">${LN[m.w]}</div><span style="font-size:var(--fc);font-weight:700;border:1.5px solid #000;border-radius:999px;padding:1px 8px">${LST(l)}</span></div><div class="meta" style="font-size:var(--fs);margin-top:6px;line-height:1.4">${LWHAT(m.w)} It works with or without your server account.</div>
+        ${m.err ? `<div class="sierr" style="display:flex;gap:10px;border:2px solid #000;border-radius:12px;padding:10px 12px;margin-top:10px">${ic('warn', 20, 2.4)}<div><div style="font-size:var(--fs);font-weight:800">${SI_ERR[m.err][0]}</div><div style="font-size:var(--fc);margin-top:2px;line-height:1.35">${SI_ERR[m.err][1]}</div></div></div>` : ''}
+        <div style="margin-top:8px">${fl('server', 'Server', m.srv, 'Your server address')}${fl('user', 'User name', m.usr, 'Its user name')}${fl('pw', 'Password', m.pw ? '••••••••' : '', 'Not entered')}</div>
+        ${m.busy ? busy : `<div style="margin-top:6px">${x4 ? rowA('lphone', 'lg-phone', 'device', 'Enter it from your phone') : ''}${a.in && l.st === 'user' ? rowA('lrepl', 'lg-repl', 'sync', 'Replace with the account\'s') : ''}${l.st ? rowA('lrem', 'lg-rem', 'trash', 'Remove ' + LN[m.w].replace('Sync', 'sync') + '…') : ''}</div>
+        <div style="display:flex;gap:10px;margin-top:12px"><div class="pill wh" data-act="lclose" data-fk="si-cancel" style="flex:1">Cancel</div><div class="pill${ready ? '' : ' dis'}" data-act="lsave" data-fk="si-ok" style="flex:1">Save</div></div>`}`); }
+    if (m.k === 'sicode') return card(`<div class="ser" style="font-size:var(--fm);font-weight:700">${m.w ? 'Enter the ' + LN[m.w].replace('Sync', 'sync') + ' from your phone' : 'Sign in from your phone'}</div>
+      <div style="font-size:var(--fs);margin-top:6px;line-height:1.4">Typing a password here is slow. On your phone, on the same Wi-Fi, scan the code, or in the companion app choose <b>Add a reader</b> and enter:</div>
+      <div style="display:flex;gap:16px;align-items:center;margin-top:12px">${qrSvg(42, x4 ? 120 : 140)}<div style="min-width:0"><div class="num" style="font-size:${x4 ? 34 : 40}px;font-weight:800;letter-spacing:.06em;white-space:nowrap">${m.code || SI_CODE}</div><div style="font-size:var(--fc);margin-top:6px;line-height:1.4">${m.w ? 'Then enter the ' + LN[m.w].replace('Sync', 'sync') + ' on the phone.' : 'Then sign in to your server on the phone.'} This reader finishes by itself. The code lasts 10 minutes.</div></div></div>
+      ${perr}${m.busy ? busy : m.err === 'old' ? `<div class="pill" data-act="closeModal" data-fk="si-close" data-here="1" style="margin-top:14px">Close</div>` : `${m.err ? `<div class="lrow" data-act="sinew" data-fk="si-new" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700;margin-top:6px">${ic('sync', 18, 2.2)}<span style="flex:1">Get a new code</span>${ic('chevR', 16, 2.6)}</div>` : `<div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:var(--fs);font-weight:600">${ic('spin', 18, 2.2)}Waiting for your phone…</div>`}
+      <div class="lrow" data-act="sicheck" data-fk="si-check" data-here="1" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700;border-top:1px solid var(--g3);margin-top:8px">${ic('sync', 18, 2.2)}<span style="flex:1">${m.w ? 'I\'ve entered it on my phone' : 'I\'ve signed in on my phone'}</span>${ic('chevR', 16, 2.6)}</div>
+      <div class="lrow" data-act="sitype" data-fk="si-type" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:600;border-top:1px solid var(--g3)">${ic('keyboard', 18, 2.2)}<span style="flex:1">Type it on this reader instead</span>${ic('chevR', 16, 2.6)}</div>
+      <div class="pill wh" data-act="closeModal" data-fk="si-cancel" style="margin-top:10px">Cancel</div>`}`);
+    // the form
+    const fld = (k, l, v, ph) => `<div class="lrow${m.busy ? ' dis' : ''}" data-act="sikey:${k}" data-fk="si-${k}"${m.err && SI_ERR[m.err][2] === k ? ' data-here="1"' : ''} style="height:var(--tap);border-bottom:1px solid var(--g3);font-size:var(--fs);gap:10px"><span style="font-weight:600;width:${x4 ? 92 : 120}px;flex:none">${l}</span><b class="ell" style="flex:1;text-align:right;${v ? '' : 'font-weight:400;color:var(--g1)'}">${v || ph}</b>${ic('keyboard', 18, 2)}</div>`;
+    const ready = m.srv && m.usr && m.pw;
+    return card(`<div class="ser" style="font-size:var(--fm);font-weight:700">${a.in ? 'Sign in again' : 'Sign in to your server'}</div><div class="meta" style="font-size:var(--fs);margin-top:6px;line-height:1.4">${a.in ? 'Your books and progress stay. Only the sign-in is renewed.' : 'Use your server account, once. BookSync then sets up sync and OPDS for you.'}</div>
+      ${err}<div style="margin-top:8px">${fld('server', 'Server', m.srv, 'Your server address')}${fld('user', 'User name', m.usr, 'Your user name')}${fld('pw', 'Password', m.pw ? '••••••••' : '', 'Not entered')}</div>
+      <div class="meta" style="font-size:var(--fc);margin-top:6px;line-height:1.4">${x4 ? 'Each row opens the keyboard (Prev/Next move, Select types).' : 'Each row opens the keyboard.'}</div>
+      ${m.busy ? busy : `${m.err === 'twostep' || x4 ? phoneRow : ''}<div style="display:flex;gap:10px;margin-top:12px"><div class="pill wh" data-act="closeModal" data-fk="si-cancel" style="flex:1">Cancel</div><div class="pill${ready ? '' : ' dis'}" data-act="signin" data-fk="si-ok" style="flex:1">Sign in</div></div>`}`);
+  }
+  // Update channel picker: radio rows with their one-line description; picking returns to Updates. Focus starts on the current one.
+  if (m.k === 'chan'){ const x4 = dk() === 'x4';
+    const rows = CHAN.map((ch, i) => { const on = SETV.chan === i; return `<div class="lrow" data-act="chanset:${i}" data-fk="ch-${i}"${on ? ' data-here="1"' : ''} style="min-height:${x4 ? 62 : 68}px;border-bottom:1px solid var(--g3);gap:12px;align-items:center"><span style="width:22px;height:22px;border:2px solid #000;border-radius:11px;display:grid;place-items:center;flex:none">${on ? '<i style="width:10px;height:10px;border-radius:5px;background:#000;display:block"></i>' : ''}</span><div style="flex:1;min-width:0;padding:6px 0"><div style="font-size:var(--fb);font-weight:${on ? 800 : 600}">${ch.n}${ch.n === INSTALLED.ch ? '<span class="meta" style="font-weight:500;font-size:var(--fc)"> · installed build</span>' : ''}</div><div class="meta" style="font-size:var(--fc);line-height:1.3;margin-top:2px">${esc(ch.d)}</div></div></div>`; }).join('');
+    return `<div class="scrim" data-act="chanback"></div><div class="card" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${x4 ? 440 : 560}px;padding:0;border-radius:18px">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--g3)"><div class="backbtn" data-act="chanback" data-fk="ch-back">${ic('chevL', 22, 2.6)}Updates</div><b style="font-size:var(--fm);flex:1">Update channel</b></div>
+      <div style="padding:0 ${x4 ? 16 : 22}px 8px">${rows}</div></div>`; }
+  if (m.k === 'whatsnew'){
+    const w = x4 ? 420 : 560;
+    const body = `<div class="ser" style="font-size:var(--fm);font-weight:700">What's new in 0.12</div><div style="font-size:var(--fs);line-height:1.5;margin-top:10px">${['Home is a widget grid you can edit','Lists (your saved filters) on Home','BookSync settings on the reader: the companion is rarely needed','Battery widget with time left at your usual use'].map(x => `<div style="display:flex;gap:10px;padding:6px 0">${ic('check', 18, 2.6)}<span>${x}</span></div>`).join('')}</div><div class="pill" data-act="closeModal" data-fk="wn-ok" style="margin-top:14px">Done</div>`;
     return `<div class="scrim" data-act="closeModal"></div><div class="card" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${w}px;padding:${x4 ? 18 : 24}px;border-radius:18px">${body}</div>`;
   }
   return '';
@@ -1951,6 +2043,8 @@ function act(a, el, ev){
     case 'doRemove': B[r[0]].dev = false; LIB.device--; S.modal = null; return toast('Download removed · still in your library');
     case 'doConnect': { const m = S.modal; S.offline = false; S.modal = null; startDownload(m.ids, m.open); return toast('Connected · downloading'); }
     case 'closeModal': S.modal = null; break;
+    case 'chanset': SETV.chan = +r[0]; S.modal = null; S.fk = 'set-chan'; break;
+    case 'chanback': S.modal = null; S.fk = 'set-chan'; break;
     case 'details': return go({n:'details', id:r[0]});
     case 'series': return go({n:'series', sid:r[0]});
     case 'nav': {
@@ -2012,8 +2106,24 @@ function act(a, el, ev){
     case 'toast': toast(r.join(':')); return;
     case 'doFree': { S.modal = null; S.freed = {...(S.freed || {}), [r[0]]:1}; if (r[0] === 'rmfinished') LIB.device -= 9; if (r[0] === 'rmold') LIB.device -= 41; const st = STORE(); return toast(`${({rmfinished:'84 MB', rmcovers:'40 MB', rmold:'2.4 GB'})[r[0]]} freed · ${fmtGB(st.free)} free${LOW() ? ' · still low' : ''}`); }
     case 'spaceGo': S.modal = null; return go({n:'storage'});
-    case 'signin': if (!S.modal || S.modal.k !== 'signin'){ S.modal = {k:'signin'}; S.fk = null; break; } if (!S.modal.pw) return toast('Enter the password first'); S.modal = null; toast('Signed in again as reader'); return;
-    case 'sikey': if (r[0] === 'pw'){ S.modal.pw = 1; toast('Password entered on the reader keyboard'); return; } return toast(`${r[0] === 'server' ? 'Server' : 'User'} opens the reader keyboard`);
+    case 'signin': { if (!S.modal || S.modal.k !== 'signin'){ act('modal:signin'); return; } const m = S.modal; if (!(m.srv && m.usr && m.pw)) return toast('Fill in all three first');
+      m.busy = true; m.err = null; S.fk = null; const gen = m.gen = (m.gen || 0) + 1; render(); S.timers = S.timers || []; S.timers.push(setTimeout(() => siFinish(m, gen), 900)); return; }
+    case 'sicheck': { const m = S.modal; m.busy = true; m.err = null; S.fk = null; const gen = m.gen = (m.gen || 0) + 1; render(); S.timers = S.timers || []; S.timers.push(setTimeout(() => siFinish(m, gen), 900)); return; }
+    case 'sitype': { const a = ACC(); const w = S.modal && S.modal.w; S.modal = w ? {k:'login', w, srv:'', usr:''} : {k:'signin', srv:a.srv, usr:a.in ? a.name : ''}; S.fk = null; break; }
+    case 'lopen': { const a = ACC(), w = r[0]; if (dk() === 'x4' && !a[w].st){ S.modal = {k:'sicode', w}; S.fk = null; break; } S.modal = {k:'login', w, srv:a[w].st ? a.srv : '', usr:!a[w].st ? '' : a[w].st === 'user' ? LUSR(w, a[w]) : a.name}; S.fk = null; break; }
+    case 'lphone': S.modal = {k:'sicode', w:S.modal.w}; S.fk = null; break;
+    case 'lsave': { const m = S.modal; if (!(m.srv && m.usr && m.pw)) return toast('Fill in all three first'); m.busy = true; m.err = null; S.fk = null; const gen = m.gen = (m.gen || 0) + 1; render(); S.timers = S.timers || []; S.timers.push(setTimeout(() => siFinish(m, gen), 900)); return; }
+    case 'lrepl': { const w = S.modal.w; ACC()[w] = {st:'acct', how:'found'}; S.modal = null; S.fk = LFK(w); toast(LN[w] + ' replaced with your account\'s'); return; }
+    case 'lrem': S.modal = {k:'lremove', w:S.modal.w}; S.fk = null; break;
+    case 'ldel': { const w = S.modal.w; ACC()[w] = {st:null}; S.modal = null; S.fk = LFK(w); toast(LN[w] + ' removed'); return; }
+    case 'lclose': { const w = S.modal.w; S.modal = null; S.fk = LFK(w); break; }
+    case 'sikey': { const m = S.modal; if (m.busy) return; const a = ACC(); if (r[0] === 'pw') m.pw = 1; else if (r[0] === 'server') m.srv = a.srv; else m.usr = m.k === 'login' ? LUSR(m.w) : a.name; m.err = null; S.fk = 'si-' + r[0];
+      render(); toast(`The keyboard typed the ${r[0] === 'pw' ? 'password' : r[0] === 'server' ? 'server address' : 'user name'}`); return; }
+    case 'sinew': { const m = S.modal; m.code = m.code === 'P3X 9D5' ? SI_CODE : 'P3X 9D5'; m.err = null; S.fk = 'si-check'; toast('New code · it lasts 10 minutes'); return; }
+    case 'sddone': { const m = S.modal; S.modal = null; S.fk = m.changed && m.changed.length ? LFK(m.changed[0]) : 'set-resign'; break; }
+    case 'socancel': S.modal = null; S.fk = 'set-out'; break;
+    case 'dosignout': { const a = ACC(); a.in = false; for (const w of ['sync', 'opds']) if (a[w].st === 'acct') a[w] = {st:null}; S.modal = null; S.fk = 'set-signin'; toast('Signed out. Your books stay on this reader'); break; }
+    case 'noop': return;
     case 'page': S.page = +r[0]; S.sel = null; S.fk = null; break;
     case 'pagePrev': S.page = Math.max(0, S.page - 1); S.sel = null; if (!S.kbdUsed && S.dev !== 'x4c') S.fk = null; break;
     case 'pageNext': S.page = Math.min(pages.length - 1, S.page + 1); S.sel = null; break;
@@ -2078,12 +2188,14 @@ function act(a, el, ev){
     case 'smode': setMode(+r[0]); S.fk = 'set-mode'; break;
     case 'sett': SETV[r[0]] = !SETV[r[0]]; break;
     case 'settings': if (r[0] === 'edit'){ S.stack = [S.stack[0]]; S.edit = true; S.sel = null; } break;
-    case 'modal': if (r[0] === 'lfilter') return act('filter'); S.modal = {k:r[0]}; S.fk = null; break;
-    case 'sync': toast(S.offline ? 'Offline · will sync when Wi-Fi is back' : 'Synced · 3 new books'); return;
+    case 'modal': if (r[0] === 'lfilter') return act('filter'); if (r[0] === 'siweb') r[0] = 'sicode';
+      if (r[0] === 'signin'){ const a = ACC(); if (dk() === 'x4' && !a.in){ S.modal = {k:'sicode'}; S.fk = null; break; } S.modal = {k:'signin', srv:a.in ? a.srv : '', usr:a.in ? a.name : ''}; S.fk = null; break; }
+      S.modal = {k:r[0]}; S.fk = null; break;
+    case 'sync': if (NOSYNC()) return toast('No sync login · set one in Your server'); toast(S.offline ? 'Offline · will sync when Wi-Fi is back' : 'Synced · 3 new books'); return;
     case 'fullrefresh': if (S.offline){ toast('Full refresh needs Wi-Fi'); return; } if (S.refresh == null){ S.refresh = 0; const tk = () => { S.refresh += 7 + Math.random() * 6; if (S.refresh >= 100){ S.refresh = null; toast('Library refreshed · 2,418 books'); return; } render(); setTimeout(tk, 260); }; setTimeout(tk, 260); } break;
     case 'sgo': return go({n:'settings'});
     case 'hsync': if (S.offline) return; S.hsync = 'busy'; render(); setTimeout(() => { S.hsync = 'done'; render(); }, 900); return;
-    case 'bsync': { if (S.offline) return toast('Offline · will sync when connected'); const b = B[c.id]; S.bsync = true; render();
+    case 'bsync': { if (NOSYNC()) return act(ACC().in ? 'lopen:sync' : 'modal:signin'); if (S.offline) return toast('Offline · will sync when connected'); const b = B[c.id]; S.bsync = true; render();
       setTimeout(() => { S.bsync = false; const p = S.pages[b.id]; if (b.remote && b.remote > p){ if (SETV.smode){
  const was = p; S.pages[b.id] = b.remote; b.prog = b.remote / b.pages; b.remote = null; c.panel = null; toast(`Jumped to p. ${S.pages[b.id]} from your ${b.rdev || 'other device'} · you were on p. ${was}`); return; } S.modal = {k:'further', id:b.id}; render(); } else toast(`Synced · p. ${p} saved`); }, 900); return; }
     case 'further': { const b = B[S.modal.id]; S.modal = null; if (r[0] === 'jump'){ S.pages[b.id] = b.remote; b.prog = b.remote / b.pages; c.panel = null; } b.remote = null; toast(r[0] === 'jump' ? `Jumped to p. ${S.pages[b.id]} · synced` : `Staying on p. ${S.pages[b.id]} · synced`); return; }
@@ -2257,7 +2369,8 @@ function explain(){
   }
   if (c.n === 'settings'){ const g = c.grp;
     if (g === 'sync') return ['Sync, Wi-Fi & power', 'One mode at the top sets Wi-Fi, when your place is sent, and sleep and wake syncs together: Battery saver, Balanced or Always up to date, each with its battery estimate at your usual use. Every setting stays visible underneath. Change one and the mode becomes Custom, with “Back to Balanced” to undo. Settings that do nothing in the current mix say why instead of hiding.' + (x4c ? ' <kbd>Select</kbd> on the mode steps to the next one.' : ''), ['Set Wi-Fi to “Off while reading”: Sync while reading warns that its syncs wait until you close the book.', 'Turn off “Sync when the reader sleeps”: the sleep limit says it is not used.']];
-    if (g === 'updates') return ['Updates', 'Three channels, each with what it means: Stable, RC (the builds about to become stable) and Preview (every test build). Installed shows the version and its channel.', []];
+    if (g === 'account') return ['Your server', 'BookSync asks for your server account once and uses it for everything: stats from all your devices, and it sets up the sync login and the OPDS login by itself (found if they exist, created if not). ' + (x4 ? 'On the X4 typing a password is slow, so Sign in shows a code and a QR for your phone or the companion app; you can still type it here.' : 'The form is typed with KOReader\'s keyboard.') + ' Signed out, Stats widgets say “This reader only”.', ['Set Server to Signed out above, then Sign in.', 'Pick an error in “Sign-in result” above to see how it reads.']];
+    if (g === 'updates') return ['Updates', 'Update channel is one row with its current choice; tapping it opens a picker of three channels, each with what it means: Stable, RC (the builds about to become stable) and Preview (every test build). Pick one and you are back here. Installed shows the version and its channel.', []];
     return ['BookSync settings', 'Everything you change day to day, on the reader itself. Each group shows a one-line summary. Rows page rather than scroll; swipe sideways or use the arrows.', []]; }
   if (c.n === 'battery') return ['Battery', 'The level and time left at your usual use, how the estimate is made, measured rates (with their margin of error), daily use and recent charges.', []];
   if (c.n === 'storage') return ['Storage', 'What uses the space and what each action frees. Low space only warns; a download is blocked only when it would leave less than 200 MB free.', ['Set Space to Nearly full in the controls above, then try a download.']];
@@ -2277,6 +2390,12 @@ function renderSide(){
 document.querySelectorAll('#devseg button').forEach(b => b.addEventListener('click', () => { const keep = S.stack; const was = dk(); S.dev = b.dataset.dev; if (dk() !== was){ S.page = 0; S.sel = null; } S.fk = null; S.kbdUsed = false; $('#hwkeys').dataset.on = ''; render(); }));
 $('#offline').addEventListener('change', e => { S.offline = e.target.checked; render(); });
 $('#lowspace').addEventListener('change', e => { S.lowspace = +e.target.value; S.freed = {}; render(); });
+$('#acct').addEventListener('change', e => { const a = ACC(), v = e.target.value; a.in = v === '1';
+  if (v === 'none'){ a.sync = {st:null}; a.opds = {st:null}; }
+  else if (v === '0'){ for (const w of ['sync', 'opds']) a[w] = {st:'user'}; } // signed out keeps only your own logins
+  else if (!a.sync.st && !a.opds.st){ a.sync = {st:v === '1' ? 'acct' : 'user', how:'found'}; a.opds = {st:v === '1' ? 'acct' : 'user', how:'created'}; } render(); });
+for (const [id, w] of [['#slog', 'sync'], ['#olog', 'opds']]) $(id).addEventListener('change', e => { const v = e.target.value; const a = ACC(); a[w] = v === 'none' ? {st:null} : {st:v === 'acct' && !a.in ? 'user' : v, how:w === 'sync' ? 'found' : 'created'}; render(); });
+$('#sires').addEventListener('change', e => { S.sires = e.target.value; });
 $('#restart').addEventListener('click', () => restart(S.dev));
 window.addEventListener('resize', scale);
 const BOOKS0 = clone(B);

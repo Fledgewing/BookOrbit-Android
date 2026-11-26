@@ -1,15 +1,18 @@
 # BookSync Home, tap to download and series
 
-**Current visual review:** [revision-10 notes](DESIGN-NOTES.md),
+**Approved presentation:** [revision-14 notes](DESIGN-NOTES.md),
 [clickable prototype](prototype.html) and [screenshot gallery](mockups.html)
 replace the earlier visual/interaction examples below. The adversarial critic
-approved the supplied design after six rounds; maintainer sign-off is pending.
+approved the supplied design in round 9. The maintainer signed off on
+2026-11-25: “This looks good from my perspective”.
 Native integration, backend, licensing and measured-fit gates below still apply.
-Implementation and merge are not authorized by critic approval.
+Implementation is authorized on `feature/0.12`, Android first (2026-11-25).
+This PR records the signed-off design and prototype; native code follows there.
 
-Status: **designing — awaiting maintainer approval**, W36, 25 November 2026.
+Status: **design approved by the maintainer 2026-11-25**, W36.
+Implementation: **authorized 2026-11-25 on `feature/0.12`, Android first**.
 Design, [static mockups](mockups.html) and the requested clickable prototype only;
-no native client implementation or release is authorized. This is the UI portion of
+this update contains no native implementation and authorizes no release. This is the UI portion of
 [backend independence step 1](../backend-independence.md#1-owned-android-client-and-ledger),
 not approval of that document's ledger, export or server proposals.
 Revision 4 records the decided widget host, free-form editors and shared layout,
@@ -917,10 +920,10 @@ review before release; this design does not change workflows or publish a bridge
 
 ### 8.8 Approval and acceptance gates
 
-Design review includes Android/X4/X3 mockups and prototype, §3's full inventory and the staged
-adapter/base/version ownership—not Android first with Xteink deferred. Implementation
-can use parallel platform slices on `feature/0.12` only after approval; no code is
-authorized by this draft. Acceptance adds: owned X4 first paint with network off;
+Design approval covers Android/X4/X3 mockups and prototype, §3's full inventory
+and staged adapter/base/version ownership. The maintainer signed off on 2026-11-25
+and authorized implementation on `feature/0.12`, **Android first**. This is the
+implementation order; Xteink scope and hardware acceptance gates remain. Acceptance adds: owned X4 first paint with network off;
 no old Home/catalog UI invocations; consumer imports confined to our adapter;
 sole sync writer; login and credential migration/rollback; positions/bookmarks/
 annotations/session preservation; SD power cuts during publication and transfer;
@@ -969,7 +972,8 @@ are gates; mockup dimensions alone are not device validation.
 | Opt-in migration for existing installs | Limits surprise and makes comparison/rollback easy; new-install default reviewed after acceptance. |
 | Operation names and physical schema remain internal | Validate both adapters before any public compatibility promise. |
 
-These settle the design draft, not approval to build.
+These reversible decisions are part of the approved design; native acceptance
+gates still apply during the authorized implementation.
 
 ## 11. One-way doors for the maintainer (approval questions)
 
@@ -1005,10 +1009,11 @@ from the reversible UI choices. Recommended answers are proposals.
    Immutable tags, signed migration identities and readers that miss the bridge
    are lasting compatibility obligations (§8.7).
 
-Maintainer also reviews the full inventory (every retained reader-preset content type and changed layout
-organization), offline prompt, series ordering, detail/actions and Android/X4/X3
-mockups before changing status from designing. Draft PR acceptance alone does
-not authorize implementation or a default flip.
+The maintainer approved the full design and revision-14 prototype on 2026-11-25,
+including the retained content, layout, offline prompt, series/detail actions and
+platform presentations. Implementation is authorized on `feature/0.12`, Android
+first. A default flip, release and firmware base cutover still require their
+specific acceptance gates; the design PR does not execute them.
 
 ## 12. Historical prototype verification (revision 4 artifact only)
 
@@ -1039,8 +1044,8 @@ unmeasured and require the separate implementation acceptance in §3.6/§8.
 **Decided:** BookSync owns the normal reading menus as well as Home on Android,
 X4 Pro, X4 Classic and X3. Top/bottom tap menus, quick settings, TOC/chapters,
 bookmarks/highlights, go to page/percent, search, book info/series, End of book and
-our cached sleep presentation use the same design system. This is design scope,
-not permission to implement or a claim that native hooks have passed acceptance.
+our cached sleep presentation use the same design system. The maintainer approved this design scope and Android-first implementation on
+`feature/0.12` on 2026-11-25; native hooks still need implementation acceptance.
 No KOReader core patches. Every original KOReader menu remains reachable through
 **KOReader menu**, including third-party plugin items; **More KOReader settings…**
 also appears in quick settings. We do not remove registrations, remap saved user
