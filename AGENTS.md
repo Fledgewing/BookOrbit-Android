@@ -78,7 +78,8 @@ Stats widgets share one materialized `reading.stats` row per paint; aggregate an
 server/local precedence and provenance in the companion, never in Lua.
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Layout moves validate only their changed page, bounded by
-the placement count. Home pages and Settings groups inherit their screen-family budget.
+the placement count. Home pages and Settings groups inherit their screen-family budget. Filter picker pages inherit
+the filter screen budget; facet counts and zero-value ordering stay in the companion.
 
 ## Read the source, not memory
 
