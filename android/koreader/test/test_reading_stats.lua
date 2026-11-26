@@ -103,6 +103,11 @@ return function(test,eq,ok,here,Cache)
             longest_session_seconds='all your devices',best_day_pages='this reader',streak='all your devices'}
         data.local_today_seconds=600; data.display.local_today='10 m today · this reader (separate)'
         eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).source,nil)
+        data.sources.days='this reader'
+        eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).source,'Days · this reader')
+        data.sources.streak='this reader'
+        eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).source,'This reader only')
+        data.sources.days='all your devices'; data.sources.streak='all your devices'
         local week=e.ReadingStatsPlan.build('this-week',data,600,300,2)
         eq(week.source,nil); ok(has(week,'10 m today · this reader (separate)'))
         eq(e.ReadingStatsPlan.build('when-you-read',data,600,300,2).source,'This reader only')

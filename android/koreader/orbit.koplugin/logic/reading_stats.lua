@@ -16,7 +16,10 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
     local source_field=({['year-in-reading']='days',['this-week']='days',
         ['when-you-read']='hours',['reading-records']='records'})[id]
     if sources[source_field] == 'this reader' then
-        p.source=id == 'reading-records' and 'Pages · this reader' or 'This reader only'
+        local r=data.records or {}
+        local mixedYear=id=='year-in-reading' and (r.books_this_year~=nil and sources.finished=='all your devices'
+            or r.best_streak~=nil and sources.streak=='all your devices')
+        p.source=id=='reading-records' and 'Pages · this reader' or mixedYear and 'Days · this reader' or 'This reader only'
     end
     local states={empty='No reading recorded',error='Reading statistics unavailable',
         ['not-saved']='Enable KOReader statistics',['offline-without-data']='Not saved yet',loading='Loading reading statistics'}
