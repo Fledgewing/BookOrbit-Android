@@ -79,6 +79,9 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 
 ## Screen and widget performance budgets
 
+Local optional widgets inherit one-row/16 KiB budgets too: companion-owned vocabulary selection
+and reading messages; native frontlight scalars only in Library. Paint never scans local history.
+
 Nested group covers and Series next-book previews count as rows in the caller budget;
 never hide multiple display records behind a single summary row. Companion materialization
 owns their ordering, counts and status labels.

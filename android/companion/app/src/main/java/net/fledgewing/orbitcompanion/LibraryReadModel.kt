@@ -13,6 +13,7 @@ class LibraryReadModel(
     private val fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null },
+    private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
     private val adapter: ServerAdapter = ServerAdapters.forStore(store, clock = clock,
         fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats),
 ) {
@@ -28,9 +29,10 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
+        val localStats by lazy { readingStats() }
         val power by lazy { battery() }
         val account by lazy { accountStats(owner) }
-        val stats by lazy { ReadingStats.display(AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
+        val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, adapter.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -41,6 +43,9 @@ class LibraryReadModel(
                 val result = try { when (args["op"]) {
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
                     "reading.stats" -> stats
+                    "local.word" -> LocalWidgets.word(vocabulary(), clock())
+                    "local.buddy" -> LocalWidgets.buddy(localStats)
+                    "local.light" -> LocalWidgets.light(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
                     "device.clock" -> ClockWidget.snapshot(clock(), power, twelve = args["twelve_hour"] == true)
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power

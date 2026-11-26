@@ -56,6 +56,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readerfont.lua", { "onSetFontSize" } },
     { "frontend/apps/reader/modules/readerfooter.lua", { "applyFooterMode", "onUpdateFooter" } },
     { "frontend/device/generic/device.lua", { "hasFrontlight", "hasNaturalLight", "getPowerDevice" } },
+    { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
     { "frontend/device/generic/powerd.lua", { "frontlightIntensity", "frontlightWarmth", "setIntensity", "setWarmth" } },
     { "frontend/ui/widget/buttontable.lua", { {"buttons_layout", F} } },
     { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus" } },
@@ -140,6 +141,7 @@ local NEEDS = {
     { "frontend/ui/widget/widget.lua", { "getSize" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
+    { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
     -- OrbiSmart (ko/orbismart.lua): places in this layout's pages, and the Yes / No popup (its
     -- Back / tap outside runs cancel_callback).

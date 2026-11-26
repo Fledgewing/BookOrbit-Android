@@ -934,3 +934,19 @@ keeps a declared budget inherited by Library: six sleep choices and 16 KiB per
 page, zero render network/subprocesses; device settings are a lifecycle-cached row.
 Counts and choice decoding stay in the companion; paints/calls log info timing
 spans. Device latency and Android power-policy acceptance remain pending.
+
+### Android local picker widgets (2026-11-26)
+
+The authorised Android-first build installs Word of the day, Reading buddy and Light
+in both prototype picker sizes (2×1 and 2×2); defaults are unchanged. Word is a daily
+KOReader vocabulary snapshot with context/source and native lookup. Buddy uses only
+local statistics, labelled On this reader; it does not imply account completion or
+achievements. Light uses native frontlight capability and cached intensity, with
+50 px decrease/increase actions; unsupported hardware has an explicit explanation.
+Highlight needs an authorized saved passage and A year ago a cached server snapshot
+(DESIGN §3.1–3.2); both remain staged with Recommended and Discover.
+
+Each widget inherits one row, 16 KiB, zero subprocesses/render network and one shared
+Home batch from budgets.lua. Selection, count and messages stay in the companion;
+Lua draws immutable windows. Timing spans remain device evidence, not host acceptance.
+See [local widget implementation](F12-G-LOCAL-WIDGETS.md) for pinned source evidence.
