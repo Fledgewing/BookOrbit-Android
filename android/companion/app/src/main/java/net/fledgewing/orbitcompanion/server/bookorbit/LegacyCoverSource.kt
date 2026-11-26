@@ -5,7 +5,7 @@ import net.fledgewing.orbitcompanion.*
 import java.io.File
 
 /** Read-only compatibility for existing catalog accounts. Never executes Lua, changes a login,
- * claims a catalog, persists a credential or activates any position/lifecycle writer. */
+ * reassigns a catalog, persists a credential or activates any position/lifecycle writer. */
 internal object LegacyCoverSource {
     class Account(val owner: String,val credentials: CacheWorker.Creds) {
         override fun toString() = "CoverAccount(redacted)"

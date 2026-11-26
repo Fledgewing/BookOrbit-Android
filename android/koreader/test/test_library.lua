@@ -54,6 +54,19 @@ return function(test, eq, ok, here, Cache)
         eq(result.error,"canceled"); eq(result.local_path,nil)
         eq(e.Budgets.screens["cover-cache"].rows,1); eq(e.Budgets.screens["cover-cache"].roundTrips,0)
     end)
+    test("covers: ownership races retry with a strict bound and stop after departure", function()
+        local queue,calls,landed,completed={},0,0,0
+        local valid=true
+        local e=setmetatable({Cache=Cache,Library={acquireCoverReference=function(_,_,done) calls=calls+1; done({error="retryable"}); return true end},
+            UIManager={scheduleIn=function(_,_,fn) queue[#queue+1]=fn end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."ko/covers.lua")),e)()
+        e.CoverQueue.acquire({{reference="local"}},false,function() return valid end,function() landed=landed+1 end,function() completed=completed+1 end)
+        for _=1,2 do table.remove(queue,1)() end
+        eq(calls,3); eq(#queue,0); eq(landed,1); eq(completed,1)
+        e.CoverQueue.acquire({{reference="local"}},false,function() return valid end,function() error("departed") end,function() completed=completed+1 end)
+        valid=false; table.remove(queue,1)()
+        eq(calls,4); eq(completed,2)
+    end)
     test("covers: parent work windows are bounded and preserve remaining jobs", function()
         local q={head=1,tail=6,1,2,3,4,5,6,seen={kept=true}}
         local rows=Cache.takeWindow(q,4); eq(#rows,4); eq(rows[4],4); eq(q.head,5); eq(q.tail,6)

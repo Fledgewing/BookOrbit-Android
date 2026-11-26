@@ -63,6 +63,21 @@ class CoverReferenceTest {
             catch (e: ServerFailure) { assertEquals("unavailable",e.kind) }
         }
     }
+    @Test fun firstCoverCanInitializeAnEmptyCacheButCannotAdoptCatalogWork() {
+        Kit().use { k ->
+            k.worker.store.setMeta("owner",null)
+            File(k.ref("7_100.jpg")).writeBytes(byteArrayOf(-1,-40,-1,0))
+            assertTrue(k.path(k.acquire("7_100.jpg")).isFile)
+            assertEquals(k.owner,k.worker.store.meta("owner")); assertTrue(k.requests.isEmpty())
+        }
+        Kit().use { k ->
+            k.worker.store.setMeta("owner",null)
+            k.worker.store.putItem(mapOf("id" to 99L),1)
+            try { k.acquire("7_100.jpg"); fail("unowned catalog data must not be adopted") }
+            catch (e: ServerFailure) { assertEquals("unauthorized",e.kind) }
+            assertNull(k.worker.store.meta("owner")); assertTrue(k.requests.isEmpty())
+        }
+    }
     @Test fun missingCoversFetchOnlyInCompanionAndForcedRefreshUsesEtag() {
         Kit().use { k ->
             val first=k.acquire("7_100.jpg")

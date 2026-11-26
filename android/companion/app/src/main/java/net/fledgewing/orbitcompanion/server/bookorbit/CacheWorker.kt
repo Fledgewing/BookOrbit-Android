@@ -454,7 +454,8 @@ class CacheWorker(
      * decoding and legacy-cache import belong here, never to the plugin renderer. */
     fun acquireCoverReference(owner: String, reference: String, creds: Creds, directory: File, refresh: Boolean = false, onGrowth: (Long) -> Unit = {}): Map<String,Any?> {
         checkpoint()
-        if (store.meta("owner") != owner) throw ServerFailure("unauthorized")
+        val current=store.meta("owner")
+        if (current!=null && current!=owner) throw ServerFailure("unauthorized")
         val root=allowed(directory.path) ?: throw ServerFailure("forbidden")
         val requested=allowed(reference) ?: throw ServerFailure("forbidden")
         val owned=allowed(File(root,BookOrbitLibrary.namespace(owner)).path) ?: throw ServerFailure("forbidden")
@@ -462,6 +463,7 @@ class CacheWorker(
         val match=Regex("(a?)([1-9][0-9]{0,9})_([0-9]{1,32})\\.jpg").matchEntire(requested.name) ?: throw ServerFailure("missing")
         val id=match.groupValues[2].toLong().also { require(it<=2147483647L) }
         val portrait=match.groupValues[1]=="a"
+        if (!store.ownIfEmpty(owner)) throw ServerFailure("unauthorized")
         val raw=mapOf("id" to id,"hasCover" to true,"updatedAt" to match.groupValues[3],"author_photo" to portrait)
         val target=allowed(File(owned,requested.name).path) ?: throw ServerFailure("forbidden")
         val before=target.length()+File(target.path+".etag").length()

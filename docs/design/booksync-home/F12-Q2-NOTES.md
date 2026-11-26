@@ -25,7 +25,10 @@ conditional transport, response limits and thumbnail processing. `CoverProtocol`
 normalizes the saved native server base; newly admitted image bytes invoke the
 existing storage policy on the companion, while hits perform no folder scan. Acquisition adds
 no executor, database or HTTP implementation. A snapshot reads one saved local
-reference, never an image body or a server reply. The existing caller budget
+reference, never an image body or a server reply. An explicit acquisition may seed a pristine
+projection namespace when catalog caching is off; it never adopts existing
+catalog data or changes an existing owner. Ownership races retry at most twice
+from the deferred worker, and departure cancels those retries. The existing caller budget
 applies: zero render network/subprocesses, at most one batch per Home paint and
 at most 16 KiB per widget. Acquisition logs a timing span; host timings do not
 establish device acceptance.

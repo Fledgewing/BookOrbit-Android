@@ -114,10 +114,11 @@ object AdapterWorker : ServerRuntime {
                     BulkWork.checkpoint()
                     val external=Environment.getExternalStorageDirectory()
                     val current=worker().store.meta("owner")
-                    val managed=credentials!=null && owner==current
+                    val managed=credentials!=null && (current==null || owner==current)
                     val legacy=if (!managed) LegacyCoverSource.read(File(external,"koreader/settings.reader.lua")) else null
                     val account=if (managed) owner!! else legacy?.owner ?: throw ServerFailure("unauthorized")
                     val login=if (managed) credentials!! else legacy?.credentials ?: throw ServerFailure("unauthorized")
+                    if (current!=null && current!=account) throw ServerFailure("retryable")
                     val directory=ConnectorPlugin.coverCacheDir(external)
                     var growth=0L
                     val value=worker().acquireCoverReference(account,reference,login,directory,refresh) { growth=it }
