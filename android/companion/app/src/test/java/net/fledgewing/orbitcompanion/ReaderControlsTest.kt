@@ -3,10 +3,42 @@ package net.fledgewing.orbitcompanion
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.nio.file.Files
+import java.io.File
 
 class ReaderControlsTest {
     private fun row(native: Map<String, Any?>): Map<*, *> =
         (ReaderControls.project(native)["items"] as List<*>).single() as Map<*, *>
+    @Test fun workerPublishesControlsWithoutCallingTheServerAdapter() {
+        val directory=Files.createTempDirectory("reader-controls").toFile()
+        try {
+            JdbcSql(File(directory,"projection.sqlite3")).use { sql ->
+                val owner="fixture|https://library.invalid"
+                LibraryReadModel.initialize(sql)
+                val store=object: ProjectionStore {
+                    override fun db()=sql
+                    override fun meta(k: String)=if (k=="owner") owner else null
+                    override fun <T> transaction(block: () -> T): T=sql.transaction(block)
+                    override fun close()=Unit
+                }
+                val adapter=object: ServerAdapter {
+                    override val id="fixture"
+                    override fun project(owner: String,request: Map<*, *>): Map<String, Any?> =
+                        error("native controls must not call a server adapter")
+                }
+                val request=String(LuaValue.encode(mapOf("op" to "reader.controls","limit" to 1,"bytes" to 16384,
+                    "native" to mapOf("page" to 50,"total" to 200,"chapters" to listOf(1,100),"marked" to true))),Charsets.ISO_8859_1)
+                assertTrue(LibraryReadModel(store,{99},{},adapter=adapter).publish(owner,listOf(request)))
+                val snapshot=store.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) {
+                    LuaValue.parse(it.bytes(0)!!) as Map<*, *>
+                }.single()
+                val item=(snapshot["items"] as List<*>).single() as Map<*, *>
+                assertEquals("p. 50 of 200 · 25%",item["position"])
+                assertEquals(true,item["marked"])
+                assertFalse(LibraryReadModel(store,{99},{},adapter=adapter).publish("another-owner",listOf(request)))
+            }
+        } finally { directory.deleteRecursively() }
+    }
     @Test fun missingAndInvalidPositionsStayUnknown() {
         for (native in listOf(emptyMap(), mapOf("page" to 1, "total" to 0),
             mapOf("page" to Double.NaN,"total" to 200),mapOf("page" to 201,"total" to 200))) {
