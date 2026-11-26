@@ -490,7 +490,8 @@ handshake before retrying. Native captures carry a path, optional cached documen
 locator/fraction, page geometry, capture time, small summary, selected automatic/Custom
 mode and lifecycle moment. Direction preferences are translated privately by the
 companion adapter. A post-close drain releases the open-sidecar lease by `closed_path`
-only after native closure; offline closure does not initiate transport.
+only after native closure; offline closure does not initiate transport. Captures
+from a no-longer-current document carry `current=false`, preserving the active lease.
 The companion owns catalog/statistics/sidecar work and all server protocol. Secrets
 and backend response fields never return to the plugin.
 

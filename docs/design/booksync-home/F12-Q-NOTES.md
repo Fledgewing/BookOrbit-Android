@@ -78,7 +78,9 @@ budget, no render-path network or subprocess, at most one batched companion roun
 per Home paint and at most 16 KiB per widget snapshot. Consent and native verification
 have named one-row / 16 KiB budgets in `logic/budgets.lua`, with info timing spans.
 The synchronous prerender preview reads an immutable in-memory publication; it does no
-SQL, network or disk IO. Cached position files are bounded to 16 KiB. Commands and drains
+SQL, network or disk IO. Old-path previews for the same document are invalidated
+when another path updates its state, and delayed captures cannot claim the current
+reader's sidecar lease. Cached position files are bounded to 16 KiB. Commands and drains
 log milliseconds. Host timing is not device acceptance; the maintainer's device targets
 remain pending confirmation.
 

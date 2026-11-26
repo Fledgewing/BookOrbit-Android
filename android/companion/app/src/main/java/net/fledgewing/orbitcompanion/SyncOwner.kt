@@ -23,7 +23,7 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
         journal.record(a.id,scope(a),document,record)
         val path=record["path"] as? String ?: return
         val snapshot=record+mapOf("document" to document,"owner" to scope(a))
-        previews=(previews+((a.id+"|"+scope(a)+"|"+path) to snapshot)).entries.toList().takeLast(300).associate { it.toPair() }
+        previews=(previews.filterValues { it["document"]!=document || it["owner"]!=scope(a) }+((a.id+"|"+scope(a)+"|"+path) to snapshot)).entries.toList().takeLast(300).associate { it.toPair() }
         val bytes=LuaValue.encode(projection(document,scope(a),record))
         if(bytes.size>16384) return // Keep the complete private record; oversized snapshots never reach Lua.
         val dir=File(settings,"orbit-cache/position").also { it.mkdirs() }
@@ -78,7 +78,7 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
                 return drain(a)
             }
             val path=args["path"] as? String
-            if (path!=null) openPath=path
+            if (path!=null && args["current"]!=false) openPath=path
             val capture=if (path!=null && op in setOf("sync.capture","sync.override","sync.pull")) a.captureLifecycle(args) else null
             val document=capture?.first ?: args["document"] as? String ?: throw IllegalArgumentException("document")
             var rec=record(a,document).toMutableMap()

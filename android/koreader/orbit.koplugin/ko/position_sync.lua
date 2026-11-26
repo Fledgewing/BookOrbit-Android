@@ -101,11 +101,18 @@ end
 -- A companion process restart loses only the activation handshake, never its journal.
 function ReadingSync.command(op,args,done)
     done=done or function() end
-    return Library.positionCommand(op,args,function(result)
+    local function send(callback)
+        if args.path then
+            local current=liveUI()
+            args.current=not not (current and current.document and current.document.file==args.path)
+        end
+        return Library.positionCommand(op,args,callback)
+    end
+    return send(function(result)
         if result.error=="writer-active" then
             ReadingSync.ready=false
             return ReadingSync.activate(function(ok)
-                if ok then Library.positionCommand(op,args,done) else done({error="unavailable"}) end
+                if ok then send(done) else done({error="unavailable"}) end
             end)
         end
         done(result)

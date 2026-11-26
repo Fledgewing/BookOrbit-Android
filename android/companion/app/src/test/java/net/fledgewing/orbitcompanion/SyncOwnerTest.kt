@@ -69,6 +69,15 @@ class SyncOwnerTest {
         restarted.command(a,"sync.drain",emptyMap<Any,Any>())
         assertTrue(a.leases.isNotEmpty()); assertTrue(a.leases.all { it==null })
     }
+    @Test fun staleCaptureCannotReplaceCurrentSidecarLeaseOrKeepAnOldPathPreview() = fixture { _,_,owner,a ->
+        a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
+        val current=owner.command(a,"sync.capture",args()+mapOf("path" to "/fixture/current.epub"))
+        val snapshot=current["snapshot"] as Map<*, *>
+        owner.command(a,"sync.capture",args(online=false)+mapOf("current" to false))
+        owner.command(a,"sync.drain",emptyMap<Any,Any>())
+        assertTrue(a.leases.isNotEmpty()); assertTrue(a.leases.all { it=="/fixture/current.epub" })
+        assertEquals(true,owner.preview(a.id,a.account,mapOf("path" to "/fixture/current.epub","token" to snapshot["token"],"page" to 120,"remote_page" to 240))["pending"])
+    }
     @Test fun declineAndMarkerStatePersistAndStaleConsentCannotMoveAnotherPlace() = fixture { root,q,owner,a ->
         a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
         val pulled=owner.command(a,"sync.capture",args())
