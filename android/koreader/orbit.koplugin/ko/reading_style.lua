@@ -73,24 +73,25 @@ function Library.readingApply(ui,key,choice,deferUpdate,screen)
     end
     local selected=Library.readingChoices(ui); selected[key]=choice
     if ui.doc_settings then ui.doc_settings:saveSetting("booksync_reading_choices",selected) end
-    if not deferUpdate and key~="margins" then ui:handleEvent(require("ui/event"):new("UpdatePos")) end
+    if not deferUpdate and key~="margins" then ui:handleEvent(require("ui/event"):new(key=="contrast" and "RedrawCurrentView" or "UpdatePos")) end
     finish(); return true
 end
 function Library.readingSave(record,ui,screen)
     local finish=span("save")
     local old=Library.readingCustom(screen)
     S.custom_reading=ReadingStyle.record(record); saveSettings()
-    local changed,marginApplied=false,false
+    local changed,marginApplied,layoutChanged=false,false,false
     for _,key in ipairs({"font","spacing","contrast","margins"}) do
         local different=key=="font" and (old.fontIndex~=S.custom_reading.fontIndex or old.face~=S.custom_reading.face or old.weight~=S.custom_reading.weight)
             or key~="font" and old[key]~=S.custom_reading[key]
         if different and Library.readingChoices(ui)[key]=="custom" then
             local applied=Library.readingApply(ui,key,"custom",true,screen)
             changed=applied or changed
+            layoutChanged=layoutChanged or (applied and key~="contrast")
             marginApplied=marginApplied or (key=="margins" and applied)
         end
     end
-    if changed and not marginApplied then ui:handleEvent(require("ui/event"):new("UpdatePos")) end
+    if changed and not marginApplied then ui:handleEvent(require("ui/event"):new(layoutChanged and "UpdatePos" or "RedrawCurrentView")) end
     finish()
 end
 function Library.readingCopy(ui)
@@ -102,7 +103,12 @@ function Library.readingCopy(ui)
         local pair=G_reader_settings:readSetting("copt_h_page_margins")
         if type(pair)=="table" then margins={pair[1],0,pair[2],0} end
     end
-    local record={fontIndex=1,face=f and f.font_face or G_reader_settings:readSetting("cre_font"),
+    local face=f and f.font_face or G_reader_settings:readSetting("cre_font")
+    local fontIndex=1
+    for i,font in ipairs(ReadingStyle.fonts) do
+        if face==font.face then fontIndex=i; face=nil; break end
+    end
+    local record={fontIndex=fontIndex,face=face,
         weight=value("font_base_weight",0),margins=scale(margins[1]),spacing=value("line_spacing",100)/100,
         contrast=(gamma[value("font_gamma",15)+1] or 1)-1}
     local copied,previous=ReadingStyle.copy(Library.readingCustom(),record)
@@ -113,14 +119,15 @@ end
 -- effect when that book next opens. Restore silently, without opening a surface.
 function Library.readingRestore(ui)
     if not Library.readingSupported(ui) then return end
-    local applied,marginApplied=false,false
+    local applied,marginApplied,layoutChanged=false,false,false
     for _,key in ipairs({"font","spacing","contrast","margins"}) do
         if Library.readingChoices(ui)[key]=="custom" then
             applied=Library.readingApply(ui,key,"custom",true,"reader-top-panel") or applied
+            layoutChanged=layoutChanged or key~="contrast"
             marginApplied=marginApplied or key=="margins"
         end
     end
-    if applied and not marginApplied then ui:handleEvent(require("ui/event"):new("UpdatePos")) end
+    if applied and not marginApplied then ui:handleEvent(require("ui/event"):new(layoutChanged and "UpdatePos" or "RedrawCurrentView")) end
 end
 local baseReady=OrbitAndroid.onReaderReady
 if baseReady then

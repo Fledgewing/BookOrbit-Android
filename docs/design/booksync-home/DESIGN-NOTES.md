@@ -845,3 +845,8 @@ operations; `ko/home_editor.lua:24` owns atomic layout saving;
 Paths without a directory prefix are under `android/koreader/orbit.koplugin/`;
 the companion file is under
 `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.
+
+Copy maps a known installed face back to its preset index. An imported face outside
+the four presets appears as the selected copied choice, drawn in that face. It adds
+at most one row, keeping the font editor within its 12-row budget; choosing a preset
+replaces the imported face, and Undo restores the previous index and face exactly.

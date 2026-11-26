@@ -264,7 +264,8 @@ return function(here, test, ok, eq)
         ok(heavy.face.embolden_half_strength>medium.face.embolden_half_strength)
         eq(heavy.face.getFallbackFont(0),heavy.face,"native shaped glyphs use the private preview strength")
         eq(W.face.hash,"fixture"); eq(W.face.embolden_half_strength,nil,"shared UI face stays immutable")
-        local _,frame=preview("margins",60); eq(frame.padding_left,50); eq(frame.padding_right,50)
+        local text,frame=preview("margins",60); eq(frame.padding_left,50); eq(frame.padding_right,50)
+        eq(text.width+2*frame[1].padding+2*frame.bordersize+frame.padding_left+frame.padding_right,500,"preview paper and gutters fit the row")
     end)
 
     test("Custom margins: physical pixels roundtrip at fractional native screen scales",function()
@@ -279,6 +280,40 @@ return function(here, test, ok, eq)
                 eq(E.Library.readingCustom().margins,pixels,"one-time copy keeps the applied margin")
             end
         end
+    end)
+
+    test("Custom contrast: native redraw only; mixed layout changes update position once",function()
+        local W,E=world(); local ui=styleReader(W)
+        E.Library.readingApply(ui,"contrast","custom"); eq(W.event.name,"RedrawCurrentView")
+        local n=W.events; local s=E.Library.readingCustom(); s.contrast=.3
+        E.Library.readingSave(s,ui,"reading-custom-contrast")
+        eq(W.event.name,"RedrawCurrentView"); eq(W.events,n+1)
+        E.Library.readingRestore(ui); eq(W.event.name,"RedrawCurrentView")
+        E.Library.readingApply(ui,"spacing","custom"); eq(W.event.name,"UpdatePos")
+        n=W.events; s=E.Library.readingCustom(); s.spacing=1.6; s.contrast=.4
+        E.Library.readingSave(s,ui,"reading-custom-spacing")
+        eq(W.event.name,"UpdatePos"); eq(W.events,n+1,"one update for mixed changes")
+    end)
+
+    test("Custom font copy: matching preset is selected; an outside face remains a visible choice",function()
+        local W,E=world(); local ui=styleReader(W)
+        for index,font in ipairs(E.ReadingStyle.fonts) do
+            ui.font.font_face=font.face
+            E.Library.readingCopy(ui)
+            local s=E.Library.readingCustom(); eq(s.fontIndex,index); eq(s.face,nil)
+            E.CustomReading.open("font",ui)
+            local selected=false
+            for _,r in ipairs(E.CustomReading.editor:rows()) do
+                if r.fontIndex==index and r.text:find("● ",1,true)==1 then selected=true end
+            end
+            ok(selected,"copied preset selected"); E.CustomReading.close()
+        end
+        ui.font.font_face="Fixture Serif"; local previous=E.Library.readingCopy(ui)
+        E.CustomReading.open("font",ui)
+        local rows=E.CustomReading.editor:rows(); eq(#rows,12,"copied face fits the editor budget")
+        eq(rows[3].face,"Fixture Serif"); eq(rows[3].text,"● Fixture Serif (copied)")
+        E.CustomReading.close(); E.Library.readingSave(previous,ui)
+        eq(E.Library.readingCustom().face,nil); eq(E.Library.readingCustom().fontIndex,4,"Undo keeps the previous font index")
     end)
 
 end
