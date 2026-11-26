@@ -321,7 +321,7 @@ class FastCatalogRefresh(
                 }
             }
             for ((request, bytes) in db.query("SELECT path,body FROM bulk_replies WHERE g=?", generation) { LuaValue.str(it.text(0)!!) to it.bytes(1)!! }) {
-                val server = plan.owner.substringAfter('|')
+                val server = plan.server
                 store.putEntry(MirrorLogic.key(plan.owner, server, request), request, LuaValue.parse(bytes), stamp())
             }
             store.setMeta("bulk_active", generation); store.setMeta("bulk_at", stamp()); set("base_published", true)

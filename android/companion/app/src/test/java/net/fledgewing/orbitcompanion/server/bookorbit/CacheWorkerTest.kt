@@ -398,7 +398,7 @@ class CacheWorkerTest {
         fun page(ids: List<Int>) = JSONObject(books(ids)).put("page", 1).put("size", 20).put("hasNext", false).put("hasPrevious", false).toString()
         fake.routes["$S$path"] = page(listOf(1, 2))
         w.check(CacheWorker.Check(key, path, "open", creds, "alice|$S"))
-        val ev1 = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.map { LuaValue.parse(it.readBytes()) as Map<*, *> }.single()
+        val ev1 = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.map { LuaValue.parse(it.readBytes()) as Map<*, *> }.single { it["kind"]=="checked" }
         assertEquals(true, ev1["unchanged"]); assertEquals(true, ev1["saved"])
         fake.routes["$S$path"] = page(listOf(1, 2, 5))
         w.check(CacheWorker.Check(key, path, "open", creds, "alice|$S"))

@@ -80,6 +80,7 @@ end
 -- Runs fn(conn) in one read transaction. -> fn's result, or nil (logged once per kind of failure).
 local function within(owner, what, fn)
     local while_reading = Db.pid() == Store.ui_pid and not Store.inChild() and reading and reading()
+        and not (Library and Library.catalog_opening)
     if while_reading and not Store.directoryReady() then return nil end
     local memo_key = Store.path() .. "|" .. tostring(owner) .. "|" .. what
     local function fallback(err)

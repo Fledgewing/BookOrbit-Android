@@ -17,6 +17,7 @@ interface ServerAdapter {
     fun lists(owner: String, limit: Int, offset: Int = 0) = project(owner, mapOf("op" to "lists", "limit" to limit, "offset" to offset))
     fun sources(owner: String, category: String, limit: Int = 6, offset: Int = 0) =
         project(owner, mapOf("op" to "sources", "category" to category, "limit" to limit, "offset" to offset))
+    fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) = done(null,"unsupported")
     fun manifest(owner: String): Map<String, Any?> = unsupported()
     fun cover(owner: String, key: String): Map<String, Any?> = unsupported()
     /** Explicit acquisition off the render path; the result is a local file reference. */

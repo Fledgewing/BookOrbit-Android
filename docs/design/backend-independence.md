@@ -181,23 +181,29 @@ so the guard rejects backend names in every casing without breaking installed se
 Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
 position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
 encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.
-The legacy query interpreter moved to `ko/server/bookorbit/store.lua`. The shared `Cache`
-object contains only codec/local utilities; legacy paging, response assembly, cache keys and
-normalization live on private `ServerCache`, whose direct use is guarded too.
+Mirror planning and legacy query interpretation now live only in the companion's
+`CatalogPlan`/`MirrorLogic`, `CacheStore` and `BulkCatalog`. The native connector consumes
+neutral bounded display snapshots through `ko/library.lua`; no Lua catalog request
+wrapper or query interpreter remains. `mirror.lua`, `store.lua` (the adapter's legacy
+interpreter) and `library_bookorbit.lua` are deleted. The generic `ko/store.lua` still
+reads one owned `library_views` row; the library's neutral companion transport and durable
+event pump reuse that path. Private `mirror/` checkpoints never cross the plugin boundary.
+`catalog.state` has one row, 16 KiB and zero polling round-trips; Home nested records count
+against the same 24-row snapshot limit. Catalog ownership changes wait for a running writer
+to stop. Existing lifecycle/finish/copy queues remain owned by their existing writers.
 
 The maintainer explicitly permits routing oversized migrations through this one Lua adapter
 for this slice. Remaining server calls **inside that adapter**, to move to companion commands
 in a later transport/sole-sync-owner slice, are:
 
 - `ko/server/bookorbit.lua`: `probeServer` (HEAD reachability in the background child).
-- `ko/server/bookorbit/store.lua`: the surviving non-cover request wrappers bridge the
-  upstream catalog API and cached replies. Mirror/copies still construct private protocol
-  plans sent to the companion worker. The former `cache.lua`, cover downloader and thumbnail
-  child scanner are removed. Cover acquisition and forced refresh use neutral companion
-  commands; the plugin reads only bounded local cover references.
+- `ko/server/bookorbit.lua`: temporary native widget/sync bindings and the existing
+  copy/finish event and state contracts. Catalog getters read only neutral local snapshots;
+  refresh actions dispatch `catalog.control`. Cover acquisition uses neutral commands and
+  local references. No legacy catalog transport or SQL interpreter is installed.
 - `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
   existing finish outbox. Preserve sole-writer ordering when moving these.
-- `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
+- `ko/server/bookorbit/grouping.lua`: legacy grouping over bounded local catalog snapshots. Its whole-list Lua aggregation is the next catalog slice.
   Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
 - `ko/server/bookorbit/sync.lua`, `reading_sync.lua` and `lifecycle.lua`: legacy outbox,
   pull/push, remote-progress parsing and upstream snapshot/settings bindings. Root start/sleep/
