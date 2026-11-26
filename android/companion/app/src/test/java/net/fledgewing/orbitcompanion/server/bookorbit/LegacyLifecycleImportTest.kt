@@ -9,10 +9,10 @@ import org.junit.Test
 class LegacyLifecycleImportTest {
     private val id="entry_${"a".repeat(32)}_100_1"
     private val digest="a".repeat(32)
-    private fun entry(root: File, generation: Long=1, payloadGeneration: Long=generation, ack: Map<String,Boolean> = emptyMap()) {
+    private fun entry(root: File, generation: Long=1, payloadGeneration: Long=generation, ack: Map<String,Boolean> = emptyMap(), id: String=this.id, at: Long=100) {
         val dir=File(root,"bookorbit-lifecycle-outbox").also { it.mkdirs() }
         File(dir,"${id}_g$generation.lua").writeBytes("return ".toByteArray()+LuaValue.encode(mapOf("version" to 1L,"id" to id,"generation" to generation,
-            "payload_generation" to payloadGeneration,"digest" to digest,"acknowledged" to ack,"remote_pending" to mapOf("annotations" to mapOf("to_apply" to listOf("pending"))))))
+            "enqueued_at" to at,"payload_generation" to payloadGeneration,"digest" to digest,"acknowledged" to ack,"remote_pending" to mapOf("annotations" to mapOf("to_apply" to listOf("pending"))))))
         File(dir,"${id}_payload_g$payloadGeneration.lua").writeBytes("return ".toByteArray()+LuaValue.encode(mapOf("version" to 1L,"id" to id,"digest" to digest,
             "snapshot" to mapOf("digest" to digest,"percentage" to 0.5,"annotations" to listOf(mapOf("text" to "fixture")),"stats_ids" to listOf(7L),"status" to "reading"))))
     }
@@ -50,6 +50,12 @@ class LegacyLifecycleImportTest {
             assertEquals(0,LegacyLifecycleImport(q,root,{ "owner" }).run(true))
             assertEquals(1,q.pending("bookorbit","owner"))
         }
+    }
+    @Test fun importPreservesLegacyFifoRatherThanDirectoryEnumerationOrder() = fixture { root,q ->
+        val second="entry_${digest}_200_2"; val first="entry_${digest}_100_3"
+        entry(root,id=id,at=300); entry(root,id=first,at=100); entry(root,id=second,at=200)
+        LegacyLifecycleImport(q,root,{"owner"}).run(true)
+        assertEquals(listOf(first,second,id),q.window("bookorbit","owner").map { it.source })
     }
     @Test fun acknowledgedExchangeStillImportsItsPendingRemoteApplication() = fixture { root,q ->
         entry(root,ack=LifecycleQueue.PHASES.associateWith { true })

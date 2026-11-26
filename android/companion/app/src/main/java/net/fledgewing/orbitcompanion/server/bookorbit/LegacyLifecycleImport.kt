@@ -46,7 +46,7 @@ internal class LegacyLifecycleImport(private val queue: LifecycleQueue, private 
         val files=source.listFiles().orEmpty().filter { NAME.matches(it.name) }
         require(files.size<=10000)
         var imported=0
-        for ((id,generations) in files.groupBy { NAME.matchEntire(it.name)!!.groupValues[1] }) {
+        val selectedEntries=files.groupBy { NAME.matchEntire(it.name)!!.groupValues[1] }.mapNotNull { (id,generations) ->
             val selected=generations.sortedByDescending { NAME.matchEntire(it.name)!!.groupValues[2].toLongOrNull() ?: 0L }
                 .firstNotNullOfOrNull { metadata ->
                     val generation=NAME.matchEntire(metadata.name)!!.groupValues[2].toLongOrNull()
@@ -59,7 +59,12 @@ internal class LegacyLifecycleImport(private val queue: LifecycleQueue, private 
                     val p=literal(payload) ?: return@firstNotNullOfOrNull null
                     if (p["version"]!=1L || p["id"]!=id || p["digest"]!=digest || p["snapshot"] !is Map<*, *>) return@firstNotNullOfOrNull null
                     Triple(m,payload,metadata)
-                } ?: continue // Damaged entries remain untouched for recovery, never silently dropped.
+                } ?: return@mapNotNull null // Damaged entries remain untouched for recovery.
+            id to selected
+        }.sortedWith(compareBy<Pair<String,Triple<Map<*, *>,File,File>>> {
+            (it.second.first["enqueued_at"] as? Number)?.toLong() ?: 0L
+        }.thenBy { it.first })
+        for ((id,selected) in selectedEntries) {
             val m=selected.first
             val payload=literal(selected.second)!!["snapshot"] as Map<*, *>
             val bound=owner(login+mapOf("_entry" to m,"_snapshot" to payload)) ?: continue // Unproven ownership stays in source.
