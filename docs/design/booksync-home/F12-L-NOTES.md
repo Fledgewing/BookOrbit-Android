@@ -79,3 +79,8 @@ F12-O replaces the temporary Battery renderer with the snapshot widget/page. Its
 `battery` operation remains local; all display labels, rates, dates and totals are companion
 projections. The Home integration wraps that one row for the immutable widget contract and
 keeps the shared reading gate, including dialogs opened above Home.
+
+The landed F12-J Home integration's interim scalar Battery renderer is superseded by
+F12-O's companion-formatted widget/page. Its capability gate and absent-history checks
+remain, without a parallel renderer or display model. Account status-row height changes
+now invalidate moved Home widgets as well as the subtitle region.

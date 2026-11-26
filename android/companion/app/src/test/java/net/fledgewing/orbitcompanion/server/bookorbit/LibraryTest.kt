@@ -146,7 +146,7 @@ class LibraryTest {
             assertNull(summary["on_device"])
             val battery=read(st,mapOf("op" to "battery"))
             assertEquals(false,(battery["freshness"] as Map<*,*>)["saved"])
-            assertFalse(battery.containsKey("level"))
+            assertFalse(battery.containsKey("level")); assertNull(battery["hours_usual_use"])
             assertTrue(LuaValue.encode(battery).size<=LibraryReadModel.MAX_BYTES)
         }
     }

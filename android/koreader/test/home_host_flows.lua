@@ -331,7 +331,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
         eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,3)
-        local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false}})
+        local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false},battery=false})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)
     test("Home host: server-only book cards open the owned Details surface",function()
