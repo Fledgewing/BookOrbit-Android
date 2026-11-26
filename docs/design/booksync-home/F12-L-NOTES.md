@@ -19,6 +19,9 @@ At starting feature commit `543d67d`, the implementation extends these existing 
 - `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/LibraryReadModel.kt:20`:
   retained bounded publishing, cache invalidation, owner isolation and timing. Server projection
   is injected through `ServerAdapter`; local KOReader reading statistics remain neutral.
+- `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsUiLogic.kt:200`:
+  retained the sleep picker's cached-list translation inside `SleepChoicesProjection`, with
+  the same neutral `SleepChoices` output and existing background worker.
 - `android/koreader/orbit.koplugin/ko/library.lua:23` and `ko/store.lua:107`:
   retained bounded UI reads. The protocol-specific bulk query interpreter moved into the
   Lua compatibility adapter; serialization stays in the existing `logic/cache.lua`.
