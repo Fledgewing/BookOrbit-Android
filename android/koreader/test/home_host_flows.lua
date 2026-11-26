@@ -22,6 +22,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Device.screen.scaleBySize,W.shown,Widget.free=saved.scale,saved.shown,saved.free
         ok(success,err)
     end
+    dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()
@@ -72,7 +73,7 @@ return function(test,eq,ok,E,W,Widget)
             local success,err=pcall(function()
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
-                local boundary=canvas[3] -- header, Close, first widget
+                local boundary=canvas[4] -- header, Close, Edit, first widget
                 local failed=boundary[1]
                 local Frame=E.HomeWidgets.ui().Frame
                 Frame.paintTo=function() end
