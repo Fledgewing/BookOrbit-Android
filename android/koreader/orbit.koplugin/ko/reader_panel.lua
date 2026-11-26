@@ -317,9 +317,11 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             elseif r.kind=="button" and r.text~=m.battery then sync=r end
         end
         local function cell(r,icon) return {text=r.text,icon=icon,callback=r.action} end
-        local header={cell(home,"home"),sync and cell(sync,sync.text=="Sync" and "cre.render.reload" or nil) or {text="",callback=function() end,enabled=false},
-            cell(settings,"appbar.settings"),{text=native.marked and "Remove bookmark" or "Add bookmark",
-                icon="bookmark",marked=native.marked,callback=action("bookmark",nil,true)}}
+        local header={cell(home,"home")}
+        if sync then header[#header+1]=cell(sync,sync.text=="Sync" and "cre.render.reload" or nil) end
+        header[#header+1]=cell(settings,"appbar.settings")
+        header[#header+1]={text=native.marked and "Remove bookmark" or "Add bookmark",
+            icon="bookmark",marked=native.marked,callback=action("bookmark",nil,true)}
         header[1].width=80; header[1].text="Home"; header[1].icon=nil
         if sync and sync.text~="Sync" then header[2].width=140 end
         rows={
