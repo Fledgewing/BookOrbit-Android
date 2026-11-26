@@ -128,7 +128,7 @@
     },
     {
      "id": "bookorbit",
-     "label": "BookOrbit home"
+     "label": "Server plugin's Home"
     }
    ],
    "section": "reading",
@@ -149,7 +149,7 @@
    "default": true,
    "section": "reading",
    "label": "Home shows this reader's reading first",
-   "line": "Your latest page shows at once; BookOrbit fills in after.",
+   "line": "Your latest page shows at once; the server fills in after.",
    "reader": [
     "plugin"
    ],
@@ -166,7 +166,7 @@
    "default": true,
    "section": "reading",
    "label": "End of book: BookSync's sheet",
-   "line": "Stars, next in series and a suggestion when you finish a BookOrbit book.",
+   "line": "Stars, next in series and a suggestion when you finish a library book.",
    "reader": [
     "plugin"
    ],
@@ -184,7 +184,7 @@
    "default": true,
    "section": "reading",
    "label": "End of book: mark it finished",
-   "line": "Reaching the end marks the book read in BookOrbit.",
+   "line": "Reaching the end marks the book read on the server.",
    "reader": [
     "plugin"
    ],
@@ -651,7 +651,7 @@
    "default": true,
    "section": "sync",
    "label": "Sync when the screen goes off",
-   "line": "Your place and highlights reach BookOrbit before the reader sleeps.",
+   "line": "Your place and highlights reach the server before the reader sleeps.",
    "reader": [
     "plugin"
    ],
@@ -713,7 +713,7 @@
    "default": true,
    "section": "sync",
    "label": "Sync on wake",
-   "line": "Every wake checks BookOrbit for reading done elsewhere.",
+   "line": "Every wake checks the server for reading done elsewhere.",
    "reader": [
     "plugin"
    ],
@@ -817,7 +817,7 @@
    "type": "bool",
    "default": true,
    "section": "library",
-   "label": "BookOrbit opens from BookSync's cache",
+   "label": "Library opens from BookSync's cache",
    "line": "Pages open at once and offline, then are checked.",
    "reader": [
     "plugin"

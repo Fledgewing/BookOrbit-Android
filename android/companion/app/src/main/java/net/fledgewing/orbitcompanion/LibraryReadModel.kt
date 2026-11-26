@@ -33,6 +33,10 @@ class LibraryReadModel(
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
                     "reading.stats" -> stats
+                    "mode-estimates" -> mapOf("items" to listOf("saver", "balanced", "current")
+                        .take(((args["limit"] as? Number)?.toInt() ?: 3).coerceIn(1, 3)).map {
+                            mapOf("id" to it, "text" to "Estimate available after measured use", "measured" to false)
+                        })
                     "battery" -> mapOf("available" to false, "freshness" to mapOf("saved" to false))
                     else -> adapter.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }

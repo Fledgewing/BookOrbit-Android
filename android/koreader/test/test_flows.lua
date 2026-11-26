@@ -516,7 +516,8 @@ local function menuAll(items, out)
     out = out or {}
     for _, it in ipairs(items) do
         table.insert(out, it)
-        if type(it.sub_item_table) == "table" then menuAll(it.sub_item_table, out) end
+        if type(it.sub_item_table) == "table" then menuAll(it.sub_item_table, out)
+        elseif it.settings_group then menuAll(it.sub_item_table_func(), out) end
     end
     return out
 end
@@ -879,7 +880,7 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     ok(#sub >= 9, "items " .. #sub)
     local titles = {}
     for _, it in ipairs(sub) do if it.text then titles[it.text] = true end end
-    for _, t in ipairs({ "Reading and Home", "Sync and Wi-Fi", "Library and storage", "Updates and details" }) do
+    for _, t in ipairs({ "Home", "Reading", "Sync, Wi-Fi & power", "Library & downloads", "Updates", "About & help" }) do
         ok(titles[t], "section " .. t)
     end
 end)
@@ -1581,11 +1582,11 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     ok(m:openCompanionHome() == true and #W.activities == 0, "Home at library home stays")
     local hasWifiRow, hasHelperLine, hasApps = false, false, false
     for _, it in ipairs(menuAll(m:menuItems())) do
-        if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true end
+        if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true; eq(it.enabled_func(), false, "unavailable control is visible and disabled") end
         if it.text == "Wi-Fi switching and sleep sync: in BookSync Companion ›" then hasHelperLine = true end
         if it.text == "Open another app…" then hasApps = true end
     end
-    ok(not hasWifiRow and hasHelperLine and not hasApps, "rows hidden, one line instead")
+    ok(hasWifiRow and not hasApps, "settings remain visible in Add-on mode")
     ok(RE.Shared.mode() == "always_on", "Wi-Fi as left: Always on")
     capsReset()
     run(5)
@@ -2156,10 +2157,10 @@ test("home button menu says it is about KOReader, and notes the companion's Home
     end
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "koreader" } }
     m:onResume(); run(1)
-    ok(homeText() == "Home button in KOReader: Back to my book, then library home", tostring(homeText()))
+    ok(homeText() == "Home button in KOReader: Back to my book, then Server plugin's Home", tostring(homeText()))
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "launcher" } }
     m:onResume(); run(1)
-    ok(homeText():find("(Home opens the BookSync launcher page)", 1, true), homeText())
+    ok(homeText():find("Home button in KOReader", 1, true), homeText())
     W.web[url], W.json.STATUS = nil, nil
     m:onResume(); run(1)
     ok(not homeText():find("(", 1, true), "no companion: no note")
@@ -5445,7 +5446,7 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     RE.Shared.refresh("test")
     ok(RE.Companion.has("sleep_screen"), "the companion offers it")
     local item
-    for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
+    item = RE.Sleep.menuItem(m, function(fn) return fn end)
     ok(item, "Tools › BookSync › Sleep screen")
     local rows = item.sub_item_table_func()
     ok(rows[1].text_func() == "Sleep screen: The reader's own", "off by default: " .. rows[1].text_func())
@@ -5615,7 +5616,7 @@ test("sleep screen: Pick from and Leave out list every list and collection, all 
     local fc = sleepCompanion()
     W.wifi = true
     local item
-    for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
+    item = RE.Sleep.menuItem(m, function(fn) return fn end)
     local rows = item.sub_item_table_func()
     local from = rows[2].sub_item_table
     local picker = from[#from]
@@ -5710,7 +5711,7 @@ test("sleep screen: the tag picker opens from the companion's tags.json; KOReade
     end
     W.wifi = true
     local item
-    for _, it in ipairs(select(2, newUI(false)):menuItems()) do if it.text == "Sleep screen" then item = it end end
+    item = RE.Sleep.menuItem(select(2, newUI(false)), function(fn) return fn end)
     local leave = item.sub_item_table_func()[3].sub_item_table_func()
     local tagItem
     for _, r in ipairs(leave) do if r.text == "Add a rule: Tag…" then tagItem = r end end
@@ -6449,7 +6450,7 @@ test("orbismart: No declines a standing reset until normal progress returns", fu
     osmAnswer(false)
 end)
 
-test("orbismart: a further place found while reading (a pause) asks once, no silent jump", function()
+test("orbismart: scheduled reading sync asks once, no silent jump", function()
     local ui, m, p = osmBook(100, nil)
     osmServer(100, 4000)
     m:onReaderReady()
@@ -6457,7 +6458,8 @@ test("orbismart: a further place found while reading (a pause) asks once, no sil
     eq(osmPopup(), nil, "same place: no popup")
     for pg = 101, 110 do W.page = pg; m:onPageUpdate(pg) end
     osmServer(214, 5000)
-    run(150)
+    m:readingSync()
+    run(5)
     ok(has(p.calls, "fetch"), "the pause pulled")
     local w = osmPopup()
     ok(w and w.text == "Continue from Boox, p. 214?", "asked")
@@ -6467,13 +6469,14 @@ test("orbismart: a further place found while reading (a pause) asks once, no sil
     eq(W.page, 214)
 end)
 
-test("orbismart: a pause where this reader is further pushes", function()
+test("orbismart: scheduled reading sync where this reader is further pushes", function()
     local ui, m, p = osmBook(100, nil)
     osmServer(100, 4000)
     m:onReaderReady()
     run(30)
     for pg = 101, 140 do W.page = pg; m:onPageUpdate(pg) end
-    run(150)
+    m:readingSync()
+    run(5)
     ok(has(p.calls, "push:orbismart"), "pushed")
     eq(W.osm_server.progress, "/p140")
     ok(osmLog("orbismart: rule4 L=140 R=100 -> push (pause, no)"), "logged")
@@ -6724,29 +6727,170 @@ test("orbismart: This book sheet gets Read from here everywhere", function()
     run(40)
 end)
 
-test("orbismart: menu: Sync first in its section; the rows it sets hidden; the override in a book", function()
-    local ui, m = osmBook(50, nil)
-    local sync
-    for _, it in ipairs(m:menuItems()) do if it.text == "Sync and Wi-Fi" then sync = it.sub_item_table end end
-    ok(sync[1].text_func():find("Reading position: Furthest page wins", 1, true), sync[1].text_func())
-    local texts = {}
-    for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
-    local all = table.concat(texts, "|")
-    ok(all:find("Read from here everywhere", 1, true), "override item")
-    ok(not all:find("Sync on wake", 1, true), "hidden under OrbiSmart")
-    store.orbit_android.sync_mode = "custom"
-    texts = {}
-    for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
-    all = table.concat(texts, "|")
-    ok(all:find("Sync on wake", 1, true), "shown under Custom")
-    ok(not all:find("Read from here everywhere", 1, true), "no override under Custom")
+test("settings: Off reading cadence adds no pause sync under the furthest-position rule", function()
+    local ui, m, p = osmBook(100, nil)
+    RE.S.reading_schedule = "off"
+    m:onReaderReady()
+    run(30)
+    p.calls = {}
+    W.page = 110; m:onPageUpdate(110)
+    run(150)
+    ok(not has(p.calls, "fetch"), "Off means no automatic pause pull")
+    eq(OSM.pause_task, nil)
+end)
+
+test("settings: sync controls remain visible under either position rule", function()
+    local _, m = osmBook(50, nil)
+    for _, mode in ipairs({"orbismart", "custom"}) do
+        store.orbit_android.sync_mode = mode
+        local texts = {}
+        for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts+1] = it.text or (it.text_func and it.text_func()) or "" end
+        local all = table.concat(texts, "|")
+        ok(all:find("Sync on wake", 1, true), "wake always visible")
+        ok(all:find("Sleep sync limit", 1, true), "sleep budget always visible")
+        eq(not not all:find("Read from here everywhere", 1, true), mode == "orbismart")
+    end
+end)
+
+test("settings: Sync now uses the existing snapshot/drain without sleeping", function()
+    local ui, m = newUI(true)
+    run(30)
+    W.broadcasts = {}; ui.bookorbit.calls = {}
+    local release, handled = RE.Wifi.release, nil
+    RE.Wifi.release = function(name, flag)
+        if name == "sync_and_sleep" then handled = flag end
+        return release(name, flag)
+    end
+    RE.Library.syncNow(m)
+    run(5)
+    RE.Wifi.release = release
+    eq(handled, false, "normal Wi-Fi lease restoration")
+    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
+    ok(has(ui.bookorbit.calls, "onSuspend"), "current position snapshotted")
+    ok(not lastBroadcast(".SLEEP_NOW"), "screen stays awake")
+end)
+
+test("settings: failed Sync now leaves the screen awake", function()
+    W.server_code = nil
+    local _, m = newUI(true)
+    run(30)
+    W.broadcasts = {}
+    RE.Library.syncNow(m)
+    run(40)
+    ok(not lastBroadcast(".SLEEP_NOW"), "failed sync also stays awake")
+    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
+    W.server_code = 200
+end)
+
+test("settings: Home layout actions enter the existing editor in the requested mode", function()
+    local _, m = newUI(false)
+    local open, calls = RE.HomeEditor.open, {}
+    RE.HomeEditor.open = function(mode) calls[#calls+1] = mode end
+    local modes = {["Edit layout"]="edit", ["Reset layout"]="reset", ["Page names"]="rename"}
+    for _, group in ipairs(m:menuItems()) do
+        if group.settings_group == "home" then
+            for _, row in ipairs(group.sub_item_table_func()) do
+                if modes[row.text] then row.callback(); run(1); eq(calls[#calls], modes[row.text]) end
+            end
+        end
+    end
+    RE.HomeEditor.open = open
+    eq(#calls, 3)
+end)
+
+test("settings: Home selector uses the host's shared setting and labels its button policy", function()
+    local _, m = newUI(false)
+    local home
+    for _, group in ipairs(m:menuItems()) do if group.settings_group == "home" then home = group.sub_item_table_func() end end
+    local old = RE.S.home_screen
+    home[1].sub_item_table[2].callback()
+    eq(RE.S.home_screen, "booksync")
+    ok(home[2].text_func():find("BookSync Home", 1, true), "button policy names the selected Home")
+    ok(lastBroadcast(".SETTINGS"), "shared settings transport")
+    RE.Shared.set("home_screen", old)
+end)
+
+test("settings: Full refresh uses the library and its connection message is neutral", function()
+    local client, note = RE.bookorbit, RE.OC.note
+    local message
+    RE.bookorbit = function() return nil end
+    RE.OC.note = function(text) message = text end
+    RE.Library.fullRefresh()
+    RE.bookorbit, RE.OC.note = client, note
+    eq(message, "Connect to the server and sign in to refresh the catalog.")
+end)
+
+test("settings: every group has a budget and neutral screen text; one channel row opens its picker", function()
+    local _, m = newUI(false)
+    local groups = {}
+    for _, it in ipairs(m:menuItems()) do
+        if it.settings_group then
+            groups[it.settings_group] = it.sub_item_table_func()
+            ok(RE.Budgets.get("screens", "settings-" .. it.settings_group))
+        end
+    end
+    for _, id in ipairs({"account", "sync", "library", "reading", "home", "sleep", "updates", "about"}) do
+        ok(groups[id] and #groups[id] > 0, id)
+    end
+    local channel = 0
+    for _, row in ipairs(menuAll(m:menuItems())) do
+        for _, text in ipairs({row.text or "", row.text_func and row.text_func() or "", row.help_text or ""}) do
+            local lower = text:lower()
+            for _, name in ipairs({"bookorbit", "grimmory", "tailscale", "tailnet", "boox", "xteink"}) do
+                ok(not lower:find(name, 1, true), "vendor in screen text: " .. text)
+            end
+        end
+        if row.text_func and row.text_func():find("Update channel:", 1, true) == 1 then
+            channel = channel + 1
+            eq(#row.sub_item_table, 3)
+            local old = RE.S.update_channel
+            row.sub_item_table[3].callback()
+            eq(RE.S.update_channel, "preview")
+            ok(lastBroadcast(".SETTINGS"), "channel uses settings sync")
+            RE.Shared.set("update_channel", old)
+        end
+    end
+    eq(channel, 1)
+end)
+
+test("settings: mode estimates come from one bounded library read; presets and Custom keep every control", function()
+    local _, m = newUI(false)
+    local oldRead, oldRequest = RE.LibraryAdapter.read, RE.LibraryAdapter.request
+    local requests, trips = 0, 0
+    RE.LibraryAdapter.read = function(encoded)
+        local args = RE.Cache.decode(encoded)
+        eq(args.op, "mode-estimates"); eq(args.limit, 3)
+        requests = requests + 1
+        return {items={{id="saver", text="≈ 4 days at your usual use"}}}, 128
+    end
+    RE.LibraryAdapter.request = function(batch) trips=trips+1; eq(#batch, 1); return true end
+    local row
+    for _, group in ipairs(m:menuItems()) do
+        if group.settings_group == "sync" then row = group.sub_item_table_func()[2] end
+    end
+    RE.LibraryAdapter.read, RE.LibraryAdapter.request = oldRead, oldRequest
+    eq(requests, 1); eq(trips, 1)
+    ok(row.sub_item_table[1].text:find("≈ 4 days at your usual use", 1, true))
+    local has = RE.Companion.has
+    RE.Companion.has = function(cap) return cap == "wifi" or has(cap) end
+    local saved = {}
+    for _, key in ipairs(RE.SettingsUI.modeKeys) do saved[key] = RE.S[key] end
+    for i, mode in ipairs(RE.SettingsUI.modes) do
+        row.sub_item_table[i].callback()
+        eq(RE.SettingsUI.mode(RE.S), mode.id)
+        for _, key in ipairs(RE.SettingsUI.modeKeys) do eq(RE.S[key], mode.values[key]) end
+    end
+    RE.Shared.set("wifi_idle_min", 10)
+    eq(RE.SettingsUI.mode(RE.S), "custom")
+    for _, key in ipairs(RE.SettingsUI.modeKeys) do RE.Shared.set(key, saved[key]) end
+    RE.Companion.has = has
 end)
 
 test("About: the locked menu shows every shared credit paragraph and the project URL", function()
     local _, m = newUI(false)
     local items = m.readOnly(m:menuItems())
     local about
-    for _, it in ipairs(items) do if it.text == "About" then about = it end end
+    for _, it in ipairs(menuAll(items)) do if it.text == "About" then about = it end end
     ok(about and about.callback, "About remains available without unlocking")
     ok(not about.enabled_func or about.enabled_func(), "About is enabled")
     W.shown = {}

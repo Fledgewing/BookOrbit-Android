@@ -34,7 +34,7 @@ local LOGIC = {
     "logic/prompts.lua", "logic/server/bookorbit/group.lua", "logic/server/bookorbit/finish.lua", "logic/server/bookorbit/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua", "logic/server/bookorbit/cache.lua",
     "logic/server/bookorbit/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
     "logic/orbismart.lua", "logic/status_layout.lua",
-    "logic/reader_panel.lua", "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua", "logic/home_editor.lua",
+    "logic/settings_ui.lua", "logic/reader_panel.lua", "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua", "logic/home_editor.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",

@@ -37,7 +37,7 @@ function OrbitAndroid:onSuspend()
             end
         end)
     end
-    if not S.sync_on_sleep and not (OSM and OSM.on()) then return end
+    if not S.sync_on_sleep then return end
     if now_s() - state.sas_done_at < 15 then
         log("suspend: just synced by Sync and sleep; skip")
         return
@@ -126,7 +126,9 @@ function sleepNow(reason)
     end
 end
 
-function OrbitAndroid:onOrbitSyncAndSleep()
+function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
+    stay_awake = stay_awake == true -- explicit Sync now; dispatcher events retain Sync and sleep
+    local flow = stay_awake and "menu_sync" or "sync_and_sleep"
     if self.sas_running then return true end
     self.sas_running = true
     local cancelled, closing = false, false
@@ -134,7 +136,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
     local t0 = now_s()
     log("sync and sleep: start")
     local msg = InfoMessage:new{
-        text = _("Syncing…") .. "\n" .. _("library · then sleep"),
+        text = _("Syncing…") .. (stay_awake and "" or ("\n" .. _("Then sleep"))),
         dismiss_callback = function()
             if not closing then
                 cancelled = true
@@ -150,23 +152,30 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         closing = true
         UIManager:close(msg)
         local seconds = now_s() - t0
-        S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = "sync_and_sleep", detail = detail }
+        S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = flow, detail = detail }
         saveSettings()
         local restore = self.sas_held and Wifi.state().restore_off and Wifi.state().n == 1 and "off" or ""
         log("sync and sleep:", ok and "synced" or "FAILED", "in", fmt(seconds), detail or "",
             restore == "off" and "| Wi-Fi was off before: companion restores off" or "")
-        Companion.netDone("sync_and_sleep", ok, seconds, detail, restore)
+        Companion.netDone(flow, ok, seconds, detail, restore)
         if self.sas_held then
             self.sas_held = false
-            Wifi.release("sync_and_sleep", true)
+            Wifi.release("sync_and_sleep", not stay_awake)
         end
         if cancelled then return end
+        if stay_awake then
+            UIManager:show(InfoMessage:new{ -- gate: user action (Sync now)
+                text = ok and _("Synced.") or _("Couldn't reach the server — saved on this device. It sends at the next sync."),
+                timeout = 3,
+            })
+            return
+        end
         state.sas_done_at = now_s()
         if ok then
             sleepNow("sync_and_sleep")
         else
             UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
-                text = _("Couldn't reach library — saved on this device.") .. "\n"
+                text = _("Couldn't reach the server — saved on this device.") .. "\n"
                     .. _("It sends first when you next wake it. Sleeping now…"),
                 timeout = 3,
             })
@@ -184,7 +193,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
     end
     Wifi.acquire("sync_and_sleep")
     self.sas_held = true
-    Net.up(p, { reason = "sync_and_sleep", cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
+    Net.up(p, { reason = flow, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if cancelled then return finish(false, "cancelled") end
         if not ok then return finish(false, res.detail) end
         if inBook() and can(p, "sleep_snapshot") then

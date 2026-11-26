@@ -791,7 +791,7 @@ function OC.menuFullRefresh()
     local cat = p and p.catalog_browser
     if not cat and p and EOB then cat = EOB.headlessCatalog(p) end
     if cat then return OC.fullRefresh(cat) end
-    OC.note(_("Open BookOrbit and sign in to refresh the catalog."), 4)
+    OC.note(_("Connect to the server and sign in to refresh the catalog."), 4)
 end
 
 -- One line per paint: covers the view needs, how many are on disk, how many are queued.

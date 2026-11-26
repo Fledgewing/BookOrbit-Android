@@ -94,6 +94,20 @@ class LibraryTest {
         LibraryReadModel(st, {99}, {}).publish(owner,listOf(request))
         return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
     }
+    @Test fun modeEstimatesAreSmallHonestWorkerSnapshots() {
+        store().use { st ->
+            val result = read(st, mapOf("op" to "mode-estimates", "limit" to 3))
+            val items = result["items"] as List<*>
+            assertEquals(listOf("saver", "balanced", "current"), items.map { (it as Map<*, *>)["id"] })
+            for (item in items) {
+                assertEquals(false, (item as Map<*, *>)["measured"])
+                assertEquals("Estimate available after measured use", item["text"])
+            }
+            assertTrue(LuaValue.encode(result).size < 1024)
+            assertEquals(1, (read(st, mapOf("op" to "mode-estimates", "limit" to 1))["items"] as List<*>).size)
+        }
+    }
+
     @Test fun homeListsAreBoundedNeutralAndNotEmptyUntilMembershipIsSaved() {
         store().use { st ->
             assertEquals("Not saved yet",read(st,mapOf("op" to "lists"))["empty"])

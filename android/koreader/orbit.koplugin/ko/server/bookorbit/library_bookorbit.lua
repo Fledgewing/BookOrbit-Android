@@ -44,6 +44,9 @@ function LibraryAdapter.request(requests)
     return true
 end
 
+function LibraryAdapter.fullRefresh() return OC.menuFullRefresh() end
+
+function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end
 -- Keep the existing sync writer and Wi-Fi lifecycle behind the adapter. No second outbox.
 function LibraryAdapter.syncCurrent(done)
     local ui = liveUI()
