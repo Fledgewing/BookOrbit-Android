@@ -34,6 +34,7 @@ class CacheWorker(
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     /** The run's % (never down; 100 at the end), each time the status is written; null when it ends. */
     private val onProgress: (Long?) -> Unit = {},
+    private val onRunState: (Map<String, Any?>) -> Unit = {},
     /** The folders a command may touch files in ([Places]); a path outside them is refused. */
     private val places: List<File> = listOf(root),
     private val resizeThumbnail: (File, Int, Int) -> Unit = { _, _, _ -> },
@@ -879,7 +880,9 @@ class CacheWorker(
 
     private fun writeStatus(r: Run, running: Boolean): Boolean {
         onProgress(if (running && store.meta("run_op") == "full") r.pct else null)
-        return write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+        val state = status(r, running)
+        onRunState(state)
+        return write(File(mirrorDir, "status.lua"), LuaValue.encode(state))
     }
 
     /** The run's counts, from the jobs table; the % never goes down and is 100 only at the end. */

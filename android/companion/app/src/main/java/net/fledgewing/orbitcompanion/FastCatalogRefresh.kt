@@ -24,6 +24,7 @@ class FastCatalogRefresh(
     private var received = 0L
     private var failures = 0L
     private var percent = 0
+    private var phaseLimit = 0
     private val old get() = store.meta("bulk_active")?.toLongOrNull()
     private fun key(s: String) = "bulk_stage_$s"
     private fun meta(s: String) = store.meta(key(s))
@@ -54,6 +55,12 @@ class FastCatalogRefresh(
         return body
     }
     private fun <T> phase(name: String, job: () -> T): T {
+        phaseLimit = when (name) {
+            "manifest" -> 14; "section metadata" -> 19; "memberships" -> 34
+            "dynamic selections" -> 49; "missing-row batches" -> 59; "ordering sequences" -> 84
+            "local indexing/publication" -> 89; "secondary series" -> 98
+            else -> percent
+        }
         val start = clock(); val before = requests; val bytes = received; val failed = failures
         try { return job() } finally {
             log("bulk: $name requests=${requests-before} bytes=${received-bytes} failures=${failures-failed} elapsedMs=${clock()-start}")
@@ -173,6 +180,7 @@ class FastCatalogRefresh(
                 set("cursor", next)
                 if (!more) set("manifest_done", true)
             }
+            tick(minOf(phaseLimit, percent + 1))
             if (!more) return
             cursor = next
         }
@@ -194,6 +202,7 @@ class FastCatalogRefresh(
                     mark(request, g); set("total:$tag", total)
                 }
             }
+            tick(minOf(phaseLimit, percent + 1))
             page++
         } while ((page-1)*100 < total)
     }

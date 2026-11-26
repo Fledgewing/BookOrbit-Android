@@ -3913,16 +3913,92 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     cacheTeardown()
 end)
 
-test("cache: Refresh tap during Full refresh expands progress without starting another job", function()
+test("cache: Refresh tap during Full refresh performs a normal refresh", function()
     local client, Cat = cacheSetup()
     local cat = setmetatable({client=client}, Cat)
-    local mirror = E.Mirror
-    local shown
-    E.Mirror={fullRunning=function() return true end, showProgress=function(why) shown=why end}
-    W.wifi=false -- progress is local even if connectivity was lost
-    E.OC.refresh(cat)
-    eq(shown,"Refresh tapped"); eq(#cache.calls,0)
-    E.Mirror=mirror
+    local refreshed = 0
+    function cat:refreshCurrent() refreshed = refreshed + 1 end
+    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "full"
+    E.Mirror._status = { engine = "bulk", op = "full", done = 10, total = 100, left = 90 }
+    W.wifi = true
+    E.LF.refreshTap(cat)
+    eq(refreshed, 1)
+    ok(not E.Badge.running and not E.Mirror.manual, "tap never promotes background work to manual Full refresh")
+    ok(not lastBroadcast(".MIRROR"), "no new Full refresh or resume from tap")
+    cacheTeardown()
+end)
+
+test("cache: long press offers Full refresh and only its menu item starts it", function()
+    local client, Cat = cacheSetup()
+    local cat = setmetatable({client=client}, Cat)
+    W.broadcasts = {}
+    E.LF.refreshHold(cat)
+    local menu = W.shown[#W.shown]
+    eq(menu.title, "Sync")
+    ok(not E.Mirror.busy and not lastBroadcast(".MIRROR"), "holding only opens the menu")
+    eq(menu.buttons[1][1].text, "Full refresh")
+    menu.buttons[1][1].callback()
+    ok(E.Mirror.busy, "explicit Full refresh starts the job")
+    cacheTeardown()
+end)
+
+test("mirror: missing, queued and stale working states never time out; only companion stop ends a run", function()
+    local client, Cat = cacheSetup()
+    local send = E.Companion.send
+    local queries, launches = 0, 0
+    E.Companion.send = function(action, extras)
+        if action == E.Companion.ACTION.MIRROR then
+            if extras.query_run then queries = queries + 1 else launches = launches + 1 end
+        end
+        return true
+    end
+    local success, err = pcall(function()
+        E.Mirror._status_dir = E.Mirror.dir()
+        E.Mirror.run_id, E.Mirror.busy, E.Mirror.active = "queued", true, true
+        E.Mirror._status = { engine = "bulk", op = "full", done = 0, total = 100, left = 100 }
+        E.Mirror.poll()
+        run(180)
+        ok(E.Mirror.busy, "missing acknowledgement is never a timer-only death")
+        local function state(name)
+            E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="queued", state=name,
+                op="full", done=0, total=100, left=100, pct=0}))
+        end
+        E.Badge.start(false, E.Mirror._status)
+        state("queued"); run(300)
+        ok(E.Mirror.busy and E.Mirror.status().state == "queued", "sleep pool can hold the queue beyond 90 seconds")
+        eq(E.Badge.history[#E.Badge.history], "Queued", "queue is visible instead of a stuck zero")
+        state("started"); run(180)
+        eq(E.Badge.history[#E.Badge.history], "Starting")
+        E.OC.writeFile(E.Mirror.dir() .. "/status.lua", E.Cache.encode({run="queued", engine="bulk", op="full",
+            beat=1, done=37, total=100, left=63, pct=37}))
+        state("progress"); run(180)
+        eq(E.Mirror.status().done, 37)
+        eq(E.Badge.history[#E.Badge.history], "37%")
+        ok(E.Mirror.busy, "old heartbeat cannot kill a working run")
+        E.Mirror.tick("retry"); E.Mirror.tick("network up")
+        eq(launches, 0, "no duplicate resumes")
+        ok(queries > 0, "liveness is queried")
+        state("stopped"); run(3)
+        ok(not E.Mirror.busy and not E.Mirror.active, "explicit companion stop ends ownership")
+    end)
+    E.Companion.send = send
+    cacheTeardown()
+    ok(success, err)
+end)
+
+test("mirror: a duplicate request attaches to the companion's canonical run and consumes its summary", function()
+    cacheSetup()
+    E.Mirror._status_dir = E.Mirror.dir()
+    E.Mirror.run_id, E.Mirror.busy, E.Mirror.active = "duplicate", true, true
+    E.Mirror._status = {engine="bulk", op="full", done=0, total=100, left=100}
+    E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="original", query_for="duplicate", state="queued"}))
+    E.Mirror.poll(); run(3)
+    eq(E.Mirror.run_id, "original")
+    E.OC.writeFile(E.Mirror.dir() .. "/summary.lua", E.Cache.encode({run="original", why="finished",
+        status={engine="bulk", op="full", done=100, total=100, left=0, pct=100}}))
+    run(3)
+    ok(not E.Mirror.busy, "canonical summary ends polling")
+    eq(E.Mirror.status().done, 100)
     cacheTeardown()
 end)
 
@@ -4807,11 +4883,11 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         local run_id = E.Mirror.run_id
         E.OC.refresh(cat)
         eq(E.Mirror.run_id, run_id, "tap keeps the running Full refresh")
-        ok(E.Badge.expanded, "tap immediately expands visible progress")
+        ok(not E.Badge.expanded, "normal tap does not expand Full refresh progress")
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         local h = E.Badge.history or {}
-        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
+        ok((h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
         ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
         -- The network goes mid-run: paused; it comes back: resumed, no read needed.
         W.wifi = false
