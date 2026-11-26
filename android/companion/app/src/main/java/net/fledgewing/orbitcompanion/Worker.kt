@@ -95,7 +95,7 @@ object Worker {
         app = ctx.applicationContext
         BulkWork.attach(ctx)
         LibraryAccount.initialize(ctx)
-        if (i.action == ACTION_MIRROR) LibraryAccount.refresh(ctx)
+        if (i.action in setOf(ACTION_MIRROR, ACTION_CHECK, ACTION_RECHECK)) LibraryAccount.refresh(ctx)
         if (i.action == ACTION_SQLITE_STRESS) {
             val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
             return SqliteStress.start(root(), secs)
@@ -122,8 +122,8 @@ object Worker {
             val owner = i.getStringExtra("owner") ?: return
             synchronized(lock) { patches.addLast {
                 val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
-                val model = LibraryReadModel(worker().store, readingStats = {
-                    ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000)
+                val model = LibraryReadModel(worker().store, accountState = LibraryAccount::state, accountStats = LibraryAccount::stats, readingStats = {
+                    ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000, AccountStats.zone(LibraryAccount.stats(LuaValue.str(owner))))
                 })
                 if (requests.size <= LibraryReadModel.MAX_BATCH && model.publish(LuaValue.str(owner), requests))
                     worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))

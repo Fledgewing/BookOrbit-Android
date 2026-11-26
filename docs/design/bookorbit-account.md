@@ -10,7 +10,7 @@ All upstream references below are relative to `upstream/bookorbit/server/src/`,
 at `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7` (`tools/upstreams.lock`).
 
 POST `auth/login` takes username, password, `clientKind: native` and optional
-`deviceLabel` (`modules/auth/auth.controller.ts:84`, `dto/login.dto.ts:4`,
+`deviceLabel` (`modules/auth/auth.controller.ts:84`, `modules/auth/dto/login.dto.ts:4`,
 `modules/auth/dto/auth-client.dto.ts:4`). Native replies contain the JWT access
 and opaque refresh token, both ISO expiry timestamps and session ID
 (`modules/auth/auth-session.service.ts:64`). Access defaults to 15 minutes;
@@ -28,7 +28,7 @@ POST `auth/oidc/:slug/state` followed by browser authorization and POST
 (`modules/auth/auth.controller.ts:70`, `:159`, `:175`). This initial plain screen
 supports password sign-in; OIDC-only accounts need their server's browser flow,
 which is deferred. There is no native TOTP/2FA challenge in the pinned login DTO
-or password login service (`modules/auth/auth.service.ts:229`). An external OIDC
+or password login service (`modules/auth/auth.service.ts:245`). An external OIDC
 provider can enforce its own factors. No factor is skipped or emulated.
 
 ## Available route inventory
@@ -141,8 +141,8 @@ achievement celebrations (`modules/achievement/achievement.controller.ts:34`).
 Smart-scope GET book execution requires attestation; the separately declared
 query operations above retain their own policy. No attempt is made to forge,
 replay, bypass or impersonate the server app. Its fixed application/signature
-policy and Google-root validation are respected (`modules/app-attest/app-attest.policy.ts:1`,
-`modules/app-attest/android-key-attest.service.ts:1`). A 403 disables that feature;
+policy and Google-root validation are respected (`modules/app-attest/app-attest.policy.ts:21`,
+`modules/app-attest/app-attest.policy.ts:37`). A 403 disables that feature;
 it does not initiate refresh or retry. A 401 permits one refresh and one replay.
 
 ## Connector setup
@@ -182,3 +182,30 @@ remains one ≤16 KiB materialized row per Home paint. Account days precede conn
 days; account hours/sessions precede local fields. Only proven not-yet-uploaded
 local minutes may be added to today. Fetch time is not an upload watermark;
 without one, show local today separately rather than double-counting it.
+
+
+## Implementation notes and follow-up
+
+F12-K extends the F12-F connector projection (`BookOrbitLibrary.kt:8`) and
+`ReadingStats.combine` rather than introducing another reading-statistics store.
+Account fetches are normalized to ≤366 daily input rows, 24 hourly rows, ≤3000
+weekly sessions (server cap: `modules/user-statistics/user-statistics.service.ts:71`)
+and ≤14 completion-month rows before private persistence. Session IDs deduplicate;
+only weekly count, longest duration and completeness enter the snapshot. A capped
+week is marked incomplete. Transient failures retain the last snapshot as stale;
+403 removes only that feature until the next sign-in/process session. Attested
+activity details, year review and celebrations always have capabilities false.
+
+`LibraryReadModel` adds `account.state` and extends `capabilities.account` and
+`capabilities.stats`; both the module and worker tests cover these operations.
+The Lua UI calls `Library.openAccount`; its private binding uses the existing
+trusted provider and applies a one-time connector revision at lifecycle resume.
+Sign-out clears private tokens/statistics and invalidates owned views; it preserves
+the independent legacy reader login. The setup screen is intentionally plain under
+the maintainer's F12-K instruction. Stored account identity is isolated by server,
+account ID and connector username. Re-sign-in preserves a known connector key only
+for the same server/account; no old token or job is reused for another owner.
+
+Next slice can use these normalized capabilities and snapshots for final account
+screens, browser/OIDC authentication and account-only library access. List writes
+remain disabled: having an account session does not grant a new UI write feature.

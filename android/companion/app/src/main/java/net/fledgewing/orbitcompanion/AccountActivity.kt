@@ -27,10 +27,15 @@ class AccountActivity : EinkActivity() {
         val root = page()
         root.addView(Ui.text(this, "Sign in to your server", 26f, bold = true))
         val state = LibraryAccount.state()
+        require(LuaValue.encode(state).size <= 16384)
         if (state["signedIn"] == true) {
             root.addView(Ui.text(this, "Signed in", 20f))
             if (state["connector"] == "existing-login-needed") root.addView(Ui.text(this,
                 "Your server already has a reader login. Use the existing reader login in KOReader to connect this reader.", 18f))
+            if (state["connector"] == "forbidden") root.addView(Ui.text(this, "Your account does not permit reader connection setup.", 18f))
+            if (state["connector"] == "unavailable") root.addView(Ui.button(this, "Try connection setup again") {
+                if (!busy) { busy = true; render(); LibraryAccount.retryConnection(this) { finishCommand(it) } }
+            })
             root.addView(Ui.button(this, if (busy) "Signing out…" else "Sign out") {
                 if (!busy) { busy = true; render(); LibraryAccount.signOut(this) { finishCommand(it) } }
             })

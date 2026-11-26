@@ -67,13 +67,19 @@ function LibraryAdapter.openAccount()
     return result and result.ok == "1"
 end
 -- Lifecycle handoff, never a paint read. Only the connector key crosses this boundary.
-function LibraryAdapter.accountReturned()
+function LibraryAdapter.accountReturned(attempt)
     if Companion.workerProblem() then return false end
     local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.ACCOUNT_CONNECTOR", {})
-    if not result or result.ok ~= "1" or not result.server or not result.user or not result.userkey then return false end
+    if result and result.pending == "1" and (attempt or 0) < 3 then
+        UIManager:scheduleIn(1, function() LibraryAdapter.accountReturned((attempt or 0)+1) end)
+        return false
+    end
+    if not result or result.ok ~= "1" or not result.revision or S.account_connector_revision == result.revision or not result.server or not result.user or not result.userkey then return false end
     local p = bookorbit()
     if not p or type(p.settings) ~= "table" then return false end
     local s = p.settings
+    S.account_connector_revision = result.revision
+    saveSettings()
     if s.server_url == result.server and s.username == result.user and s.userkey == result.userkey then return false end
     -- The account owner explicitly chose sign-in in the companion. Existing sync ownership
     -- is left to upstream's one ledger on its next normal command; no second sync writer.

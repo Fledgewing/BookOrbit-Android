@@ -98,4 +98,37 @@ class BookOrbitAccountTest {
             try { BookOrbitAccount.normalizeServer(s); fail(s) } catch (_: IllegalArgumentException) { }
         }
     }
+    @Test fun lostCreationResponseRecoversTheCheckpointedKeyWithoutAnotherCreation() {
+        val k = Kit(); k.existing = null
+        val original = k.answer
+        k.answer = { p,m,b,t ->
+            if (p == "/koreader/credentials" && m == "POST") {
+                k.existing = mapOf("username" to b!!["username"])
+                BookOrbitAccount.Reply(0)
+            } else original(p,m,b,t)
+        }
+        k.login(); assertNull(k.account.connector())
+        val checkpoint = k.vault.data!!["pendingKey"]
+        k.account.setupConnector(null)
+        assertEquals(checkpoint, k.account.connector()!!.key)
+        assertEquals(1, k.calls.count { it == "POST /koreader/credentials" })
+    }
+    @Test fun reloginPreservesTheKnownConnectorAndAccountSwitchDoesNotReuseIt() {
+        val k = Kit(); k.login(CacheWorker.Creds("https://library.invalid/api/v1", "fixture", "key"))
+        k.login(); assertEquals("key", k.account.connector()!!.key)
+        k.existing = mapOf("username" to "other")
+        k.account.setupConnector(null)
+        assertNull(k.account.connector())
+        assertEquals("existing-login-needed", k.account.state()["connector"])
+    }
+    @Test fun transientStatsErrorsRetainCacheWhileForbiddenFieldsAreRemoved() {
+        val k = Kit(); k.login()
+        val owner = k.account.owner()!!
+        val before = k.account.stats(owner)!!["days"]
+        k.answer = { p,_,_,_ -> BookOrbitAccount.Reply(if (p.contains("peak-hours")) 403 else 0) }
+        k.account.refreshStats(force = true)
+        val cached = k.account.stats(owner)!!
+        assertEquals(before, cached["days"]); assertNull(cached["hours"]); assertEquals(true, cached["stale"])
+    }
+
 }

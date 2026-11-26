@@ -20,10 +20,12 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     private fun number(v: Any?) = (v as? Number)?.toLong()
     private fun signedIn() = session != null && (number(session?.get("refreshExpiry")) ?: 0) > now()
     @Synchronized fun state(): Map<String, Any?> = mapOf("signedIn" to signedIn(),
-        "connector" to (session?.get("connectorState") ?: "not-configured"))
+        "connector" to (session?.get("connectorState") ?: "not-configured"),
+        "connectorRevision" to session?.get("revision"))
     @Synchronized fun owner(): String? = if (signedIn()) (session?.get("connectorUser") as? String)?.let { it + "|" + (session!!["server"] as String).lowercase(java.util.Locale.ROOT) } else null
     @Synchronized fun connector(): CacheWorker.Creds? {
         val s = session ?: return null
+        if (s["connectorState"] != "ready") return null
         val user = s["connectorUser"] as? String ?: return null
         val key = s["connectorKey"] as? String ?: return null
         return CacheWorker.Creds(s["server"] as String, LuaValue.utf8(user), key)
@@ -39,13 +41,14 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             val reply = r.value as? Map<*, *> ?: throw Failure("invalid-response")
             val user = reply["user"] as? Map<*, *> ?: throw Failure("invalid-response")
             val id = number(user["id"]) ?: throw Failure("invalid-response")
-            val next = mutableMapOf<String, Any?>("server" to base, "id" to id)
+            val next = mutableMapOf<String, Any?>("server" to base, "id" to id, "revision" to java.util.UUID.randomUUID().toString())
             credentials(next, reply)
             // Persist only after the complete response validates. Retire an older session best effort.
             val previous = session
+            val previousConnector = connector().takeIf { previous?.get("id") == id && previous["server"] == base }
             session = next; blocked.clear(); persist()
             if (previous != null) runCatching { http.request(previous["server"] as String, "/auth/logout", "POST", mapOf("refreshToken" to previous["refresh"]), null) }
-            setupConnector(legacy)
+            setupConnector(previousConnector ?: legacy)
             refreshStats(force = true)
         } finally { password.fill('\u0000') }
     }
@@ -81,37 +84,58 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     @Synchronized internal fun setupConnector(legacy: CacheWorker.Creds?) {
         val r = get("/koreader/credentials", "connector")
         val s = session ?: return
-        if (r.code !in 200..299) { s["connectorState"] = "unavailable"; persist(); return }
+        if (r.code !in 200..299) { s["connectorState"] = if (r.code == 403) "forbidden" else "unavailable"; persist(); return }
+        val server = s["server"] as String
         val existing = r.value as? Map<*, *>
         if (existing != null) {
-            val user = existing["username"] as? String
-            if (user != null) s["connectorUser"] = user
-            val known = connector() ?: legacy
-            if (user != null && known?.user == LuaValue.utf8(user) && normalizeServer(known.server) == s["server"]) {
-                s["connectorUser"] = LuaValue.str(known.user); s["connectorKey"] = known.key; s["connectorState"] = "ready"
-            } else { s["connectorState"] = "existing-login-needed" }
+            val user = (existing["username"] as? String) ?: throw Failure("invalid-response")
+            val pending = (s["pendingUser"] as? String)?.let { u -> (s["pendingKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
+            val stored = (s["connectorUser"] as? String)?.let { u -> (s["connectorKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
+            val known = listOfNotNull(stored, pending, legacy).firstOrNull {
+                it.user == LuaValue.utf8(user) && normalizeServer(it.server) == server
+            }
+            s["connectorUser"] = user; s.remove("connectorKey")
+            if (known != null) {
+                s["connectorKey"] = known.key; s["connectorState"] = "ready"
+            } else s["connectorState"] = "existing-login-needed"
+            s.remove("pendingUser"); s.remove("pendingKey")
         } else if (r.value == null) {
             val random = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
             val user = "booksync-" + s["id"] + "-" + random.take(8)
-            val created = http.request(s["server"] as String, "/koreader/credentials", "POST", mapOf("username" to user, "password" to random), s["access"] as String)
+            val key = MessageDigest.getInstance("MD5").digest(random.toByteArray()).joinToString("") { "%02x".format(it) }
+            // Checkpoint the derived key before creation: a lost response must not lose the
+            // one-time secret or cause another device's existing connector to be replaced.
+            s["pendingUser"] = user; s["pendingKey"] = key; persist()
+            val created = http.request(server, "/koreader/credentials", "POST", mapOf("username" to user, "password" to random), s["access"] as String)
             if (created.code in 200..299) {
-                s["connectorUser"] = user
-                s["connectorKey"] = MessageDigest.getInstance("MD5").digest(random.toByteArray()).joinToString("") { "%02x".format(it) }
-                s["connectorState"] = "ready"
-            } else s["connectorState"] = if (created.code == 409) "existing-login-needed" else "unavailable"
-        }
+                s["connectorUser"] = user; s["connectorKey"] = key; s["connectorState"] = "ready"
+                s.remove("pendingUser"); s.remove("pendingKey")
+            } else {
+                s["connectorState"] = if (created.code == 409) "existing-login-needed" else if (created.code == 403) "forbidden" else "unavailable"
+                if (created.code == 403) blocked.add("connector")
+            }
+        } else throw Failure("invalid-response")
         persist()
     }
     @Synchronized fun refreshStats(force: Boolean = false) = span("account.refreshStats") {
         if (!signedIn() || (!force && lastAttempt > now() - 300)) return@span
         lastAttempt = now()
-        val fields = linkedMapOf<String, Any?>()
+        val fields = (session?.get("stats") as? Map<*, *>).orEmpty().entries.associate { it.key.toString() to it.value }.toMutableMap()
+        var success = false
+        var stale = false
         for ((path, feature) in READS) {
             val r = get(path, feature)
-            if (r.code in 200..299) AccountStats.normalize(feature, r.value, java.time.Instant.ofEpochSecond(now()).atZone(java.time.ZoneOffset.UTC).toLocalDate())?.let { fields[feature] = it }
+            if (r.code in 200..299) {
+                val today = java.time.Instant.ofEpochSecond(now()).atZone(AccountStats.zone(fields)).toLocalDate()
+                val normalized = AccountStats.normalize(feature, r.value, today)
+                if (normalized != null) { fields[feature] = normalized; success = true } else fields.remove(feature)
+            } else if (r.code == 403 || r.code == 404) fields.remove(feature)
+            else stale = true
         }
         // Raw bounded account data stays private, normalized before library publication.
-        session?.set("stats", fields + mapOf("at" to now())); persist()
+        if (success) fields["at"] = now()
+        fields["stale"] = stale
+        session?.set("stats", fields); persist()
     }
     @Synchronized fun signOut() = span("account.signOut") {
         val old = session
@@ -125,8 +149,8 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
         try { return block() } finally { log("$id ms=${(System.nanoTime()-start)/1_000_000}") }
     }
     companion object {
-        val READS = linkedMapOf("/user-statistics/daily-reading?days=365" to "days", "/user-statistics/peak-hours?days=365" to "hours",
-            "/user-statistics/session-timeline" to "sessions", "/user-statistics/completion-timeline?days=365" to "finished", "/auth/me" to "goal")
+        val READS = linkedMapOf("/auth/me" to "goal", "/user-statistics/daily-reading?days=365" to "days", "/user-statistics/peak-hours?days=365" to "hours",
+            "/user-statistics/session-timeline" to "sessions", "/user-statistics/completion-timeline?days=365" to "finished")
         fun normalizeServer(raw: String): String {
             val uri = URI(raw.trim())
             require(uri.scheme in setOf("https", "http") && uri.host != null && uri.userInfo == null && uri.rawQuery == null && uri.fragment == null)

@@ -68,7 +68,10 @@ class CommandProvider : ContentProvider() {
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
             if (method == LibraryAccount.CONNECTOR) {
+                LibraryAccount.initialize(ctx)
                 return answer(true).apply {
+                    putString("pending", if (LibraryAccount.ready()) "0" else "1")
+                    putString("revision", LibraryAccount.state()["connectorRevision"] as? String)
                     LibraryAccount.connector()?.let { putString("server", it.server); putString("user", it.user); putString("userkey", it.key) }
                 }
             }

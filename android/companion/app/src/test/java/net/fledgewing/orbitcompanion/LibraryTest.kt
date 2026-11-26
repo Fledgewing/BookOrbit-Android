@@ -280,4 +280,27 @@ class LibraryTest {
             assertTrue(sizes.all { it<=16384 })
         }
     }
+    @Test fun accountOperationsAreOwnerScopedNormalizedAndBudgeted() {
+        store().use { st ->
+            var reads = 0
+            val model = LibraryReadModel(st, {99}, {}, accountState = { mapOf("signedIn" to true) }, accountStats = { requested ->
+                assertEquals(owner, requested); reads++
+                mapOf("hours" to List(24) { 1L }, "sessions" to mapOf("count" to 2, "longest_seconds" to 90))
+            })
+            fun request(op: String, bytes: Int = 16384) = String(LuaValue.encode(mapOf("op" to op, "limit" to 1, "bytes" to bytes)), Charsets.ISO_8859_1)
+            val requests = listOf(request("account.state"), request("capabilities"), request("reading.stats"))
+            assertFalse(model.publish("other", requests)); assertEquals(0, reads)
+            assertTrue(model.publish(owner, requests))
+            val values = st.db().query("SELECT request,body FROM library_views WHERE owner=?", owner) { it.text(0)!! to it.bytes(1)!! }.toMap()
+            assertTrue(values.values.all { it.size <= 16384 })
+            val state = LuaValue.parse(values.getValue(requests[0])) as Map<*, *>
+            assertEquals(mapOf("signedIn" to true), state)
+            val caps = LuaValue.parse(values.getValue(requests[1])) as Map<*, *>
+            assertEquals(true, (caps["account"] as Map<*, *>)["signedIn"])
+            assertEquals(true, (caps["stats"] as Map<*, *>)["hours"])
+            assertEquals(false, (caps["stats"] as Map<*, *>)["yearReview"])
+            assertFalse(String(values.getValue(requests[2])).contains("accessToken"))
+        }
+    }
+
 }

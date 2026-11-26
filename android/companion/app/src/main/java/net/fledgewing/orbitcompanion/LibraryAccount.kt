@@ -18,11 +18,13 @@ object LibraryAccount {
     @Volatile private var savedConnector: CacheWorker.Creds? = null
     @Volatile private var savedOwner: String? = null
     @Volatile private var loaded = false
+    private var nextRefreshAt = 0L
     private var legacy: CacheWorker.Creds? = null
     private fun adapter(ctx: Context) = adapter ?: BookOrbitAccount(EncryptedAccountVault.android(ctx), AccountHttp).also { adapter = it }
     fun state(): Map<String, Any?> = snapshot
     fun stats(owner: String): Map<*, *>? = savedStats.takeIf { owner == savedOwner }
     fun connector(): CacheWorker.Creds? = savedConnector
+    fun ready(): Boolean = loaded
     fun initialize(ctx: Context, done: () -> Unit = {}) {
         if (loaded) { main.post(done); return }
         queue.execute { if (!loaded) { publish(adapter(ctx)); loaded = true }; main.post(done) }
@@ -37,6 +39,7 @@ object LibraryAccount {
         savedConnector = a.connector().takeIf { signed["signedIn"] == true }
         savedOwner = a.owner()
         savedStats = savedOwner?.let(a::stats)
+        require(LuaValue.encode(signed).size <= 16384)
         snapshot = signed
     }
     private fun command(ctx: Context, work: (BookOrbitAccount) -> Unit, done: (String?) -> Unit) {
@@ -53,6 +56,12 @@ object LibraryAccount {
     }
     fun signIn(ctx: Context, server: String, username: String, password: CharArray, done: (String?) -> Unit) =
         command(ctx, { a -> try { a.signIn(server, username, password, legacy) } finally { password.fill('\u0000') } }, done)
+    fun retryConnection(ctx: Context, done: (String?) -> Unit) = command(ctx, { it.setupConnector(legacy); it.refreshStats(force = true) }, done)
     fun signOut(ctx: Context, done: (String?) -> Unit) = command(ctx, { it.signOut() }, done)
-    fun refresh(ctx: Context) = command(ctx, { it.refreshStats() }, {})
+    @Synchronized fun refresh(ctx: Context) {
+        val now = System.currentTimeMillis()
+        if (now < nextRefreshAt) return
+        nextRefreshAt = now + 300000
+        command(ctx, { it.refreshStats() }, {})
+    }
 }
