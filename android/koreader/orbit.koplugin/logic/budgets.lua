@@ -59,6 +59,10 @@ function Budgets.get(kind, id)
     return b
 end
 
+-- Settings groups inherit the Settings family limits.
+for _, id in ipairs({"account", "sync", "library", "reading", "home", "sleep", "updates", "about"}) do
+    Budgets.screens["settings-" .. id] = Budgets.screens.settings
+end
 -- Reader surfaces consume one book, capability row and optional battery row, in one batch.
 for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
     Budgets.screens[id] = budget(3, 3 * 16384, 50)

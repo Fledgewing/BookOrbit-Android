@@ -406,7 +406,7 @@ function Mirror.stop(why)
     if Mirror.preparing then Mirror.preparing, Mirror.busy = nil, nil end
     Mirror.notices = nil
     if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
-    Badge.finish(_("Paused · it goes on when BookOrbit answers"))
+    Badge.finish(_("Paused · it goes on when the server answers"))
     if not Mirror.active then return end
     Mirror.active = nil
     log("mirror: paused (" .. why .. "),", Mirror.status().left or 0, "left; it resumes at the next network up, wake or Home")

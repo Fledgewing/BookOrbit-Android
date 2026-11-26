@@ -551,7 +551,7 @@ function Sleep.menuItem(_plugin, later)
             sub_item_table_func = scopeRows(toggleRule, hasRule) })
 
         table.insert(rows, info(function()
-            return _("For a custom field: make a smart scope with that condition in BookOrbit, then add it here.")
+            return _("For a custom field: make a smart scope with that condition on the server, then add it here.")
         end))
         return rows
     end

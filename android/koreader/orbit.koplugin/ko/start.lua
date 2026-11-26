@@ -42,7 +42,7 @@ function OrbitAndroid:wakeFlow(reason)
         log("orbismart: woke after " .. fmt(state.paused_for) .. "; no wake check under " .. OSM.WAKE_MIN_S .. " s")
         return
     end
-    if not S.sync_on_wake and not (OSM and OSM.on()) then
+    if not S.sync_on_wake then
         log(reason .. ": sync on wake is off")
         return
     end

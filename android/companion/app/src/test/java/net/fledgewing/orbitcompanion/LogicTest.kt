@@ -10,6 +10,11 @@ class HomeDeciderTest {
     private val start = HomeAction.START_KOREADER
     private val launcher = HomeAction.SHOW_LAUNCHER
 
+    @Test fun manualSyncDoesNotSelectAfterSleepWifiPolicy() {
+        assertNull(WifiPolicy.afterSleepSync(WifiAfterSleep.OFF_NOW, "menu_sync", true, 0, restoreOff = true))
+        assertFalse(WifiPolicy.isSleepReason("menu_sync"))
+    }
+
     @Test
     fun singlePressesStartKoreader() {
         val d = HomeDecider()
