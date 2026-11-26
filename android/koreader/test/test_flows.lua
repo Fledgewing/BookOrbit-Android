@@ -4005,6 +4005,16 @@ test("cache: bounded list opens paint under 500 ms without a subprocess or compa
     eq(spans,3,"one timing line per cache-hit open")
     run(0.1)
     ok(sends > 0,"stale checks resume after render without waiting for their replies")
+    local check, mirror = E.OC.check, E.OC.mirrorTick
+    local jobs = 0
+    E.OC.check = function() jobs=jobs+1 end
+    E.OC.mirrorTick = function() jobs=jobs+1 end
+    E.OC.cache_only = true
+    ok(cat:fetch("Redraw", function() return client:request("GET",paths[1]) end))
+    E.OC.cache_only = nil -- the redraw clears it before nextTick
+    run(0.1)
+    eq(jobs,0,"cache-only redraw never schedules background work after its flag clears")
+    E.OC.check, E.OC.mirrorTick = check, mirror
     -- Cache miss still uses exactly one child; errors cannot leave probe mode set.
     local missing = "/koreader/plugin/catalog/books?collectionId=99&size=12"
     cache.server[missing] = {items={},total=0}
@@ -6083,6 +6093,46 @@ test("bulk catalog: plugin SQL serves offline windows, filters and secondary con
         eq(e.body.buckets[1].count,8,"letter count")
     end)
     st:close();os.execute("rm -rf '" .. dir .. "'")
+end)
+
+test("bulk catalog: a 7000-book mirror decodes only the requested window within 500 ms", function()
+    local dir, st = fixtureStore()
+    for sql in io.lines(here .. "/../../../shared/fixtures/catalog/bulk-refresh/schema.sql") do st.conn:exec(sql) end
+    st:run("INSERT OR REPLACE INTO meta VALUES ('bulk_active','1')")
+    st.conn:exec("BEGIN")
+    for i=1,7000 do
+        local letter = string.char(65 + math.floor((i-1)*26/7000))
+        local title = letter .. string.format("%05d",i)
+        local item = RE.Cache.encode({id=i,title=title,description=string.rep("x",1000)})
+        st:run("INSERT INTO bulk_books (g,id,item,title,status,added) VALUES (1,?,?,?,'unread',?)",i,item,title,tostring(i))
+        st:run("INSERT INTO bulk_ranks VALUES (1,'title','asc',?,?,?)",i,i-1,letter)
+        if i%2 == 0 then st:run("INSERT INTO bulk_members (g,kind,value,id) VALUES (1,'collectionId','4',?)",i) end
+    end
+    st.conn:exec("COMMIT")
+    withStore(dir,function()
+        local decode = RE.Cache.decode
+        local decoded = 0
+        RE.Cache.decode = function(...) decoded=decoded+1; return decode(...) end
+        local success, err = pcall(function()
+            for _, query in ipairs({
+                "sort=title&order=asc&buckets=1",
+                "sort=recently_added&order=desc",
+                "sort=title&order=asc&buckets=1&collectionId=4",
+            }) do
+                decoded=0
+                local path="/koreader/plugin/catalog/books?size=12&page=1&" .. query
+                local start=os.clock()
+                local entry=RE.Store.read(DBFX.owner,path,path,nil)
+                ok(os.clock()-start < 0.5,"bulk window CPU budget: " .. query)
+                eq(#entry.body.items,12)
+                ok(decoded <= 13,"only 12 items and an optional header decoded: " .. decoded)
+                eq(entry.body.total,query:find("collectionId",1,true) and 3500 or 7000)
+            end
+        end)
+        RE.Cache.decode=decode
+        ok(success,err)
+    end)
+    st:close(); sh("rm -rf",dir)
 end)
 
 test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()

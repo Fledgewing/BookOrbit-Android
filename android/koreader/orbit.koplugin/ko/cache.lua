@@ -964,15 +964,17 @@ function OC.install(why)
                 for _, r in ipairs(reads) do OC.saw(r.client, r.key, "cache") end
                 OC.open_span.source = "cache-inline"
                 OC.mark("response")
+                -- Retain cache-only redraw semantics after the caller clears its flag.
+                local cache_only = OC.cache_only
                 -- Nothing before paint waits for the companion or starts the mirror.
                 UIManager:nextTick(function()
                     for _, r in ipairs(reads) do
-                        if r.check and not OC.cache_only then
+                        if r.check and not cache_only then
                             OC.done[r.key] = true
                             OC.check(nil, r.key, r.method, r.path, r.headers, r.client)
                         end
                     end
-                    if not OC.cache_only then pcall(OC.mirrorTick, "read") end
+                    if not cache_only then pcall(OC.mirrorTick, "read") end
                 end)
                 return body, err, errbody
             end
