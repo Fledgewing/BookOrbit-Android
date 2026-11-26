@@ -889,6 +889,8 @@ history is not proof that a book was unopened for six months. Old-book removal
 therefore requires a recorded last-open time older than six calendar months.
 The foreground book is excluded from removal candidates. Confirmations bind to
 an exact file preview and preserve sidecars, server copies and progress.
+Busy actions stay disabled; a covered page adopts a completed snapshot on its next
+visible paint, with no additional library read. Closed pages discard results.
 
 Android supports the owned Storage page, patterned bar, warning, removal,
 Collections index and folder chooser. Firmware follows the authorized later

@@ -93,12 +93,15 @@ function StorageUI.create(mode,onCollection,onReturn)
         local s=function(n) return Device.screen:scaleBySize(n) end
         local w,h=self.dimen.w,self.dimen.h; local c=HomeWidgets.canvas(w,h)
         self.controls={}
-        local function button(label,y,callback)
-            local b=HomeWidgets.button(c,label,s(16),y,w-s(32),s(54),callback)
+        local function button(label,y,callback,allowBusy)
+            local b=HomeWidgets.button(c,label,s(16),y,w-s(32),s(54),function()
+                if not self.busy or allowBusy then callback() end
+            end,allowBusy or not self.busy)
             self.controls[#self.controls+1]=b
             return b
         end
         HomeWidgets.text(c,self.mode=="collections" and "Collections" or self.mode=="folder" and "Download folder" or "Storage",s(16),s(12),w-s(32),24,false,true)
+        if self.busy then HomeWidgets.text(c,"Working…",w-s(150),s(18),s(134),16) end
         local y=s(62)
         if self.mode=="collections" then
             if self.data.pending or self.data.error or #(self.data.items or {})==0 then
@@ -133,13 +136,14 @@ function StorageUI.create(mode,onCollection,onReturn)
             if self.data.pending or self.data.error then button("Retry",y,function() Library.retry(); self:rebuild() end); y=y+s(56) end
             button("Catalog cache limit ›",y,function() StorageUI.cacheLimit() end); y=y+s(56)
         end
-        button("Back",math.min(y+s(8),h-s(62)),function() self:onClose() end)
+        button("Back",math.min(y+s(8),h-s(62)),function() self:onClose() end,true)
         local old=self[1]; self[1]=HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=0,background=HomeWidgets.ui().BB.COLOR_WHITE,c}
         if old then old:free() end
         self.focus=math.min(self.focus,#self.controls)
         finish()
     end
     function Page:confirmation()
+        if self.busy then return end
         local finish=Budgets.span("storage.confirm.paint",now_s,log)
         Budgets.get("screens","storage-confirm")
         local title,body=StoragePlan.confirm(self.confirm)
@@ -156,20 +160,36 @@ function StorageUI.create(mode,onCollection,onReturn)
         if self.busy then return end
         self.busy=true; self:draw(); UIManager:setDirty(self,"ui")
         Library.storageCommand(op,args,function(result)
-            if not self:visible() then return end
+            if self.closed then return end
             self.busy=false
-            self.data=result or {error="Storage unavailable"}
-            if folder and not self.data.error then self:onClose() else self:draw(); UIManager:setDirty(self,"ui") end
+            result=result or {error="Storage unavailable"}
+            if self:visible() then
+                self.data=result
+                if folder and not self.data.error then self:onClose() else self:draw(); UIManager:setDirty(self,"ui") end
+            else self.pending_result=result end
             Library.retry(); Library.changed({kind="storage"})
         end)
     end
     function Page:moveFocus(delta)
         local old=self.controls[self.focus]
         if old.onUnfocus then old:onUnfocus() end
-        self.focus=(self.focus-1+delta)%#self.controls+1
+        for _=1,#self.controls do
+            self.focus=(self.focus-1+delta)%#self.controls+1
+            if self.controls[self.focus].enabled~=false then break end
+        end
         if self.controls[self.focus].onFocus then self.controls[self.focus]:onFocus() end
         UIManager:setDirty(self,"ui")
         return true
+    end
+    function Page:paintTo(bb,x,y)
+        local finish=Budgets.span("storage.screen.paint",now_s,log)
+        -- A user popup may cover the initiating page. Adopt its completed local result
+        -- only when the page is visible again; never reopen a closed page or read here.
+        if self.pending_result and self:visible() then
+            self.data=self.pending_result; self.pending_result=nil; self:draw()
+        end
+        Input.paintTo(self,bb,x,y)
+        finish()
     end
     function Page:onNext() return self:moveFocus(1) end
     function Page:onPrevious() return self:moveFocus(-1) end

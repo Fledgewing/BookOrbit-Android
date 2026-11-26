@@ -26,9 +26,9 @@ function HomeWidgets.text(canvas, text, x,y,w,size,ink,bold)
     return HomeWidgets.put(canvas,u.Text:new{text=tostring(text or ""),face=u.Font:getFace(bold and "tfont" or "cfont",size),
         max_width=w,fgcolor=ink and u.BB.COLOR_WHITE or u.BB.COLOR_BLACK},x,y)
 end
-function HomeWidgets.button(canvas,text,x,y,w,h,callback)
+function HomeWidgets.button(canvas,text,x,y,w,h,callback,enabled)
     return HomeWidgets.put(canvas,HomeWidgets.ui().Button:new{text=text,width=w,height=h,padding=0,bordersize=0,
-        text_font_size=16,avoid_text_truncation=false,callback=callback},x,y)
+        text_font_size=16,avoid_text_truncation=false,callback=callback,enabled=enabled~=false},x,y)
 end
 function HomeWidgets.caption(settings, book)
     local cap=settings.cap or 0

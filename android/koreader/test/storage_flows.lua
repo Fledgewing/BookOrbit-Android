@@ -115,6 +115,30 @@ return function(test,eq,ok,E,W,withHost)
             page:onClose()
         end)
     end)
+    test('storage: busy actions cannot open a second confirmation and hidden completion waits for visibility',function()
+        withHost(function()
+            local reads=0
+            E.LibraryAdapter.read=function() reads=reads+1; return data(),700 end
+            local done,calls
+            E.LibraryAdapter.command=function(_,_,callback) calls=(calls or 0)+1; done=callback end
+            local page=E.StorageUI.show()
+            page:run('storage.free',{action='finished',token='preview'})
+            eq(calls,1); eq(page.busy,true)
+            local shown=#W.shown
+            ok(click(page,'Remove finished books from device\nFrees 10 MB · 1 book'))
+            ok(click(page,'Catalog cache limit ›'))
+            eq(#W.shown,shown); eq(calls,1)
+            eq(page.controls[1].enabled,false); eq(page.controls[#page.controls].enabled,true)
+            page:onNext(); eq(page.controls[page.focus].text,'Back')
+            local popup={}; W.shown[#W.shown+1]=popup
+            local old=page[1]; local result=data(); result.actions={}
+            done(result); eq(page[1],old); eq(page.busy,false); ok(page.pending_result)
+            table.remove(W.shown)
+            page:paintTo({paintRect=function() end},0,0)
+            eq(page.pending_result,nil); eq(#page.data.actions,0); eq(reads,1,"deferred paint never reads again")
+            page:onClose()
+        end)
+    end)
     test('collections: loading, error, unsaved and complete-empty remain distinct',function()
         withHost(function()
             for _,case in ipairs({{{pending=true},'Loading…'},{{error='offline'},"Couldn't load collections · Retry"},
