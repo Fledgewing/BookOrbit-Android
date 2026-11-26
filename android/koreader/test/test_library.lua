@@ -67,6 +67,18 @@ return function(test, eq, ok, here, Cache)
         local r=e.Library.paint("home"):widget("library")
         r:counts(); eq(r.usage.rows,1,"summary is a materialized row")
     end)
+    test("library: reopening and source events refresh the worker, publications do not loop", function()
+        local e=setmetatable({Cache=Cache, now_s=function() return 10 end, log=function() end,
+            OC={watchChecks=function() end},Library={changed=function() end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        local a=e.LibraryAdapter
+        a.owner=function() return "fixture" end
+        a.sent={stale=1}; a.watch(true); eq(next(a.sent),nil)
+        a.sent={materialized=10}; a.changed({kind="library",owner="fixture"}); eq(a.sent.materialized,10)
+        a.changed({kind="checked",owner="other"}); eq(a.sent.materialized,10)
+        a.changed({kind="checked",owner="fixture"}); eq(next(a.sent),nil)
+        a.watch(false); eq(a.watching,false)
+    end)
     test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
         local baseline={}
         for line in io.lines(here .. "/library-legacy-boundary.txt") do baseline[line]=(baseline[line] or 0)+1 end

@@ -46,7 +46,9 @@ Per-widget decoded snapshots stay at or below 16 KiB; Home is bounded to 128 row
 128 KiB and 16 requests. A preflight stops reads before exhausting the page budget.
 Per-card errors (including deferred KOReader painting) become Error/Retry cards;
 no invalid widget can poison the sibling budget counters. Read-model events coalesce
-on the next UI tick and redraw only a visible Home. Closing unsubscribes and cancels
+on the next UI tick and redraw only a visible Home. Re-entering Home and completed source/copy checks refresh materialization;
+publication notifications retain the throttle, preventing a repaint/request loop.
+Closing unsubscribes and cancels
 pending redraws; events never show/focus a Home over reading.
 
 Info-level spans cover library calls, Home construction and widget painting. Device

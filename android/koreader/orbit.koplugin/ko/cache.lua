@@ -148,6 +148,7 @@ end
 function OC.applyEvents(events)
     for _, ev in ipairs(events) do
         if type(ev) == "table" then
+            if LibraryAdapter and (ev.kind == "checked" or ev.kind == "copies") then LibraryAdapter.changed(ev) end
             if ev.kind == "library" or ev.kind == "library_source" then
                 LibraryAdapter.changed(ev)
             elseif ev.kind == "stored" then

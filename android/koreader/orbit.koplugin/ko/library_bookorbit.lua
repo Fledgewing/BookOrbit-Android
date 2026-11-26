@@ -42,7 +42,7 @@ end
 
 function LibraryAdapter.watch(enabled)
     LibraryAdapter.watching = enabled
-    if enabled then OC.watchChecks() end
+    if enabled then LibraryAdapter.reset(); OC.watchChecks() end
 end
 function LibraryAdapter.changed(ev)
     if ev.owner and ev.owner ~= LibraryAdapter.owner() then return end
