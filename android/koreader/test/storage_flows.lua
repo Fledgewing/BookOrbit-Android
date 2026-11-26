@@ -12,6 +12,19 @@ return function(test,eq,ok,E,W,withHost)
             actions={{id='finished',label='Remove finished books from device',detail='Frees 10 MB · 1 book',token='preview'}},
             folders={{id='Books',label='/Books'},{id='BookSync',label='/BookSync'}},folder='Books',freshness={saved=true}}
     end
+    test('storage: patterned bar paints the bounded immutable Home snapshot',function()
+        withHost(function()
+            local canvas=E.HomeWidgets.canvas(100,10)
+            local parts=E.HomeHostPlan.immutable({{pattern='solid',fraction=.5},{pattern='hatch',fraction=.2},
+                {pattern='dots',fraction=.1},{pattern='white',fraction=.2}})
+            E.StorageUI.bar(canvas,parts,0,0,100,10)
+            local rects={}
+            canvas[1]:paintTo({paintRect=function(_,x,y,w,h,color) rects[#rects+1]={x=x,y=y,w=w,h=h,color=color} end},0,0)
+            eq(rects[2].w,50); eq(rects[2].h,10); eq(rects[2].color,0)
+            ok(#rects>8,'hatch and dots must be drawn from proxy rows')
+            for _,r in ipairs(rects) do ok(r.x>=0 and r.y>=0 and r.x+r.w<=100 and r.y+r.h<=10) end
+        end)
+    end)
     test('storage: Home adds one bounded local row to the existing batch and has no paint IO',function()
         withHost(function(batches)
             local read=E.LibraryAdapter.read

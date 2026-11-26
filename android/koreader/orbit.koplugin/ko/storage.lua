@@ -8,7 +8,10 @@ function StorageUI.bar(canvas,parts,x,y,w,h)
     function bar:paintTo(bb,px,py)
         local u=HomeWidgets.ui(); local offset=0
         bb:paintRect(px,py,w,h,u.BB.COLOR_WHITE)
-        for _,part in ipairs(parts or {}) do
+        -- Home snapshots are immutable proxies: LuaJIT ipairs does not read __index.
+        for i=1,4 do
+            local part=parts and parts[i]
+            if not part then break end
             local width=math.min(w-offset,math.max(0,math.floor(w*(part.fraction or 0))))
             if part.pattern=="solid" then bb:paintRect(px+offset,py,width,h,u.BB.COLOR_BLACK)
             elseif part.pattern=="hatch" or part.pattern=="dots" then
