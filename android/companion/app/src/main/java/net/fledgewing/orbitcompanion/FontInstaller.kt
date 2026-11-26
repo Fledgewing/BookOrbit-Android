@@ -144,7 +144,7 @@ object FontInstaller {
         p.fontsRestartPending = false
         if (p.koreaderBook == "1") p.restartReopen = "1"
         log("restarting KOReader to load them ($why)")
-        Koreader.restart(ctx.applicationContext, "reading fonts installed ($why)")
+        Koreader.restart(ctx.applicationContext, "reading fonts installed ($why)", userStarted = manual)
         return true
     }
 }

@@ -266,7 +266,9 @@
       "method": "net.fledgewing.orbitcompanion.call.TAKE_COMMAND",
       "caller": "koreader",
       "extras": [
-        "command"
+        "command",
+        "id",
+        "source"
       ],
       "answer": [],
       "does": "did the companion put this command on KOReader's start? once"
@@ -335,6 +337,7 @@
   "koreader_start": {
     "extras": {
       "COMMAND": "net.fledgewing.orbitcompanion.extra.COMMAND",
+      "COMMAND_ID": "net.fledgewing.orbitcompanion.extra.COMMAND_ID",
       "FROM": "net.fledgewing.orbitcompanion.extra.FROM",
       "ROTATION": "net.fledgewing.orbitcompanion.extra.ROTATION"
     },

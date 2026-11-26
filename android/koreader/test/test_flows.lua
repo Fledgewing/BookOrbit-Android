@@ -1352,6 +1352,19 @@ test("channel migration before defaults preserves opt-in and real changes beat s
         settings_at = { update_channel = 30 } }).update_channel, "rc", "migration preserves a channel choice")
 end)
 
+test("a plugin channel tap after a companion change in the same second wins", function()
+    local old, at, shared = RE.S.update_channel, RE.S.settings_at.update_channel, RE.S.shared_settings_at
+    local remoteAt = os.time() * 1000 + 500
+    RE.S.update_channel = "preview"
+    RE.S.settings_at.update_channel = remoteAt
+    RE.S.shared_settings_at = remoteAt
+    RE.Shared.set("update_channel", "rc")
+    ok(RE.S.settings_at.update_channel > remoteAt, "tap advances past observed companion milliseconds")
+    eq(#RE.SettingsSync.merge(RE.SCHEMA, RE.S, RE.S.settings_at,
+        { update_channel = { v = "preview", at = remoteAt } }, remoteAt + 1, true), 0, "old companion echo cannot undo the tap")
+    RE.S.update_channel, RE.S.settings_at.update_channel, RE.S.shared_settings_at = old, at, shared
+end)
+
 ---------------------------------------------------------------- the contract (shared/contract/companion.json)
 -- The plugin's side; the companion's is ContractTest.kt. Every entry is the plugin's own and used.
 test("contract: every command, call, page, launch command, status key, file and the database", function()
@@ -1386,6 +1399,7 @@ test("contract: every command, call, page, launch command, status key, file and 
     end
     eq(table.concat(RE.CALL_ANSWER, ","), table.concat(C.answer, ","), "CALL_ANSWER")
     -- KOReader's start: the extras and every command the plugin obeys, nothing more.
+    eq(CO.EXTRA_COMMAND_ID, C.koreader_start.extras.COMMAND_ID)
     eq(CO.EXTRA_COMMAND, C.koreader_start.extras.COMMAND); eq(CO.EXTRA_FROM, C.koreader_start.extras.FROM)
     eq(CO.EXTRA_ROTATION, C.koreader_start.extras.ROTATION)
     local h = io.open(here .. "/../orbit.koplugin/ko/home.lua", "rb"); local home = h:read("*a"); h:close()
