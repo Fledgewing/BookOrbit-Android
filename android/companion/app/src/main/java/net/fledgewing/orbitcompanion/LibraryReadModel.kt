@@ -56,7 +56,7 @@ class LibraryReadModel(
         if (op == "capabilities") {
             val remote = BookOrbitLibrary.readingStats(store)
             val a = accountStats(owner).orEmpty()
-            return mapOf("catalog" to true, "detail" to true, "download" to false,
+            return mapOf("catalog" to true, "detail" to true, "download" to ((accountState()["opds"] as? Map<*, *>)?.get("set") == true),
                 "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false),
                 "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
                 "account" to accountState(),

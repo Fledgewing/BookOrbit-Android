@@ -67,19 +67,27 @@ class CommandProvider : ContentProvider() {
                 return answer(true)
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
-            if (method == LibraryAccount.CONNECTOR) {
+            if (method == ServerCommands.START) {
+                val encoded = extras?.getString("args")?.takeIf { it.length <= 8192 } ?: return answer(false,"budget")
+                val op = extras.getString("op") ?: return answer(false,"missing")
+                return try {
+                    val args = LuaValue.parse(encoded.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return answer(false,"invalid")
+                    answer(true).apply { putString("id",ServerCommands.start(ctx,op,args)) }
+                } catch (_: Exception) { answer(false,"invalid") }
+            }
+            if (method == ServerCommands.RESULT) {
+                val id = extras?.getString("id")?.takeIf { it.length <= 64 } ?: return answer(false,"invalid")
+                return answer(true).apply { putString("body",String(LuaValue.encode(ServerCommands.result(id)),Charsets.ISO_8859_1)) }
+            }
+            if (method == LibraryAccount.STATE) {
                 LibraryAccount.initialize(ctx)
                 return answer(true).apply {
                     putString("pending", if (LibraryAccount.ready()) "0" else "1")
-                    putString("revision", LibraryAccount.state()["connectorRevision"] as? String)
-                    LibraryAccount.connector()?.let { putString("server", it.server); putString("user", it.user); putString("userkey", it.key) }
+                    putString("owner", LibraryAccount.owner())
                 }
             }
             if (method == LibraryAccount.OPEN) {
                 val server = extras?.getString("server").orEmpty()
-                val user = extras?.getString("user")
-                val key = extras?.getString("userkey")
-                LibraryAccount.bind(ctx, if (user != null && key != null) CacheWorker.Creds(server, user, key) else null)
                 main.post { ctx.startActivity(Intent(ctx, AccountActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("server", server)) }
                 return answer(true)
             }

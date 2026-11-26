@@ -106,3 +106,15 @@ function Library.retry() LibraryAdapter.reset() end
 -- Explicit account commands; transport and connector compatibility stay behind the adapter.
 function Library.openAccount() return LibraryAdapter.openAccount() end
 function Library.accountReturned() return LibraryAdapter.accountReturned() end
+
+function Library.syncPosition(document, update, callback)
+    local args={document=document}
+    if update then args.percentage,args.position=update.percentage,update.position end
+    return LibraryAdapter.command(update and "sync.write" or "sync.read",args,callback)
+end
+function Library.catalogPage(page,limit,callback)
+    return LibraryAdapter.command("catalog.window",{page=page,limit=math.min(limit or 24,Budgets.MAX_ROWS)},callback)
+end
+function Library.download(key,destination,callback)
+    return LibraryAdapter.command("downloads.start",{key=key,destination=destination},callback)
+end

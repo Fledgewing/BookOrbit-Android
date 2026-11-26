@@ -25,4 +25,21 @@ class AccountVaultTest {
         assertNull(vault.load()); assertFalse(file.exists())
         vault.save(value); vault.save(null); assertFalse(file.exists())
     }
+    @Test fun allThreeLoginsAreEncryptedAndAccountRemovalPreservesDirectLogin() {
+        val file = Files.createTempDirectory("three-logins").resolve("account.enc").toFile()
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val vault = EncryptedAccountVault(file) { key }
+        val credentials = ServerCredentials(vault)
+        credentials.accountVault.save(mapOf("access" to "fixture-access", "refresh" to "fixture-refresh"))
+        credentials.set("sync",ServerCredentials.Login("https://library.invalid/api/v1","fixture-sync","a".repeat(32),"user"))
+        credentials.set("opds",ServerCredentials.Login("https://library.invalid/api/v1","fixture-opds","fixture-opds-password","account"))
+        val stored = String(file.readBytes())
+        for (secret in listOf("fixture-access","fixture-refresh","fixture-opds-password","a".repeat(32))) assertFalse(stored.contains(secret))
+        credentials.accountVault.save(null)
+        val reloaded = ServerCredentials(vault)
+        assertNull(reloaded.accountVault.load()); assertNull(reloaded.login("opds"))
+        assertEquals("user",reloaded.status("sync")["origin"])
+        reloaded.remove("sync"); assertFalse(file.exists())
+    }
+
 }

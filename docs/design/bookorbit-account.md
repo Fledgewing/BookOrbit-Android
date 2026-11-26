@@ -1,8 +1,9 @@
 # BookSync account sign-in (Android F12-K)
 
 Authorised Android implementation, 2026-11-25. Firmware follows later on X4 Pro,
-X4 and X3; no firmware capability is claimed here. The companion owns credentials,
-network and normalization. UI uses the library interface and capability flags.
+X4 and X3; no firmware capability is claimed here. The companion owns three independent optional logins: server account, sync and
+OPDS. Each records user/account provenance. UI uses the neutral ServerAdapter
+and account interface; credentials, network and normalization stay in the companion.
 
 ## Pinned source and sign-in
 
@@ -24,7 +25,11 @@ must not be mixed. Access is `Authorization: Bearer …` (`modules/auth/jwt.stra
 
 GET `auth/login-options` reports password policy and OIDC providers. OIDC uses
 POST `auth/oidc/:slug/state` followed by browser authorization and POST
-`auth/oidc/callback`; backchannel logout is also supported
+`auth/oidc/callback` with code, PKCE verifier, nonce, state, redirect URI and
+native client options (`modules/auth/dto/oidc-callback.dto.ts:4`). Redirect URIs
+must pass the server's configured web/native allowlist
+(`modules/auth/oidc/oidc.service.ts:159`); BookSync does not claim another app's
+callback identity. Backchannel logout is also supported
 (`modules/auth/auth.controller.ts:70`, `:159`, `:175`). This initial plain screen
 supports password sign-in; OIDC-only accounts need their server's browser flow,
 which is deferred. There is no native TOTP/2FA challenge in the pinned login DTO
@@ -49,6 +54,7 @@ query goal with a default, so that default must never masquerade as a saved goal
 - `GET user-statistics/peak-hours` — `modules/user-statistics/user-statistics.controller.ts:83`.
 - `GET user-statistics/favorite-days` — `modules/user-statistics/user-statistics.controller.ts:88`.
 - `GET user-statistics/session-timeline` — `modules/user-statistics/user-statistics.controller.ts:93`.
+- `PATCH user-statistics/session-timeline/:sessionId` — `modules/user-statistics/user-statistics.controller.ts:98` (edit; not called by BookSync).
 - `GET user-statistics/completion-timeline` — `modules/user-statistics/user-statistics.controller.ts:108`.
 - `GET user-statistics/goal-trajectory` — `modules/user-statistics/user-statistics.controller.ts:113`.
 - `GET user-statistics/progress-funnel` — `modules/user-statistics/user-statistics.controller.ts:118`.
@@ -104,6 +110,8 @@ Requires `ViewUserActivity`; unavailable to an ordinary account without that per
 - `GET achievements` — `modules/achievement/achievement.controller.ts:22`.
 - `GET achievements/hints` — `modules/achievement/achievement.controller.ts:28`.
 
+`POST achievements/admin/backfill` additionally requires a superuser (`modules/achievement/achievement-backfill.service.ts:40`); it is not an ordinary account route.
+
 ### collection
 
 - `GET collections` — `modules/collection/collection.controller.ts:78`.
@@ -153,16 +161,44 @@ otherwise username and preferences, never a password or sync key
 (`modules/koreader/koreader.service.ts:177`). Creation accepts a password and
 stores bcrypt plus the kosync MD5 key (`:104`). BookSync generates a random
 connector password only when absent and stores its derived key privately.
-Existing credentials are preserved; reuse the current reader's matching connector
-key. An existing connector with no known key needs the legacy connector login.
-One account login cannot recover an existing secret from this server contract.
+The independent sync row accepts a password (derived immediately) or a derived
+key. An existing connector with no known key needs this direct sync login;
+account login cannot recover an existing secret from the server. Explicitly
+replacing a direct sync login with the account login may adopt a matching known
+key, and changes its provenance to account. No existing server credential is reset.
 
 JWT `GET/POST opds-users`, `PATCH/DELETE opds-users/:id` requires `OpdsAccess`
 (`modules/opds/opds-user.controller.ts:11`). Listing and creating do not return
-passwords (`modules/opds/opds-user.service.ts:28`, `:45`). BookSync's catalog and
-download integration uses the KOReader connector, so this slice creates no unused
-OPDS identity. A future OPDS consumer must reuse a known identity or create a
-separate random credential, never reset an existing one silently.
+passwords (`modules/opds/opds-user.service.ts:28`, `:45`). The independent OPDS row
+accepts a direct username/password. When it is unset, account sign-in creates a
+dedicated random OPDS identity through these permitted account routes; it leaves
+other identities intact. Existing unknown OPDS passwords cannot be recovered.
+
+The private OPDS adapter reads `GET opds/catalog` and streams
+`GET opds/:bookId/download` (`modules/opds/opds.controller.ts:103`, `:300`),
+using HTTP Basic auth under its OPDS guard (`:41`). Sync uses
+`GET koreader/users/auth`, `GET koreader/syncs/progress/:document` and
+`PUT koreader/syncs/progress` (`modules/koreader/koreader.controller.ts:54`, `:67`, `:74`).
+These operations work without an account session. The plugin receives opaque
+book identities, bounded display rows, normalized positions and local paths.
+It receives no newly stored usernames, sync keys, OPDS passwords or tokens.
+
+## Three logins and sign-out
+
+Maintainer additions, 2026-11-25: Settings › Your server has three independent,
+optional rows. Each login can be set, changed and removed. Account sign-in fills
+only unset connector slots. Directly entered credentials have origin `user` and
+are never silently replaced. “Replace with account login” is explicit and changes
+the selected slot's origin to `account` only after a candidate is available.
+Account-discovered/adopted credentials have account origin too.
+
+Account sign-out removes the account session and all account-origin sync/OPDS
+slots in the same encrypted-store mutation. No subsequent adapter operation can
+use them. User-origin slots survive and operate independently. Removing or
+changing sync does not disturb OPDS, and removing OPDS does not sign out the
+account. Neither action deletes shared credentials on the server. Stored sync
+secrets are derived keys; OPDS passwords remain encrypted because Basic auth
+needs the original secret. No password is copied to the plugin or a shared file.
 
 ## Reuse and performance
 
@@ -170,11 +206,11 @@ Extend `ko/library.lua:5` and its private `ko/library_bookorbit.lua:5` binding,
 `LibraryReadModel.kt:20` (bounded publication), `Worker.kt:108` (one batched
 projection), `CacheStore.kt:20` (owned SQLite), `Core.kt:55` (timing log), and
 `ReadingStats.kt:20` (worker aggregation). Connector stats from F12-F feed the
-same projection, with account fields taking precedence. Tokens and account
+same projection, with account fields taking precedence. Tokens and stored connector/account
 passwords never enter plugin UI, events, shared settings or logs.
 
-Every screen/widget inherits a strict budget. Account screen paint: one small
-state row, ≤16 KiB, zero subprocesses/network, one local library read. Explicit
+Every screen/widget inherits a strict budget. Your server paint: three small
+state rows, ≤16 KiB, zero subprocesses/network, one local library read. Explicit
 sign-in/refresh commands perform bounded HTTP off the UI thread, not during a
 paint. Each call and paint emits one info timing span without credentials.
 Account snapshots cap each reply and all decoded rows. Existing `reading.stats`
@@ -198,14 +234,27 @@ activity details, year review and celebrations always have capabilities false.
 
 `LibraryReadModel` adds `account.state` and extends `capabilities.account` and
 `capabilities.stats`; both the module and worker tests cover these operations.
-The Lua UI calls `Library.openAccount`; its private binding uses the existing
-trusted provider and applies a one-time connector revision at lifecycle resume.
-Sign-out clears private tokens/statistics and invalidates owned views; it preserves
-the independent legacy reader login. The setup screen is intentionally plain under
-the maintainer's F12-K instruction. Stored account identity is isolated by server,
-account ID and connector username. Re-sign-in preserves a known connector key only
-for the same server/account; no old token or job is reused for another owner.
+The Lua UI calls `Library.openAccount`; the trusted provider opens the private
+three-row companion screen. Lifecycle status imports only an opaque owner.
+`ServerAdapter` exposes normalized position, catalog and download commands; the
+provider queues them and returns bounded results asynchronously, with no network
+or subprocess in the plugin. Existing pre-0.12 reader-plugin transport remains
+its compatibility path; no second automatic session uploader is introduced.
+The owned client can dispatch these new operations without receiving credentials.
+Account stats, connector snapshots and per-owner publication share the existing
+library read model. State/owner/stats publish atomically on account changes.
+Tests cover individual logins, precedence, independent removal, account-only,
+user-only and mixed-origin sign-out, explicit adoption, derived sync keys,
+private transport and plugin results without secrets.
 
-Next slice can use these normalized capabilities and snapshots for final account
-screens, browser/OIDC authentication and account-only library access. List writes
+Next slice can use the neutral commands, capabilities and snapshots for the
+final owned client screens, browser/OIDC authentication and richer catalog integration. List writes
 remain disabled: having an account session does not grant a new UI write feature.
+
+
+The neutral companion port is `ServerAdapter.kt:6`; `ServerCredentials.kt:4`
+scopes all three login records in the existing encrypted vault. Sync and OPDS
+transport reuse `Worker.UrlHttp` for streamed downloads, with bounded parser and
+result limits in `OpdsCatalog` and `ServerCommands`. `LibraryAccount` is the UI
+facade; `BookOrbitServerAdapter` alone accesses connector secrets. This adds
+no plugin credential export or second periodic progress uploader.

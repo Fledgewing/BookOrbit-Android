@@ -131,4 +131,22 @@ class BookOrbitAccountTest {
         assertEquals(before, cached["days"]); assertNull(cached["hours"]); assertEquals(true, cached["stale"])
     }
 
+    @Test fun unavailableEncryptedStorageNeverFallsBackToAnInMemorySession() {
+        val k = Kit()
+        val vault = object : AccountVault {
+            override fun load(): Map<String, Any?>? = null
+            override fun save(value: Map<String, Any?>?) { if (value != null) throw IllegalStateException("private") }
+        }
+        val a = BookOrbitAccount(vault, object : BookOrbitAccount.Http {
+            override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?) =
+                BookOrbitAccount.Reply(200, k.tokens() + ("user" to mapOf("id" to 7)))
+        }, { k.time }, k.logs::add)
+        val password = "private-password".toCharArray()
+        try { a.signIn("https://library.invalid", "fixture", password); fail() }
+        catch (e: BookOrbitAccount.Failure) { assertEquals("storage-unavailable", e.kind) }
+        assertEquals(false, a.state()["signedIn"]); assertNull(a.connector())
+        assertTrue(password.all { it == '\u0000' })
+        assertFalse(k.logs.toString().contains("private"))
+    }
+
 }

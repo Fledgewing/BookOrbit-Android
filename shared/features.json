@@ -5360,13 +5360,13 @@
     },
     {
       "id": "server-account",
-      "feature": "One server-account login and private token refresh (0.12 Android foundation)",
+      "feature": "Independent account, sync and OPDS logins (0.12 Android foundation)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Password sign-in, encrypted tokens, account stats and missing-reader-credential setup",
-          "reason": "deliberately deferred: plain interim screen; browser/OIDC sign-in and device acceptance follow. Existing connector secrets cannot be recovered; reuse a configured reader login.",
+          "note": "Three encrypted optional logins, provenance-aware sign-out, private sync/OPDS operations and account stats",
+          "reason": "deliberately deferred: plain interim screen; final owned client integration, browser/OIDC sign-in and device acceptance follow. Existing server connector secrets cannot be recovered; direct login remains available.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",

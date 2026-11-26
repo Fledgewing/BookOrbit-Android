@@ -74,7 +74,7 @@ subprocess spawns and render-path network calls, at most one batched companion r
 per Home paint, and at most 16 KiB per widget snapshot. Declare limits in
 `logic/budgets.lua`/the widget registry and test missing or exceeded budgets. Log one
 info-level timing span per call/paint; host timing is not a device performance test.
-Account sign-in commands run off the UI thread; their screen reads one small private state snapshot and never tokens.
+Server sign-in commands run off the UI thread; their three-login screen reads one small private state snapshot and never secrets. Account sign-out removes account-origin connectors; directly entered logins stay.
 Stats widgets share one materialized `reading.stats` row per paint; aggregate and resolve per-field
 server/local precedence and provenance in the companion, never in Lua.
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window

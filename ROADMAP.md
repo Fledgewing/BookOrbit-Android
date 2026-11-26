@@ -17,7 +17,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status |
 |---|---|---|
-| One account sign-in, private token refresh, connector setup and account-wide reading statistics through the library interface. | Android; X4 Pro, X4, X3 later | building (maintainer-authorised Android F12-K; device acceptance pending) |
+| Independent optional account, sync and OPDS logins, encrypted credentials, origin-aware sign-out and account-wide reading statistics through the library interface. | Android; X4 Pro, X4, X3 later | building (maintainer-authorised Android F12-K; device acceptance pending) |
 | Opt-in owned Home host with paged placements, isolated Continue reading, Shelf and Lists widgets, and one budgeted batch per paint. | Android; X4 Pro, X4, X3 later | building (authorised 2026-11-25; device acceptance pending) |
 
 The release after 0.11.4 graduates from previews and release candidates. Built in parallel on the

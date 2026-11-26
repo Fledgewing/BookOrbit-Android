@@ -78,6 +78,7 @@ object Worker {
     internal fun accountChanged(ctx: Context) {
         app = ctx.applicationContext
         synchronized(lock) { patches.addLast {
+            LibraryAccount.owner()?.let { worker().store.own(it) }
             worker().store.db().exec("DELETE FROM library_views")
             worker().event(mapOf("kind" to "account"))
         }; lock.notifyAll() }

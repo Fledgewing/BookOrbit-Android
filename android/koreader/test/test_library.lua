@@ -141,19 +141,18 @@ return function(test, eq, ok, here, Cache)
         p:close()
         -- Removing legacy references is always allowed; adding another identical one is not.
     end)
-    test("library: account handoff is one-time and keeps credentials inside the adapter", function()
-        local settings={}; local saves, calls = 0, 0
-        local result={ok="1",revision="revision-1",server="https://library.invalid/api/v1",user="fixture",userkey="sync-key"}
-        local e=setmetatable({S={},saveSettings=function() end, Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
-            bookorbit=function() return {settings=settings} end,
-            G_reader_settings={saveSetting=function(_,key,s) eq(key,"bookorbit"); eq(s,settings); saves=saves+1 end,flush=function() end},
-            Jni={call=function(_,method) calls=calls+1; return result end}}, {__index=_G})
+    test("library: server lifecycle imports only an opaque owner, never credentials", function()
+        local result={ok="1",owner="opaque-login"}
+        local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
+            Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(next(args),nil); return result end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
-        eq(e.LibraryAdapter.accountReturned(),true); eq(settings.userkey,"sync-key"); eq(saves,1)
-        settings.userkey=nil -- an explicit later legacy logout must stay logged out
-        eq(e.LibraryAdapter.accountReturned(),false); eq(settings.userkey,nil); eq(saves,1)
-        result.revision="revision-2"
-        eq(e.LibraryAdapter.accountReturned(),true); eq(saves,2)
+        eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.owner(),"opaque-login")
+        eq(e.LibraryAdapter.accountReturned(),false)
+        result.owner=nil
+        eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.managed_owner,nil)
+        local code=source(root .. "ko/library_bookorbit.lua")
+        eq(code:find('result.userkey',1,true),nil)
+        eq(code:find('result.secret',1,true),nil)
     end)
 
 end

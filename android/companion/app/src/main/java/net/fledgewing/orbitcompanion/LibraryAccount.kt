@@ -3,61 +3,76 @@ package net.fledgewing.orbitcompanion
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import java.io.File
 import java.util.concurrent.Executors
 
-/** BookSync's account interface. UI sees only immutable, small state and completion codes.
- * Adapter, token vault and all HTTP stay on one private worker; paints never wait on it. */
+/** BookSync's neutral server interface. One private worker owns all three logins and transport. */
 object LibraryAccount {
     const val OPEN = "${Contract.PACKAGE}.call.ACCOUNT_OPEN"
-    const val CONNECTOR = "${Contract.PACKAGE}.call.ACCOUNT_CONNECTOR"
-    private val queue = Executors.newSingleThreadExecutor { r -> Thread(r, "booksync-account").apply { isDaemon = true } }
+    const val STATE = "${Contract.PACKAGE}.call.SERVER_STATE"
+    private val queue = Executors.newSingleThreadExecutor { r -> Thread(r, "booksync-server").apply { isDaemon = true } }
     private val main = Handler(Looper.getMainLooper())
-    private var adapter: BookOrbitAccount? = null // worker thread only
-    @Volatile private var snapshot: Map<String, Any?> = mapOf("signedIn" to false, "connector" to "not-configured")
-    @Volatile private var savedStats: Map<*, *>? = null
-    @Volatile private var savedConnector: CacheWorker.Creds? = null
-    @Volatile private var savedOwner: String? = null
+    private var adapter: ServerAdapter? = null
+    private class Published(val state: Map<String, Any?> = emptyMap(), val owner: String? = null, val stats: Map<*, *>? = null)
+    @Volatile private var published = Published()
     @Volatile private var loaded = false
     private var nextRefreshAt = 0L
-    private var legacy: CacheWorker.Creds? = null
-    private fun adapter(ctx: Context) = adapter ?: BookOrbitAccount(EncryptedAccountVault.android(ctx), AccountHttp).also { adapter = it }
-    fun state(): Map<String, Any?> = snapshot
-    fun stats(owner: String): Map<*, *>? = savedStats.takeIf { owner == savedOwner }
-    fun connector(): CacheWorker.Creds? = savedConnector
-    fun ready(): Boolean = loaded
+    private fun adapter(ctx: Context): ServerAdapter = adapter ?: run {
+        val credentials = ServerCredentials(EncryptedAccountVault.android(ctx))
+        val account = BookOrbitAccount(credentials.accountVault, AccountHttp, setupOnSignIn = { false })
+        BookOrbitServerAdapter(credentials, account, ConnectorHttp).also { adapter = it }
+    }
+    fun state(): Map<String, Any?> = published.state
+    fun owner(): String? = published.owner
+    fun stats(owner: String): Map<*, *>? = published.let { if (owner == it.owner) it.stats else null }
+    fun ready() = loaded
     fun initialize(ctx: Context, done: () -> Unit = {}) {
         if (loaded) { main.post(done); return }
-        queue.execute { if (!loaded) { publish(adapter(ctx)); loaded = true }; main.post(done) }
-    }
-    fun bind(ctx: Context, credentials: CacheWorker.Creds?) {
-        queue.execute { legacy = credentials; val a = adapter(ctx);
-            if (a.state()["signedIn"] == true && credentials != null) runCatching { a.setupConnector(credentials) }
-            publish(a); loaded = true }
-    }
-    private fun publish(a: BookOrbitAccount) {
-        val signed = a.state()
-        savedConnector = a.connector().takeIf { signed["signedIn"] == true }
-        savedOwner = a.owner()
-        savedStats = savedOwner?.let(a::stats)
-        require(LuaValue.encode(signed).size <= 16384)
-        snapshot = signed
-    }
-    private fun command(ctx: Context, work: (BookOrbitAccount) -> Unit, done: (String?) -> Unit) {
         val app = ctx.applicationContext
         queue.execute {
+            try { if (!loaded) { publish(adapter(app)); loaded = true } }
+            catch (_: Exception) { published = Published() }
+            finally { main.post(done) }
+        }
+    }
+    private fun publish(a: ServerAdapter) {
+        val state = a.state(); val owner = a.owner()
+        require(LuaValue.encode(state).size <= 16384)
+        published = Published(state, owner, owner?.let(a::stats))
+    }
+    private fun command(ctx: Context, work: (ServerAdapter) -> Unit, done: (String?) -> Unit, cleanup: () -> Unit = {}, invalidate: Boolean = true) {
+        val app = ctx.applicationContext
+        queue.execute {
+            val start = System.nanoTime()
             var error: String? = null
-            val a = adapter(app)
-            try { work(a) } catch (e: BookOrbitAccount.Failure) { error = e.kind }
+            try { work(adapter(app)) } catch (e: BookOrbitAccount.Failure) { error = e.kind }
             catch (_: Exception) { error = "unavailable" }
-            publish(a)
-            Worker.accountChanged(app)
+            finally { cleanup() }
+            runCatching { adapter?.let(::publish) }.onFailure { published = Published(); error = "unavailable" }
+            if (invalidate) Worker.accountChanged(app)
+            OLog.i("server.command ms=${(System.nanoTime()-start)/1_000_000}")
             main.post { done(error) }
         }
     }
     fun signIn(ctx: Context, server: String, username: String, password: CharArray, done: (String?) -> Unit) =
-        command(ctx, { a -> try { a.signIn(server, username, password, legacy) } finally { password.fill('\u0000') } }, done)
-    fun retryConnection(ctx: Context, done: (String?) -> Unit) = command(ctx, { it.setupConnector(legacy); it.refreshStats(force = true) }, done)
+        command(ctx, { it.signIn(server,username,password) }, done, { password.fill('\u0000') })
     fun signOut(ctx: Context, done: (String?) -> Unit) = command(ctx, { it.signOut() }, done)
+    fun setLogin(ctx: Context, kind: String, server: String, username: String, secret: CharArray, derivedKey: Boolean, done: (String?) -> Unit) =
+        command(ctx, { it.setLogin(kind,server,username,secret,derivedKey) }, done, { secret.fill('\u0000') })
+    fun removeLogin(ctx: Context, kind: String, done: (String?) -> Unit) = command(ctx, { it.removeLogin(kind) }, done)
+    fun useAccountLogin(ctx: Context, kind: String, done: (String?) -> Unit) = command(ctx, { it.useAccountLogin(kind) }, done)
+    fun position(ctx: Context, document: String, update: Map<String,Any?>? = null, done: (Map<String,Any?>?,String?) -> Unit) {
+        var result: Map<String,Any?>? = null
+        command(ctx, { result = it.position(document,update) }, { done(result,it) }, invalidate = false)
+    }
+    fun catalog(ctx: Context, page: Int = 1, limit: Int = 24, done: (Map<String,Any?>?,String?) -> Unit) {
+        var result: Map<String,Any?>? = null
+        command(ctx, { result = it.catalog(page,limit) }, { done(result,it) }, invalidate = false)
+    }
+    fun download(ctx: Context, key: String, destination: File, done: (String?) -> Unit) = command(ctx, {
+        require(Places.inside(destination.path,Places.roots()) != null)
+        if (!it.download(key,destination)) throw BookOrbitAccount.Failure("unavailable")
+    }, done)
     @Synchronized fun refresh(ctx: Context) {
         val now = System.currentTimeMillis()
         if (now < nextRefreshAt) return

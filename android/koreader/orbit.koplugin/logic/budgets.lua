@@ -9,7 +9,7 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "filter
     Budgets.screens[id] = budget(id == "home" and 128 or 32, id == "home" and 131072 or 32768,
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
-Budgets.screens["account"] = budget(1, 16384, 50)
+Budgets.screens["account"] = budget(3, 16384, 50)
 -- Picker pages inherit the same filter screen limits, including one worker round-trip.
 Budgets.screens["filter-picker"] = budget(24, 16384, 50)
 Budgets.libraryWindow = budget(32, 32768, 30)

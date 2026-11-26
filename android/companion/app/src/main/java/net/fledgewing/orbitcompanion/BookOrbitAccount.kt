@@ -9,19 +9,26 @@ import java.net.URI
  * All methods are worker-only; synchronization serializes rotating refresh credentials. */
 class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
-    private val log: (String) -> Unit = { OLog.i(it) }) {
+    private val log: (String) -> Unit = { OLog.i(it) },
+    private val setupOnSignIn: () -> Boolean = { true }) {
     interface Http { fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?): Reply }
     class Reply(val code: Int, val value: Any? = null) { override fun toString() = "AccountReply($code)" }
     class Failure(val kind: String) : Exception(kind)
     private var session = vault.load()?.toMutableMap()
     private val blocked = mutableSetOf<String>()
     private var lastAttempt = 0L
-    private fun persist() = vault.save(session)
+    private fun persist() {
+        try { vault.save(session) } catch (_: Exception) {
+            session = null
+            runCatching { vault.save(null) }
+            throw Failure("storage-unavailable")
+        }
+    }
     private fun number(v: Any?) = (v as? Number)?.toLong()
     private fun signedIn() = session != null && (number(session?.get("refreshExpiry")) ?: 0) > now()
     @Synchronized fun state(): Map<String, Any?> = mapOf("signedIn" to signedIn(),
         "connector" to (session?.get("connectorState") ?: "not-configured"),
-        "connectorRevision" to session?.get("revision"))
+        "connectorRevision" to session?.get("revision"), "expiresAt" to session?.get("refreshExpiry"))
     @Synchronized fun owner(): String? = if (signedIn()) (session?.get("connectorUser") as? String)?.let { it + "|" + (session!!["server"] as String).lowercase(java.util.Locale.ROOT) } else null
     @Synchronized fun connector(): CacheWorker.Creds? {
         val s = session ?: return null
@@ -48,7 +55,7 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             val previousConnector = connector().takeIf { previous?.get("id") == id && previous["server"] == base }
             session = next; blocked.clear(); persist()
             if (previous != null) runCatching { http.request(previous["server"] as String, "/auth/logout", "POST", mapOf("refreshToken" to previous["refresh"]), null) }
-            setupConnector(previousConnector ?: legacy)
+            if (setupOnSignIn()) setupConnector(previousConnector ?: legacy)
             refreshStats(force = true)
         } finally { password.fill('\u0000') }
     }
@@ -71,9 +78,10 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     }
     /** Exact allowlist: never probe an attested route. 403 disables just this feature. */
     @Synchronized internal fun get(path: String, feature: String): Reply {
-        require(path in READS || path == "/koreader/credentials")
+        require(path in READS || path == "/koreader/credentials" || path == "/opds-users")
         if (feature in blocked) return Reply(403)
         val s = session ?: throw Failure("unauthorized")
+        if (!signedIn()) { clear(); throw Failure("expired") }
         if ((number(s["accessExpiry"]) ?: 0) <= now() + 30) refresh()
         fun request() = http.request(session!!["server"] as String, path, "GET", null, session!!["access"] as String)
         var r = request()
@@ -117,6 +125,19 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
         } else throw Failure("invalid-response")
         persist()
     }
+    /** Dedicated OPDS identity: existing passwords are never returned or reset by the server. */
+    @Synchronized internal fun setupOpds(): Pair<String, Pair<String, String>>? {
+        val listed = get("/opds-users", "opds")
+        if (listed.code !in 200..299) return null
+        require(listed.value is List<*>)
+        val s = session ?: return null
+        val secret = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        val user = "booksync-" + s["id"] + "-" + secret.take(12)
+        val r = http.request(s["server"] as String, "/opds-users", "POST", mapOf("username" to user, "password" to secret), s["access"] as String)
+        if (r.code == 403) blocked.add("opds")
+        return if (r.code in 200..299) (s["server"] as String) to (user to secret) else null
+    }
+    @Synchronized internal fun normalizedStats(): Map<*, *>? = if (signedIn()) session?.get("stats") as? Map<*, *> else null
     @Synchronized fun refreshStats(force: Boolean = false) = span("account.refreshStats") {
         if (!signedIn() || (!force && lastAttempt > now() - 300)) return@span
         lastAttempt = now()

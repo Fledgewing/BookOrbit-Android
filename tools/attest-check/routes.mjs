@@ -15,7 +15,7 @@ export const SOURCES = [
 ];
 
 // A route starts with one of these (an optional /api/v1 global prefix in front).
-const ROUTE_START = /\/(?:api\/v1\/)?(?:koreader|opds|auth|user-statistics)(?=[/?#\0]|$)/g;
+const ROUTE_START = /\/(?:api\/v1\/)?(?:koreader|opds-users|opds|auth|user-statistics)(?=[/?#\0]|$)/g;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 const IGNORE = 'orbify:not-a-route';
 
