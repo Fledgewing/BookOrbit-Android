@@ -1,13 +1,18 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 return function(test,eq,ok,E,W,Widget,withHost)
-    local function click(editor,text)
-        for _,button in ipairs(editor[1][1]) do if button.text==text and button.callback then return button.callback() end end
+    local function click(editor,text,nth)
+        local match=0
+        for _,button in ipairs(editor[1][1]) do if button.text==text and button.callback then
+            match=match+1; if match==(nth or 1) then return button.callback() end
+        end end
         error("missing control: "..text)
     end
     local function editor()
         E.S.home_layout=E.Layout.default()
         local host=E.HomeHost.create()
-        return E.HomeEditor.create(host),host
+        E.HomeHost.active=host; W.shown={host}
+        click(host,"Edit")
+        return W.shown[#W.shown],host
     end
     test("Home editor: select, band move, resize and remove use pure operations",function()
         withHost(function(batches,reads)
@@ -23,8 +28,9 @@ return function(test,eq,ok,E,W,Widget,withHost)
             eq(p.placements[2].x,2); eq(p.placements[3].x,0)
             click(e,"Size"); local sizes=W.shown[#W.shown]
             eq(sizes.title,"Widget size")
-            sizes.buttons[1][1].callback()
+            sizes.buttons[5][1].callback() -- 2×2 -> 2×1, not a no-op size choice
             eq(E.Layout.editorPage(m.document,1).placements[2].w,2)
+            eq(E.Layout.editorPage(m.document,1).placements[2].h,1)
             click(e,"Remove"); eq(#m:page().placements,5); eq(m.selected,nil)
             eq(#reads,calls); eq(#batches,trips)
             eq(e.metrics.bytes,0); eq(e.metrics.spawns,0); eq(e.metrics.network,0); eq(e.metrics.roundTrips,0)
@@ -43,7 +49,8 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(described>=3)
             -- Default Home is full: all allowed spans are tried before a new page is added.
             local n=#m.document.pages
-            ok(m:add("continue-reading")); eq(#m.document.pages,n+1); eq(m:page().name,"Reading")
+            click(e,"Add",2) -- second picker entry is Continue reading
+            eq(#m.document.pages,n+1); eq(m:page().name,"Reading")
             eq(m.index,n+1); ok(m.selected)
             e.picker=nil; e:rebuild(); e:turn(-1); e:turn(1)
             click(e,"+" ); eq(e.picker,1); ok(e.slotX~=nil and e.slotY~=nil)
