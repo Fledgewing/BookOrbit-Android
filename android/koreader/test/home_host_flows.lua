@@ -520,4 +520,53 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Clock: installed snapshot renderer, states, battery tap, Back and host refresh",function()
+        withHost(function(batches,reads)
+            local data={state="ready",time="21:42",weekday="Tuesday",date="25 November",battery="▭ 78% ›",
+                days={{label="M",date="24"},{label="T",date="25",today=true}},freshness={saved=true}}
+            local calls=0
+            for _,size in ipairs(E.WidgetRegistry.clock.sizes["android-tablet"]) do
+                local rect=E.HomeHostPlan.rect({x=0,y=0,w=size[1],h=size[2]},{cols=4,rows=8},678,764,12)
+                for _,state in ipairs({"ready","loading","error","not-saved","empty","offline-without-data","offline-with-data"}) do
+                    data.state=(state=="offline-with-data" and "ready" or state)
+                    local snapshot=E.HomeHostPlan.snapshot(data)
+                    local card=E.ClockWidgets.render({w=size[1],h=size[2]},snapshot,function(action) eq(action,"battery"); calls=calls+1 end,rect)
+                    local time,battery,message=false,false,false
+                    for _,control in ipairs(card[1]) do
+                        if control.text=="21:42" then time=true end
+                        if control.callback then
+                            ok(control.width>=50 and control.height>=50)
+                            ok(control.overlap_offset[2]+control.height<=rect.h)
+                            control.callback(); battery=true
+                        end
+                        if control.text=="Loading clock" or control.text=="Time unavailable" or control.text=="Clock unavailable" then message=true end
+                    end
+                    if data.state=="ready" then ok(time and battery) else ok(message and not time and not battery) end
+                end
+            end
+            eq(calls,6)
+            data.state="ready"
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                local args=E.Cache.decode(raw)
+                if args.op=="device.clock" then return data,#E.Cache.encode(data) end
+                return read(raw)
+            end
+            local success,err=pcall(function()
+                local doc=E.Layout.default()
+                doc.pages={{id="clock",tab="Home",name="Clock",placements={{instance="clock",widget="clock",version=1,x=0,y=0,w=2,h=2,settings={}}}}}
+                E.S.home_layout=doc
+                local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+                ok(h.widgetRefresh); eq(#batches,1); eq(h.metrics.roundTrips,1)
+                local refresh=h.widgetRefresh
+                refresh(); ok(h.redraw); h.redraw(); eq(#batches,2)
+                W.shown={}; local count=#batches; h.widgetRefresh(); eq(#batches,count)
+                ok(not h.redraw,"hidden Home never paints")
+                h:onClose(); h:onCloseWidget(); eq(h.widgetRefresh,nil)
+            end)
+            E.LibraryAdapter.read=read
+            ok(success,err)
+        end)
+    end)
+
 end

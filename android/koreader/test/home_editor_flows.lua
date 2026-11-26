@@ -78,7 +78,9 @@ return function(test,eq,ok,E,W,Widget,withHost)
             local n=#m.document.pages
             local hero
             for i,id in ipairs(E.HomeEditor.available({})) do if id=="continue-reading" then hero=i end end
-            click(e,"Add",hero) -- Find by contract; registering another widget may reorder the picker.
+            local per=math.max(1,math.min(3,math.floor((e.dimen.h-150)/150)))
+            e.picker=math.floor((hero-1)/per)+1; e:rebuild()
+            click(e,"Add",(hero-1)%per+1) -- Find across picker pages as the installed catalog grows.
             eq(#m.document.pages,n+1); eq(m:page().name,"Reading")
             eq(m.index,n+1); ok(m.selected)
             e.picker=nil; e:rebuild(); e:turn(-1); e:turn(1)
