@@ -25,6 +25,9 @@ data class AndroidReleaseFeed(val releases: List<ReleaseInfo>, val withdrawn: Se
             }
         }
 
+        internal fun load(root: String, minSerial: Long, fetch: (String) -> String): AndroidReleaseFeed =
+            fromLocations { url -> parse(fetch(url), root, minSerial) }
+
         fun parse(text: String, root: String, minSerial: Long): AndroidReleaseFeed {
             val envelope = JSONObject(text)
             val payload = envelope.getString("payload")

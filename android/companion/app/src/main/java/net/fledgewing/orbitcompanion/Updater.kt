@@ -205,9 +205,7 @@ object Updater {
         val channel = p.updateChannel
         log("check started ($why, interactive=$interactive, channel=${channel.key}, installed v${BuildConfig.VERSION_NAME})")
 
-        val feed = AndroidReleaseFeed.fromLocations { url ->
-            AndroidReleaseFeed.parse(httpText(url), BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL)
-        }
+        val feed = AndroidReleaseFeed.load(BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL, ::httpText)
         val releases = feed.releases
         withdrawn = feed.withdrawn
         // Only a check that reached GitHub counts for the daily timer: a failed one (no network,
