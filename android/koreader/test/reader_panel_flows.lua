@@ -282,4 +282,17 @@ return function(here, test, ok, eq)
         end
     end)
 
+    test("Custom contrast: native redraw only; mixed layout changes update position once",function()
+        local W,E=world(); local ui=styleReader(W)
+        E.Library.readingApply(ui,"contrast","custom"); eq(W.event.name,"RedrawCurrentView")
+        local n=W.events; local s=E.Library.readingCustom(); s.contrast=.3
+        E.Library.readingSave(s,ui,"reading-custom-contrast")
+        eq(W.event.name,"RedrawCurrentView"); eq(W.events,n+1)
+        E.Library.readingRestore(ui); eq(W.event.name,"RedrawCurrentView")
+        E.Library.readingApply(ui,"spacing","custom"); eq(W.event.name,"UpdatePos")
+        n=W.events; s=E.Library.readingCustom(); s.spacing=1.6; s.contrast=.4
+        E.Library.readingSave(s,ui,"reading-custom-spacing")
+        eq(W.event.name,"UpdatePos"); eq(W.events,n+1,"one update for mixed changes")
+    end)
+
 end

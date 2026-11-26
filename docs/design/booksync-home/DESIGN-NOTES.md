@@ -803,3 +803,11 @@ physical pixel margins survive apply and one-time copy unchanged.
 Keep-open Custom editor and copy rows inherit the existing Settings PIN lock.
 Only explicitly read-only leaf navigation may bypass the read-only menu wrapper;
 keeping a menu open does not make its action safe to run while locked.
+
+
+Contrast-only changes use the native redraw event; font, spacing and margin changes
+use the layout update path. At the pinned KOReader commit, `frontend/apps/reader/modules/readerfont.lua:269`
+sends `RedrawCurrentView` for gamma; `frontend/apps/reader/modules/readerrolling.lua:993`
+updates layout/metadata, while `frontend/apps/reader/modules/readerrolling.lua:1088`
+redraws the current page. Mixed edits still batch
+one position update (or reuse the native margin update).

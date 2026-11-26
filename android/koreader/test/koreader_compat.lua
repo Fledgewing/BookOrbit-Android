@@ -116,7 +116,7 @@ local NEEDS = {
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },
     { "frontend/apps/reader/modules/readerview.lua", { "paintTo" } },
     { "frontend/apps/reader/modules/readertypeset.lua", { "onSetPageMargins", { "unscaled_margins", F } } },
-    { "frontend/apps/reader/modules/readerrolling.lua", { { "cre_top_bar_enabled", F } } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "onUpdatePos", "onRedrawCurrentView", { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
