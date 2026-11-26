@@ -4913,65 +4913,61 @@
       ]
     },
     {
-      "id": "setting-patch_update_prerelease",
-      "feature": "Include previews and release candidates (`patch_update_prerelease`)",
+      "id": "setting-update_channel",
+      "feature": "Update channel: Stable / RC / Preview (`update_channel`)",
       "category": "Settings exposure",
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Companion schema row; conditional on parent/capability",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Plugin delegates update checks to the companion.",
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
-              "line": 336
-            },
-            {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
-              "line": 40
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Logic.kt",
+              "line": 243
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (implemented; unreleased)"
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Native include-prereleases filter; different wire setting",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
           "reason": null,
           "evidence": [
             {
-              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
-              "line": 94
+              "path": "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch",
+              "line": 1
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": "0.12 (implemented; unreleased)"
         },
         "x4": {
           "status": "supported",
-          "note": "Native include-prereleases filter; different wire setting",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
           "reason": null,
           "evidence": [
             {
-              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
-              "line": 94
+              "path": "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch",
+              "line": 1
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": "0.12 (implemented; unreleased)"
         },
         "x3": {
           "status": "supported",
-          "note": "Native include-prereleases filter; different wire setting",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
           "reason": null,
           "evidence": [
             {
-              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
-              "line": 94
+              "path": "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch",
+              "line": 1
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": "0.12 (implemented; unreleased)"
         }
       },
       "settings_keys": [
-        "patch_update_prerelease"
+        "update_channel"
       ]
     },
     {
@@ -5199,7 +5195,7 @@
   ],
   "release_evidence": {
     "android": "Verified presence baseline v0.11.3-rc.17; current main also includes later reader-opening/refresh fixes and the unpublished preview-version policy below. These later changes are not attributed to rc.17.",
-    "xteink": "Verified presence baseline xteink-v2.0.0.373+bookorbit.1-rc3. Current main additionally relabels the OTA opt-in as Include pre-releases; the CrossInk rc suffix describes the upstream base, not overlay readiness."
+    "xteink": "Verified presence baseline xteink-v2.0.0.373+bookorbit.1-rc3. Current implementation replaces the OTA opt-in with Stable / RC / Preview channels based on booksync_version."
   },
   "constraints": {
     "run_id": 45688398918,
@@ -5518,7 +5514,7 @@
   ],
   "post_baseline_changes": [
     {
-      "note": "Android/plugin updates distinguish Preview, RC and stable, with increasing Android package codes and an opt-in for previews and release candidates. Main targets v0.11.4-preview.1 next; no such release existed at audit time. Xteink rc/beta tag labels describe its upstream CrossInk base, and overlay builds remain pre-releases until that base is stable. See docs/design/release-versions.md.",
+      "note": "Android, plugin and all Xteink readers offer Stable / RC / Preview update channels. Eligibility uses the BookSync product version; upstream CrossInk labels and GitHub prerelease flags do not decide the channel. Existing opt-ins migrate to Preview; stricter channels wait for a newer allowed version. Implemented for 0.12; not yet released. See docs/design/update-channels.md.",
       "evidence": [
         {
           "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidVersionCode.java",
@@ -5529,8 +5525,8 @@
           "line": 154
         },
         {
-          "path": "xteink/overlay/patches/v2.0/0051-orbify-prerelease-label.patch",
-          "line": 13
+          "path": "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch",
+          "line": 1
         }
       ]
     },

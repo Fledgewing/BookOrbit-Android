@@ -1,0 +1,277 @@
+Subject: [PATCH] BookSync: Stable / RC / Preview update channels
+
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 5cc53f5d..c5daa150 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -259,7 +259,10 @@ STR_SYNC_SERVER: "Sync Server"
+ STR_BOOKORBIT_SYNC: "BookOrbit Sync"
+ STR_BOOKORBIT: "BookOrbit"
+ STR_CHECK_UPDATES: "Check for Updates"
+-STR_OTA_INCLUDE_PRERELEASES: "Include pre-releases"
++STR_OTA_INCLUDE_PRERELEASES: "Update channel"
++STR_BOOKSYNC_STABLE: "Stable"
++STR_BOOKSYNC_RC: "RC"
++STR_BOOKSYNC_PREVIEW: "Preview"
+ STR_LANGUAGE: "Language"
+ STR_KEYBOARD_LAYOUTS: "Keyboard layouts"
+ STR_CLEAR_READING_CACHE: "Clear Reading Cache"
+diff --git a/src/CrossPointSettings.cpp b/src/CrossPointSettings.cpp
+index ae30dd19..48797dd0 100644
+--- a/src/CrossPointSettings.cpp
++++ b/src/CrossPointSettings.cpp
+@@ -634,6 +634,11 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
+   // Old settings files must not retain a previously selected runtime override.
+   wifiTransmitPower = 0;
+   bool needsResave = false;
++  // Only migrate stored settings; obsolete API and feed formats are not supported.
++  if (doc["otaChannel"].isNull() && !doc["otaIncludePrereleases"].isNull()) {
++    otaChannel = (doc["otaIncludePrereleases"].as<uint8_t>() != 0) ? 2 : 0;
++    needsResave = true;
++  }
+   auto clamp = [](const uint8_t value, const uint8_t maxValue, const uint8_t fallback) {
+     return value < maxValue ? value : fallback;
+   };
+diff --git a/src/CrossPointSettings.h b/src/CrossPointSettings.h
+index 48228609..3d4db0a7 100644
+--- a/src/CrossPointSettings.h
++++ b/src/CrossPointSettings.h
+@@ -527,9 +527,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
+   // for a clock that survives sleep, and boards with a real RTC (X3) do not need it.
+   // See HalPowerManager::startDeepSleep.
+   uint8_t keepClockInSleep = 0;
+-  // Let Check for Updates offer this fork's release candidates (GitHub pre-releases) as well
+-  // as its final releases. Off by default: candidates are test builds.
+-  uint8_t otaIncludePrereleases = 0;
++  // BookSync update channel, based on the product version rather than GitHub's flag.
++  uint8_t otaChannel = 0;  // Stable / RC / Preview
+   // Set once an NTP sync succeeds. Used to skip re-syncing on every WiFi connect.
+   // Resetting to 0 (e.g. via the web UI) forces a re-sync on next WiFi connect.
+   uint8_t clockHasBeenSynced = 0;
+diff --git a/src/SettingsList.cpp b/src/SettingsList.cpp
+index 06c660a6..8b57e8bd 100644
+--- a/src/SettingsList.cpp
++++ b/src/SettingsList.cpp
+@@ -342,8 +342,9 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
+                          "readingIdleTimeThresholdUnits", StrId::STR_CAT_SYSTEM));
+   add(SettingInfo::Toggle(StrId::STR_TRACK_READING_STATS, &CrossPointSettings::trackReadingStats, "trackReadingStats",
+                           StrId::STR_CAT_SYSTEM));
+-  add(SettingInfo::Toggle(StrId::STR_OTA_INCLUDE_PRERELEASES, &CrossPointSettings::otaIncludePrereleases,
+-                          "otaIncludePrereleases", StrId::STR_CAT_SYSTEM));
++  add(SettingInfo::Enum(StrId::STR_OTA_INCLUDE_PRERELEASES, &CrossPointSettings::otaChannel,
++                        {StrId::STR_BOOKSYNC_STABLE, StrId::STR_BOOKSYNC_RC, StrId::STR_BOOKSYNC_PREVIEW},
++                        "otaChannel", StrId::STR_CAT_SYSTEM));
+ 
+   // Frontlight quick-panel state: persisted + web-exposed, category-less so
+   // it stays off the Settings screen (edited from the swipe-down panel).
+diff --git a/src/activities/settings/OtaUpdateActivity.cpp b/src/activities/settings/OtaUpdateActivity.cpp
+index 22618a83..cab08086 100644
+--- a/src/activities/settings/OtaUpdateActivity.cpp
++++ b/src/activities/settings/OtaUpdateActivity.cpp
+@@ -60,7 +60,7 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
+     return;
+   }
+ 
+-  updater.setIncludePrereleases(SETTINGS.otaIncludePrereleases != 0);
++  updater.setChannel(static_cast<ota_release_pick::Channel>(SETTINGS.otaChannel));
+   const auto res = updater.checkForUpdate();
+   if (res != OtaUpdater::OK) {
+     LOG_DBG("OTA", "Update check failed: %d", res);
+diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
+index b1b7d3f4..5321b8b7 100644
+--- a/src/activities/settings/SettingsActivity.cpp
++++ b/src/activities/settings/SettingsActivity.cpp
+@@ -609,7 +609,8 @@ void SettingsActivity::closeSubmenu() {
+ }
+ 
+ bool SettingsActivity::currentSettingUsesOptionMenu(const SettingInfo& setting) const {
+-  return setting.nameId != StrId::STR_FONT_FAMILY && setting.type == SettingType::ENUM &&
++  return setting.valuePtr != &CrossPointSettings::otaChannel &&
++         setting.nameId != StrId::STR_FONT_FAMILY && setting.type == SettingType::ENUM &&
+          (settingEnumOptionCount(setting) > 2 || setting.valuePtr == &CrossPointSettings::menuNavigation) &&
+          (setting.valuePtr != nullptr || (setting.valueGetter && setting.valueSetter));
+ }
+@@ -2234,6 +2235,26 @@ void SettingsActivity::render(RenderLock&&) {
+ }
+ 
+ #ifdef SIMULATOR
++// Exercise the same cycle handler as Confirm, including its durable save and reload.
++bool SettingsActivity::simulatorTestUpdateChannel() {
++  selectedCategoryIndex = categoryCount - 1;
++  rebuildSettingsLists();
++  const unsigned initial = SETTINGS.otaChannel;
++  for (unsigned step = 1; step <= 3; ++step) {
++    const auto row = std::find_if(currentSettings->begin(), currentSettings->end(), [](const SettingInfo& item) {
++      return item.valuePtr == &CrossPointSettings::otaChannel;
++    });
++    if (row == currentSettings->end() || row->type != SettingType::ENUM || currentSettingUsesOptionMenu(*row)) return false;
++    selectedSettingIndex = static_cast<int>(std::distance(currentSettings->begin(), row)) + 1;
++    toggleCurrentSetting();
++    if (optionPopup.isActive() || SETTINGS.otaChannel != (initial + step) % 3) return false;
++    SETTINGS.otaChannel = 255;
++    if (!SETTINGS.loadFromFile() || SETTINGS.otaChannel != (initial + step) % 3) return false;
++  }
++  LOG_INF("SET", "BookSync channel cycle passed (initial=%u)", initial);
++  return true;
++}
++
+ void SettingsActivity::simulatorOpenFrontButtons() {
+   controlsFrontButtonSettings = buildControlsFrontButtonSettingsList(getSettingsList());
+   selectedCategoryIndex = 2;
+diff --git a/src/activities/settings/SettingsActivity.h b/src/activities/settings/SettingsActivity.h
+index a22031ca..4d00c52e 100644
+--- a/src/activities/settings/SettingsActivity.h
++++ b/src/activities/settings/SettingsActivity.h
+@@ -390,6 +390,7 @@ class SettingsActivity final : public Activity {
+   void openLanguageDownloadsOnEnter() { openLanguageDownloadsPending = true; }
+   void enableTouchscreenRecovery() { touchscreenRecovery = true; }
+ #ifdef SIMULATOR
++  bool simulatorTestUpdateChannel();
+   void simulatorOpenFrontButtons();
+   int simulatorCategoryIndex() const { return selectedCategoryIndex; }
+   int simulatorSelectedIndex() const { return selectedSettingIndex; }
+diff --git a/src/main.cpp b/src/main.cpp
+index 5a2a0d35..5959dd34 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -135,6 +135,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+ #include "activities/reader/bookorbit/BookOrbitSyncActivity.h"
+ #include "activities/settings/AssetDownloadActivity.h"
+ #include "activities/settings/BookOrbitSettingsActivity.h"
++#ifdef SIMULATOR
++#include "activities/settings/SettingsActivity.h"
++#endif
+ #include "activities/settings/FontDownloadActivity.h"
+ #include "activities/settings/KOReaderAuthActivity.h"
+ #include "activities/settings/KOReaderSettingsActivity.h"
+@@ -2314,6 +2317,12 @@ void setup() {
+   setupDisplayAndFonts(SleepWakePolicy::shouldInitializeSeamlessly(resume, isUc8279X3, hasValidSleepFrame),
+                        resume != BootResume::Network, useReaderRenderStack);
+   logBootHeap("display and font resolver ready");
++#ifdef SIMULATOR
++  if (std::getenv("ORBIFY_SIM_UPDATE_CHANNEL_TEST")) {
++    SettingsActivity test(renderer, mappedInputManager);
++    std::_Exit(test.simulatorTestUpdateChannel() ? 0 : 1);
++  }
++#endif
+ 
+   switch (resume) {
+     case BootResume::Silent:
+diff --git a/src/network/OtaReleasePick.cpp b/src/network/OtaReleasePick.cpp
+index cef98f63..1b89d59e 100644
+--- a/src/network/OtaReleasePick.cpp
++++ b/src/network/OtaReleasePick.cpp
+@@ -87,10 +87,11 @@ int compare(const char* latestBookSync, const char* currentBookSync,
+ void keep(ReleaseJsonParser::Release& newest, const ReleaseJsonParser::Release& candidate, const Filter& filter) {
+   const char* version = versionOf(candidate.tagName, filter.tagPrefix);
+   if (version == nullptr || !firmware_version::isComparable(version)) return;
+-  if (candidate.booksyncVersion[0] && (!validBookSync(candidate.booksyncVersion) ||
+-      parse(candidate.booksyncVersion).channel < 0)) return;
+   const Version book = parse(candidate.booksyncVersion);
+-  if ((candidate.prerelease || (book.valid && book.channel < 2)) && !filter.includePrereleases) return;
++  // Missing, malformed and artifact-only identities are never offered.
++  if (!book.valid || book.channel < 0) return;
++  if (book.channel == 0 && filter.channel != Channel::Preview) return;
++  if (book.channel == 1 && filter.channel == Channel::Stable) return;
+   if (newest.tagFound &&
+       compare(candidate.booksyncVersion, newest.booksyncVersion,
+               version, versionOf(newest.tagName, filter.tagPrefix)) <= 0) {
+diff --git a/src/network/OtaReleasePick.h b/src/network/OtaReleasePick.h
+index 75bc36fc..f4e53709 100644
+--- a/src/network/OtaReleasePick.h
++++ b/src/network/OtaReleasePick.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <ReleaseJsonParser.h>
++#include "orbify/UpdateChannel.h"
+ 
+ // BookSync (overlay patch "ota-tag-prefix"): picks the firmware release to offer from a GET
+ // /releases list. BookSync releases Android and firmware from one repo, so the firmware's
+@@ -12,8 +13,8 @@ namespace ota_release_pick {
+ struct Filter {
+   // Tag prefix of this firmware's releases; "" accepts every tag (upstream's behaviour).
+   const char* tagPrefix;
+-  // False skips releases GitHub marks as pre-releases.
+-  bool includePrereleases;
++  // Eligibility comes only from booksync_version.
++  Channel channel;
+ };
+ 
+ // The version part of `tag`: what follows the prefix, or nullptr when `tag` lacks it.
+diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
+index 5f694df2..e84de504 100644
+--- a/src/network/OtaUpdater.cpp
++++ b/src/network/OtaUpdater.cpp
+@@ -336,7 +336,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+   // The newest listed release lives on the heap, not next to the parser: an OTA launched at
+   // boot checks inside setup()'s frames, on the 8 KB loop stack the TLS handshake also uses
+   // (OtaUpdateActivity::onEnter). Value-initialised, so it starts with nothing found.
+-  const bool readList = includePrereleases || otaTagPrefix[0] != '\0';
++  const bool readList = channel != ota_release_pick::Channel::Stable || otaTagPrefix[0] != '\0';
+   std::unique_ptr<ReleaseJsonParser::Release> newestListed;
+   if (readList) {
+     newestListed = makeUniqueNoThrow<ReleaseJsonParser::Release>();
+@@ -347,7 +347,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+   }
+ 
+   esp_err_t esp_err;
+-  ListedReleasePick listedPick{newestListed.get(), {otaTagPrefix, includePrereleases}};
++  ListedReleasePick listedPick{newestListed.get(), {otaTagPrefix, channel}};
+   ReleaseJsonParser releaseParser(isMatchingFirmwareAssetName, newestListed ? keepNewestListedRelease : nullptr,
+                                   &listedPick);
+ 
+@@ -369,8 +369,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+   // the same check after a restart got through. A slow read gets more time, and a failed check
+   // is asked once more on a fresh connection, as the catalog's fetchJson does.
+   client_config.timeout_ms = 15000;
+-  LOG_DBG("OTA", "Checking for update (current: %s, pre-releases: %s)", AppVersion::version(),
+-          includePrereleases ? "yes" : "no");
++  LOG_DBG("OTA", "Checking for update (current: %s, channel: %u)", AppVersion::version(),
++          static_cast<unsigned>(channel));
+   for (int attempt = 1;; attempt++) {
+     esp_err = checkOnce(client_config);
+     // Before the repository rename, the new default feed does not exist yet.
+@@ -393,8 +393,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+ #else
+ 
+   totalBytesReceived = 0;
+-  LOG_DBG("OTA", "Checking for update (current: %s, pre-releases: %s)", AppVersion::version(),
+-          includePrereleases ? "yes" : "no");
++  LOG_DBG("OTA", "Checking for update (current: %s, channel: %u)", AppVersion::version(),
++          static_cast<unsigned>(channel));
+ 
+   esp_http_client_handle_t client_handle = esp_http_client_init(&client_config);
+   if (!client_handle) {
+diff --git a/src/network/OtaUpdater.h b/src/network/OtaUpdater.h
+index bc5c054a..b251771d 100644
+--- a/src/network/OtaUpdater.h
++++ b/src/network/OtaUpdater.h
+@@ -1,11 +1,13 @@
+ #pragma once
+ 
++#include "orbify/UpdateChannel.h"
++
+ #include <atomic>
+ #include <string>
+ 
+ class OtaUpdater {
+   bool updateAvailable = false;
+-  bool includePrereleases = false;
++  ota_release_pick::Channel channel = ota_release_pick::Channel::Stable;
+   std::string latestVersion;
+   std::string latestBookSyncVersion;
+   std::string otaUrl;
+@@ -44,10 +46,8 @@ class OtaUpdater {
+   OtaUpdater() = default;
+   bool isUpdateNewer() const;
+   const std::string& getLatestVersion() const;
+-  // Lets checkForUpdate() offer the newest release candidate too, when it is newer than both
+-  // the installed firmware and the latest final release. Inline, so the simulator's own
+-  // OtaUpdater definitions (crossink-simulator) need nothing new.
+-  void setIncludePrereleases(const bool include) { includePrereleases = include; }
++  // Inline so the simulator's OtaUpdater definitions need no additional implementation.
++  void setChannel(ota_release_pick::Channel value) { channel = value; }
+   OtaUpdaterError checkForUpdate();
+   OtaUpdaterError installUpdate(ProgressCallback onProgress = nullptr, void* ctx = nullptr,
+                                 std::atomic<bool>* cancelRequested = nullptr);

@@ -26,6 +26,7 @@ design and mockup approval still apply.
 
 | Outcome | Platforms | Status |
 |---|---|---|
+| **Stable / RC / Preview update channels** selected from the BookSync version, with stored opt-in migration and no channel-switch downgrade. | Android, X4 Pro, X4, X3 | building (0.12, maintainer-approved W42) |
 | **BookSync Home** replaces the BookOrbit plugin's Home: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android; X4 Pro, X4 after | designing |
 | **Equivalent settings controls**: expose the [parity gap 1](docs/FEATURES.md#prioritised-parity-bugs) controls, including a sleep sync budget aligned with Android's 10/15/20 s choices. | X4 Pro, X4 | planned (0.12) |
 | **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |

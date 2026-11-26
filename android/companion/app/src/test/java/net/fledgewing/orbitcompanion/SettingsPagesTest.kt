@@ -96,6 +96,18 @@ class SettingsPagesTest {
     }
 
     @Test
+    fun updateChannelRowsShowDescriptionsAndSetTheUpdaterPreference() {
+        val a = section("updates")
+        assertTrue(texts(a).containsAll(listOf("Stable", "RC", "Preview", "tested releases only",
+            "also release candidates, about to become stable", "every test build")))
+        for (channel in UpdateChannel.values()) {
+            tagged(a, "channel:${channel.key}")!!.performClick()
+            assertEquals(channel, Prefs(a).updateChannel)
+            assertEquals(channel.key, SettingsStore.get(a, "update_channel"))
+        }
+    }
+
+    @Test
     fun everyShownKeyHasARowInItsSection() {
         // Defaults: sleep screen off hides its children; Wi-Fi rows need the wifi cap (Full has it).
         val hiddenByDefault = setOf("sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery", "sleep_style",

@@ -23,16 +23,19 @@ def build_feed(releases):
     releases = sorted((r for r in releases if not r.get("draft") and
                        r["tag_name"].startswith("xteink-v")), key=lambda r: r["created_at"], reverse=True)
     selected = []
+    # Old readers still need both numeric bridge heads, regardless of product channel.
+    legacy = [r for r in releases if re.match(r"xteink-v\d+\.\d+\.\d+\.\d+", r["tag_name"])]
     for pre in (False, True):
-        channel = [r for r in releases if r["prerelease"] == pre]
-        # Keep legacy channel heads indefinitely. Old firmware compares numeric tags and
-        # cannot cross from 2.0.0.N to 0.12 without first installing this bridge.
-        legacy = [r for r in channel if re.match(r"xteink-v\d+\.\d+\.\d+\.\d+", r["tag_name"])]
-        product = sorted((r for r in channel if r not in legacy and identity(r)),
-                         key=product_key, reverse=True)
-        for group in (product, legacy):
-            if group and group[0] not in selected:
-                selected.append(group[0])
+        head = next((r for r in legacy if r["prerelease"] == pre), None)
+        if head:
+            selected.append(head)
+    # Keep a head for every BookSync label. GitHub's flag and CrossInk's suffix
+    # cannot classify these, and a newer preview must never evict the RC head.
+    product = sorted((r for r in releases if identity(r)), key=product_key, reverse=True)
+    for channel in (2, 1, 0):
+        head = next((r for r in product if product_key(r)[3] == channel), None)
+        if head and head not in selected:
+            selected.append(head)
     result = []
     for release in selected:
         entry = {key: release[key] for key in ("tag_name", "name", "draft", "prerelease", "created_at")}

@@ -202,8 +202,8 @@ object Updater {
 
     private fun run(ctx: Context, interactive: Boolean, why: String): String {
         val p = Prefs(ctx)
-        val pre = p.includePreReleases
-        log("check started ($why, interactive=$interactive, pre-releases=$pre, installed v${BuildConfig.VERSION_NAME})")
+        val channel = p.updateChannel
+        log("check started ($why, interactive=$interactive, channel=${channel.key}, installed v${BuildConfig.VERSION_NAME})")
 
         val feed = AndroidReleaseFeed.parse(httpText(AndroidReleaseFeed.URL),
             BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL)
@@ -213,7 +213,7 @@ object Updater {
         // VPN lockdown) is retried at the next Wi-Fi up instead of 24 h later.
         p.updateCheckedAt = System.currentTimeMillis()
         log("fetched ${releases.size} release(s): ${releases.joinToString { it.tag }}")
-        val rel = UpdatePolicy.pick(releases, pre, withdrawn) ?: return "no release found"
+        val rel = UpdatePolicy.pick(releases, channel, withdrawn) ?: return "no release found"
         val ver = rel.version!!
         val current = Version.parse(BuildConfig.VERSION_NAME)
         if (!UpdatePolicy.shouldInstall(ver, current, withdrawn)) {

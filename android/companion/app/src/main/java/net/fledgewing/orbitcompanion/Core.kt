@@ -298,9 +298,9 @@ class Prefs(ctx: Context) {
     var autoUpdate: Boolean
         get() = bool("auto_update", true)
         set(v) = setBool("auto_update", v)
-    var includePreReleases: Boolean
-        get() = bool("include_prereleases", false)
-        set(v) = setBool("include_prereleases", v)
+    var updateChannel: UpdateChannel
+        get() = UpdateChannel.fromKey(SettingsStore.get(app, "update_channel"))
+        set(v) = SettingsStore.store(app, "update_channel", v.key)
     var updateCheckedAt by LongPref("update_checked_at")
     var updateStatusAt by LongPref("update_status_at")
     var updateStatus: String

@@ -30,6 +30,33 @@ class SettingsStoreTest {
         SettingsStore.useSchema(SettingsSchema.parse(java.io.File("../../../shared/settings/schema.json").readText()))
     }
 
+    @Test
+    fun channelMigratesStoredOptInOnceAndNewChoicesWin() {
+        val old = ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE)
+        val shared = ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
+        for (enabled in listOf(false, true)) {
+            shared.edit().clear().commit()
+            old.edit().putBoolean("include_prereleases", enabled).commit()
+            SettingsStore.resetForTest()
+            assertEquals(if (enabled) UpdateChannel.PREVIEW else UpdateChannel.STABLE, Prefs(ctx).updateChannel)
+            assertFalse(old.contains("include_prereleases"))
+            Prefs(ctx).updateChannel = UpdateChannel.RC
+            SettingsStore.resetForTest()
+            assertEquals(UpdateChannel.RC, Prefs(ctx).updateChannel)
+        }
+        old.edit().putBoolean("include_prereleases", true).commit()
+        SettingsStore.resetForTest()
+        assertEquals(UpdateChannel.RC, Prefs(ctx).updateChannel)
+    }
+
+    @Test
+    fun channelMigratesOldSchemaValueWhenCompanionPreferenceWasNeverWritten() {
+        ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit()
+            .putString("patch_update_prerelease", "1").commit()
+        assertEquals(UpdateChannel.PREVIEW, Prefs(ctx).updateChannel)
+        assertEquals("preview", SettingsStore.get(ctx, "update_channel"))
+    }
+
     private fun echo(vararg kv: Pair<String, Pair<String, Long>>): String =
         SettingsSync.valuesJson(kv.associate { (k, e) -> k to SettingEntry(e.first, e.second) })
 

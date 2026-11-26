@@ -81,5 +81,17 @@ class Versions(unittest.TestCase):
         earlier = release("0.12.0-preview.1", True, "8")
         self.assertIn(rc["tag_name"], [r["tag_name"] for r in F.build_feed([earlier, rc])])
 
+    def test_three_channel_feed_ignores_github_and_upstream_labels(self):
+        def release(book, flag):
+            return dict(tag_name=f"xteink-v{book}+crossink.2.0.0.bookorbit.1-rc3",
+                        name=book, draft=False, prerelease=flag, created_at=book, assets=[])
+        stable = release("0.12.0", True)
+        rc = release("0.13.0-rc.2", False)
+        preview = release("0.14.0-preview.1", False)
+        feed = F.build_feed([stable, rc, preview, release("0.13.0-rc.1", True)])
+        self.assertEqual({"0.12.0", "0.13.0-rc.2", "0.14.0-preview.1"},
+                         {r["booksync_version"] for r in feed})
+        self.assertTrue(all("-rc3" in r["tag_name"] for r in feed))
+
 if __name__ == "__main__":
     unittest.main()
