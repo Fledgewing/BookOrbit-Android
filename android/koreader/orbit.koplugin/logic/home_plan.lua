@@ -5,23 +5,16 @@
 
 -- Smart Home (android/docs/INTERFACE.md "go home"). What Home does in KOReader.
 --   mode: "smart" | HomePlan.SERVER_HOME; in_reader: a book is open; covered: a menu or the
---   plugin's views are over it; on_dashboard: the plugin's BookOrbit home (dashboard) is the
 --   top widget; from_other: Home came from another app (or KOReader was just started);
 --   reopen: a current book that isn't open now and still exists: the book Home itself closed
 --   (home_book), or the one KOReader was killed with (cold start, open_book_at_exit). A book
 --   the user closed is never reopened from history.
--- bookorbit_sub: a BookOrbit screen that isn't its main page is on top (BookOrbit.screen).
--- Returns "bookorbit_main" (that BookOrbit main page), "companion" (the companion's launcher page), "dashboard" (close any book,
--- BookOrbit home) or "book" (show the book: close what covers it, or open the last one).
--- Presses in KOReader step book -> BookOrbit home -> companion; Home from another app (the
 -- companion included) goes back to the book, so the steps never loop.
 HomePlan = {}
 
 function HomePlan.decide(o)
-    -- A BookOrbit page past its first (the dashboard's page 2, a list's page 3), nothing over
     -- it: page 1 first; only page 1 leaves (v0.5.4).
     if o.page_above_1 and not o.from_other then return "first_page" end
-    -- Any BookOrbit screen other than its main page (a detail, list, search, board, settings,
     -- a sheet or dialog over the catalog): back to the main page (v0.4.9).
     if o.library_sub then return "library_main" end
     if o.on_dashboard and not o.from_other then return "companion" end
@@ -44,13 +37,11 @@ function HomePlan.cameFromOtherApp(from_extra, suspended_s)
     return suspended_s == nil or suspended_s >= HomePlan.OTHER_APP_S
 end
 
--- The rotation Home keeps (BookOrbit Home must never turn the device from how it is held).
 -- On Android, KOReader's rotation is the activity's requestedOrientation (koreader-base
 -- ffi/framebuffer_android.lua:78-91: mode 0-3 -> PORTRAIT, LANDSCAPE, REVERSE_PORTRAIT,
 -- REVERSE_LANDSCAPE), which turns the whole display. Every new file browser forces its own
 -- rotation, fm_rotation_mode or upright (filemanager.lua:63-69, from showFiles :1321: KOReader's
 -- start, reader.lua:291, and every book close, readerui.lua:594, since opening a book closes the
--- file browser, readerui.lua:787-788), and BookOrbit Home sits over it.
 -- held: the companion's ROTATION extra, the display's orientation when Home was pressed.
 HomePlan.ROTATIONS = { portrait = 0, landscape = 1, reverse_portrait = 2, reverse_landscape = 3 }
 

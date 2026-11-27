@@ -77,6 +77,8 @@ interface ProjectionStore : AutoCloseable {
 }
 
 interface ConnectorInstaller {
+    /** Bounded local retirement metadata; no network, credentials or catalog data. */
+    fun retirementPlan(): Map<String,Any?> = emptyMap()
     val minimumVersion: String
     val homeModeKey: String
     fun coverCacheDir(root: File): File

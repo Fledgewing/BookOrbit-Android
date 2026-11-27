@@ -7,7 +7,7 @@ function Gate.inBackground()
     return Gate.backgrounds[coroutine.running() or main] == true
 end
 function Gate.silent()
-    return Gate.inBackground() or (Server.fullRefreshNotice())
+    return Gate.inBackground() or Library.catalog_active
 end
 function Gate.withBackground(background, fn, ...)
     local key = coroutine.running() or main
@@ -89,14 +89,6 @@ local function quietMethods(t, names)
     end
 end
 quietMethods(OrbitAndroid, { "init", "onResume", "onReaderReady", "onSuspend", "wakeFlow", "showWakeBanner", "bookOpenFlow", "readingSync", "onNetworkConnected" })
-Server.quietLegacy(quietMethods)
 
-function Gate.installCatalog()
-    local Catalog = Server.loaded("catalog")
-    if type(Catalog) ~= "table" then return end
-    for _, name in ipairs({ "scheduleThumbnailDownloads", "downloadThumbnailBatch", "boardRefreshClock" }) do
-        if type(Catalog[name]) == "function" then
-            wrap(Catalog, name, function(stock) return Gate.bind(stock) end, "background_notices")
-        end
-    end
-end
+
+function Gate.installCatalog() end

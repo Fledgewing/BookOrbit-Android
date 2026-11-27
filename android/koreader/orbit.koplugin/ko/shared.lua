@@ -37,7 +37,6 @@ function Shared.refresh(why)
     end
     local st = Companion.status(1)
     Shared.capsChanged(why, Companion.updateCaps(st, why))
-    -- Signed in to BookOrbit changed since the last report (a sign-in on BookOrbit's page).
     if why ~= "start" then pcall(Library.backgroundCommand,"preferences.report", "refresh " .. why) end
     -- Clicker buttons: the companion's key map (an empty map turns ours off).
     if st then

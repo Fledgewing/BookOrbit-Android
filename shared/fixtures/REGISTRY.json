@@ -7,7 +7,6 @@
       "rule": "What makes two requests one cache entry",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -17,7 +16,6 @@
       "rule": "Which requests are cached",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -27,7 +25,6 @@
       "rule": "When a read is served from the cache and when it is checked",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -37,7 +34,6 @@
       "rule": "Whether a check changed the saved reply",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -48,7 +44,6 @@
       "owner": "plugin, companion, xteink",
       "readers": [
         "kt",
-        "lua",
         "cpp"
       ],
       "note": "lua also checks the fake companion's copy of the patch (android/koreader/test/companion_rules.lua)"
@@ -79,8 +74,7 @@
       "rule": "A check keeps the saved random pick; a Full refresh takes the new one",
       "owner": "companion",
       "readers": [
-        "kt",
-        "lua"
+        "kt"
       ],
       "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
@@ -88,18 +82,18 @@
       "file": "cache/cases.json",
       "section": "mirror.windows",
       "rule": "The offline mirror's list identities",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
       "file": "cache/cases.json",
       "section": "mirror.slices",
       "rule": "A read cut from the mirror's saved pages",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
@@ -117,7 +111,6 @@
       "rule": "When the automatic Full refresh is due",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -127,8 +120,7 @@
       "rule": "A mirror request with no answer is retried with smaller pages, then skipped",
       "owner": "companion",
       "readers": [
-        "kt",
-        "lua"
+        "kt"
       ],
       "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
@@ -136,9 +128,9 @@
       "file": "cache/cases.json",
       "section": "mirror.small_pages",
       "rule": "A list saved in a smaller page size",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
@@ -156,8 +148,7 @@
       "rule": "The note when the mirror stops at the limit",
       "owner": "companion",
       "readers": [
-        "kt",
-        "lua"
+        "kt"
       ],
       "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
@@ -166,8 +157,7 @@
       "rule": "The plugin's cache keys, hashes, list pages, cover names and entry format, which the companion's worker matches byte for byte",
       "owner": "companion",
       "readers": [
-        "kt",
-        "lua"
+        "kt"
       ]
     },
     {
@@ -225,7 +215,6 @@
       "rule": "End of book: next in series, suggestions and author",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -235,7 +224,6 @@
       "rule": "End of book: the finish queue's drain guard",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -245,7 +233,6 @@
       "rule": "End of book: error backoff",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -255,7 +242,6 @@
       "rule": "End of book: the stale-push hold",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -272,7 +258,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -281,7 +266,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -290,7 +274,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -299,7 +282,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -308,7 +290,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -317,7 +298,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -326,7 +306,6 @@
       "rule": "Recorded book detail for the end-of-book picker",
       "owner": "server",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -349,17 +328,17 @@
     {
       "file": "bookorbit/catalog-sections.smart-scopes.json",
       "rule": "Smart scopes in the server's shape, for the sleep screen's pickers",
-      "owner": "server",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
       "file": "bookorbit/catalog-sections.collections.json",
       "rule": "Collections in the server's shape, for the sleep screen's pickers",
-      "owner": "server",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
@@ -385,7 +364,6 @@
       "rule": "Local-first: this device's reading over the server's",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },
@@ -394,7 +372,6 @@
       "rule": "Local-first: the reading stamp",
       "owner": "plugin, xteink",
       "readers": [
-        "lua",
         "cpp"
       ]
     },

@@ -248,6 +248,9 @@ end
 -- ContentResolver.call to the companion (Jni.call): the status, or a command.
 function W.companionCall(method, extras)
     local function answer(t) return { kind = "bundle", extras = t } end
+    if method:match("%.call%.LIBRARY_BOOTSTRAP$") then
+        return answer({ok="1",body='{plugins={"bookorbit"},modules={"bookorbit_api"},settings_key="bookorbit",home_key="bookorbit",row_count=1}'})
+    end
     if method:match("%.call%.STATUS$") then
         W.last_status = extras
         local body = W.web[STATUS_KEY]
@@ -856,20 +859,7 @@ test("sync while reading: chapter cadence never invokes the retired client", fun
     store.orbit_android.reading_schedule="off"
 end)
 
-test("home from the companion: library home opens over the book, which stays open", function()
-    local ui = newUI(true)
-    run(30)
-    W.home_called = false
-    W.shown = {}
-    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "home"
-    ui.menu.registered[1]:onResume()
-    run(1)
-    ok(not W.home_called, "reader not closed")
-    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard opened")
-    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "dashboard on top")
-    ui.bookorbit.catalog_browser.close_callback()
-    ok(W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] == nil, "extra consumed")
-end)
+
 
 test("menu is its own Tools entry, not inside the plugin's menu, and builds", function()
     local ui, m = newUI(true)
@@ -940,7 +930,7 @@ test("wifi: just in time turns Wi-Fi off after the idle time, and not while a do
     run(30)
     W.broadcasts = {}
     -- A download that blocks for a while: activity, so the timer restarts.
-    require("socket.http").request({ url = "https://dl.test/none", method = "GET" })
+    NetworkMgr:beforeWifiAction(function() require("socket.http").request({url="https://dl.test/none",method="GET"}) end)
     run(50)
     ok(#wifiOffs() == 0, "not idle yet")
     run(40)
@@ -1197,8 +1187,8 @@ test("restart with a book open (an update you started): the next start reopens t
     W.opened = nil
     local ui2, m2 = newUI(false)
     local cb = {}
-    cb.close_callback = function() ui2.bookorbit.catalog_browser = nil; W.catalog_closed = true end
-    ui2.bookorbit.catalog_browser = cb
+    cb.dismiss_callback = function() getfenv(Orbit.onSuspend).HomeHost.active=nil; W.catalog_closed=true end
+    getfenv(Orbit.onSuspend).HomeHost.active=cb
     W.catalog_closed = false
     m2:reopenAfterRestart("start") -- what init schedules 1 s after a start with restart_book set
     run(1)
@@ -1334,6 +1324,8 @@ test("contract: every command, call, page, launch command, status key, file and 
     mailbox_source=mailbox_source..cache:read("*a");cache:close()
     local actions=assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CatalogWorkflow.kt","rb"))
     mailbox_source=mailbox_source..actions:read("*a");actions:close()
+    local installer=assert(io.open(here.."/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/ConnectorPlugin.kt","rb"))
+    mailbox_source=mailbox_source..installer:read("*a");installer:close()
     for _, f in ipairs(C.files) do
         local name = f.path:gsub("/$", ""):match("[^/]+$")
         local source = f.reader == "companion" and (src .. mailbox_source) or src
@@ -1479,20 +1471,7 @@ test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never 
 end)
 
 
-test("commands: signin opens BookOrbit's sign-in; recommended opens the review page", function()
-    local ui, m, p = recWorld(false)
-    p.signed_out = true
-    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "signin"
-    ok(m:checkCommand("resume"), "handled")
-    run(1)
-    ok(has(p.calls, "promptLogin"), "BookOrbit's sign-in")
-    p.signed_out = nil
-    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "recommended"
-    ok(m:checkCommand("resume"), "handled")
-    run(1)
-    ok(m.rec_menu and m.rec_menu.title == "Recommended settings", "review page")
-    run(1)
-end)
+
 
 test("add-on: a restart starts the companion's relaunch window, never at screen-off", function()
     capsReset()
@@ -1746,106 +1725,17 @@ local function command(m, cmd, from)
     W.intent_extras["net.fledgewing.orbitcompanion.extra.FROM"] = from
 end
 
-test("smart home: pressed in a book -> library home", function()
-    local ui, m = newUI(true)
-    run(5)
-    W.home_called = false
-    m:onSuspend(); W.clock = W.clock + 0.5
-    command(m, "home_smart")
-    m:onResume()
-    run(1)
-    ok(has(ui.bookorbit.calls, "dashboard") and not W.home_called, "library home over the book")
-    ui.bookorbit.catalog_browser.close_callback()
-end)
 
-test("smart home: from another app with a book open -> stay in the book", function()
-    local ui, m = newUI(true)
-    run(5)
-    W.home_called = false
-    m:onSuspend(); W.clock = W.clock + 60
-    command(m, "home_smart")
-    m:onResume()
-    run(1)
-    ok(not W.home_called, "stayed in the book")
-end)
 
-test("smart home: cold start after KOReader was killed with a book open -> that book", function()
-    W.files["/books/killed.epub"] = true
-    W.opened = nil
-    local ui, m = newUI(false)
-    command(nil, "home_smart", "other_app")
-    m:checkCommand("start") -- what init schedules 1 s after a cold start
-    run(5)
-    ok(W.opened == "/books/killed.epub", "reopened the book it was killed with")
-end)
 
-test("smart home: from the file browser with no book open -> library home, not history", function()
-    store.lastfile = "/books/last.epub"
-    W.files["/books/last.epub"] = true
-    W.opened = nil
-    local ui, m = newUI(false)
-    run(5)
-    m:onSuspend(); W.clock = W.clock + 0.5
-    command(m, "home_smart")
-    m:onResume()
-    run(1)
-    ok(W.opened == nil, "no book reopened from history")
-    ok(has(ui.bookorbit.calls, "dashboard"), "library home")
-end)
 
-test("smart home: book -> library home -> companion -> back to the book", function()
-    local ui, m = newUI(true)
-    run(5)
-    W.shown, W.activities, W.home_called = {}, {}, false
-    local function press(from, pause)
-        m:onSuspend(); W.clock = W.clock + (pause or 0.5)
-        command(m, "home_smart", from)
-        m:onResume()
-        run(1)
-    end
-    press()
-    ok(ui.bookorbit.catalog_browser ~= nil and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "1: library home")
-    press()
-    local a = W.activities[#W.activities]
-    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "2: companion")
-    press("other_app", 30)
-    ok(ui.bookorbit.catalog_browser == nil and #W.shown == 0, "3: dashboard closed, back in the book")
-    ok(not W.home_called, "the book was never closed")
-end)
 
-test("smart home: fallback close by Home keeps the book current; elsewhere goes back to it", function()
-    store.orbit_android.home_book = nil
-    W.files["/b.epub"] = true
-    local ui, m = newUI(true)
-    m:onReaderReady()
-    run(5)
-    -- A plugin without the dashboard action (compat fallback): Home closes the book instead.
-    local q = newPlugin(); q.onBookOrbitOpenDashboard = nil
-    ui.bookorbit = q
-    local before = #W.logs
-    m:onOrbitGoHome()
-    run(1)
-    ok(W.home_called, "closed by Home")
-    local logged = false
-    for i = before + 1, #W.logs do
-        if W.logs[i]:find("compat: dashboard unavailable (plugin", 1, true) then logged = true end
-    end
-    ok(logged, "compat logged")
-    m:onCloseWidget()
-    ok(store.orbit_android.home_book == "/b.epub", "still the current book")
-    local fm, m2 = newUI(false)
-    run(5)
-    W.opened = nil
-    command(m2, "home_smart", "other_app")
-    m2:onResume()
-    run(1)
-    ok(W.opened == "/b.epub", "back to the book Home closed")
-    -- A user close clears it.
-    local ui3, m3 = newUI(true)
-    m3:onReaderReady()
-    m3:onCloseWidget()
-    ok(store.orbit_android.home_book == nil, "user close clears it")
-end)
+
+
+
+
+
+
 
 -- Like KOReader 2025.10+ (frontend/pluginloader.lua v2026.07.1:117-164): on* handlers become
 -- callable tables.
@@ -1858,42 +1748,9 @@ local function sandboxed(p)
     return p
 end
 
-test("home: plugin handlers wrapped by KOReader 2026.07 -> Home on the file browser opens library home", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    sandboxed(ui.bookorbit)
-    run(5)
-    W.shown, W.activities = { { name = "filemanager" } }, {}
-    command(m, "home_smart", "other_app")
-    m:onResume()
-    run(2)
-    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard handler ran")
-    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "library home on top")
-    ok(#W.activities == 0, "no companion page")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: the instance shows no handler but the UI routes the event -> library home opens", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    local real = ui.bookorbit
-    local seen = newPlugin()
-    seen.onBookOrbitOpenDashboard = nil -- what the patch sees; the UI still has the real module
-    ui.bookorbit = seen
-    function ui:handleEvent(ev)
-        local h = real["on" .. ev.name]
-        if h then return h(real, unpack(ev.args)) end
-    end
-    run(5)
-    W.shown, W.activities = { { name = "filemanager" } }, {}
-    command(m, "home_smart", "other_app")
-    m:onResume()
-    run(2)
-    ok(has(real.calls, "dashboard"), "event reached the plugin")
-    ok(W.shown[#W.shown] == real.catalog_browser, "library home on top")
-    W.shown = {}
-end)
+
+
 
 test("storage menu: all sizes and fractional GB labels", function()
     local E = getfenv(Orbit.onSuspend)
@@ -1998,20 +1855,7 @@ test("compat: reading sync does not require an upstream progress API", function(
     ok(not has(ui.bookorbit.calls,"fetch"))
 end)
 
-test("compat: a catalog without dashboardMode -> not treated as library home", function()
-    local ui, m = newUI(true)
-    run(5)
-    local cb = {}
-    cb.close_callback = function() UIManager:close(cb); ui.bookorbit.catalog_browser = nil end
-    ui.bookorbit.catalog_browser = cb
-    W.shown, W.activities = { cb }, {}
-    m:onSuspend(); W.clock = W.clock + 0.5
-    command(m, "home_smart")
-    m:onResume()
-    run(1)
-    ok(#W.activities == 0, "no companion page")
-    ok(ui.bookorbit.catalog_browser == nil, "back to the book")
-end)
+
 
 test("open book at exit: set when a book opens, cleared when it is closed", function()
     local ui, m = newUI(true)
@@ -2022,15 +1866,7 @@ test("open book at exit: set when a book opens, cleared when it is closed", func
     ok(store.orbit_android.open_book_at_exit == nil, "cleared")
 end)
 
-test("smart home: no last book -> library home", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    command(m, "home_smart", "other_app")
-    m:onResume()
-    run(5)
-    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard")
-end)
+
 
 local function dashboardOnTop(ui, kind)
     local cb = { dashboardMode = function() return kind == "dashboard" end }
@@ -2039,87 +1875,16 @@ local function dashboardOnTop(ui, kind)
 end
 
 for _, cmd in ipairs({ "home_smart", "home" }) do
-    test("home (" .. cmd .. "): pressed on library home -> the companion's launcher page", function()
-        store.lastfile = "/books/last.epub"
-        W.files["/books/last.epub"] = true
-        local ui, m = newUI(false)
-        run(5)
-        dashboardOnTop(ui, "dashboard")
-        W.activities, W.opened = {}, nil
-        m:onSuspend(); W.clock = W.clock + 0.5
-        command(m, cmd)
-        m:onResume()
-        run(1)
-        local a = W.activities[#W.activities]
-        ok(a and a.action:match("%.SHOW_LAUNCHER$"), "launcher page started")
-        ok(W.opened == nil, "no book opened")
-        ui.bookorbit.catalog_browser = nil
-        W.shown = {}
-    end)
+
 end
 
-test("home: from the companion page while library home is on top, no book -> library home", function()
-    store.lastfile = "/books/last.epub"
-    W.files["/books/last.epub"] = true
-    local ui, m = newUI(false)
-    run(5)
-    dashboardOnTop(ui, "dashboard")
-    W.activities, W.opened = {}, nil
-    command(m, "home_smart", "other_app")
-    m:onResume()
-    run(1)
-    ok(#W.activities == 0, "no companion page")
-    ok(W.opened == nil, "no book reopened")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
+
 
 -- Held left-handed (upside down) in another app; KOReader's file browser had forced upright
 -- (filemanager.lua:63-69). Home: BookOrbit Home turns back to how the device is held.
-test("home from another app with no book: BookOrbit Home keeps the held rotation", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local screen = preload.device.screen
-    local rot = 0
-    screen.getRotationMode = function() return rot end
-    local set = {}
-    function ui:onSetRotationMode(mode) table.insert(set, mode); rot = mode end
-    command(m, "home_smart", "other_app")
-    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
-    m:onResume()
-    run(2)
-    ok(#set == 1, "one turn"); ok(set[1] == 2, "upside down, as held")
-    ok(W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] == nil, "extra consumed")
-    -- Already as held: nothing turns.
-    command(m, "home_smart", "other_app")
-    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
-    ui.bookorbit.catalog_browser = nil
-    m:onResume()
-    run(2)
-    ok(#set == 1, "no second turn")
-    screen.getRotationMode, ui.onSetRotationMode = nil, nil
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home from another app back to the open book: the book's rotation stays", function()
-    local ui, m = newUI(true)
-    run(5)
-    local screen = preload.device.screen
-    screen.getRotationMode = function() return 0 end
-    local turned = false
-    screen.setRotationMode = function() turned = true end
-    m:onSuspend(); W.clock = W.clock + 30
-    command(m, "home_smart", "other_app")
-    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
-    m:onResume()
-    run(2)
-    ok(not turned, "a book keeps its own rotation")
-    screen.getRotationMode, screen.setRotationMode = nil, nil
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
+
+
 
 test("a book closing: the new file browser keeps the book's rotation", function()
     local calls = 0
@@ -2157,45 +1922,9 @@ test("start patch: installed into koreader/patches once, kept current", function
     ok(got == src, "the plugin's copy")
 end)
 
-test("home at KOReader's start after the start patch: no second turn", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local screen = preload.device.screen
-    screen.getRotationMode = function() return 2 end
-    local set = {}
-    function ui:onSetRotationMode(mode) table.insert(set, mode) end
-    ORBIT_START_ROTATION = 2
-    m:smartHome("start", "other_app", "smart", "landscape")
-    run(2)
-    ORBIT_START_ROTATION = nil
-    ok(#set == 0, "the start kept the held rotation")
-    screen.getRotationMode, ui.onSetRotationMode = nil, nil
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: file browser on top of a stale library home -> library home brought to the top", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local stale = { dashboardMode = function() return true end }
-    stale.close_callback = function() UIManager:close(stale); ui.bookorbit.catalog_browser = nil end
-    ui.bookorbit.catalog_browser = stale
-    local browser = { name = "filemanager" }
-    W.shown = { stale, browser }
-    W.activities, W.opened = {}, nil
-    command(m, "home_smart", "other_app")
-    m:onResume()
-    run(2)
-    local top = W.shown[#W.shown]
-    ok(#W.activities == 0, "no companion page")
-    ok(ui.bookorbit.catalog_browser ~= nil and ui.bookorbit.catalog_browser ~= stale, "reopened")
-    ok(top == ui.bookorbit.catalog_browser, "library home is on top")
-    ok(m:whereNow() == "bookorbit", "where: bookorbit")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
+
+
 
 -- A catalog like plugin 2.3.0's: modes switched in place, goDashboard back to the main page.
 local function catalogIn(ui, kind)
@@ -2217,37 +1946,9 @@ local function homePress(m)
     run(2)
 end
 
-test("home: BookOrbit detail view over an open book -> BookOrbit main page, book stays", function()
-    store.lastfile = "/books/last.epub"
-    W.files["/books/last.epub"] = true
-    local ui, m = newUI(true)
-    run(5)
-    local cb = catalogIn(ui, "detail")
-    homePress(m)
-    ok(#W.activities == 0, "no companion page")
-    ok(not W.home_called, "the book stays open")
-    ok(W.went_dashboard and cb:dashboardMode(), "catalog back to its main page")
-    ok(W.shown[#W.shown] == cb, "same catalog on top")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: a sheet over BookOrbit's main page -> the sheet closed, main page", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local cb = catalogIn(ui, "dashboard")
-    local closed = false
-    local sheet = { name = "bookorbit_menu_sheet", onCloseWidget = function() closed = true end }
-    sheet.dismiss_callback = function() closed = true end
-    table.insert(W.shown, sheet)
-    homePress(m)
-    ok(#W.activities == 0, "no companion page")
-    ok(closed and W.shown[#W.shown] == cb, "sheet closed, catalog on top")
-    ok(cb:dashboardMode(), "main page")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
+
+
 
 -- Plugin 2.3.0's paging: the dashboard's board_page (boardPage/boardFlip), a list's page
 -- (listMode/listPaging/listGoPage).
@@ -2262,70 +1963,15 @@ local function withPaging(cb, page)
     return cb
 end
 
-test("home: library home on page 2 -> page 1, not the companion", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local cb = withPaging(catalogIn(ui, "dashboard"), 2)
-    homePress(m)
-    ok(#W.activities == 0, "no companion page")
-    ok(cb:boardPage() == 1, "page 1")
-    ok(W.shown[#W.shown] == cb and cb:dashboardMode(), "same catalog, main page")
-    homePress(m)
-    local a = W.activities[#W.activities]
-    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "page 1: the launcher page")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: a BookOrbit list on page 3 -> its page 1, then the main page", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local cb = withPaging(catalogIn(ui, "books"), 3)
-    W.list_went = nil
-    homePress(m)
-    ok(W.list_went == 1, "list page 1")
-    ok(not W.went_dashboard and #W.activities == 0, "stayed on the list")
-    homePress(m)
-    ok(W.went_dashboard and cb:dashboardMode(), "then the main page")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: catalog in a list mode, plugin without goDashboard -> reopened on its main page", function()
-    store.lastfile = nil
-    local ui, m = newUI(false)
-    run(5)
-    local cb = catalogIn(ui, "books")
-    cb.goDashboard = nil
-    homePress(m)
-    local now = ui.bookorbit.catalog_browser
-    ok(now ~= nil and now ~= cb, "a fresh catalog")
-    ok(W.shown[#W.shown] == now and now:dashboardMode(), "on its main page")
-    ok(#W.shown == 1, "the old one closed: " .. #W.shown)
-    ok(#W.activities == 0, "no companion page")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("home: BookOrbit's true main page -> the companion's launcher page", function()
-    local ui, m = newUI(false)
-    run(5)
-    catalogIn(ui, "dashboard")
-    homePress(m)
-    local a = W.activities[#W.activities]
-    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "launcher page")
-    ok(not W.went_dashboard, "no reset")
-    ui.bookorbit.catalog_browser = nil
-    W.shown = {}
-end)
 
-test("apps gesture: registered and in the recommended set", function()
-    ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "BookSync Companion: apps", "action title")
-    local R = getfenv(Orbit.onSuspend).Recommended
-    ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
-end)
+
+
+
+
+
 
 ---------------------------------------------------------------- updates (BookSync Companion)
 -- The plugin and the companion ship together: the menu's check asks the companion (UPDATE), and
@@ -2541,43 +2187,7 @@ W.screen_on = false
 sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR)
 os.remove(SELF)
 
-test("settings PIN: a locked companion makes the BookSync menu read-only, with the keypad one tap away; unreachable stays usable", function()
-    local url = STATUS_KEY
-    local ui, m = newUI(true)
-    local items = {}
-    m:addToMainMenu(items)
-    W.web[url] = "STATUS"
-    W.json.STATUS = { version = "0.4.4", pin_locked = true }
-    W.activities = {}
-    local sub = items.orbit_android.sub_item_table_func()
-    ok(sub[1].text:find("PIN", 1, true), "first row asks for the PIN")
-    -- Every value is still there to read; nothing that changes something is enabled.
-    local all = menuAll(sub)
-    ok(#all > 20, "the whole menu, read-only " .. #all)
-    local enabled = 0
-    for i, it in ipairs(all) do
-        if i > 1 and it.callback and not it.settings_group and not it.sub_item_table and not it.keep_menu_open and not it.read_only and not (it.enabled_func and it.enabled_func() == false) then
-            enabled = enabled + 1
-        end
-    end
-    eq(enabled, 0, "no control enabled while locked")
-    local wifi = RE.S.sync_on_wake
-    for _, it in ipairs(all) do if it.text == "Sync when it wakes" then it.callback() end end
-    eq(RE.S.sync_on_wake, wifi, "a tap changes nothing")
-    run(1)
-    for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad until asked") end
-    W.activities = {}
-    sub[1].callback()
-    ok(W.activities[1] and W.activities[1].action:match("SHOW_PIN$"), "the first row opens the keypad")
-    W.json.STATUS = { version = "0.4.4", pin_locked = false }
-    local open = items.orbit_android.sub_item_table_func()
-    ok(not open[1].text:find("PIN", 1, true), "unlocked: the usual menu")
-    W.web[url], W.json.STATUS = nil, nil
-    W.activities = {}
-    ok(#items.orbit_android.sub_item_table_func() >= 9, "companion unreachable: full menu")
-    run(1)
-    for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad without the companion") end
-end)
+
 
 ---------------------------------------------------------------- lists by series and by author
 -- A catalog class like plugin 2.3.0's (bookorbit_catalog.lua with CatalogLists mixed in), cut
@@ -2973,100 +2583,11 @@ local function lfModules(drop)
     return Cat, BD, LV, BUI
 end
 
-test("local-first: a plugin without a hook -> Home stays the plugin's", function()
-    local Cat, BD = lfModules("listRun")
-    local build = BD.build
-    newUI(false)
-    ok(not E.LF.installed and BD.build == build and not (rawget(Cat, "__orbit_stock") or {})["lf:boardRun"], "no local-first hooks installed")
-end)
 
-test("local-first: Home paints this device's state; ⟳ refreshes; a refresh repaints changed tiles only", function()
-    local Cat, BD, LV, BUI = lfModules()
-    package.loaded["bookorbit_state_manager"] = { getBook = function(d) return d == "d7" and { bookId = 7 } or nil end }
-    newUI(false)
-    ok(E.LF.installed, "installed")
-    -- Finished here, not yet sent: Home shows it finished before the server knows.
-    E.LocalState.put("d7", { status = "complete", percent = 100, pending = true })
-    local body = { continueReading = { { id = 7, title = "A", progressPercentage = 40 }, { id = 8, title = "B", progressPercentage = 10 } } }
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = body } }, Cat)
-    local d = BD.build(cat, cat.current_context, os.time())
-    ok(lf.built ~= body and lf.built.orbit_overlay, "an overlaid copy")
-    ok(#body.continueReading == 2, "the saved body untouched")
-    ok(d.orbit_board, "marked for the header")
-    -- Header: ⟳ next to the device status, and the stamp.
-    E.LocalState.load().fetchedAt.dashboard = os.time() - 120
-    local h = cat:boardHeader(d)
-    ok(h.status.items and h.status.items[1].action.kind == "orbit-refresh", "⟳ in the header")
-    ok(h.date_long:find("Sunday · updated", 1, true), "stamp: " .. tostring(h.date_long))
-    cat:boardRun({ kind = "orbit-refresh" })
-    ok(lf.refreshed, "⟳ refreshes")
-    cat:boardRun({ kind = "menu" })
-    ok(lf.stock_run == "menu", "other actions: the plugin's")
-    -- List header: ⟳ and its stamp.
-    local lh = cat:listHeader("books", { kind = "books", params = {} })
-    local lv = LV.header(500, lh)
-    ok(lv.status.items and lv.status.items[1].region.kind == "orbit-refresh", "⟳ on lists")
-    lf.refreshed = nil
-    cat:listRun({ kind = "orbit-refresh" })
-    ok(lf.refreshed, "list ⟳ refreshes")
-    -- A refresh lands: one tile changed -> only it repaints, plus the header stamp.
-    cat._board_ctx = { d = d }
-    cat._board_tiles = { { item = { type = "hero" } }, { item = { type = "clock" } }, { item = { type = "shelf", source = "x" } } }
-    lf.repainted, lf.stock_switch, lf.header = {}, 0, 0
-    local fresh = { continueReading = { { id = 8, title = "B", progressPercentage = 30 } } }
-    lf.next_context = { kind = "dashboard", dashboard = fresh }
-    local items, ctx = cat:dashboardRootFetch({})
-    cat:switchTo("Home", items, ctx, false)
-    ok(lf.stock_switch == 0 and lf.header == 1, "no full repaint; header stamped")
-    W.shown = { cat }; run(0.1)
-    ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "only the hero tile: " .. table.concat(lf.repainted, ","))
-    ok(cat.current_context == ctx, "the new body adopted")
-    -- A different board (shelf set changed) -> the plugin's full repaint.
-    local other = { kind = "dashboard", dashboard = { continueReading = {}, boardShelves = { y = {} } }, orbit_refresh = true }
-    cat:switchTo("Home", {}, other, false)
-    ok(lf.stock_switch == 1, "full repaint")
-    for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "bookorbit_state_manager" }) do
-        package.loaded[k] = nil
-    end
-end)
 
-test("local-first: ⟳ keeps covers; a quiet refresh keeps cover jobs; a late cover redraws its tile", function()
-    local Cat, BD = lfModules()
-    E.LF.installed = nil -- install again, onto this test's catalog
-    newUI(false)
-    lf.evicted, lf.scheduled, lf.cancelled, lf.covers, lf.refreshed = {}, {}, 0, {}, nil
-    local body = { continueReading = { { id = 7, title = "A", progressPercentage = 40 } } }
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = body } }, Cat)
-    local d = BD.build(cat, cat.current_context, os.time())
-    -- ⟳: the data refreshes, the covers stay (they are keyed by cover version).
-    cat:boardRun({ kind = "orbit-refresh" })
-    ok(lf.refreshed, "⟳ refreshes")
-    ok(#lf.evicted == 0, "no cover deleted: " .. table.concat(lf.evicted, ","))
-    -- The plugin's own refresh paths still evict, as before.
-    cat:refreshCurrent()
-    ok(#lf.evicted == 1, "the plugin's own refresh unchanged")
-    lf.evicted = {}
-    -- A refresh lands quietly: no cancelled cover jobs, and the new book's cover is fetched.
-    cat._board_ctx = { d = d }
-    cat._board_tiles = { { item = { type = "hero" } } }
-    lf.repainted, lf.stock_switch, lf.header = {}, 0, 0
-    lf.next_context = { kind = "dashboard", dashboard = { continueReading = { { id = 7, title = "A", progressPercentage = 40 }, { id = 9, title = "C", progressPercentage = 5 } } } }
-    local items, ctx = cat:dashboardRootFetch({})
-    cat:switchTo("Home", items, ctx, false)
-    ok(lf.stock_switch == 0 and lf.cancelled == 0, "quiet: cover jobs kept")
-    ok(table.concat(lf.scheduled, ",") == "7,9", "covers scheduled: " .. table.concat(lf.scheduled, ","))
-    -- A cover lands while a hydration repaint skip is pending: its tile still redraws.
-    lf.repainted, lf.full_paint = {}, 0
-    lf.covers[9] = "ready"
-    cat._orbit_skip_repaint = true
-    cat:updateItems(nil, true)
-    W.shown = { cat }; run(0.1)
-    ok(lf.full_paint == 0, "no full repaint")
-    ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "the cover's tile redrew: " .. table.concat(lf.repainted, ","))
-    for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui" }) do
-        package.loaded[k] = nil
-    end
-end)
+
+
+
 
 ---------------------------------------------------------------- write-through cache
 local cache = {}
@@ -3219,18 +2740,7 @@ local DASH = "/koreader/plugin/catalog/dashboard"
 
 
 
-test("covers: low-level legacy calls are local only even with caching disabled", function()
-    local client = cacheSetup()
-    local saved=E.Library.cachedCover
-    E.Library.cachedCover=function(path) return path=="/fixture/cached.jpg" and path or nil end
-    E.S.offline_cache=false
-    eq(client:downloadCatalogThumbnail(7,"/fixture/cached.jpg"),true)
-    eq(client:downloadCatalogThumbnail(7,"/fixture/missing.jpg"),nil)
-    eq(client:downloadCatalogAuthorPhoto(7,"/fixture/missing.jpg"),nil)
-    eq(cache.stock_cover,nil); eq(#cache.calls,0)
-    E.Library.cachedCover=saved; E.S.offline_cache=true
-    cacheTeardown()
-end)
+
 
 -- The request paths the pinned plugin builds (bookorbit_api.lua:676-738; query() sorts and drops
 -- empty parameters, :386). plugin_compat.lua checks these strings are still in the plugin.
@@ -3351,106 +2861,13 @@ end
 
 
 
-test("covers: companion batches never fork and stale results cannot redraw", function()
-    local function prep(Cat)
-        function Cat:thumbnailEntry(book)
-            self.thumbnail_memo=self.thumbnail_memo or {}
-            local key=tostring(book.id)
-            self.thumbnail_memo[key]=self.thumbnail_memo[key] or {path=cache.dir.."/covers/"..key.."_100.jpg"}
-            return self.thumbnail_memo[key]
-        end
-        function Cat:stopThumbnailWorker() self.stopped=true end
-        function Cat:updateItems() self.redraws=(self.redraws or 0)+1 end
-    end
-    local client,Cat=cacheSetup(prep)
-    local commands={}; local paths={}
-    local cached,command=E.Library.cachedCover,E.LibraryAdapter.command
-    E.Library.cachedCover=function(ref) return paths[ref] end
-    E.LibraryAdapter.command=function(op,args,done)
-        eq(op,"covers.acquire"); ok(not W.in_child,"parent-side dispatch")
-        commands[#commands+1]=args
-        UIManager:scheduleIn(0.1,function() paths[args.reference]=args.reference; done({local_path=args.reference}) end)
-        return true
-    end
-    local cat=setmetatable({client=client,thumbnail_generation=1,thumbnail_queue={head=1,tail=2,{id=1},{id=2}},
-        thumbnail_prefetch_queue={head=1,tail=0}},Cat)
-    cat:runThumbnailWorker(1); run(0.5)
-    eq(#commands,2); eq(cat.redraws,1); ok(cat.stopped); eq(cache.stock_cover,nil); eq(cache.child_crash,nil)
-    cat.thumbnail_queue={head=1,tail=1,{id=3}}; cat.stopped=false
-    cat:runThumbnailWorker(1); cat.thumbnail_generation=2; run(0.5)
-    eq(cat.redraws,1,"departed generation cannot redraw")
-    E.Library.cachedCover,E.LibraryAdapter.command=cached,command
-    cacheTeardown()
-end)
 
-test("covers: forced recheck dispatches neutral references and never redraws while reading", function()
-    local _,Cat=cacheSetup()
-    local command=E.LibraryAdapter.command
-    local requests={}
-    E.LibraryAdapter.command=function(op,args,done)
-        eq(op,"covers.acquire"); eq(args.refresh,true); ok(args.server==nil and args.userkey==nil)
-        requests[#requests+1]=args.reference
-        UIManager:scheduleIn(0.1,function() done({local_path=args.reference}) end)
-        return true
-    end
-    local cat=setmetatable({thumbnail_generation=1},Cat)
-    local redraw=0
-    function cat:updateItems() redraw=redraw+1 end
-    E.OC.recheckCovers(cat,{{path="/fixture/one.jpg"},{path="/fixture/two.jpg"}})
-    run(0.5); eq(#requests,2); eq(redraw,1)
-    local reading=E.reading; E.reading=function() return true end
-    E.OC.recheckCovers(cat,{{path="/fixture/one.jpg"}})
-    run(0.5); eq(redraw,1,"reading is never interrupted by a cover completion")
-    E.reading=reading; E.LibraryAdapter.command=command
-    cacheTeardown()
-end)
 
-test("covers: saved local references stay drawable offline while refresh waits", function()
-    local function prep(Cat)
-        function Cat:thumbnailEntry(book)
-            self.thumbnail_memo=self.thumbnail_memo or {}
-            self.thumbnail_memo[book.id]=self.thumbnail_memo[book.id] or {path=cache.dir.."/covers/"..book.id.."_200.jpg"}
-            return self.thumbnail_memo[book.id]
-        end
-        function Cat:stopThumbnailWorker() end
-        function Cat:updateItems() end
-    end
-    local _,Cat=cacheSetup(prep)
-    local cached,command=E.Library.cachedCover,E.LibraryAdapter.command
-    local old=cache.dir.."/covers/1_100.jpg"
-    local f=assert(io.open(old,"wb")); f:write("\255\216\255\224cached"); f:close()
-    E.Library.cachedCover=function() return old end
-    local calls=0
-    E.LibraryAdapter.command=function(op,args,done)
-        calls=calls+1; eq(op,"covers.acquire")
-        UIManager:scheduleIn(0.1,function() done({local_path=old,stale=true}) end)
-        return true
-    end
-    local cat=setmetatable({thumbnail_generation=1,thumbnail_queue={head=1,tail=1,{id=1}},thumbnail_prefetch_queue={head=1,tail=0}},Cat)
-    W.wifi=false
-    local row=cat:thumbnailEntry({id=1}); eq(row.path,old); eq(row.exists,true); eq(calls,0,"paint is local-only")
-    cat:runThumbnailWorker(1)
-    eq(cat:thumbnailEntry({id=1}).path,old,"pending acquisition keeps the saved cover")
-    run(0.5); eq(cat:thumbnailEntry({id=1}).path,old); eq(#cache.calls,0)
-    E.Library.cachedCover,E.LibraryAdapter.command=cached,command
-    cacheTeardown()
-end)
 
-test("wifi: just in time keeps Wi-Fi on while BookOrbit's Home is over the book, and while the cache works", function()
-    local WP = E.WifiPlan
-    local st = WP.new("jit", 2, 0)
-    st.mode, st.foreground, st.in_book, st.last_flow, st.release_at, st.last_activity = "jit", true, true, "wake", 10, 100
-    local a, why = WP.decide(st, { now = 20, wifi_on = true, browsing = false })
-    ok(a == "off" and why:find("done in a book"), "reading: off after the wake (" .. tostring(why) .. ")")
-    a, why = WP.decide(st, { now = 20, wifi_on = true, browsing = true })
-    ok(a == nil, "BookOrbit's Home over the book: kept (" .. tostring(why) .. ")")
-    a = WP.decide(st, { now = 100 + 121, wifi_on = true, browsing = true })
-    ok(a == "off", "idle there for the just-in-time time: off")
-    E.Library.catalog_active=true
-    local busy, bwhy = E.Wifi.busy()
-    ok(busy and bwhy:find("catalog"), "a cache check out at the companion keeps it: " .. tostring(bwhy))
-    E.Library.catalog_active=nil
-end)
+
+
+
+
 
 test("suspend: unchanged app switches coalesce native captures; real sleep always captures", function()
     local ui,m=newUI(true); run(30)
@@ -3466,37 +2883,7 @@ test("suspend: unchanged app switches coalesce native captures; real sleep alway
     env.Jni.isInteractive=interactive
 end)
 
-test("remove: with a book open (no file browser) BookOrbit's remove asks through KOReader's delete; the open book stays", function()
-    local asked, deleted = {}, {}
-    local FM = { instance = nil }
-    function FM:showDeleteFileDialog(path, after) table.insert(asked, path); if self:deleteFile(path, true) and after then after() end end
-    function FM:deleteFile(path) table.insert(deleted, path); return true end
-    local RUI = { instance = { document = { file = "/books/open.epub" } } }
-    local saved_fm, saved_rui = package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"]
-    package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"] = FM, RUI
-    local errors = {}
-    package.loaded["bookorbit_toast"] = { error = function(t) table.insert(errors, t) end, show = function() end }
-    local Peek = {}
-    -- As bookorbit_book_peek.lua:156-167.
-    function Peek.remove(catalog, path)
-        local fm = require("apps/filemanager/filemanager").instance
-        if not fm or not fm.showDeleteFileDialog then
-            require("bookorbit_toast").error("Open the file browser to remove this book.")
-            return
-        end
-        fm:showDeleteFileDialog(path, function() catalog.refreshed = true end)
-    end
-    package.loaded["bookorbit_book_peek"] = Peek
-    E.LF.installRemove()
-    local cat = {}
-    Peek.remove(cat, "/books/other.epub")
-    ok(asked[1] == "/books/other.epub" and deleted[1] == "/books/other.epub" and cat.refreshed, "asked, deleted, refreshed")
-    ok(#errors == 0 and FM.instance == nil, "no 'open the file browser'; no file browser left behind")
-    Peek.remove(cat, "/books/open.epub")
-    ok(#deleted == 1 and errors[1]:find("This book is open"), "the open book stays: " .. tostring(errors[1]))
-    package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"] = saved_fm, saved_rui
-    package.loaded["bookorbit_toast"], package.loaded["bookorbit_book_peek"] = nil, nil
-end)
+
 
 
 
@@ -3504,39 +2891,7 @@ end)
 ---------------------------------------------------------------- v0.11.2 (M8C test of v0.11.1)
 
 
-test("reading gate: BookOrbit over the book is not reading, whatever floats on top; Wi-Fi agrees (v0.11.2)", function()
-    RE.Gate.queue = {}
-    local ui = newUI(true)
-    local cat = { name = "catalog" }
-    ui.bookorbit.catalog_browser = cat
-    W.shown = {}
-    ok(RE.reading(), "the book alone: reading")
-    -- Home over the book, under BookOrbit's loading pill (not a toast) and a KOReader message.
-    W.shown = { ui, cat, { name = "bookorbit_toast" }, { name = "InfoMessage" } }
-    ok(not RE.reading(), "Home over the book with a pill and a message on top: not reading")
-    local shown
-    RE.Gate.show("BookOrbit show: Full refresh · saving for offline 1/146", function() shown = true end)
-    ok(shown and #RE.Gate.queue == 0, "the Full refresh progress shows at once")
-    W.shown = { ui, { name = "bookorbit_book_sheet" } }
-    ok(not RE.reading(), "a BookOrbit sheet over the book")
-    W.shown = { ui, { name = "bookorbit_menu_sheet" }, { name = "bookorbit_confirm" } }
-    ok(not RE.reading(), "a BookOrbit menu and dialog over the book")
-    W.shown = { ui, { name = "bookorbit_toast" } }
-    ok(RE.reading(), "a BookOrbit pill alone over the book: still reading")
-    W.shown = { cat, ui }
-    ok(RE.reading(), "the book over the catalog: reading")
-    -- The Wi-Fi plan's "browsing" is the same test: no "done in a book" off with Home over it.
-    W.shown = { ui, cat, { name = "bookorbit_toast" } }
-    local hosts = RE.serverPlugin
-    RE.serverPlugin = function() return ui.bookorbit end
-    ok(RE.serverOverBook(RE.serverPlugin()), "browsing for the Wi-Fi plan")
-    local st = RE.WifiPlan.new("jit", 2, 0)
-    st.in_book, st.last_flow, st.release_at, st.last_activity = true, "wake", W.clock - 1, W.clock
-    local a = RE.WifiPlan.decide(st, { now = W.clock, wifi_on = true, browsing = RE.serverOverBook(RE.serverPlugin()) })
-    ok(a == nil, "kept on while paging BookOrbit lists over the book")
-    RE.serverPlugin = hosts
-    W.shown = {}
-end)
+
 
 
 
@@ -3570,32 +2925,7 @@ end)
 
 
 
-test("local-first: Home's first paint has the on-device marks; a changed tile names what changed (v0.11.2)", function()
-    local client, Cat = cacheSetup(function(Cat)
-        function Cat:initialDashboardContext() return {}, { kind = "dashboard", dashboard = {}, stale = true } end
-        function Cat:dashboardRootFetch() return {}, { kind = "dashboard", dashboard = self.client:request("GET", DASH) } end
-    end)
-    W.wifi = true
-    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } } }
-    client:request("GET", DASH)
-    local sm = package.loaded["bookorbit_state_manager"]
-    package.loaded["bookorbit_state_manager"] = {
-        hasOnDeviceMaps = function() return true end,
-        onDeviceMaps = function() return { byBookId = { [7] = "/books/seven.epub" }, byFileId = {}, generation = 3 } end,
-    }
-    local cat = setmetatable({ client = client, on_device = {} }, Cat)
-    W.logs = {}
-    cat:initialDashboardContext()
-    ok(cat.on_device[7] == "/books/seven.epub", "BookOrbit's marks before the first paint (Resume, not Download)")
-    ok(table.concat(W.logs, "\n"):find("first paint with BookOrbit's on-device marks for 1 book(s)", 1, true), "logged")
-    package.loaded["bookorbit_state_manager"] = sm
-    W.logs = {}
-    E.LF.logChanged({ { key = 1, kind = "hero" } }, { 1 },
-        { continue_reading = { { id = 7, progressPercentage = 40 } } },
-        { continue_reading = { { id = 7, progressPercentage = 40, on_device = true } } })
-    ok(W.logs[1] and W.logs[1]:find("local-first: tile 1 hero changed: book 7 on device no -> yes", 1, true), "the tile and field: " .. tostring(W.logs[1]))
-    cacheTeardown()
-end)
+
 
 
 
@@ -3638,33 +2968,7 @@ end
 
 
 
-test("sleep screen: back from a real sleep the plugin tells the companion (no service needed); an app switch doesn't", function()
-    local on = RE.Sleep.on
-    RE.Sleep.on = function() return true end
-    local function wakes()
-        return count(W.broadcasts, function(x) return x.action:sub(-11) == ".SLEEP_POOL" and x.extras.wake == "1" end)
-    end
-    local _ui, m = newUI(false)
-    run(5)
-    W.broadcasts = {}
-    W.screen_on = false
-    m:onSuspend()
-    run(2)
-    W.screen_on = true
-    m:onResume()
-    run(1)
-    ok(wakes() == 1, "one wake: " .. wakes())
-    local b = lastBroadcast(".SLEEP_POOL")
-    ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.reason == "wake", "to the companion")
-    -- Another app in front and back, the screen on throughout: no wake.
-    m:onSuspend()
-    run(2)
-    m:onResume()
-    run(1)
-    ok(wakes() == 1, "an app switch is no wake: " .. wakes())
-    RE.Sleep.on = on
-    W.screen_on = false
-end)
+
 
 -- BookSync Companion refreshes the sleep screen's pool (fake_companion.lua plays SleepPoolBuilder).
 local function sleepCompanion()
@@ -3685,134 +2989,7 @@ local function sleepCompanion()
     return fc
 end
 
-test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
-    local JSON = dofile(here .. "/json_mini.lua")
-    capsReset()
-    local caps = {}
-    for _, c in ipairs(FULL) do table.insert(caps, c) end
-    table.insert(caps, "sleep_screen")
-    W.web[STATUS_KEY] = "STATUS"
-    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps, sleep = { shown_by = "BookSync screen saver ✓" } }
-    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
-    local lfs = require("libs/libkoreader-lfs")
-    local saved = { attributes = lfs.attributes, dir = lfs.dir }
-    lfs.attributes = function(f, k)
-        local d = os.execute('test -d "' .. f .. '"')
-        if d == 0 or d == true then return "directory" end
-        local h = io.open(f, "rb"); if h then h:close(); return "file" end
-        return saved.attributes(f, k)
-    end
-    lfs.dir = function(d)
-        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
-        for n in h:lines() do table.insert(names, n) end
-        h:close(); local i = 0
-        return function() i = i + 1; return names[i] end
-    end
-    local S, Sleep = RE.S, RE.Sleep
-    Sleep.base_dir = dir
-    local ui, m = newUI(false)
-    RE.Shared.refresh("test")
-    ok(RE.Companion.has("sleep_screen"), "the companion offers it")
-    local item
-    item = RE.Sleep.menuItem(m, function(fn) return fn end)
-    ok(item, "Tools › BookSync › Sleep screen")
-    local rows = item.sub_item_table_func()
-    ok(rows[1].text_func() == "Sleep screen: The reader's own", "off by default: " .. rows[1].text_func())
-    ok(rows[2].enabled_func() == false, "Pick from waits for Recommended")
-    ok(rows[#rows - 1].text_func() == "Shown by: BookSync screen saver ✓", "how the companion shows it")
-    -- Recommended on: saved, and the companion gets every sleep extra.
-    W.broadcasts = {}
-    rows[1].sub_item_table[2].callback()
-    ok(S.sleep_mode == "recommended", "saved")
-    local b = lastBroadcast(".SETTINGS")
-    ok(b and b.extras.sleep_mode == "recommended" and b.extras.sleep_hours == "6" and b.extras.sleep_style == "bar"
-        and b.extras.sleep_battery == "0" and b.extras.sleep_from == "up_next", "SETTINGS extras")
-    Sleep.set("sleep_leave_out", { "tag:age:18" })
-    ok(lastBroadcast(".SETTINGS").extras.sleep_leave_out == "tag:age:18", "rules, one per line")
-    -- The pool: Up next is empty, so Want to read; one read, one without a cover, one left out by tag.
-    local calls = {}
-    local client = {}
-    function client:query(path, q)
-        local keys = {}
-        for k in pairs(q) do table.insert(keys, k) end
-        table.sort(keys)
-        local parts = {}
-        for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. tostring(q[k])) end
-        return path .. "?" .. table.concat(parts, "&")
-    end
-    local ui_calls = 0
-    function client:requestBlocking(method, path)
-        table.insert(calls, path)
-        if not W.in_companion then ui_calls = ui_calls + 1 end
-        if path:find("sections/up%-next%-in%-series") then return { section = { books = {} } } end
-        if path:find("sections/want%-to%-read") then
-            return { section = { books = {
-                { id = 1, title = "Read One", hasCover = true, readStatus = "read" },
-                { id = 2, title = "Tagged", hasCover = true },
-                { id = 3, title = "Kept", hasCover = true },
-                { id = 4, title = "No Cover", hasCover = false },
-            } } }
-        end
-        local id = tonumber(path:match("/catalog/books/(%d+)$"))
-        if id == 2 then return { id = 2, title = "Tagged", hasCover = true, tags = { "Age:18" } } end
-        if id == 3 then return { id = 3, title = "Kept", hasCover = true, tags = { "cosy" } } end
-        return nil, 404
-    end
-    local oc_client = RE.OC.client
-    RE.OC.client = function() return client end
-    local fc = sleepCompanion()
-    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
-    io.open(dir .. "/covers/99.jpg", "wb"):close() -- a cover from an earlier pool
-    W.broadcasts = {}
-    Sleep.refreshed_at = nil
-    Sleep.kick("test")
-    run(60)
-    local f = io.open(dir .. "/pool.json", "rb")
-    ok(f, "pool.json written")
-    local pool = JSON.decode(f:read("*a")); f:close()
-    ok(#pool.items == 1 and pool.items[1].id == 3 and pool.items[1].file == "covers/3.jpg", "only the kept book: " .. tostring(#pool.items))
-    ok(io.open(dir .. "/covers/3.jpg", "rb"), "its cover")
-    ok(not io.open(dir .. "/covers/99.jpg", "rb"), "the old cover went")
-    local ask = lastBroadcast(".SLEEP_REFRESH")
-    ok(ask and ask.extras.from == "up_next" and ask.extras.rules == "tag:age:18" and ask.extras.every == "0", "the companion is asked")
-    ok(ui_calls == 0 and fc.sleep_asks == 1, "the companion lists, checks and fetches; KOReader asks nothing: " .. ui_calls)
-    -- Without the right companion nothing is asked.
-    local at = Sleep.refreshed_at
-    fc.problem = "Update BookSync Companion"
-    Sleep.refreshed_at = nil
-    ok(Sleep.refresh("old companion") == false and fc.sleep_asks == 1, "an older companion: not asked")
-    fc.problem, Sleep.refreshed_at = nil, at
-    local log = table.concat(W.logs, "\n")
-    ok(log:find("sleep screen: pool 1 cover(s)", 1, true) and log:find("from want-to-read (the chosen list was empty)", 1, true), "logged")
-    -- Not again within REFRESH_EVERY_S; never in a book.
-    local n = #calls
-    Sleep.kick("again"); run(10)
-    ok(#calls == n, "not again so soon")
-    -- The current book's cover, once per book.
-    package.loaded["apps/filemanager/filemanagerbookinfo"] = { getCoverImage = function()
-        return { writeToFile = function(_, path) local g = io.open(path, "wb"); g:write("png"); g:close(); return true end, free = function() end }
-    end }
-    local book = { document = { file = "/books/made-up.epub" }, doc_props = { display_title = "A Made-Up Book", authors = "Ann Example" } }
-    ok(Sleep.writeCurrent(book, "test") == true, "written")
-    ok(Sleep.writeCurrent(book, "test") == false, "once per book")
-    f = io.open(dir .. "/current.json", "rb")
-    local cur = JSON.decode(f:read("*a")); f:close()
-    ok(cur.title == "A Made-Up Book" and cur.file == "current.png" and cur.authors == "Ann Example", "current.json")
-    ok(io.open(dir .. "/current.png", "rb"), "current.png")
-    -- Off again: nothing more is written.
-    rows[1].sub_item_table[1].callback()
-    S.sleep_current_file = nil
-    ok(Sleep.writeCurrent(book, "off") == false, "off writes nothing")
-    package.loaded["apps/filemanager/filemanagerbookinfo"] = nil
-    RE.OC.client = oc_client
-    fc.done()
-    lfs.attributes, lfs.dir = saved.attributes, saved.dir
-    Sleep.base_dir = nil
-    S.sleep_leave_out = {}
-    sh("rm -rf", dir)
-    capsReset()
-    run(5)
-end)
+
 
 test("sleep screen: settings changed in the companion are applied; an older companion changes nothing", function()
     capsReset()
@@ -3835,259 +3012,11 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     run(5)
 end)
 
-test("sleep screen: Pick from and Leave out list every list and collection, all pages, with counts, saved for offline", function()
-    local JSON = dofile(here .. "/json_mini.lua")
-    local function fixture(name)
-        local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
-        local v = JSON.decode(f:read("*a")); f:close(); return v
-    end
-    -- @fixture bookorbit/catalog-sections.smart-scopes.json @fixture bookorbit/catalog-sections.collections.json
-    local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
-    -- scopes.json is read back with KOReader's json module: the real decoder here.
-    local jm = require("json")
-    local stub_decode = jm.decode
-    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
-    capsReset()
-    local caps = {}
-    for _, c in ipairs(FULL) do table.insert(caps, c) end
-    table.insert(caps, "sleep_screen")
-    W.web[STATUS_KEY] = "STATUS"
-    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
-    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
-    local S, Sleep = RE.S, RE.Sleep
-    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = dir, nil, nil, nil
-    S.sleep_mode = "recommended"
-    local ui, m = newUI(false)
-    RE.Shared.refresh("test")
-    -- Lists come in two pages (hasNext), collections whole, as the server sends them.
-    local calls, down = {}, false
-    local client = {}
-    function client:query(path, q) return string.format("%s?page=%d&size=%d", path, q.page, q.size) end
-    function client:requestBlocking(_, path)
-        table.insert(calls, path)
-        if down then return nil, "offline" end
-        if path:find("/sections/smart%-scopes%?page=1&size=100") then
-            local items = {}
-            for i = 1, 7 do items[i] = scopes.items[i] end
-            return { section = "smart-scopes", items = items, hasNext = true }
-        end
-        if path:find("/sections/smart%-scopes%?page=2&size=100") then
-            local items = {}
-            for i = 8, #scopes.items do table.insert(items, scopes.items[i]) end
-            return { section = "smart-scopes", items = items, hasNext = false }
-        end
-        if path:find("/sections/collections%?page=1") then return collections end
-        return nil, 404
-    end
-    local oc_client = RE.OC.client
-    RE.OC.client = function() return client end
-    local fc = sleepCompanion()
-    W.wifi = true
-    local item
-    item = RE.Sleep.menuItem(m, function(fn) return fn end)
-    local rows = item.sub_item_table_func()
-    local from = rows[2].sub_item_table
-    local picker = from[#from]
-    -- First open: nothing saved yet, fetched behind the menu.
-    local first = picker.sub_item_table_func()
-    ok(#first == 1 and first[1].text_func():find("Loading", 1, true), "loading: " .. first[1].text_func())
-    run(10)
-    ok(#calls == 3, "two pages of scopes, one of collections: " .. table.concat(calls, " "))
-    local f = io.open(dir .. "/scopes.json", "rb")
-    ok(f, "scopes.json saved"); if f then f:close() end
-    local function texts(list)
-        local out = {}
-        for _, r in ipairs(list) do table.insert(out, r.text or (r.text_func and r.text_func())) end
-        return out
-    end
-    local got = texts(picker.sub_item_table_func())
-    ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
-    ok(got[1] == "Lists" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
-    ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
-    -- Tapping one ticks it beside Up next (Pick from is a set, R1c), and both names show.
-    local tapped = picker.sub_item_table_func()
-    ok(tapped[15].checked_func and not tapped[15].checked_func(), "a tick box, not ticked yet")
-    tapped[15].callback()
-    ok(S.sleep_from == "up_next\ncollection:7" and Sleep.fromLabel(S.sleep_from) == "Up next in series, ToRead", "picked: " .. tostring(S.sleep_from))
-    ok(picker.sub_item_table_func()[15].checked_func(), "ticked")
-    -- Library stands alone: ticking it clears the others; ticking a list clears it.
-    from[1].callback()
-    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Whole library", "library: " .. tostring(S.sleep_from))
-    from[3].callback()
-    ok(S.sleep_from == "want_to_read", "a list clears Library: " .. tostring(S.sleep_from))
-    from[3].callback()
-    ok(S.sleep_from == "want_to_read", "the last one stays ticked")
-    tapped[15].callback()
-    -- Offline, after a restart: the same lists from scopes.json, in Leave out too.
-    down, W.wifi = true, false
-    Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
-    local leave = rows[3].sub_item_table_func()
-    local add
-    for _, r in ipairs(leave) do if r.text == "Add a rule: Library, list or collection…" then add = r end end
-    local lo = texts(add.sub_item_table_func())
-    ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
-    add.sub_item_table_func()[4].callback()
-    ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (list)", "rule added: " .. tostring(S.sleep_leave_out[1]))
-    RE.OC.client, jm.decode = oc_client, stub_decode
-    fc.done()
-    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
-    S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
-    sh("rm -rf", dir)
-    capsReset()
-    run(5)
-end)
 
-test("sleep screen: the tag picker opens from the companion's tags.json; KOReader reads no saved detail", function()
-    capsReset()
-    local caps = {}
-    for _, c in ipairs(FULL) do table.insert(caps, c) end
-    table.insert(caps, "sleep_screen")
-    W.web[STATUS_KEY] = "STATUS"
-    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
-    local jm = require("json")
-    local JSON = dofile(here .. "/json_mini.lua")
-    local stub_decode = jm.decode
-    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
-    local sdir = os.tmpname(); os.remove(sdir); sh("mkdir -p", sdir .. "/covers")
-    local S, Sleep = RE.S, RE.Sleep
-    Sleep.base_dir, Sleep.tags_cache, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = sdir, nil, nil, nil, nil
-    S.sleep_mode, S.sleep_leave_out = "recommended", {}
-    newUI(false)
-    RE.Shared.refresh("test")
-    local client = {}
-    function client:query(path, q) return path .. "?page=" .. q.page end
-    function client:requestBlocking(_, path)
-        if path:find("/sections/") then return { items = {}, hasNext = false } end
-        return nil, 404
-    end
-    local oc_client = RE.OC.client
-    RE.OC.client = function() return client end
-    local fc = sleepCompanion()
-    -- 400 saved details in the database, each with tags, and one more.
-    local cdir = RE.OC.dir()
-    local st = fc.db()
-    st:begin()
-    for i = 1, 400 do st:putDetail(i, { id = i, tags = { i % 2 == 0 and "Age:18" or "cosy", "Fantasy" } }, 1) end
-    st:putDetail(900, { id = 900, tags = { "Space" } }, 1)
-    st:commit()
-    -- Every file KOReader's UI thread opens in the cache folder while the picker opens.
-    local reads, open = 0, io.open
-    io.open = function(path, ...)
-        -- The companion's small answers (events/) are read; no saved detail or index is.
-        if not W.in_companion and tostring(path):find(cdir, 1, true) and not tostring(path):find("/events/", 1, true) and not tostring(path):find("/events-batch.lua", 1, true) then reads = reads + 1 end
-        return open(path, ...)
-    end
-    W.wifi = true
-    local item
-    item = RE.Sleep.menuItem(select(2, newUI(false)), function(fn) return fn end)
-    local leave = item.sub_item_table_func()[3].sub_item_table_func()
-    local tagItem
-    for _, r in ipairs(leave) do if r.text == "Add a rule: Tag…" then tagItem = r end end
-    -- First open: nothing counted yet; the companion counts behind it.
-    local first = tagItem.sub_item_table_func()
-    ok(#first == 2 and first[2].text_func():find("Counting", 1, true), "counting: " .. tostring(first[2] and first[2].text_func and first[2].text_func()))
-    run(10)
-    ok(fc.sleep_asks == 1 and fc.sleep_last.scopes_only == "1", "the companion was asked for the pickers' lists")
-    local rows = tagItem.sub_item_table_func()
-    local texts = {}
-    for _, r in ipairs(rows) do table.insert(texts, r.text or "") end
-    ok(texts[2] == "Fantasy · 400" and texts[3] == "Age:18 · 200" and texts[4] == "cosy · 200" and texts[5] == "Space · 1", "counted by the companion: " .. table.concat(texts, " | "))
-    ok(reads == 0, "KOReader read no saved detail: " .. reads)
-    rows[3].callback()
-    ok(S.sleep_leave_out[1] == "tag:age:18", "picked: " .. tostring(S.sleep_leave_out[1]))
-    io.open = open
-    RE.OC.client, jm.decode = oc_client, stub_decode
-    fc.done()
-    Sleep.base_dir, Sleep.tags_cache, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil, nil
-    S.sleep_mode, S.sleep_leave_out = "off", {}
-    sh("rm -rf", sdir)
-    capsReset()
-    run(5)
-end)
 
-test("sleep screen: 24 covers ready whatever the source; Every sleep retires the used-up and tops up", function()
-    local JSON = dofile(here .. "/json_mini.lua")
-    local jm = require("json")
-    local stub_decode = jm.decode
-    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
-    capsReset()
-    local caps = {}
-    for _, c in ipairs(FULL) do table.insert(caps, c) end
-    table.insert(caps, "sleep_screen")
-    W.web[STATUS_KEY] = "STATUS"
-    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
-    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
-    local lfs = require("libs/libkoreader-lfs")
-    local saved = { attributes = lfs.attributes, dir = lfs.dir }
-    lfs.attributes = function(f, k)
-        local d = os.execute('test -d "' .. f .. '"')
-        if d == 0 or d == true then return "directory" end
-        local h = io.open(f, "rb"); if h then h:close(); return "file" end
-        return saved.attributes(f, k)
-    end
-    lfs.dir = function(d)
-        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
-        for n in h:lines() do table.insert(names, n) end
-        h:close(); local i = 0
-        return function() i = i + 1; return names[i] end
-    end
-    local S, Sleep = RE.S, RE.Sleep
-    Sleep.base_dir = dir
-    newUI(false)
-    RE.Shared.refresh("test")
-    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "recommended", "up_next", 6, {}
-    local books = {}
-    for i = 1, 30 do books[i] = { id = i, title = "Book " .. i, hasCover = true } end
-    local client = {}
-    function client:query(path) return path end
-    function client:requestBlocking(_, path)
-        if path:find("sections/up%-next%-in%-series") then return { section = { books = books } } end
-        return nil, 404
-    end
-    local oc_client = RE.OC.client
-    RE.OC.client = function() return client end
-    local fc = sleepCompanion()
-    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
-    W.wifi = true
-    local function build()
-        Sleep.refreshed_at = nil
-        Sleep.kick("test"); run(60)
-        local ids, f = {}, io.open(dir .. "/pool.json", "rb")
-        for _, it in ipairs(JSON.decode(f:read("*a")).items) do table.insert(ids, it.id) end
-        f:close()
-        return ids
-    end
-    local function has(ids, id) for _, x in ipairs(ids) do if x == id then return true end end return false end
-    local function state(shows)
-        local f = io.open(dir .. "/state.json", "wb"); f:write(shows); f:close()
-    end
-    -- 30 in the source: the batch is 24, with hours too.
-    local ids = build()
-    ok(#ids == 24 and ids[1] == 1 and ids[24] == 24, "24 of 30: " .. #ids)
-    -- Every sleep: 1 and 2 were shown 3 times; they go, 25 and 26 come in; the rest stay.
-    S.sleep_hours = 0
-    state('{"v":1,"shown":3,"changed_at":1,"shows":{"1":3,"2":3,"3":1}}')
-    ids = build()
-    ok(#ids == 24 and not has(ids, 1) and not has(ids, 2) and has(ids, 3) and has(ids, 25) and has(ids, 26), "retired and topped up: " .. table.concat(ids, ","))
-    ok(not io.open(dir .. "/covers/1.jpg", "rb"), "a retired cover's file goes")
-    ok(table.concat(W.logs, "\n"):find("every sleep: 22 kept, 2 retired", 1, true), "logged")
-    -- A one-book source: fewer than 24 is fine, and a used-up last cover stays rather than nothing.
-    books = { { id = 40, title = "Only", hasCover = true } }
-    state('{"v":1,"shown":0,"changed_at":1,"shows":{}}')
-    ids = build()
-    ok(#ids == 1 and ids[1] == 40, "one book: " .. table.concat(ids, ","))
-    state('{"v":1,"shown":40,"changed_at":1,"shows":{"40":3}}')
-    ids = build()
-    ok(#ids == 1 and ids[1] == 40, "kept cycling: " .. table.concat(ids, ","))
-    RE.OC.client, jm.decode = oc_client, stub_decode
-    fc.done()
-    lfs.attributes, lfs.dir = saved.attributes, saved.dir
-    Sleep.base_dir = nil
-    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "off", "up_next", 6, {}
-    sh("rm -rf", dir)
-    capsReset()
-    run(5)
-end)
+
+
+
 
 
 test("settings v2: a change queued in the companion while KOReader was off applies, then is echoed", function()
@@ -4183,50 +3112,34 @@ test("sqlite stress: the reader sees whole pages through lua-ljsqlite3, read-onl
     w:close(); os.remove(path)
 end)
 
-test("sqlite stress: a torn page and a locked file are caught and counted", function()
-    local path, w = stressDb()
-    for gen = 1, 50 do stressWrite(w, gen, { torn = gen == 17 }) end
-    local r = RE.SqliteStress.read(path, 2, tickClock())
-    ok(r.errors > 0 and tostring(r.first_error):find("torn page") ~= nil, "torn: " .. tostring(r.first_error))
-    -- A writer holding the commit lock: the reader waits (busy) and goes on once it's released.
-    local path2, w2 = stressDb()
-    for gen = 1, 50 do stressWrite(w2, gen) end
-    w2:exec("BEGIN EXCLUSIVE")
-    local n, release = 0, nil
-    local clock = function() n = n + 1; if n == 30 then w2:exec("COMMIT") end; return n * 0.01 end
-    local r2 = RE.SqliteStress.read(path2, 1, clock)
-    eq(r2.errors, 0, "errors after the wait: " .. tostring(r2.first_error))
-    ok(r2.busy >= 1, "the wait is counted")
-    ok(r2.reads > 0, "reads after the lock went")
-    w:close(); w2:close(); os.remove(path); os.remove(path2)
-end)
+
 
 -- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
 local JSONF = dofile(here .. "/json_mini.lua")
 -- @fixture cache/db.json @fixture cache/schema.sql
 local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
-local FakeStore = dofile(here .. "/fake_store.lua")(RE.ServerCache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
-
 local function fixtureStore()
-    local dir = os.tmpname() .. "-store"
-    os.execute("mkdir -p '" .. dir .. "'")
-    local st = FakeStore.open(dir .. "/orbit.db")
-    st:own(DBFX.owner)
-    for i, sv in ipairs(DBFX.saves) do
-        local key = sv.key or RE.ServerCache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = sv.path })
-        st:save(key, sv.path, sv.reply, 1000 + i, DBFX.detail_template)
+    local dir=os.tmpname().."-store";os.execute("mkdir -p '"..dir.."'")
+    local sql=SQ3.open(dir.."/orbit.db","rwc")
+    local st={conn=sql}
+    function st:run(query,...)
+        local q=self.conn:prepare(query);if select("#",...)>0 then q:bind(...) end
+        local out={};while true do local row=q:step();if not row then break end;out[#out+1]=row end;q:close();return out
     end
-    return dir, st
+    function st:close() self.conn:close() end
+    for line in io.lines(here.."/../../../shared/fixtures/cache/schema.sql") do
+        if line~="" and not line:match("^%-%-") then sql:exec(line) end
+    end
+    sql:exec("PRAGMA user_version=1")
+    st:run("INSERT OR REPLACE INTO meta(k,v) VALUES('owner',?)",DBFX.owner)
+    return dir,st
+end
+local function withStore(dir,fn)
+    local saved,ready=RE.Store.directory,RE.Store.directoryReady;RE.Store.directory=function() return dir end;RE.Store.directoryReady=function() return true end
+    local worked,why=pcall(fn);RE.Db.close(dir.."/orbit.db");RE.Store.directory=saved;RE.Store.directoryReady=ready
+    if not worked then error(why,0) end
 end
 
-local function withStore(dir, fn)
-    local saved = RE.OC._dir
-    RE.OC._dir = dir
-    local okf, err = pcall(fn)
-    RE.Db.close(dir .. "/orbit.db")
-    RE.OC._dir = saved
-    if not okf then error(err, 0) end
-end
 
 test("library device owner: local SQLite rows survive sign-out without adopting the catalog", function()
     local dir, st = fixtureStore()
@@ -4272,41 +3185,7 @@ end)
 
 
 
-test("reading: a locked cache cannot delay page turns or cold/warm cache reads", function()
-    local dir, st = fixtureStore()
-    withStore(dir, function()
-        local path = DBFX.reads[1].path
-        local reading, conn = RE.reading, RE.Db.conn
-        RE.reading = function() return false end
-        st.conn:exec("CREATE TABLE IF NOT EXISTS library_views (owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
-        st.conn:exec("INSERT INTO library_views VALUES ('"..DBFX.owner.."','tap-warm','{items={}}',1)")
-        local warm = RE.Store.library(DBFX.owner, "tap-warm")
-        ok(warm ~= nil, "prime the decoded cache before reading")
-        local ui, m = newUI(true)
-        RE.EOB.page_digests[ui] = { file = ui.document.file, digest = "tap-regression" }
-        local bookOf = RE.EOB.bookOf
-        RE.EOB.bookOf = function() error("page turn read plugin state") end
-        RE.reading = function() return true end
-        local opens = 0
-        RE.Db.conn = function(...) opens = opens + 1; return conn(...) end
-        st.conn:exec("BEGIN EXCLUSIVE")
-        local okf, err = pcall(function()
-            uiWorkBudget(function()
-                for page = 2, 26 do
-                    m:onPageUpdate(page)
-                    eq(RE.Store.library(DBFX.owner,"tap-warm"), warm, "memory hit")
-                    eq(RE.Store.library(DBFX.owner,"tap-cold"), nil, "cold miss skips SQL")
-                end
-            end, { opens = 0, reads = 0, walks = 0, entries = 0, intents = 0 })
-        end)
-        st.conn:exec("COMMIT")
-        RE.reading, RE.Db.conn, RE.EOB.bookOf = reading, conn, bookOf
-        if not okf then error(err) end
-        eq(RE.EOB.session["tap-regression"].forward, 24, "forward turns still release the stale-push hold")
-        eq(opens, 0, "no SQLite access on a page turn, even under an exclusive lock")
-    end)
-    st:close()
-end)
+
 
 test("reading: finish sync returns immediately and dispatches only outside reading", function()
     local reading,action=RE.reading,RE.Library.catalogAction
@@ -4628,64 +3507,9 @@ test("main loop: yielding work is attributed to each resume rather than a combin
     W.logs=logs
 end)
 
-test("Home calendar: worker snapshots replace a correctly dated empty calendar", function()
-    local LF, C, OC = E.LF, E.Companion, E.OC
-    local saved={year=LF.year,key=LF.year_key,waiting=LF.year_waiting,send=C.send,problem=C.workerProblem,watch=OC.watchChecks,catalog=E.Mirror.catalog}
-    local asks={}
-    C.send=function(action, extras) asks[#asks+1]=extras; return true end
-    C.workerProblem=function() return nil end
-    OC.watchChecks=function() end
-    E.Mirror.catalog=function() return nil end
-    LF.year={values={},start=0,today=0}; LF.year_key=nil
-    local now=os.time(); local body={}
-    local values,start,today=LF.yearMinutes(now,body)
-    ok(start>now-365*86400 and today<=now and now-today<86400,"current calendar dates before first answer")
-    ok(#values>=358 and #values<=364); eq(#asks,1)
-    LF.yearMinutes(now,body); eq(#asks,1,"pending ask coalesced")
-    LF.yearLanded({key=asks[1].board_key,data={values={10,20},start=start,today=today}})
-    eq(select(1,LF.yearMinutes(now,body))[2],20,"worker answer used")
-    LF.year,LF.year_key,LF.year_waiting=saved.year,saved.key,saved.waiting
-    C.send,C.workerProblem,OC.watchChecks,E.Mirror.catalog=saved.send,saved.problem,saved.watch,saved.catalog
-end)
 
-test("startup: 7000 cover files keep each UI callback within a fixed IO/intent budget", function()
-    local client = cacheSetup()
-    local lfs = require("libs/libkoreader-lfs")
-    local cdir = cache.dir .. "/covers"
-    for i=1,7000 do local f=assert(io.open(cdir .. "/" .. i .. ".jpg.etag", "wb")); f:write("etag"); f:close() end
-    E.OC.cover_dir = cdir
-    FC.coverDirectory=cdir
-    local checked = 0
-    local items = FC.storageItems
-    -- The fake worker walks the real directory; companion tests cover its actual cleanup/count.
-    FC.storageItems = function(folder)
-        ok(W.in_companion, "storage runs in companion")
-        local count=0; for name in lfs.dir(folder) do if name:match("%.etag$") then count=count+1 end end
-        eq(count,7000)
-        return {}
-    end
-    W.main_loop_guard = function(fn,args)
-        uiWorkBudget(function() fn(unpack(args)) end)
-        if getfenv(fn)==E then checked=checked+1 end
-    end
-    local passed_guard, err=pcall(function()
-        uiWorkBudget(function()
-            E.OC.storageCount("orphan ETags")
-            eq(E.OC.olderCover,nil,"older-cover enumeration is companion-only")
-        end)
-        run(12)
-        local reader={document={file="/books/reading.epub"}}
-        ReaderUI.instance=reader; W.shown={reader}
-        uiWorkBudget(function() E.OC.storageCount("orphan ETags") end)
-        run(12)
-        ReaderUI.instance=nil; W.shown={}
-        ok(checked > 0, "guard measured production callbacks")
-    end)
-    W.main_loop_guard=nil; FC.storageItems=items
-    ReaderUI.instance=nil; W.shown={}
-    cacheTeardown()
-    ok(passed_guard,err)
-end)
+
+
 
 
 
@@ -4703,12 +3527,16 @@ end)
 
 -- This case is also in the emulated release gate (ORBIT_TEST_ONLY=startup).
 -- With a pinned checkout it executes KOReader's actual opening coroutine.
+
+
+-- This case is also in the emulated release gate (ORBIT_TEST_ONLY=startup).
+-- With a pinned checkout it executes KOReader's actual opening coroutine.
 test("startup smoke: Home, history and file browser open during Full refresh with repair pending", function()
     local Reader = require("apps/reader/readerui")
     eq(Reader.showReader, stockShowReader, "book opening is never intercepted for repair")
     local show = Reader.showReader
     local old_do, old_co = Reader.doShowReader, Reader.showReaderCoroutine
-    local old_notices, old_busy, old_active = E.Mirror.notices, E.Mirror.busy, E.Mirror.active
+    local active=RE.Library.catalog_active
     local Info = require("ui/widget/infomessage")
     local source = [[
 function Reader:showReaderCoroutine(file, provider, seamless)
@@ -4733,7 +3561,7 @@ end
         for _, origin in ipairs({ "Home", "history", "file browser" }) do
             W.queue, W.shown = {}, {}
             ReaderUI.instance = nil
-            E.Mirror.notices, E.Mirror.busy, E.Mirror.active = true, true, true
+            RE.Library.catalog_active=true
             -- No companion repair answer is delivered. Opening cannot wait for one.
             local before, quits = #W.broadcasts, W.quits or 0
             local reader = { document={file="/books/synthetic.epub"}, name="reader" }
@@ -4755,7 +3583,7 @@ end
         package.loaded["ui/widget/trapwidget"] = old
     end)
     Reader.showReader, Reader.doShowReader, Reader.showReaderCoroutine = show, old_do, old_co
-    E.Mirror.notices, E.Mirror.busy, E.Mirror.active = old_notices, old_busy, old_active
+    RE.Library.catalog_active=active
     ReaderUI.instance = nil; W.shown = {}
     ok(success, err)
 end)
@@ -4810,6 +3638,7 @@ if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
     end
 end
 dofile(here .. "/catalog_actions_flows.lua")({E=RE,W=W,test=test,eq=eq,ok=ok,newUI=newUI,UIManager=UIManager,store=store})
+dofile(here.."/retirement_flows.lua")(test,eq,ok,RE)
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

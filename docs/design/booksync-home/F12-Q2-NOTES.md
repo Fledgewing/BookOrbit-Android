@@ -1,9 +1,9 @@
 # F12-Q2 catalog transport migration
 
-Status: **covers and mirror/store cutovers implemented; remaining catalog cutover incomplete**. The legacy
-Lua catalog adapter and its callers are still present. The maintainer authorised
-merging this prerequisite as step 1 of 5; it does not complete the server-free
-plugin slice.
+Status: **Android catalog cutover implemented, including the final Lua boundary guard**.
+The five staged PRs move cover, mirror/store, copy, grouping, recommendation and finish work
+behind Library and the companion. No plugin Lua adapter or composition root is exempt.
+Xteink enforcement remains deferred under the maintainer's Android-first ruling.
 
 The library now exposes an explicit `acquireCover(key, callback)` command and a
 one-row `cover(key)` snapshot. `ServerAdapter.acquireCover` resolves an opaque key
@@ -194,3 +194,48 @@ warms one identity row while reading. Native catalog downloads use the companion
 verified cache hits reuse the file and native cache linking is replayable after a restart.
 Saved recommendation choices feed the owned sync settings source. Tests cover the ownership
 handoff, offline match/finish identity, pending native links and native download suppression.
+
+## Step 5: enforce every Lua path
+
+`tools/test/test-server-boundary.py` checks every production plugin Lua file, including
+nested `ko/server/`, `logic/server/`, the loader and the former sync paths. There is no file
+skip list, baseline, suppression annotation or vendor-name masking for Lua. The guard's
+negative matrix covers both vendor names, routes, HTTP imports/clients and subprocess
+entry points under invented adapter paths. The five F12-Q files already retired, so they
+need no exception. Comments remain documentation, not executable protocol.
+
+The former root facade and `local_view.lua` are deleted, along with unused Lua catalog
+policy modules. No vendor-shaped display records are reconstructed in Lua. Home, lists,
+Details, group navigation and account setup use the existing owned UI and bounded library
+snapshots. Native KOReader opening, rotation, reading gates and the owned single sync writer
+remain in place. The release test still executes the pinned native opening coroutine while
+Full refresh is active; it never intercepts book opening for repair.
+
+Retirement is necessary before any old client instance starts. `ConnectorPlugin` supplies
+one static, credential-free descriptor through the trusted `LIBRARY_BOOTSTRAP` provider.
+`ko/library_bootstrap.lua` verifies the companion signer, version handshake and one-row /
+16 KiB / one-round-trip budget; `ko/retirement.lua` replaces complete legacy class/API methods
+without invoking them. Missing metadata, a late instance or an unknown startup seam leaves
+`SyncRetirement.safe=false`, preserving the existing five-phase import gate. Native defaults,
+setting keys and old gesture aliases are opaque adapter metadata; configured gestures now
+reach owned Library sync and ReaderPanel actions. No encoding or concatenation hides vendor
+names in Lua source.
+
+Sleep refresh sends neutral settings only. Its existing adapter worker resolves the encrypted
+login itself and does not resurrect a removed adopted login. Copy sidecar/statistics repair
+and the local ledger already commit in the companion before the native event is acknowledged;
+finish intent is already in native reader settings and the owned journal. No retired native
+cache or state writer is reactivated merely to acknowledge an event.
+
+Reuse evidence: `ko/home_host.lua:339` (owned Home), `ko/library.lua:163` (Library command/read
+boundary), `ko/store.lua:66` (bounded local persistence), `ko/base.lua:48` (native hook chain),
+`MirrorLogic.kt:116` (window identities), `CacheStore.kt:240` (saved window reads), and
+`CatalogWorkflow.kt:268` (owned file identity). Historical mirror slicing and section fixtures
+now exercise those companion implementations in `RetiredCatalogFixtureTest.kt`; existing
+workflow/projection tests own catalog policy. Retired native UI tests are replaced by owned
+Home, generic retirement, bounded SQLite and companion tests, rather than testing dead code.
+
+Every screen/widget retains its budget; no new screen is introduced. Bootstrap has its own
+startup-call budget and timing span. The plugin observes native network work at KOReader's
+NetworkMgr seam and imports no HTTP client. Device timing targets still require maintainer
+confirmation. No devices, adb, releases, tags or firmware source changes are part of this slice.

@@ -100,7 +100,6 @@ function WifiPlan.wifiOff(st)
 end
 
 -- ctx = { now, wifi_on, busy, screen_off, browsing }. Returns action ("off" | nil), reason, force.
--- browsing: BookOrbit's catalog is on top (Home opens over the book): not reading, so the
 -- "done in a book" offs wait; just in time's idle rule still applies.
 -- force: off_reading's book-open off, which applies even to Wi-Fi turned on by hand.
 -- Never off while a flow holds the network, the plugin or a download is busy, or (except

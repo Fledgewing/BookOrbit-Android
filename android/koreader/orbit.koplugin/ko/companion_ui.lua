@@ -21,10 +21,8 @@ function OrbitAndroid:onOrbitOpenCompanion()
     return true
 end
 
--- Home from BookOrbit home: the companion's launcher page (as on a double Home). A companion
 -- older than 0.2.1 has no SHOW_LAUNCHER; its apps page stands in.
 function OrbitAndroid:openCompanionHome()
-    -- Without the companion as Home (Add-on, plugin only): BookOrbit home is the top; Android's
     -- Home key goes to the reader's own launcher (docs/design/addon-mode.md §6.4).
     if not Companion.has("home") then
         log("home: the companion isn't Home here; staying on library home")

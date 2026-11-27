@@ -9,7 +9,6 @@
 -- timeout) and never sees half of one.
 --
 -- A connection belongs to the process that opened it: SQLite connections must not cross fork(),
--- and the BookOrbit plugin reads its catalog in forked children. A child opens its own and leaves
 -- the inherited one alone. A file replaced under us (the companion recreated it, or the swap
 -- fallback renamed a new one in) has another inode: the next read reopens.
 ---------------------------------------------------------------------------------------------

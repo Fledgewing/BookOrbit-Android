@@ -53,9 +53,9 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   The interface is introduced in 0.12 ([BookSync Home's owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)).
 
 - **Server adapters own protocol.** Android endpoint paths, authentication, upstream transport primitives, backend JSON and
-  backend terms live only in `server/bookorbit` (Kotlin) and `ko/server/bookorbit` /
-  `logic/server/bookorbit` (Lua compatibility). Only `ServerAdapters.kt` and the plugin loader
-  wire implementations. Direct legacy Lua globals are not an interface: use Library or the
+  backend terms live only in the companion's `server/bookorbit` package (Kotlin).
+  Android plugin Lua has no server adapter exemption. `ServerAdapters.kt` wires protocol
+  implementations; the plugin loader binds only neutral local retirement metadata. Direct legacy Lua globals are not an interface: use Library or the
   reviewed Server facade; local file IO belongs to generic Store. UI uses the neutral
   library/read model and capability flags. Run
   `python3 tools/test/test-server-boundary.py`; no baseline, suppression or skip list is allowed.
@@ -321,3 +321,9 @@ Device-local library projections use their own reserved owner without changing c
 ownership. They inherit the same screen/widget row, byte and one-batch limits; folder and
 sidecar work stays on the companion. Login adoption checkpoints secrets and its migration
 marker together in the existing encrypted vault; never activate a second lifecycle writer.
+
+Android plugin Lua has no adapter-directory or composition-root exemption: no server routes,
+HTTP clients or vendor identifiers. Legacy class retirement uses one bounded local Library
+bootstrap descriptor (one row, 16 KiB, one round-trip, zero network/subprocesses) before instances
+start; a missing, late or mismatched companion never claims sync ownership. Retirement metadata
+and native setting/gesture identifiers are supplied by the companion adapter, never encoded in Lua.

@@ -65,6 +65,13 @@ class CatalogWorkflowTest {
             catch(_:IllegalArgumentException) { }
         } finally { outside.delete() }
     }
+    @Test fun offlineFinishAndUndoImmediatelyPatchTheOwnedCatalogWithoutNetwork()=World().use { w ->
+        w.reading=true;w.mark()
+        assertEquals("read",(w.worker.store.detail(7)!!.first as Map<*,*>)["readStatus"])
+        w.run("finish.mark",mapOf("path" to w.old.path,"document" to CatalogWorkflow.partial(w.old),"complete" to false,"percentage" to .9))
+        assertEquals("reading",(w.worker.store.detail(7)!!.first as Map<*,*>)["readStatus"])
+        assertTrue(w.calls.isEmpty());assertTrue(w.jobs().isEmpty())
+    }
     @Test fun nativeRecommendationLabelsAreProjectedAndAllEightRowsFitTheBudget() {
         val definitions=RecommendedSettings.items
         val observations=definitions.associate { it["id"] as String to mapOf("available" to true,"current" to it["ours"]) }

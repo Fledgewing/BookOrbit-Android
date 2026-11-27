@@ -217,7 +217,6 @@ end
 -- nothing heavy runs in KOReader either (no mirror, no background checks).
 -- The plugin and the companion ship together (docs/design/companion-worker.md "Required
 -- companion"): nil when the companion of this plugin's own version is there, else what to do.
--- purpose: what it is needed for (default "to save BookOrbit for offline").
 function Companion.workerProblem(purpose)
     purpose = purpose or _("to save library for offline")
     local st = Companion.state()
@@ -250,7 +249,6 @@ request_seq = 0
 
 -- One command, through the companion's caller-checked call (android/docs/INTERFACE.md). Only
 -- to the companion signed by BookSync's release key (Companion.state), so a look-alike app never
--- gets a command or the BookOrbit login some carry.
 function Companion.send(action, extras)
     extras = extras or {}
     local short = action:match("[^.]+$")
@@ -330,3 +328,5 @@ function Companion.status()
 end
 
 ---------------------------------------------------------------------------------------------
+
+Companion.LIBRARY_BOOTSTRAP=Companion.PACKAGE..".call.LIBRARY_BOOTSTRAP"

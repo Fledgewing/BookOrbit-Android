@@ -6,7 +6,6 @@
 -- Decisions taken on plugin state, kept pure so they can be tested.
 Plan = {}
 
--- Strategy values from bookorbit main.lua:56-60.
 Plan.STRATEGY = { PROMPT = 1, SILENT = 2, DISABLE = 3 }
 
 -- While waiting for the plugin's lifecycle outbox after a sleep sync.
@@ -22,11 +21,8 @@ function Plan.outboxVerdict(o)
     return "wait"
 end
 
--- Sync while reading: what to do once the plugin has refreshed BookOrbit's position
 -- (fetchRemoteProgress, which never moves the reader or prompts).
---   has_remote: BookOrbit has a position for this book
 --   same_place / remote_newer: the plugin's own isSamePlace / remoteProgressIsNewer
---   forward: the plugin's "BookOrbit is further ahead" strategy
 -- Returns "push", "pull" or "none". Never "prompt": a PROMPT strategy waits for the next
 -- wake or book open, so nothing interrupts the page.
 function Plan.readingAction(o)

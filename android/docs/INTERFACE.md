@@ -591,3 +591,13 @@ contains decisions, compare-before-write operations, backup/Undo state, labels a
 Only KOReader applies native settings; the companion writes `orbit-recommended.json` for its
 review page. Review paints read the lifecycle-cached library snapshot with zero round-trips.
 Small queue checkpoints remain available while reading; background transfers pause.
+
+### Local startup retirement (0.12, F12-Q2 step 5)
+
+`LIBRARY_BOOTSTRAP` is a trusted, local provider read before plugin instances start. It accepts
+`patch_version` and refuses a different companion version. Its one static row is at most 16 KiB;
+no network, file scans or subprocesses run. The adapter supplies opaque legacy class/module,
+setting and gesture identifiers. Lua only disables old methods and preserves native scalar
+settings. A late, absent or malformed descriptor cannot authorize the owned sync writer.
+Home/account/catalog UI uses the owned Library surfaces. `SLEEP_REFRESH` carries neutral
+settings only; the companion adapter resolves its login and preserves explicit login removal.

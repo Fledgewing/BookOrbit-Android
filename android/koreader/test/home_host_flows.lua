@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,news=E.S.news_012_pending,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -61,20 +61,50 @@ return function(test,eq,ok,E,W,Widget)
         end,decode=function(raw) return E.Layout.copy(records[raw]) end} end
         E.Store.readFile=function(path) return files[path] end
         E.Store.writeFile=function(path,raw) files[path]=raw; return true end
-        W.shown={}
+        W.shown={};E.S.news_012_pending=false
         local success,err=pcall(fn,batches,reads,U)
         if E.HomeHost.active then E.HomeHost.active:onCloseWidget() end
         E.LibraryAdapter,E.HomeWidgets._ui,E.S.home_layout,E.S.home_screen=saved.adapter,saved.ui,saved.layout,saved.screen
         E.Device.screen.scaleBySize,W.shown,Widget.free,Widget.paintTo,E.require=saved.scale,saved.shown,saved.free,saved.paint,saved.require
         E.HomeEditor.codec,E.HomeEditor.path,E.HomeEditor.loaded=saved.codec,saved.path,saved.loaded
         E.Library.open,E.ReaderPanel=saved.open,saved.panel
-        E.HomeEditor.save=saved.save
-        E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
+        E.HomeEditor.save=saved.save;E.S.news_012_pending=saved.news
+        E.liveUI,E.Wifi.state,E.FinishUI.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
         E.Shared.pin_locked,E.Shared.refresh=saved.pin,saved.refresh
         E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
+    test("owned Home: the default repeated Home returns to the open book",function() withHost(function()
+        E.S.home_screen="booksync"
+        local ui={document={file="/fixture/current.epub"}};E.liveUI=function() return ui end
+        local controller=setmetatable({ui=ui,openCompanionHome=function() error("default Home opened the companion") end},{__index=E.OrbitAndroid})
+        controller:smartHome("command",nil,"smart");local host=E.HomeHost.active
+        eq(W.shown[#W.shown],host)
+        controller:smartHome("command",nil,"smart")
+        for _,w in ipairs(W.shown) do ok(w~=host,"Home closed back to the current book") end
+        eq(ui.document.file,"/fixture/current.epub");eq(E.reading(),true)
+    end) end)
+    test("owned Home: legacy choice cycles Home, companion and the current book",function() withHost(function()
+        E.S.home_screen="server-home"
+        local ui={document={file="/fixture/current.epub"}}
+        E.liveUI=function() return ui end
+        local opened=0
+        local controller=setmetatable({ui=ui,openCompanionHome=function() opened=opened+1;return true end},{__index=E.OrbitAndroid})
+        ok(controller:smartHome("command",nil,"smart"));local host=E.HomeHost.active
+        ok(host);eq(E.reading(),false)
+        ok(controller:smartHome("command",nil,"smart"));eq(opened,1)
+        ok(controller:smartHome("command","other_app","smart"));eq(W.shown[#W.shown],nil)
+        eq(ui.document.file,"/fixture/current.epub");eq(E.reading(),true)
+    end) end)
+    test("owned Home: list and Series return through the owned host with no native catalog",function() withHost(function()
+        local ui={document={file="/fixture/current.epub"}};E.liveUI=function() return ui end
+        local controller=setmetatable({ui=ui},{__index=E.OrbitAndroid})
+        controller:onOrbitGoHome();local host=E.HomeHost.active
+        host:showList("All books","all",{});ok(host.list_layout)
+        controller:smartHome("command",nil,"smart");eq(host.list_layout,nil)
+        eq(E.HomeHost.active,host);eq(ui.document.file,"/fixture/current.epub")
+    end) end)
     dofile((arg[0]:match("^(.*)/") or ".").."/series_flows.lua")(test,eq,ok,E,W,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
@@ -429,7 +459,7 @@ return function(test,eq,ok,E,W,Widget)
             local reader={document={}}
             E.liveUI=function() return reader end
             E.Wifi.state=function() return {foreground=true} end
-            E.EOB.sheet=nil
+            E.FinishUI.sheet=nil
             W.shown={reader,h}
             eq(E.reading(),false)
             local read=E.LibraryAdapter.read
@@ -460,7 +490,7 @@ return function(test,eq,ok,E,W,Widget)
             local reader={document={}}
             E.liveUI=function() return reader end
             E.Wifi.state=function() return {foreground=true} end
-            E.EOB.sheet=nil
+            E.FinishUI.sheet=nil
             W.shown={reader,h}
             E.Library.open=function() return false end
             E.ReaderPanel={details=function(key)

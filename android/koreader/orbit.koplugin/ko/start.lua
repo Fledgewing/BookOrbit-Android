@@ -21,7 +21,6 @@ function OrbitAndroid:onResume()
     end
     log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
     Clicks.install("resume")
-    -- Back in front and not in a book (file browser, BookOrbit Home): what waited shows now.
     UIManager:scheduleIn(2, function() Gate.drain("resume") end)
     UIManager:scheduleIn(0.3, function()
         if Library then Library.accountReturned() end
@@ -29,7 +28,6 @@ function OrbitAndroid:onResume()
         Wifi.applySettings("resume")
         self:checkCommand("resume")
         self:maybeRestart("check")
-        -- After checkCommand: a Home command moves to BookOrbit home first (finishHome checks too).
         self:maybeSetupPrompt("resume")
         -- Also after "home": the closed book's sync needs the network.
         self:wakeFlow("wake")

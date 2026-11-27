@@ -33,12 +33,6 @@ function FinishUI.leaveForHome(ui)
     end
     return had
 end
-function FinishUI.hold(digest,fraction,status)
-    if status~="complete" or type(fraction)~="number" then return false end
-    local j=FinishUI.jobs[digest];local s=FinishUI.session[digest] or {}
-    local final=j and j.final_pos and tonumber(j.final_pos.percentage) or 1
-    return Finish.holdPush(final*100,fraction*100,s.forward,s.released)
-end
 function FinishUI.onPage(ui,page)
     local b=FinishUI.page_digests[ui]
     if not b or not ui.document or b.file~=ui.document.file then return end

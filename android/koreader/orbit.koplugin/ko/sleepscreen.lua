@@ -121,8 +121,7 @@ local function readJson(path)
     return (okd and type(v) == "table") and v or nil
 end
 
--- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
-function Sleep.bookId(path) return Server.localBookId(path) end
+function Sleep.bookId(path) return Library.localBookReference(path) end
 
 ---------------------------------------------------------------- Current book (R9)
 
@@ -181,11 +180,7 @@ function Sleep.kick(why)
 end
 
 -- The login travels only in the caller-checked call to the verified companion (Companion.send), never in a file.
-local function ask(client, extras)
-    Server.credentials(client, extras)
-    Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
-    Server.watchCache()
-end
+local function ask(extras) return Library.sleepRefresh(extras) end
 
 function Sleep.refresh(why)
     local s = Sleep.settings()
@@ -199,15 +194,15 @@ function Sleep.refresh(why)
         return false
     end
     Sleep.problem = nil
-    local client = Server.cacheClient()
-    if not (client and Sleep.dir()) then
+    local available=(Library.cachedAccountState().catalog or {}).canRefresh==true
+    if not (available and Sleep.dir()) then
         log("sleep screen: no library client yet; the pool waits (" .. tostring(why) .. ")")
         return false
     end
     Sleep.asked, Sleep.refreshed_at = Store.now(), t
     Wifi.acquire("sleep screen")
     log("sleep screen: the companion refreshes the pool from", s.sleep_from, "(" .. tostring(why) .. ")")
-    ask(client, { reason = tostring(why), from = s.sleep_from, rules = SleepPool.encodeRules(s.sleep_leave_out),
+    ask({ reason = tostring(why), from = s.sleep_from, rules = SleepPool.encodeRules(s.sleep_leave_out),
         open_id = tostring(Sleep.bookId(S.sleep_current_file) or ""), every = s.sleep_hours == SleepPool.EVERY_SLEEP and "1" or "0",
         storage_limit_mb = tostring(tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) })
     return true
@@ -291,15 +286,15 @@ end
 
 -- The companion lists both again when online; done(v or nil) after.
 function Sleep.refreshScopes(why, done)
-    local client = Server.cacheClient()
+    local available=(Library.cachedAccountState().catalog or {}).canRefresh==true
     local t = os.time()
-    if Sleep.scopes_asked or not client or not NetworkMgr:isConnected() or Companion.workerProblem()
+    if Sleep.scopes_asked or not available or not NetworkMgr:isConnected() or Companion.workerProblem()
         or (Sleep.scopes_at and t >= Sleep.scopes_at and t - Sleep.scopes_at < Sleep.SCOPES_EVERY_S) then
         if done then done(nil) end
         return false
     end
     Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = Store.now(), t, done
-    ask(client, { reason = tostring(why), scopes_only = "1" })
+    ask({ reason = tostring(why), scopes_only = "1" })
     return true
 end
 

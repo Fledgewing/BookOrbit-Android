@@ -60,7 +60,14 @@ end
 stock_beforeWifiAction = NetworkMgr.beforeWifiAction
 function NetworkMgr:beforeWifiAction(callback)
     Wifi.activity("KOReader needs the network")
-    return stock_beforeWifiAction(self, callback)
+    if type(callback)~="function" then return stock_beforeWifiAction(self,callback) end
+    return stock_beforeWifiAction(self,function(...)
+        Wifi.inflight_http=Wifi.inflight_http+1;Wifi.activity("native network job")
+        local result=pack(pcall(callback,...))
+        Wifi.inflight_http=Wifi.inflight_http-1;Wifi.activity("native network job finished")
+        if not result[1] then error(result[2],0) end
+        return unpack(result,2,result.n)
+    end)
 end
 
 -- No "Turn on Wi-Fi?" prompt, in every Wi-Fi mode, when the companion can switch Wi-Fi:
@@ -70,8 +77,6 @@ end
 -- connection is up (frontend/ui/network/manager.lua:539-541, closed at :110-113 or replaced by
 -- "Error connecting to the network" at :88-92). It runs for every beforeWifiAction
 -- (manager.lua:605-619), e.g. the plugin's resume pull, which asks for the network 1 s after
--- each wake (bookorbit.koplugin main.lua:1329-1337 -> requestProgressPull(true, ...) ->
--- willRerunWhenConnected, bookorbit_progress_sync.lua:389). With Wi-Fi off after a sleep
 -- sync or "just in time", that flashed on every wake. With the companion, the same steps run
 -- without the message: ask for Wi-Fi (requestToTurnOnWifi, manager.lua:67-78), then the
 -- stock connectivity check with no widget (:82-133), which shows nothing on success and
@@ -107,7 +112,5 @@ end
 -- (ko/recommended.lua silentWifiOn): only at KOReader's default, with a backup.
 silentWifiOn()
 
-wrapRequests("socket.http")
-wrapRequests("ssl.https")
 
 ---------------------------------------------------------------------------------------------
