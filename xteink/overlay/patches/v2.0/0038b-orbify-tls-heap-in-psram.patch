@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: tls heap in psram
 Allocate TLS and JSON in PSRAM on X4 readers to preserve internal heap.
 
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index b0acf38..8ceac84 100644
+index ce5602f7..b34c9d12 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -11,6 +11,9 @@
@@ -60,7 +60,7 @@ index b0acf38..8ceac84 100644
              return false;
            }
 diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
-index a2e8225..cbb4208 100644
+index cff2ce2e..645b5b81 100644
 --- a/src/BookOrbitHomeStore.cpp
 +++ b/src/BookOrbitHomeStore.cpp
 @@ -42,11 +42,20 @@ constexpr int MAX_COVER_FETCHES = 8;
@@ -87,7 +87,7 @@ index a2e8225..cbb4208 100644
  constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 20 * 1024;
  #endif
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index a18aaf7..4531b6b 100644
+index c877922a..13e0529f 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -63,7 +63,8 @@

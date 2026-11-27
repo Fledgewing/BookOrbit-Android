@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: full refresh percent
 Show one monotonic Full refresh percentage and fit Tailscale status rows.
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 3114508..0c8a9e1 100644
+index 51bea7ca..3d2e7082 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -322,7 +322,6 @@ STR_ORBIFY_BOOK_N_OF: "Book %s of %s"
@@ -14,10 +14,10 @@ index 3114508..0c8a9e1 100644
  STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
  STR_ORBIFY_NOT_SAVED_OFFLINE: "Not saved for offline yet"
  STR_ORBIFY_SEARCH_NEEDS_CONNECTION: "Search needs a connection"
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 5b80dd9..08b0b7b 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index 36e06077..d5c4b9ca 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -64,6 +64,7 @@
  #include "components/CompactHeader.h"
  #include "orbify/CacheStore.h"
@@ -274,10 +274,10 @@ index 5b80dd9..08b0b7b 100644
 -  self->requestUpdate();
  }
  #endif
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index 96971db..ee96de1 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
+index b39114ec..00bb39d2 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 @@ -3,6 +3,9 @@
  #include <FreeInkUIGfxRenderer.h>
  
@@ -329,7 +329,7 @@ index 96971db..ee96de1 100644
  
    // Row window over the current listing (see `entries`).
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
-index b2a848e..206cd8a 100644
+index c6912cf3..b268e718 100644
 --- a/src/activities/home/HomeActivity.cpp
 +++ b/src/activities/home/HomeActivity.cpp
 @@ -1169,7 +1169,7 @@ void HomeActivity::loopBookOrbitHome() {
@@ -342,7 +342,7 @@ index b2a848e..206cd8a 100644
    // Patch 0038 (X4 Pro, .167: a hold did nothing, a tap failed, the next tap started a Full
    // refresh): the tile no longer takes the SDK's screen long press. That fires at 500 ms, an
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index e1edfc7..9b6582b 100644
+index 2678fc10..43363312 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -6,6 +6,7 @@
@@ -521,7 +521,7 @@ index e1edfc7..9b6582b 100644
    renderer.displayBuffer();
  }
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
-index d8b493c..34ab3a6 100644
+index abe828b1..34ab3a62 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.h
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
 @@ -1,9 +1,16 @@
@@ -577,7 +577,7 @@ index d8b493c..34ab3a6 100644
    // recognised nothing.
    std::string summaryLines[2];
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
-index 78daaee..7039b0d 100644
+index 78daaeee..cf3a603b 100644
 --- a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
 +++ b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
 @@ -15,6 +15,14 @@

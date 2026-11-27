@@ -3,10 +3,10 @@ Subject: [PATCH] BookSync: offline catalog and boot trail
 Avoid a catalog request before its network boot has started.
 
 diff --git a/src/main.cpp b/src/main.cpp
-index 156ee11..cdc8dbc 100644
+index 8ac475c4..1d83e3d2 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -380,6 +380,8 @@ RTC_NOINIT_ATTR library::ScanSleepToken libraryScanSleepToken;
+@@ -382,6 +382,8 @@ RTC_NOINIT_ATTR library::ScanSleepToken libraryScanSleepToken;
  // Patch 0038: the last step this run reached (orbify/core/BootTrail.h), for the next boot's log.
  RTC_NOINIT_ATTR uint32_t orbifyBootTrailWord;
  void orbifyBootStep(const orbify::boottrail::Step step) { orbifyBootTrailWord = orbify::boottrail::pack(step); }
@@ -15,19 +15,19 @@ index 156ee11..cdc8dbc 100644
  
  // Definitions for SilentRestart.h. RTC_NOINIT survives ESP.restart() but not power loss.
  RTC_NOINIT_ATTR uint32_t silentRebootMagic;
-@@ -1916,9 +1918,11 @@ void setup() {
+@@ -1914,9 +1916,11 @@ void setup() {
    BoardConfig::holdPowerRails();
-   // Where the last run stopped, read before this boot records its own first step.
+   // Read the previous run before recording this boot.
    const orbify::boottrail::Step lastRunStep = orbify::boottrail::unpack(orbifyBootTrailWord);
 +  const int lastRunReset = orbify::boottrail::unpackReset(orbifyBootTrailReset);
    orbifyBootStep(orbify::boottrail::Step::SetupStarted);
  
    const esp_reset_reason_t rawResetReason = esp_reset_reason();
 +  orbifyBootTrailReset = orbify::boottrail::packReset(static_cast<int>(rawResetReason));
-   const esp_sleep_wakeup_cause_t rawWakeupCause = esp_sleep_get_wakeup_cause();
- #if FREEINK_DEVICE_PICCO
-   const bool usbSleepWake = piccoUsbWakeToken.consume(rawResetReason == ESP_RST_SW);
-@@ -1972,7 +1976,12 @@ void setup() {
+   if (rawResetReason != ESP_RST_DEEPSLEEP &&
+       !(rawResetReason == ESP_RST_SW && silentRebootMagic == SILENT_REBOOT_MAGIC)) {
+     ProgressBookIterator::resetLegacyLookups();
+@@ -1974,7 +1978,12 @@ void setup() {
      // a run that stopped before deep sleep or loop(): the step it stopped at.
      const bool firmwareRestart = rawResetReason == ESP_RST_SW || rawResetReason == ESP_RST_DEEPSLEEP;
      if (orbify::boottrail::stoppedEarly(lastRunStep, firmwareRestart)) {
@@ -41,7 +41,7 @@ index 156ee11..cdc8dbc 100644
      } else {
        LOG_INF("BOOT", "Last run ended at: %s", orbify::boottrail::name(lastRunStep));
      }
-@@ -2068,6 +2077,7 @@ void setup() {
+@@ -2070,6 +2079,7 @@ void setup() {
    }
  #endif
    trustedtime::init();
@@ -49,7 +49,7 @@ index 156ee11..cdc8dbc 100644
  
  #if FREEINK_DEVICE_X4 || FREEINK_DEVICE_X3
    LOG_INF("MAIN", "Hardware detect: %s", gpio.deviceIsX3() ? "X3" : "X4");
-@@ -2146,6 +2156,7 @@ void setup() {
+@@ -2169,6 +2179,7 @@ void setup() {
    display.startBegin();
  
    HalSystem::checkPanic();
@@ -57,7 +57,7 @@ index 156ee11..cdc8dbc 100644
  
    if (!PluginBundle::recoverPending()) LOG_ERR("PLUG", "Plugin install recovery pending");
    // I2C light capabilities must be known before settings validate saved gestures.
-@@ -2207,6 +2218,7 @@ void setup() {
+@@ -2230,6 +2241,7 @@ void setup() {
    UITheme::getInstance().reload();
    ButtonNavigator::setMappedInputManager(mappedInputManager);
    logBootHeap("boot state ready");
@@ -65,7 +65,7 @@ index 156ee11..cdc8dbc 100644
    // Silent restarts are invisible recovery steps, so they always retain the
    // current light state rather than applying wake or schedule policy.
    const bool wasLightOnBeforeSleep =
-@@ -2518,6 +2530,7 @@ void setup() {
+@@ -2541,6 +2553,7 @@ void setup() {
      activityManager.goToReader(path, false, allowFastInitialReaderRefresh, false, quickResumeFrameVisible);
    }
  
@@ -74,7 +74,7 @@ index 156ee11..cdc8dbc 100644
    if ((resume == BootResume::Silent || resume == BootResume::Network) && !sleepSyncBoot) {
      // Block until the first paint physically completes. refreshDisplay()
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 5b4a274..5858a28 100644
+index d4f2c42e..e2260c17 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -138,7 +138,15 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc

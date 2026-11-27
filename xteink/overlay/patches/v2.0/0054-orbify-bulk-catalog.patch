@@ -1,27 +1,99 @@
 Subject: [PATCH] BookSync: raw bulk catalog transport for the SD worker
 
-diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
---- a/src/network/BookOrbitCatalogClient.h
-+++ b/src/network/BookOrbitCatalogClient.h
-@@ -1,5 +1,7 @@
- #pragma once
- #include <cstdint>
-+#include <CrossInkTailnetCuts.h>
-+#include <ArduinoJson.h>
- #include <atomic>
- #include <string>
- #include <vector>
-@@ -142,6 +144,9 @@
- class BookOrbitCatalogClient {
-  public:
-   static constexpr int PAGE_SIZE = 20;
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
+index aeb452cd..67711293 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
+@@ -9,6 +9,7 @@
+ #include <functional>
+ 
+ #include "BookOrbitCatalogLink.h"
++#include "orbify/BulkCatalog.h"
+ 
+ namespace {
+ constexpr char BOOKORBIT_LIST_CACHE_DIR[] = "/.crosspoint/bookorbit_lists";
+@@ -119,6 +120,9 @@ void clear() {
+ }
+ 
+ bool loadRootSections(std::vector<BookOrbitCatalogSection>& outSections) {
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  static bool fetchBulk(const std::string& path, JsonDocument& out);
++  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchRootSections(outSections);
 +#endif
-   // The dashboard shelf of books marked "want to read", which BookOrbit's KOReader plugin
-   // shows; the catalog lists it as a root section of the same id.
-   static constexpr char WANT_TO_READ_SHELF[] = "want-to-read";
+   std::string text;
+   if (!readJsonStringFile(cachePathForKey("root"), text)) return false;
+ 
+@@ -136,6 +140,9 @@ bool loadRootSections(std::vector<BookOrbitCatalogSection>& outSections) {
+ }
+ 
+ void saveRootSections(const std::vector<BookOrbitCatalogSection>& sections) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active()) return;
++#endif
+   std::string json;
+   json.reserve(64 + sections.size() * 48);
+   json += "{\"sections\":[";
+@@ -152,6 +159,9 @@ void saveRootSections(const std::vector<BookOrbitCatalogSection>& sections) {
+ }
+ 
+ bool loadCatalogCounts(BookOrbitCatalogCounts& outCounts) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchCatalogCounts(outCounts);
++#endif
+   std::string text;
+   if (!readJsonStringFile(cachePathForKey("counts"), text)) return false;
+ 
+@@ -171,6 +181,9 @@ bool loadCatalogCounts(BookOrbitCatalogCounts& outCounts) {
+ }
+ 
+ void saveCatalogCounts(const BookOrbitCatalogCounts& counts) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active()) return;
++#endif
+   std::string json;
+   json.reserve(176);  // eight keys plus their digits, so the append chain never reallocates
+   json += "{\"totalBooks\":" + std::to_string(counts.totalBooks) +
+@@ -183,6 +196,9 @@ void saveCatalogCounts(const BookOrbitCatalogCounts& counts) {
+ }
+ 
+ bool loadFacetPage(const std::string& sectionId, const int page, BookOrbitFacetPage& outPage) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchSectionEntries(sectionId,page,outPage);
++#endif
+   std::string text;
+   if (!readJsonStringFile(cachePathForKey(facetCacheKey(sectionId, page)), text)) return false;
+ 
+@@ -204,6 +220,9 @@ bool loadFacetPage(const std::string& sectionId, const int page, BookOrbitFacetP
+ }
+ 
+ void saveFacetPage(const std::string& sectionId, const int page, const BookOrbitFacetPage& pageData) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active()) return;
++#endif
+   std::string json;
+   json.reserve(96 + pageData.entries.size() * 80);
+   json += "{\"page\":" + std::to_string(pageData.page) +
+@@ -223,6 +242,9 @@ void saveFacetPage(const std::string& sectionId, const int page, const BookOrbit
+ }
+ 
+ bool loadBooksPage(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active() && query.query.empty()) return BookOrbitCatalogClient::fetchBooks(query,page,outPage);
++#endif
+   std::string text;
+   if (!readJsonStringFile(cachePathForKey(booksCacheKey(query, page)), text)) return false;
+ 
+@@ -250,6 +272,9 @@ bool loadBooksPage(const BookOrbitBookQuery& query, const int page, BookOrbitBoo
+ }
+ 
+ void saveBooksPage(const BookOrbitBookQuery& query, const int page, const BookOrbitBookPage& pageData) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(OrbifyBulk::active() && query.query.empty()) return;
++#endif
+   std::string json;
+   json.reserve(160 + pageData.books.size() * 80);
+   // The filename is a hash of the key; embed the key itself so a cache file can be
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index 992040a6..7f24c410 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -29,6 +29,7 @@
@@ -32,7 +104,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
  #endif
  #endif
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
-@@ -173,6 +174,13 @@
+@@ -173,6 +174,13 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
    // in the last minute or there is no network; else the request below, whose reply is kept, and
    // the saved reply again if the request fails.
    const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
@@ -46,108 +118,39 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
    OrbifyWifi::Hold miss(OrbifyWifi::Owner::OfflineMiss, !cached.hasEntry);
    if (!cached.hasEntry) OrbifyWifi::simulatorIdleOffProbe();
    // Patch 0040: offline with nothing saved, no request (orbify::cache::readStep). The cache-first
-@@ -432,6 +440,13 @@
- #else
- void BookOrbitCatalogClient::openBootSession() {}
+@@ -434,6 +442,13 @@ void BookOrbitCatalogClient::openBootSession() {}
  void BookOrbitCatalogClient::closeBootSession(const char*) {}
-+#endif
-+
+ #endif
+ 
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +bool BookOrbitCatalogClient::fetchBulk(const std::string& path, JsonDocument& out) {
 +  if (!BOOKORBIT_STORE.hasCredentials() || path.find("/plugin/catalog/") != 0) return false;
 +  return fetchJson(BOOKORBIT_STORE.getBaseUrl()+path,[](JsonDocument& filter){filter.set(true);},out);
 +}
- #endif
- 
++#endif
++
  bool BookOrbitCatalogClient::fetchRootSections(std::vector<BookOrbitCatalogSection>& outSections) {
-diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
---- a/src/activities/browser/BookOrbitCatalogListCache.cpp
-+++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
-@@ -9,6 +9,7 @@
- #include <functional>
- 
- #include "BookOrbitCatalogLink.h"
-+#include "orbify/BulkCatalog.h"
- 
- namespace {
- constexpr char BOOKORBIT_LIST_CACHE_DIR[] = "/.crosspoint/bookorbit_lists";
-@@ -119,6 +120,9 @@
- }
- 
- bool loadRootSections(std::vector<BookOrbitCatalogSection>& outSections) {
+   outSections.clear();
+   if (!BOOKORBIT_STORE.hasCredentials()) return false;
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+index d7de748f..68cac71a 100644
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ #include <cstdint>
++#include <CrossInkTailnetCuts.h>
++#include <ArduinoJson.h>
+ #include <atomic>
+ #include <string>
+ #include <vector>
+@@ -144,6 +146,9 @@ struct BookOrbitCatalogCounts {
+ class BookOrbitCatalogClient {
+  public:
+   static constexpr int PAGE_SIZE = 20;
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchRootSections(outSections);
++  static bool fetchBulk(const std::string& path, JsonDocument& out);
 +#endif
-   std::string text;
-   if (!readJsonStringFile(cachePathForKey("root"), text)) return false;
- 
-@@ -136,6 +140,9 @@
- }
- 
- void saveRootSections(const std::vector<BookOrbitCatalogSection>& sections) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return;
-+#endif
-   std::string json;
-   json.reserve(64 + sections.size() * 48);
-   json += "{\"sections\":[";
-@@ -152,6 +159,9 @@
- }
- 
- bool loadCatalogCounts(BookOrbitCatalogCounts& outCounts) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchCatalogCounts(outCounts);
-+#endif
-   std::string text;
-   if (!readJsonStringFile(cachePathForKey("counts"), text)) return false;
- 
-@@ -171,6 +181,9 @@
- }
- 
- void saveCatalogCounts(const BookOrbitCatalogCounts& counts) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return;
-+#endif
-   std::string json;
-   json.reserve(176);  // eight keys plus their digits, so the append chain never reallocates
-   json += "{\"totalBooks\":" + std::to_string(counts.totalBooks) +
-@@ -183,6 +196,9 @@
- }
- 
- bool loadFacetPage(const std::string& sectionId, const int page, BookOrbitFacetPage& outPage) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchSectionEntries(sectionId,page,outPage);
-+#endif
-   std::string text;
-   if (!readJsonStringFile(cachePathForKey(facetCacheKey(sectionId, page)), text)) return false;
- 
-@@ -204,6 +220,9 @@
- }
- 
- void saveFacetPage(const std::string& sectionId, const int page, const BookOrbitFacetPage& pageData) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active()) return;
-+#endif
-   std::string json;
-   json.reserve(96 + pageData.entries.size() * 80);
-   json += "{\"page\":" + std::to_string(pageData.page) +
-@@ -223,6 +242,9 @@
- }
- 
- bool loadBooksPage(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active() && query.query.empty()) return BookOrbitCatalogClient::fetchBooks(query,page,outPage);
-+#endif
-   std::string text;
-   if (!readJsonStringFile(cachePathForKey(booksCacheKey(query, page)), text)) return false;
- 
-@@ -250,6 +272,9 @@
- }
- 
- void saveBooksPage(const BookOrbitBookQuery& query, const int page, const BookOrbitBookPage& pageData) {
-+#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if(OrbifyBulk::active() && query.query.empty()) return;
-+#endif
-   std::string json;
-   json.reserve(160 + pageData.books.size() * 80);
-   // The filename is a hash of the key; embed the key itself so a cache file can be
+   // The dashboard shelf of books marked "want to read", which BookOrbit's KOReader plugin
+   // shows; the catalog lists it as a root section of the same id.
+   static constexpr char WANT_TO_READ_SHELF[] = "want-to-read";

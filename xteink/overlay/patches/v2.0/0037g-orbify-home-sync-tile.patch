@@ -3,12 +3,12 @@ Subject: [PATCH] BookSync: home sync tile
 Use the Home sync tile for refresh and long-press Full refresh.
 
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
-index 2fed132..e3fefc1 100644
+index b97d0779..c3b71b59 100644
 --- a/src/activities/home/HomeActivity.cpp
 +++ b/src/activities/home/HomeActivity.cpp
 @@ -41,6 +41,10 @@
  #include "SilentRestart.h"
- #include "activities/browser/BookOrbitCatalogLink.h"
+ #include "activities/browser/bookorbit/BookOrbitCatalogLink.h"
  #include "components/UITheme.h"
 +#include <CrossInkTailnetCuts.h>
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
@@ -68,7 +68,7 @@ index 2fed132..e3fefc1 100644
    if (mappedInput.wasItemTapped(tapped)) {
      if (tapped == BookOrbitHomeUi::TAP_PREVIOUS_PAGE) {
 diff --git a/src/activities/home/HomeActivity.h b/src/activities/home/HomeActivity.h
-index 8679a7f..f303ea7 100644
+index 8679a7f3..f303ea75 100644
 --- a/src/activities/home/HomeActivity.h
 +++ b/src/activities/home/HomeActivity.h
 @@ -66,6 +66,8 @@ class HomeActivity final : public Activity {
@@ -81,7 +81,7 @@ index 8679a7f..f303ea7 100644
    int minimalMenuIndex = 0;
    int minimalHomeNavIndex = -1;
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index f1c9827..e1edfc7 100644
+index 392acea8..2678fc10 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -218,7 +218,8 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
@@ -95,7 +95,7 @@ index f1c9827..e1edfc7 100644
      case State::Mirroring:
        status = tr(STR_ORBIFY_FULL_REFRESH);
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.h b/src/components/themes/bookorbit/BookOrbitHomeUi.h
-index eac9146..e7bb6eb 100644
+index eac91469..e7bb6eb1 100644
 --- a/src/components/themes/bookorbit/BookOrbitHomeUi.h
 +++ b/src/components/themes/bookorbit/BookOrbitHomeUi.h
 @@ -48,6 +48,16 @@ class BookOrbitHomeUi final {

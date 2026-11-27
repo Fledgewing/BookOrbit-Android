@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: end of book page
 Open the BookSync End-of-Book page from the reader.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index 7623f367..98548aac 100644
+index e3658fe3..8b853ad5 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -178,3 +178,11 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -19,7 +19,7 @@ index 7623f367..98548aac 100644
 +#define CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW 1
 +#endif
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 0d787e58..3a1b1265 100644
+index 10c10a02..cb345142 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -291,6 +291,24 @@ STR_BOOKORBIT_ON_DEVICE_ERROR: "Could not list the books on the SD card."
@@ -48,7 +48,7 @@ index 0d787e58..3a1b1265 100644
  STR_EVERY_N_PAGES: "Every %d pages"
  STR_EVERY_CHAPTER: "Every chapter"
 diff --git a/scripts/gen_i18n.py b/scripts/gen_i18n.py
-index 3a3b1e69..f7175a2b 100755
+index 3a3b1e69..34f769b7 100755
 --- a/scripts/gen_i18n.py
 +++ b/scripts/gen_i18n.py
 @@ -867,7 +867,8 @@ def main(
@@ -61,10 +61,10 @@ index 3a3b1e69..f7175a2b 100755
  
      if translations_dir is None or output_dir is None:
          if len(sys.argv) == 3:
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index e7617533..63c79a80 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index e7617533..148ce977 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -53,6 +53,7 @@
  #include "util/StringUtils.h"
  #include "network/SavedWifiConnect.h"
@@ -115,10 +115,10 @@ index e7617533..63c79a80 100644
    // A linked section opens over the root, which Back returns to.
    if (!entryLink.sectionId.empty()) {
      const BookOrbitCatalogLink link = std::move(entryLink);
-diff --git a/src/activities/browser/BookOrbitCatalogLink.h b/src/activities/browser/BookOrbitCatalogLink.h
-index 5d875c47..ace03260 100644
---- a/src/activities/browser/BookOrbitCatalogLink.h
-+++ b/src/activities/browser/BookOrbitCatalogLink.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogLink.h b/src/activities/browser/bookorbit/BookOrbitCatalogLink.h
+index 5d875c47..d30041f6 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogLink.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogLink.h
 @@ -13,4 +13,9 @@ struct BookOrbitCatalogLink {
    std::string sectionId;
    std::string title;
@@ -129,10 +129,10 @@ index 5d875c47..ace03260 100644
 +  std::string author;
 +  std::string returnPath;
  };
-diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
 index db0055df..29bbf4a8 100644
---- a/src/activities/browser/BookOrbitCatalogListCache.cpp
-+++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
 @@ -415,6 +415,10 @@ bool saveEntryLink(const BookOrbitCatalogLink& link) {
    appendJsonEscaped(json, link.title);
    json += ",\"replacePath\":";
@@ -156,7 +156,7 @@ index db0055df..29bbf4a8 100644
  
  void discardEntryLink() { Storage.remove(BOOKORBIT_ENTRY_LINK_PATH); }
 diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
-index c93d662c..2da4c55d 100644
+index c93d662c..33d01f2b 100644
 --- a/src/activities/reader/EndOfBookOptions.cpp
 +++ b/src/activities/reader/EndOfBookOptions.cpp
 @@ -15,6 +15,9 @@
@@ -323,7 +323,7 @@ index c93d662c..2da4c55d 100644
  
    // The list renders through the FreeInkApp so its rows register touch hit rects. The
 diff --git a/src/activities/reader/EndOfBookOptions.h b/src/activities/reader/EndOfBookOptions.h
-index f8096ab8..ad8fbfc3 100644
+index f8096ab8..cf43bb45 100644
 --- a/src/activities/reader/EndOfBookOptions.h
 +++ b/src/activities/reader/EndOfBookOptions.h
 @@ -1,5 +1,6 @@
@@ -391,10 +391,10 @@ index f8096ab8..ad8fbfc3 100644
 +#endif
  };
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index 34516cf3..220af4fa 100644
+index 71ba48b5..75efc56d 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -3830,6 +3830,10 @@ void EpubReaderActivity::loop() {
+@@ -3887,6 +3887,10 @@ void EpubReaderActivity::loop() {
        if (!endOfBookOptions) {
          LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
        }
@@ -405,7 +405,7 @@ index 34516cf3..220af4fa 100644
      }
      if (endOfBookOptions) {
        endOfBookOptions->loadOnce(epub->getPath());
-@@ -3874,10 +3878,42 @@ void EpubReaderActivity::loop() {
+@@ -3931,10 +3935,42 @@ void EpubReaderActivity::loop() {
      longPressMenuHandled = false;
      lastPageTurnTime = millis();
      std::string openPath;
@@ -449,7 +449,7 @@ index 34516cf3..220af4fa 100644
        case EndOfBookOptions::Action::GoHome:
          onGoHome();
          return;
-@@ -7088,6 +7124,10 @@ void EpubReaderActivity::render(RenderLock&& lock) {
+@@ -7163,6 +7199,10 @@ void EpubReaderActivity::render(RenderLock&& lock) {
        if (!endOfBookOptions) {
          LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
        }
@@ -461,10 +461,10 @@ index 34516cf3..220af4fa 100644
      renderer.clearScreen();
      if (endOfBookOptions) {
 diff --git a/src/activities/reader/XtcReaderActivity.cpp b/src/activities/reader/XtcReaderActivity.cpp
-index c732f117..ebb5bab6 100644
+index 2f035a3d..99c86a06 100644
 --- a/src/activities/reader/XtcReaderActivity.cpp
 +++ b/src/activities/reader/XtcReaderActivity.cpp
-@@ -295,6 +295,7 @@ void XtcReaderActivity::loop() {
+@@ -296,6 +296,7 @@ void XtcReaderActivity::loop() {
        }
        return;
      case EndOfBookOptions::Action::None:
@@ -473,7 +473,7 @@ index c732f117..ebb5bab6 100644
    }
  
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index f0913acc..6e6178b4 100644
+index 1c1c6965..0f8f6fa5 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -103,6 +103,8 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
@@ -485,7 +485,7 @@ index f0913acc..6e6178b4 100644
    syncSession.reset();  // no request follows; free the TLS session before the reader reloads
    {
      RenderLock lock(*this);
-@@ -770,6 +772,8 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -769,6 +771,8 @@ void BookOrbitSyncActivity::performUpload() {
    // BookSync (patch 0027): the final position is up; now the finished books, on the same session.
    if (result == BookOrbitSyncClient::OK) {
      OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
@@ -495,7 +495,7 @@ index f0913acc..6e6178b4 100644
  
    syncSession.reset();
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index e84140b5..fb6647e8 100644
+index 925e1d65..8cc1926c 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -23,6 +23,9 @@
@@ -508,12 +508,11 @@ index e84140b5..fb6647e8 100644
  #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
  #include <Memory.h>
  #include <SecureHttpClient.h>
-@@ -709,9 +712,16 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
-     bookOrbitSetFilter(filter,
-                        R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
-                        R"("devicePath":true}]})");
+@@ -709,9 +712,15 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+   bookOrbitSetFilter(filter,
+                      R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+                      R"("devicePath":true,"downloadVariant":true}]})");
 +#if CROSSINK_TAILNET_ORBIFY_FINISH
-+    // BookSync (patch 0028): the series card's fields ride on the same reply (design §5).
 +    orbify::cardFilter(filter);
 +#endif
    };

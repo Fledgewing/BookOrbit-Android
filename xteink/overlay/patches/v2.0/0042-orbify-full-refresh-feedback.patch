@@ -3,9 +3,11 @@ Subject: [PATCH] BookSync: explicit-only Full refresh feedback
 Keep intermediate notices silent and use the persisted user request as the progress gate.
 Implementation: orbify/Mirror and orbify/RefreshBadge.
 
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 3d2e7082..83c1a372 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -322,8 +322,8 @@
+@@ -322,8 +322,8 @@ STR_ORBIFY_BOOK_N_OF: "Book %s of %s"
  STR_ORBIFY_REFRESH: "Refresh"
  STR_ORBIFY_REFRESHING: "Refreshing…"
  STR_ORBIFY_FULL_REFRESH: "Full refresh"
@@ -16,9 +18,11 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
  STR_ORBIFY_SEARCH_NEEDS_CONNECTION: "Search needs a connection"
  STR_ORBIFY_COULDNT_CONNECT: "Couldn't connect"
  STR_ORBIFY_SLEEP_PICK: "BookOrbit Pick"
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-@@ -697,6 +697,9 @@
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index d5c4b9ca..19b78c9c 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+@@ -697,6 +697,9 @@ void BookOrbitCatalogBrowserActivity::openEntryViews() {
  }
  
  void BookOrbitCatalogBrowserActivity::showLoadingBeforeFetch() {
@@ -28,7 +32,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    state = BrowserState::LOADING;
    statusMessage = tr(STR_LOADING);
    if (requestUpdateAndWait() != RequestUpdateResult::Rendered) {
-@@ -2650,29 +2653,11 @@
+@@ -2650,29 +2653,11 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
    const int level = static_cast<int>(navLevel);
    LOG_INF("BookOrbit", "Catalog: %s of view %d%s", full ? "Full refresh" : "Refresh", level,
            offlineSession ? " (offline: connecting)" : "");
@@ -59,7 +63,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
      mirrorResumeChecked = true;
      {
        RenderLock lock(*this);
-@@ -2683,8 +2668,38 @@
+@@ -2683,8 +2668,38 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
      }
      syncMirrorShown();
      mirrorInputAt = millis();
@@ -98,9 +102,11 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    if (!full) {
      // Patch 0037: the tap shows at once ("Refreshing…" in place of the stamp), the view stays.
      {
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index 43363312..e066ba6c 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-@@ -40,6 +40,10 @@
+@@ -40,6 +40,10 @@ constexpr int PROGRESS_BAR_HEIGHT = 16;
  void BookOrbitHomeRefreshActivity::onEnter() {
    Activity::onEnter();
    // This boot's onEnter() can run inside setup(): the scan waits for the first loop().
@@ -111,7 +117,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    scanPending = true;
    requestUpdate();
  }
-@@ -47,6 +51,25 @@
+@@ -47,6 +51,25 @@ void BookOrbitHomeRefreshActivity::onEnter() {
  void BookOrbitHomeRefreshActivity::connect() {
    // The BookOrbit theme's sync also recognises books copied to the card; its offline half
    // (the Library index, the hashes) runs before Wi-Fi takes its share of the heap.
@@ -137,7 +143,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
    BookOrbitDeviceScan::prepare(nullptr, &progress);
    // Shown again if the Wi-Fi screen hands back before the refresh starts.
-@@ -64,6 +87,12 @@
+@@ -64,6 +87,12 @@ void BookOrbitHomeRefreshActivity::connect() {
  
  void BookOrbitHomeRefreshActivity::showStep(const State step) {
    state = step;
@@ -150,7 +156,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    if (requestUpdateAndWait() != RequestUpdateResult::Rendered) {
      LOG_ERR("BookOrbit", "Home refresh step %d could not be shown", static_cast<int>(step));
    }
-@@ -135,12 +164,24 @@
+@@ -135,15 +164,27 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
    if (refreshed && OrbifyMirror::requested()) {
      mirrorSession.reset(new BookOrbitCatalogClient::Session());
      mirrorWalk.begin();
@@ -162,9 +168,9 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
 +      mirrorPopupUntil = 0;  // the initial frame already showed the one start popup
        state = State::Mirroring;
      }
-+    requestUpdate();
-+    return;
-+  }
+     requestUpdate();
+     return;
+   }
 +#endif
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +  if (userFullRefresh && !refreshed) {
@@ -173,10 +179,13 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
 +    mirrorPopupUntil = 0;
 +    mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
 +    state = State::Mirroring;
-     requestUpdate();
-     return;
-   }
-@@ -158,6 +199,12 @@
++    requestUpdate();
++    return;
++  }
+ #endif
+   finishRefresh(refreshed);
+ }
+@@ -158,6 +199,12 @@ void BookOrbitHomeRefreshActivity::finishRefresh(const bool refreshed) {
    }
    LOG_INF("BookOrbit", "Home refresh over (ok=%d, free=%u maxAlloc=%u)", refreshed, ESP.getFreeHeap(),
            ESP.getMaxAllocHeap());
@@ -189,7 +198,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    if (refreshed && summaryLines[0].empty()) {
      silentRestart();
      return;
-@@ -178,7 +225,7 @@
+@@ -178,7 +225,7 @@ void BookOrbitHomeRefreshActivity::finishRefresh(const bool refreshed) {
  void BookOrbitHomeRefreshActivity::tickMirror() {
    const unsigned long now = millis();
    const bool input = mappedInput.hasPendingActivity() || mappedInput.wasAnyPressed() || mappedInput.wasAnyReleased();
@@ -198,7 +207,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    if (input || (done && now >= mirrorDoneUntil) || (!done && WiFi.status() != WL_CONNECTED)) {
      if (!done) {
        LOG_INF("BookOrbit", "Home refresh: Full refresh paused at %u%% (%s); it carries on later", mirrorPercent,
-@@ -247,6 +294,12 @@
+@@ -247,6 +294,12 @@ void BookOrbitHomeRefreshActivity::loop() {
  }
  
  void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
@@ -211,7 +220,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    char line[96];
    const char* status = tr(STR_LOADING);
    bool showSummary = false;
-@@ -284,7 +337,7 @@
+@@ -284,7 +337,7 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
        status = tr(STR_ORBIFY_REFRESHING);
        break;
      case State::Mirroring:
@@ -220,9 +229,11 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
        break;
      case State::DecodingCovers:
        status = tr(STR_HOME_PREPARING_COVERS);
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
+index 34ab3a62..94095ee4 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.h
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
-@@ -50,6 +50,7 @@
+@@ -50,6 +50,7 @@ class BookOrbitHomeRefreshActivity final : public Activity {
    void tickMirror();
    OrbifyMirror::Walk mirrorWalk;
    std::unique_ptr<BookOrbitCatalogClient::Session> mirrorSession;
@@ -230,9 +241,11 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
    unsigned mirrorPercent = 0;
    bool mirrorFinished = false;
    size_t mirrorFailures = 0;
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 21cd2853..e7a38ecb 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -421,6 +421,7 @@
+@@ -420,6 +420,7 @@ void BookOrbitSyncActivity::runSleepSync() {
      // rest resumes in the next sleeps; Settings and a hold on the catalog's refresh run it whole in
      // their own boots.
      if (extras && !sleepSyncWakeRequested()) {
@@ -240,9 +253,11 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
        const auto due = OrbifyMirror::dueNow();
        if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
          LOG_INF("ORB", "Mirror: due (%s%s); a slice of %u requests in this sleep", orbify::mirror::dueName(due),
+diff --git a/src/main.cpp b/src/main.cpp
+index 1d83e3d2..a090cb95 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -110,6 +110,7 @@
+@@ -112,6 +112,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "OpdsServerStore.h"
  #include "RecentBooksStore.h"
  #include "SdCardFontSystem.h"
@@ -250,7 +265,7 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
  #include "SilentRestart.h"
  #include "orbify/HeapFloor.h"
  #include "orbify/CrashRecord.h"
-@@ -526,7 +527,12 @@
+@@ -528,7 +529,12 @@ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload
    const bool displayReady = tailnet_display_ready(3000);
    std::optional<RenderLock> lock;
    if (!RenderLock::heldByCurrentTask()) lock.emplace();

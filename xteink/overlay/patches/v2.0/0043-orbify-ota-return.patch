@@ -3,6 +3,8 @@ Subject: [PATCH] BookSync: return to the OTA screen after updating
 Route a completed installation back to its update screen without a network join.
 Implementation: orbify/OtaReturn; no verifier changes.
 
+diff --git a/src/activities/settings/OtaUpdateActivity.cpp b/src/activities/settings/OtaUpdateActivity.cpp
+index 7f5bd50d..22618a83 100644
 --- a/src/activities/settings/OtaUpdateActivity.cpp
 +++ b/src/activities/settings/OtaUpdateActivity.cpp
 @@ -5,6 +5,7 @@
@@ -13,7 +15,7 @@ Implementation: orbify/OtaReturn; no verifier changes.
  #include "CrossPointSettings.h"
  #include "MappedInputManager.h"
  #include "SdCardFontSystem.h"
-@@ -91,6 +92,13 @@
+@@ -91,6 +92,13 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
  void OtaUpdateActivity::onEnter() {
    Activity::onEnter();
    sdFontSystem.releaseLoadedFont(renderer);
@@ -27,7 +29,7 @@ Implementation: orbify/OtaReturn; no verifier changes.
  
    if (hasActiveWifiConnection()) {
      onWifiSelectionComplete(true);
-@@ -186,7 +194,9 @@
+@@ -186,7 +194,9 @@ void OtaUpdateActivity::render(RenderLock&&) {
          renderer, safe, UI_10_FONT_ID, y,
          (std::to_string(updater.getProcessedSize()) + " / " + std::to_string(updater.getTotalSize())).c_str());
    } else if (state == NO_UPDATE) {
@@ -38,7 +40,7 @@ Implementation: orbify/OtaReturn; no verifier changes.
      const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
      GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
    } else if (state == FAILED) {
-@@ -311,6 +321,7 @@
+@@ -311,6 +321,7 @@ void OtaUpdateActivity::loop() {
    }
  
    if (state == SHUTTING_DOWN) {
@@ -46,9 +48,11 @@ Implementation: orbify/OtaReturn; no verifier changes.
      ESP.restart();
    }
  }
+diff --git a/src/activities/settings/OtaUpdateActivity.h b/src/activities/settings/OtaUpdateActivity.h
+index 7663e034..6c5810e2 100644
 --- a/src/activities/settings/OtaUpdateActivity.h
 +++ b/src/activities/settings/OtaUpdateActivity.h
-@@ -28,6 +28,7 @@
+@@ -28,6 +28,7 @@ class OtaUpdateActivity : public Activity {
    unsigned int lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
    StrId failureMessage = StrId::STR_UPDATE_FAILED;
    OtaUpdater updater;
@@ -56,9 +60,11 @@ Implementation: orbify/OtaReturn; no verifier changes.
  
    void onWifiSelectionComplete(bool success);
    void runUpdateInstall();
+diff --git a/src/main.cpp b/src/main.cpp
+index a090cb95..f1e11595 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -112,6 +112,7 @@
+@@ -114,6 +114,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "SdCardFontSystem.h"
  #include "orbify/Mirror.h"
  #include "SilentRestart.h"
@@ -66,7 +72,7 @@ Implementation: orbify/OtaReturn; no verifier changes.
  #include "orbify/HeapFloor.h"
  #include "orbify/CrashRecord.h"
  #include "orbify/core/BootTrail.h"
-@@ -2377,6 +2378,8 @@
+@@ -2400,6 +2401,8 @@ void setup() {
    } else if (rebootedFromPanic) {
      // If we rebooted from a panic, go to crash report screen to show the panic info
      activityManager.goToCrashReport();

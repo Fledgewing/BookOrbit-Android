@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: home tile touch
 Align the Home tile touch target and consume the menu-closing swipe.
 
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index be42ab3..c224f48 100644
+index be42ab34..c224f487 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
 @@ -114,6 +114,9 @@ static_assert(isNetworkBootTargetValue(static_cast<uint32_t>(NetworkBootTarget::
@@ -17,7 +17,7 @@ index be42ab3..c224f48 100644
  bool silentRestartToReader(bool cleanImageBaseOnEntry = false);  // currently-open EPUB (APP_STATE.openEpubPath)
  // Reboots immediately after an activity releases exclusive raw storage.
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
-index e3fefc1..b2a848e 100644
+index c3b71b59..c6912cf3 100644
 --- a/src/activities/home/HomeActivity.cpp
 +++ b/src/activities/home/HomeActivity.cpp
 @@ -1142,6 +1142,7 @@ bool HomeActivity::waitingForInitialFrontRelease() {
@@ -90,7 +90,7 @@ index e3fefc1..b2a848e 100644
      return;
    }
    if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-@@ -1293,6 +1319,8 @@ void HomeActivity::activateBookOrbitStop(const BookOrbitHomeUi::Stop& stop) {
+@@ -1292,6 +1318,8 @@ void HomeActivity::activateBookOrbitStop(const BookOrbitHomeUi::Stop& stop) {
        break;
      }
      case BookOrbitHomeUi::Action::Refresh:
@@ -99,7 +99,7 @@ index e3fefc1..b2a848e 100644
        silentRestartToNetwork(NetworkBootTarget::BOOKORBIT_HOME_REFRESH);
        break;
      case BookOrbitHomeUi::Action::None:
-@@ -1790,10 +1818,17 @@ void HomeActivity::loop() {
+@@ -1789,10 +1817,17 @@ void HomeActivity::loop() {
          return;
        }
  
@@ -120,7 +120,7 @@ index e3fefc1..b2a848e 100644
          minimalHomeNavIndex = -1;
          requestUpdate();
 diff --git a/src/activities/home/HomeActivity.h b/src/activities/home/HomeActivity.h
-index f303ea7..60ce680 100644
+index f303ea75..60ce6805 100644
 --- a/src/activities/home/HomeActivity.h
 +++ b/src/activities/home/HomeActivity.h
 @@ -68,6 +68,7 @@ class HomeActivity final : public Activity {
@@ -132,7 +132,7 @@ index f303ea7..60ce680 100644
    int minimalMenuIndex = 0;
    int minimalHomeNavIndex = -1;
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.h b/src/components/themes/bookorbit/BookOrbitHomeUi.h
-index e7bb6eb..4f30005 100644
+index e7bb6eb1..4f300054 100644
 --- a/src/components/themes/bookorbit/BookOrbitHomeUi.h
 +++ b/src/components/themes/bookorbit/BookOrbitHomeUi.h
 @@ -48,6 +48,17 @@ class BookOrbitHomeUi final {
@@ -154,10 +154,10 @@ index e7bb6eb..4f30005 100644
    const Stop* stopContaining(const int x, const int y) const {
      const int page = stops.currentPageIndex();
 diff --git a/src/main.cpp b/src/main.cpp
-index cd78f19..e5988d0 100644
+index 40013211..8ac475c4 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -514,6 +514,9 @@ static bool syncStorageBeforeTransition() {
+@@ -516,6 +516,9 @@ static bool syncStorageBeforeTransition() {
  #endif
  }
  
@@ -167,7 +167,7 @@ index cd78f19..e5988d0 100644
  static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
    if (deepSleepInProgress) return false;
    BatteryStats::onRestart();  // CrossInk-Tailnet patch 0025 (before the flush below)
-@@ -523,8 +526,9 @@ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload
+@@ -525,8 +528,9 @@ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload
    if (!RenderLock::heldByCurrentTask()) lock.emplace();
    if (displayReady) {
      if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();

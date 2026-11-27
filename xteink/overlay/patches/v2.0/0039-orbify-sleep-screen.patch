@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: sleep screen
 Hook sleep-screen rotation and cover preparation into sleep and wake.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index ea84f00..973d6f5 100644
+index 6160f10c..d137fe1b 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -214,3 +214,8 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -16,7 +16,7 @@ index ea84f00..973d6f5 100644
 +#define CROSSINK_TAILNET_ORBIFY_SLEEP 0
 +#endif
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 8aa8d40..3114508 100644
+index 8dd91e6f..51bea7ca 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -327,6 +327,16 @@ STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
@@ -37,7 +37,7 @@ index 8aa8d40..3114508 100644
  STR_EVERY_N_PAGES: "Every %d pages"
  STR_EVERY_CHAPTER: "Every chapter"
 diff --git a/scripts/gen_i18n.py b/scripts/gen_i18n.py
-index f7175a2..a6c56a6 100755
+index 34f769b7..f6f1feb4 100755
 --- a/scripts/gen_i18n.py
 +++ b/scripts/gen_i18n.py
 @@ -244,6 +244,9 @@ def find_used_string_keys(
@@ -51,7 +51,7 @@ index f7175a2..a6c56a6 100755
      pattern = re.compile(r"\bSTR_[A-Za-z0-9_]+\b")
      used: Set[str] = set()
 diff --git a/src/SettingsList.cpp b/src/SettingsList.cpp
-index 98a7514..a6908bc 100644
+index 9fb54334..d714d4c4 100644
 --- a/src/SettingsList.cpp
 +++ b/src/SettingsList.cpp
 @@ -22,6 +22,10 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
@@ -66,7 +66,7 @@ index 98a7514..a6908bc 100644
                          {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideClock",
                          StrId::STR_CAT_DISPLAY)
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 175499b..d6b9af0 100644
+index bd17a3fe..976ef178 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
 @@ -27,6 +27,9 @@
@@ -79,7 +79,7 @@ index 175499b..d6b9af0 100644
  
  inline std::string fontSizePointLabel(const uint8_t pointSize) { return std::to_string(pointSize) + " pt"; }
  
-@@ -654,9 +657,14 @@ inline constexpr size_t BASE_SETTINGS_EEGO_ENTRIES = 1;
+@@ -641,9 +644,14 @@ inline constexpr size_t BASE_SETTINGS_EEGO_ENTRIES = 1;
  #else
  inline constexpr size_t BASE_SETTINGS_EEGO_ENTRIES = 0;
  #endif
@@ -89,13 +89,13 @@ index 175499b..d6b9af0 100644
 +inline constexpr size_t BASE_SETTINGS_ORBIFY_SLEEP_ENTRIES = 0;
 +#endif
  inline constexpr size_t BASE_SETTINGS_CAPACITY = 108 + BASE_SETTINGS_SCALABLE_FONT_ENTRIES +
-                                                  (CROSSINK_APP_CAP_TOUCH ? 9 : 0) + BASE_SETTINGS_KOREADER_ENTRIES +
+                                                  (CROSSINK_APP_CAP_TOUCH ? 10 : 0) + BASE_SETTINGS_KOREADER_ENTRIES +
 -                                                 BASE_SETTINGS_EEGO_ENTRIES;
 +                                                 BASE_SETTINGS_EEGO_ENTRIES + BASE_SETTINGS_ORBIFY_SLEEP_ENTRIES;
  
  #if FREEINK_DEVICE_PICCO
  inline constexpr size_t SLIDE_SWITCH_SETTINGS_COUNT = 1;
-@@ -1162,9 +1170,16 @@ inline std::vector<SettingInfo> buildDisplaySleepSettingsList(const std::vector<
+@@ -1151,9 +1159,16 @@ inline std::vector<SettingInfo> buildDisplaySleepSettingsList(const std::vector<
    };
  
    addSleepSetting(StrId::STR_SLEEP_SCREEN, StrId::STR_SLEEP_SCREEN_WALLPAPER);
@@ -113,7 +113,7 @@ index 175499b..d6b9af0 100644
    return sleepSettings;
  }
 diff --git a/src/activities/boot_sleep/SleepActivity.cpp b/src/activities/boot_sleep/SleepActivity.cpp
-index d5d3994..dc64757 100644
+index d5d39942..4c94a984 100644
 --- a/src/activities/boot_sleep/SleepActivity.cpp
 +++ b/src/activities/boot_sleep/SleepActivity.cpp
 @@ -44,6 +44,9 @@
@@ -228,7 +228,7 @@ index d5d3994..dc64757 100644
    const auto placement = prepareSleepBitmap(bitmap);
    renderer.clearScreen();
 diff --git a/src/activities/boot_sleep/SleepActivity.h b/src/activities/boot_sleep/SleepActivity.h
-index 607715f..f9352d2 100644
+index 607715f1..77919563 100644
 --- a/src/activities/boot_sleep/SleepActivity.h
 +++ b/src/activities/boot_sleep/SleepActivity.h
 @@ -1,4 +1,6 @@
@@ -250,7 +250,7 @@ index 607715f..f9352d2 100644
    void renderOverlaySleepScreen(Bitmap* cover = nullptr) const;
    mutable bool monochromeFrame = false;
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 4531b6b..359ce03 100644
+index 13e0529f..21cd2853 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -52,6 +52,9 @@
@@ -263,7 +263,7 @@ index 4531b6b..359ce03 100644
  #include "fontIds.h"
  #include "network/SavedWifiConnect.h"
  #include "util/BookContentId.h"
-@@ -402,6 +405,10 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -401,6 +404,10 @@ void BookOrbitSyncActivity::runSleepSync() {
      // The End-of-Book page's next cover (decoded below, with the radio off).
      if (extras && !sleepSyncWakeRequested()) OrbifyFinish::fetchNextCover(epubPath, &sleepSyncWakeRequested);
  #endif
@@ -274,7 +274,7 @@ index 4531b6b..359ce03 100644
  #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
      // Copies the server rewrote: the match check on the session, then the replacements, one book
      // at a time, the book that was open included (it is not on screen now; the user's ruling of
-@@ -435,6 +442,10 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -434,6 +441,10 @@ void BookOrbitSyncActivity::runSleepSync() {
  #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
    // BookSync (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
    if (!sleepSyncWakeRequested()) OrbifyFinish::decodeNextCovers(&sleepSyncWakeRequested);
@@ -286,7 +286,7 @@ index 4531b6b..359ce03 100644
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
  #ifdef SIMULATOR
 diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
-index c69f3f4..b1e777c 100644
+index 0edaf1d9..b1b7d3f4 100644
 --- a/src/activities/settings/SettingsActivity.cpp
 +++ b/src/activities/settings/SettingsActivity.cpp
 @@ -45,6 +45,10 @@
@@ -353,7 +353,7 @@ index c69f3f4..b1e777c 100644
      items.push_back(item);
    }
 diff --git a/src/activities/settings/SettingsActivity.h b/src/activities/settings/SettingsActivity.h
-index 8207d00..c34b6e9 100644
+index 8207d00a..a22031ca 100644
 --- a/src/activities/settings/SettingsActivity.h
 +++ b/src/activities/settings/SettingsActivity.h
 @@ -71,6 +71,10 @@ enum class SettingAction {

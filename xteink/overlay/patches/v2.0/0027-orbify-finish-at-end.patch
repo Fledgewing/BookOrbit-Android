@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: finish at end
 Queue a finished book for sync when the reader reaches its end.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index e598b8b3..7623f367 100644
+index e598b8b3..e3658fe3 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -168,3 +168,13 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -45,7 +45,7 @@ index 411751f6..138a748d 100644
    backgroundSync = doc["backgroundSync"] | static_cast<uint8_t>(0);
  #endif
 diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.h b/lib/BookOrbitSync/BookOrbitCredentialStore.h
-index 3d5d779a..edee8363 100644
+index 3d5d779a..b7c4ebda 100644
 --- a/lib/BookOrbitSync/BookOrbitCredentialStore.h
 +++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
 @@ -41,6 +41,9 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
@@ -78,7 +78,7 @@ index 3d5d779a..edee8363 100644
    // Sync the open book in the background while reading (CrossInk-Tailnet, X4s): how often,
    // as a BookOrbitBackgroundSync::Interval. Runs only under Smart sync.
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index 1a0f9c4c..c747f475 100644
+index 1a0f9c4c..150f360c 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -34,6 +34,7 @@
@@ -148,7 +148,7 @@ index 1a0f9c4c..c747f475 100644
    if (s_sidecarStateAnswer != CapabilityAnswer::Unknown) return s_sidecarStateAnswer == CapabilityAnswer::Yes;
    lastHttpCode = 0;
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
-index c2e75009..5106bba8 100644
+index c2e75009..531a08d9 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.h
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
 @@ -161,6 +161,15 @@ class BookOrbitSyncClient {
@@ -168,7 +168,7 @@ index c2e75009..5106bba8 100644
                               uint32_t annotationsUpserted);
  
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 4dd9a0b7..0d787e58 100644
+index d788e847..10c10a02 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -290,6 +290,7 @@ STR_BOOKORBIT_IN_PROGRESS: "In progress"
@@ -180,10 +180,10 @@ index 4dd9a0b7..0d787e58 100644
  STR_EVERY_N_PAGES: "Every %d pages"
  STR_EVERY_CHAPTER: "Every chapter"
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index 12f7e393..34516cf3 100644
+index 464720b2..71ba48b5 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -112,6 +112,7 @@
+@@ -113,6 +113,7 @@
  #include "util/BookMoveUtils.h"
  #include "util/Dictionary.h"
  #include "util/ScreenshotUtil.h"
@@ -191,7 +191,7 @@ index 12f7e393..34516cf3 100644
  
  namespace {
  // The caller owns RenderLock. The main-loop idle hook cannot acquire it while
-@@ -3849,6 +3850,13 @@ void EpubReaderActivity::loop() {
+@@ -3906,6 +3907,13 @@ void EpubReaderActivity::loop() {
      }
    }
  
@@ -206,7 +206,7 @@ index 12f7e393..34516cf3 100644
    // setBookCompleted() also arms this when the user marks a book finished before
    // the End-of-Book screen.
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index f2dd8482..f0913acc 100644
+index 0879eeb3..1c1c6965 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -43,6 +43,7 @@
@@ -227,7 +227,7 @@ index f2dd8482..f0913acc 100644
    syncSession.reset();  // no request follows; free the TLS session before the reader reloads
    {
      RenderLock lock(*this);
-@@ -310,6 +314,12 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -309,6 +313,12 @@ void BookOrbitSyncActivity::runSleepSync() {
    } else if (!stopIfWoken()) {
      LOG_INF("BookOrbit", "Sleep sync skipped: no saved network answered");
    }
@@ -240,7 +240,7 @@ index f2dd8482..f0913acc 100644
    syncSession.reset();
    // The BookOrbit Home draws from what this boot's network leaves behind. Each step is
    // retried by the next sync, so a wake press can end it anywhere. Its tile dates the
-@@ -732,6 +742,22 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -731,6 +741,22 @@ void BookOrbitSyncActivity::performUpload() {
      LOG_DBG("BookOrbit", "Released epub before upload (heap: %u)", (unsigned)ESP.getFreeHeap());
    }
  
@@ -263,7 +263,7 @@ index f2dd8482..f0913acc 100644
    KOReaderProgress progress;
    progress.document = documentHash;
    progress.progress = localProgress.xpath;
-@@ -741,6 +767,10 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -740,6 +766,10 @@ void BookOrbitSyncActivity::performUpload() {
  
    if (stopIfWoken()) return;
    const auto result = BookOrbitSyncClient::updateProgress(progress);
@@ -275,10 +275,10 @@ index f2dd8482..f0913acc 100644
    syncSession.reset();
    // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 1fe9ec2b..5947ca37 100644
+index 664fd40a..21e048c4 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
-@@ -34,7 +34,9 @@ namespace fui = freeink::ui;
+@@ -33,7 +33,9 @@ namespace fui = freeink::ui;
  
  namespace {
  // CrossInk-Tailnet: "Sync While Reading" is the last row, listed only under Smart sync.
@@ -289,7 +289,7 @@ index 1fe9ec2b..5947ca37 100644
  // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
  // generic and already translated in every language file.
  const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
-@@ -45,13 +47,17 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -44,13 +46,17 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
                                       StrId::STR_OPDS_DOWNLOAD_FOLDER,
                                       StrId::STR_SYNC_BEHAVIOR,
                                       StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
@@ -309,7 +309,7 @@ index 1fe9ec2b..5947ca37 100644
  // The Home page: the top shelf, the bottom shelf, then the refresh.
  constexpr int HOME_ITEMS = 3;
  constexpr int REFRESH_ROW = 2;
-@@ -263,6 +269,12 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -262,6 +268,12 @@ void BookOrbitSettingsActivity::handleSelection() {
      BOOKORBIT_STORE.setSyncOnSleep(!BOOKORBIT_STORE.getSyncOnSleep());
      BOOKORBIT_STORE.saveToFile();
      requestUpdate();
@@ -322,7 +322,7 @@ index 1fe9ec2b..5947ca37 100644
    } else if (selectedIndex == HOME_ROW) {
      startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
                             [](const ActivityResult&) {});
-@@ -423,6 +435,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+@@ -422,6 +434,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
                                                                                      : tr(STR_ASK_EVERY_TIME);
      } else if (i == 7) {
        values[i] = BOOKORBIT_STORE.getSyncOnSleep() ? tr(STR_ON) : tr(STR_OFF);
@@ -334,7 +334,7 @@ index 1fe9ec2b..5947ca37 100644
      } else if (i == BACKGROUND_SYNC_ROW) {
        char label[40];
 diff --git a/src/sync/BookSyncFile.cpp b/src/sync/BookSyncFile.cpp
-index dcb6051e..f0025d2c 100644
+index dcb6051e..9f8faeae 100644
 --- a/src/sync/BookSyncFile.cpp
 +++ b/src/sync/BookSyncFile.cpp
 @@ -14,6 +14,7 @@

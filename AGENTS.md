@@ -104,8 +104,7 @@ bridge has reached devices; 0.12 is prepared on feature/0.12.
 
 The upstream-driven Xteink release policy below applies through 0.11. From 0.12,
 firmware tags are xteink-v<booksync version>+crossink.<upstream tag>, with the upstream
-"+" replaced by ".". BookSync preview/rc/stable decides the channel. Daily pinning and
-publication remain limited to the legacy bridge line; unified builds keep the release
+"+" replaced by ".". BookSync preview/rc/stable decides the channel. Daily publication remains limited to the legacy bridge line; upstream pins change only through PRs; unified builds keep the release
 commit's pin and publish only at the matching Android tag.
 
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
@@ -173,8 +172,8 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   `./gradlew verifySharedVersion testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
-  CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; daily runs first move that pin to
-  upstream's newest 2.x tag, rc included, and always build the commit the lock records).
+  CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; every event builds that same
+  reviewed pin. Update it through a PR with passing firmware and emulated release tests).
 - Workflows: `python3 tools/test/test-workflows.py`, `python3 tools/test/test-release-inputs.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
   actions pinned by SHA, no stored checkout credentials, and no write permission, secret or token
   in a job that runs a build tool. Steps shared by several workflows live in `.github/actions/`.

@@ -17,10 +17,10 @@ index a4193789..87113b20 100644
 +#define CROSSINK_TAILNET_SETTINGS_PIN 0
 +#endif
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 87ff4924..0e67a99f 100644
+index 31396754..bf24188e 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -723,6 +723,18 @@ STR_NO_SERVERS: "No OPDS servers configured"
+@@ -727,6 +727,18 @@ STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_OPDS_SERVERS: "OPDS Servers"
  STR_TAILSCALE: "Tailscale"
@@ -40,10 +40,10 @@ index 87ff4924..0e67a99f 100644
  STR_OPDS_SD_ROOT: "SD Root"
  STR_OPDS_DEFAULT_FOLDER: "Default Folder"
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 6f149f4a..028cdcef 100644
+index 2484c29f..5d18ee4a 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1186,6 +1186,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1175,6 +1175,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
  #endif
    systemSettings.push_back(SettingInfo::Action(StrId::STR_TAILSCALE, SettingAction::Tailscale));
@@ -76,7 +76,7 @@ index 8d290164..7bd048b5 100644
    // activity owning the open book should be the Home/Reader unwind target.
    virtual bool isBookReaderActivity() const { return false; }
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index bccb15f9..0478a964 100644
+index 6c963fd8..87f8bf17 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
 @@ -68,6 +68,9 @@
@@ -190,10 +190,10 @@ index bccb15f9..0478a964 100644
    if (currentActivity) currentActivity->onInputLockChanged(locked);
    for (const auto& activity : stackActivities) {
 diff --git a/src/activities/ActivityManager.h b/src/activities/ActivityManager.h
-index 73be4d22..06f684f0 100644
+index 3dacbcaa..ca0c934d 100644
 --- a/src/activities/ActivityManager.h
 +++ b/src/activities/ActivityManager.h
-@@ -89,6 +89,12 @@ class ActivityManager {
+@@ -91,6 +91,12 @@ class ActivityManager {
    std::unique_ptr<Activity> pendingActivity;
    enum class PendingAction { None, Push, Pop, Replace };
    PendingAction pendingAction = PendingAction::None;
@@ -207,7 +207,7 @@ index 73be4d22..06f684f0 100644
    bool releaseNotesShown = false;
    // Set when an overlay is closed specifically to hand control back to the
 diff --git a/src/activities/home/FileBrowserActivity.cpp b/src/activities/home/FileBrowserActivity.cpp
-index 79776167..17d19aba 100644
+index 79776167..82c53e5b 100644
 --- a/src/activities/home/FileBrowserActivity.cpp
 +++ b/src/activities/home/FileBrowserActivity.cpp
 @@ -19,6 +19,7 @@
@@ -231,7 +231,7 @@ index 79776167..17d19aba 100644
        (entryCount() > 0 && selectorIndex < entryCount()) ? entryNameAt(selectorIndex) : std::string();
    SETTINGS.showHiddenFiles = SETTINGS.showHiddenFiles ? 0 : 1;
 diff --git a/src/activities/network/WifiSelectionActivity.cpp b/src/activities/network/WifiSelectionActivity.cpp
-index 50125698..5cd5055c 100644
+index 50125698..85816f98 100644
 --- a/src/activities/network/WifiSelectionActivity.cpp
 +++ b/src/activities/network/WifiSelectionActivity.cpp
 @@ -20,6 +20,7 @@
@@ -383,7 +383,7 @@ index ddd1a6c9..a8f1ea3b 100644
        : Activity("QuickActions", renderer, mappedInput) {}
    void onEnter() override;
 diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
-index 5129675a..ce2a1ea4 100644
+index 5129675a..e9a3a71d 100644
 --- a/src/activities/settings/SettingsActivity.cpp
 +++ b/src/activities/settings/SettingsActivity.cpp
 @@ -25,6 +25,9 @@
@@ -435,10 +435,10 @@ index 32d4eace..2766cf72 100644
  
   private:
 diff --git a/src/main.cpp b/src/main.cpp
-index 148befb4..7e1b83b2 100644
+index 32da4eb7..aa6fde5f 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -111,6 +111,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -113,6 +113,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "SdCardFontSystem.h"
  #include "SilentRestart.h"
  #include "WifiCredentialStore.h"
@@ -446,7 +446,7 @@ index 148befb4..7e1b83b2 100644
  #include "activities/network/StatsUploadActivity.h"
  #include "activities/Activity.h"
  #include "activities/ActivityManager.h"
-@@ -1459,6 +1460,9 @@ static bool holdSleepWhileUsbPowered(bool monochrome = false) {
+@@ -1461,6 +1462,9 @@ static bool holdSleepWhileUsbPowered(bool monochrome = false) {
  #endif
  
  void enterDeepSleep(bool fromTimeout) {
@@ -456,7 +456,7 @@ index 148befb4..7e1b83b2 100644
  #ifndef SIMULATOR
    gpio.stopButtonCapture();
  #endif
-@@ -1993,6 +1997,9 @@ void setup() {
+@@ -2020,6 +2024,9 @@ void setup() {
    // Apply brightness and wake policy only after the saved settings are loaded.
    Frontlight.initializeHardware();
    SETTINGS.loadFromFile();
@@ -467,10 +467,10 @@ index 148befb4..7e1b83b2 100644
    // Up + Down resets EEGO, so every boot must restore touch as the recovery path.
    SETTINGS.disableReaderTouchscreen = 0;
 diff --git a/src/network/CrossPointWebServer.cpp b/src/network/CrossPointWebServer.cpp
-index 74585bc7..02dd82c8 100644
+index 0d3fdd9a..2bce0a78 100644
 --- a/src/network/CrossPointWebServer.cpp
 +++ b/src/network/CrossPointWebServer.cpp
-@@ -67,6 +67,7 @@
+@@ -69,6 +69,7 @@
  #include "util/FontFamilyLabel.h"
  #include "util/OpdsDownloadFolder.h"
  #include "util/ReaderStatusBarJson.h"
@@ -478,11 +478,10 @@ index 74585bc7..02dd82c8 100644
  #include "util/StringUtils.h"
  
  namespace {
-@@ -391,6 +392,14 @@ bool isProtectedPath(const String& path) {
+@@ -396,6 +397,13 @@ bool isProtectedPath(const String& path) {
  
    return false;
  }
-+
 +// CrossInk-Tailnet settings PIN: while it is locked, the settings, credential, font and plugin
 +// file endpoints answer 403 (and hidden files stay hidden, see SettingsPin::relock()).
 +bool refusedWhileLocked(WebServer& server) {
@@ -492,59 +491,80 @@ index 74585bc7..02dd82c8 100644
 +}
  }  // namespace
  
- // File listing page template - now using generated headers:
-@@ -492,7 +501,8 @@ void CrossPointWebServer::begin() {
-   server->on("/api/crypto", HTTP_POST, [this] { handleCrypto(); });
-   server->on("/api/fetch", HTTP_POST, [this] { handleFetch(); });
-   server->on("/api/book-key", HTTP_POST, [this] { handleBookKey(); });
--  server->on("/api/plugin-fs", HTTP_POST, [this] { handlePluginFs(); }, [this] { handlePluginFsUpload(); });
-+  server->on("/api/plugin-fs", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handlePluginFs(); },
-+             [this] { if (!SettingsPin::locked()) handlePluginFsUpload(); });
- #endif
-   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
-   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
-@@ -514,30 +524,31 @@ void CrossPointWebServer::begin() {
-   server->on("/delete", HTTP_POST, [this] { handleDelete(); });
+ namespace webtransfer {
+@@ -519,11 +527,11 @@ void CrossPointWebServer::begin() {
+           pluginFsUpload.error = "file transfer in progress";
+           return;
+         }
+-        handlePluginFs();
++        if (!refusedWhileLocked(*server)) handlePluginFs();
+       },
+       [this] {
+         if (!webtransfer::isWebSocketUploadInProgress()) {
+-          handlePluginFsUpload();
++          if (!SettingsPin::locked()) handlePluginFsUpload();
+           return;
+         }
+         if (server->upload().status == UPLOAD_FILE_START) pluginFsUpload.started = true;
+@@ -566,14 +574,14 @@ void CrossPointWebServer::begin() {
+   });
  
    // Settings endpoints
 -  server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
 -  server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
--  server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
--  server->on("/api/status-bars", HTTP_GET, [this] { handleGetStatusBars(); });
--  server->on("/api/status-bars", HTTP_POST, [this] { handlePostStatusBars(); });
 +  server->on("/settings", HTTP_GET, [this] { if (!refusedWhileLocked(*server)) handleSettingsPage(); });
 +  server->on("/api/settings", HTTP_GET, [this] { if (!refusedWhileLocked(*server)) handleGetSettings(); });
-+  server->on("/api/settings", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handlePostSettings(); });
+   server->on("/api/settings", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handlePostSettings();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handlePostSettings();
+   });
+-  server->on("/api/status-bars", HTTP_GET, [this] { handleGetStatusBars(); });
 +  server->on("/api/status-bars", HTTP_GET, [this] { if (!refusedWhileLocked(*server)) handleGetStatusBars(); });
-+  server->on("/api/status-bars", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handlePostStatusBars(); });
+   server->on("/api/status-bars", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handlePostStatusBars();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handlePostStatusBars();
+   });
  
    // Font management endpoints
-   server->on("/fonts", HTTP_GET, [this] { handleFontsPage(); });
-   server->on("/api/fonts", HTTP_GET, [this] { handleFontList(); });
--  server->on("/api/fonts/upload", HTTP_POST, [this] { handleFontUpload(); }, [this] { handleFontUploadData(); });
--  server->on("/api/fonts/delete", HTTP_POST, [this] { handleFontDelete(); });
-+  server->on("/api/fonts/upload", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handleFontUpload(); },
-+             [this] { if (!SettingsPin::locked()) handleFontUploadData(); });
-+  server->on("/api/fonts/delete", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handleFontDelete(); });
+@@ -582,32 +590,32 @@ void CrossPointWebServer::begin() {
+   server->on(
+       "/api/fonts/upload", HTTP_POST,
+       [this] {
+-        if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handleFontUpload();
++        if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handleFontUpload();
+       },
+-      [this] { handleFontUploadData(); });
++      [this] { if (!SettingsPin::locked()) handleFontUploadData(); });
+   server->on("/api/fonts/delete", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handleFontDelete();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handleFontDelete();
+   });
  
    // OPDS server endpoints
  #if CROSSINK_APP_CAP_OPDS
    // Without OPDS these answer 404, and the web settings page leaves its OPDS card out.
 -  server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
--  server->on("/api/opds", HTTP_POST, [this] { handlePostOpdsServer(); });
--  server->on("/api/opds/delete", HTTP_POST, [this] { handleDeleteOpdsServer(); });
 +  server->on("/api/opds", HTTP_GET, [this] { if (!refusedWhileLocked(*server)) handleGetOpdsServers(); });
-+  server->on("/api/opds", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handlePostOpdsServer(); });
-+  server->on("/api/opds/delete", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handleDeleteOpdsServer(); });
+   server->on("/api/opds", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handlePostOpdsServer();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handlePostOpdsServer();
+   });
+   server->on("/api/opds/delete", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handleDeleteOpdsServer();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handleDeleteOpdsServer();
+   });
  #endif
  
    // Wi-Fi credential endpoints
 -  server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiNetworks(); });
--  server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiNetwork(); });
--  server->on("/api/wifi/delete", HTTP_POST, [this] { handleDeleteWifiNetwork(); });
 +  server->on("/api/wifi", HTTP_GET, [this] { if (!refusedWhileLocked(*server)) handleGetWifiNetworks(); });
-+  server->on("/api/wifi", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handlePostWifiNetwork(); });
-+  server->on("/api/wifi/delete", HTTP_POST, [this] { if (!refusedWhileLocked(*server)) handleDeleteWifiNetwork(); });
+   server->on("/api/wifi", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handlePostWifiNetwork();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handlePostWifiNetwork();
+   });
+   server->on("/api/wifi/delete", HTTP_POST, [this] {
+-    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) handleDeleteWifiNetwork();
++    if (!webtransfer::rejectMutationDuringWebSocketUpload(*server)) if (!refusedWhileLocked(*server)) handleDeleteWifiNetwork();
+   });
  
    server->onNotFound([this] { handleNotFound(); });
- 

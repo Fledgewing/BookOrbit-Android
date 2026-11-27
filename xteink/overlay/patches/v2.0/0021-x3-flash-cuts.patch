@@ -32,10 +32,10 @@ index 6793b90c..161cd9d7 100644
    if (action == CrossPointSettings::READING_STATS && !SETTINGS.shouldTrackReadingStats()) return false;
    if (action == CrossPointSettings::PREVIOUS_PAGE || action == CrossPointSettings::NEARBY_POSITION_SYNC ||
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index c6cdf4c7..6f149f4a 100644
+index 746e46ea..2484c29f 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1186,7 +1186,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1175,7 +1175,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
  #endif
    systemSettings.push_back(SettingInfo::Action(StrId::STR_TAILSCALE, SettingAction::Tailscale));
@@ -46,7 +46,7 @@ index c6cdf4c7..6f149f4a 100644
    // Picco retains the vendor recovery slot and has no spare application slot.
    systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index aa7bb0a1..bccb15f9 100644
+index 1bd72b64..6c963fd8 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
 @@ -4,7 +4,9 @@
@@ -150,7 +150,7 @@ index 95eadea5..3fdf09e7 100644
           FsHelpers::hasPngExtension(path) || FsHelpers::hasBmpExtension(path);
  }
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
-index af8fc2e6..2fed1325 100644
+index 31d8e821..b97d0779 100644
 --- a/src/activities/home/HomeActivity.cpp
 +++ b/src/activities/home/HomeActivity.cpp
 @@ -825,7 +825,7 @@ void HomeActivity::onEnter() {
@@ -285,10 +285,10 @@ index 265d8362..9a67610c 100644
  constexpr int MENU_ENTRY_COUNT = sizeof(MENU_ENTRIES) / sizeof(MENU_ENTRIES[0]);
  static_assert(MENU_ENTRY_COUNT <= NetworkModeSelectionActivity::MAX_MENU_ROWS, "Raise MAX_MENU_ROWS");
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index 5d6d869d..27a44ea9 100644
+index d86e79e0..75fd3449 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -70,7 +70,9 @@
+@@ -71,7 +71,9 @@
  #include "KOReaderSyncActivity.h"
  #include "LookedUpWordsActivity.h"
  #include "MappedInputManager.h"
@@ -298,7 +298,7 @@ index 5d6d869d..27a44ea9 100644
  #include "PageWordGeometry.h"
  #include "ProgressMapper.h"
  #include "QrDisplayActivity.h"
-@@ -4957,6 +4959,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
+@@ -5017,6 +5019,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
        break;
      }
      case EpubReaderMenuAction::NEARBY_POSITION_SYNC: {
@@ -308,7 +308,7 @@ index 5d6d869d..27a44ea9 100644
        const int currentPage = section ? section->currentPage : nextPageNumber;
        const int totalPages = section ? section->estimatedTotalPages() : std::max(1, cachedChapterTotalPageCount);
        std::optional<uint16_t> paragraphIndex;
-@@ -5027,6 +5032,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
+@@ -5087,6 +5092,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
        pauseReadingPaceTimer("nearby_position_sync");
        activityManager.replaceActivity(std::move(syncActivity));
        break;
@@ -317,10 +317,10 @@ index 5d6d869d..27a44ea9 100644
      case EpubReaderMenuAction::BOOKMARK_TOGGLE: {
        const int bookmarkPageCount = section ? section->estimatedTotalPages() : 0;
 diff --git a/src/activities/reader/EpubReaderMenuModel.h b/src/activities/reader/EpubReaderMenuModel.h
-index 1bc78419..e3b355d2 100644
+index 77397618..452dcc47 100644
 --- a/src/activities/reader/EpubReaderMenuModel.h
 +++ b/src/activities/reader/EpubReaderMenuModel.h
-@@ -238,8 +238,10 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
+@@ -239,8 +239,10 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
    if (available.buttonDevice) {
      if (available.hasBookOrbitSync) location.add(ReaderDrawerCatalogItem::BookOrbitSync);
      if (available.hasKOReaderSync) location.add(ReaderDrawerCatalogItem::SyncProgress);
@@ -332,19 +332,18 @@ index 1bc78419..e3b355d2 100644
    location.add(ReaderDrawerCatalogItem::Screenshot);
    location.add(ReaderDrawerCatalogItem::DisplayQr);
 diff --git a/src/activities/settings/HyphenationManagerActivity.cpp b/src/activities/settings/HyphenationManagerActivity.cpp
-index d7c8980a..8fe55296 100644
+index 706212b4..4e49a568 100644
 --- a/src/activities/settings/HyphenationManagerActivity.cpp
 +++ b/src/activities/settings/HyphenationManagerActivity.cpp
-@@ -82,10 +82,29 @@ void HyphenationManagerActivity::select() {
-     if (HyphenationPackStore::hasSource(code))
-       apply(false);
+@@ -112,11 +112,26 @@ void HyphenationManagerActivity::select() {
+     else if (localOnly)
+       showLanguages();
      else
 +#if CROSSINK_TAILNET_NO_ASSET_DOWNLOADS
 +    {
-+      // CrossInk-Tailnet X3 build without asset downloads: an SD copy is the way to install.
 +      RenderLock lock(*this);
 +      const char* ok[] = {tr(STR_OK)};
-+      popup_.show(catalog_->labels[selected_], ok, 1, 0, [this](int) { pending_ = Pending::List; },
++      popup_.show(row->label, ok, 1, 0, [this](int) { pending_ = Pending::List; },
 +                  OptionPopup::Note("Copy hyphenation files to /.crossink/hyphenation on the SD card.", ""));
 +      popup_.setCancelCallback([this] { pending_ = Pending::List; });
 +      requestUpdate();
@@ -356,23 +355,13 @@ index d7c8980a..8fe55296 100644
    }
    RenderLock lock(*this);
 +#if CROSSINK_TAILNET_NO_ASSET_DOWNLOADS
-+  const char* options[] = {tr(STR_DELETE), tr(STR_CANCEL)};  // No Update: nothing downloads on this build.
-+  popup_.show(
-+      catalog_->labels[selected_], options, 2, 1,
-+      [this](int index) { pending_ = index == 0 ? Pending::Remove : Pending::List; },
-+      OptionPopup::Note(tr(STR_HYPHENATION_APPLY_HINT), ""));
++  const bool canUpdate = false;
 +#else
-   const char* options[] = {tr(STR_UPDATE), tr(STR_DELETE), tr(STR_CANCEL)};
-   popup_.show(
-       catalog_->labels[selected_], options, 3, 2,
-@@ -93,6 +112,7 @@ void HyphenationManagerActivity::select() {
-                                      : index == 1 ? Pending::Remove
-                                                   : Pending::List; },
-       OptionPopup::Note(tr(STR_HYPHENATION_APPLY_HINT), ""));
+   const bool canUpdate = !localOnly || hasSource;
 +#endif
-   popup_.setCancelCallback([this] { pending_ = Pending::List; });
-   requestUpdate();
- }
+   const char* options[] = {tr(STR_UPDATE), tr(STR_DELETE), tr(STR_CANCEL)};
+   const int firstOption = canUpdate ? 0 : 1;
+   popup_.show(
 diff --git a/src/activities/settings/ReleaseNotesActivity.cpp b/src/activities/settings/ReleaseNotesActivity.cpp
 index 83fe4452..2171303b 100644
 --- a/src/activities/settings/ReleaseNotesActivity.cpp
@@ -430,10 +419,10 @@ index 7bbc50eb..4190ebf3 100644
                                                     StrId::STR_NEARBY_POSITION_SYNC, StrId::STR_SEND_NEARBY_BOOK};
    static constexpr std::array<FrontlightPanelAction, 4> ACTIONS = {
 diff --git a/src/main.cpp b/src/main.cpp
-index 41b9128e..148befb4 100644
+index 3bf4f5e5..32da4eb7 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -2279,6 +2279,9 @@ void setup() {
+@@ -2306,6 +2306,9 @@ void setup() {
          launched = activityManager.resumeFileTransferFromNetworkBoot(snapshotPayload);
          break;
        case NetworkBootTarget::DOWNLOAD_ASSETS: {
@@ -444,10 +433,10 @@ index 41b9128e..148befb4 100644
          auto assets = makeUniqueNoThrow<AssetDownloadActivity>(renderer, mappedInputManager, snapshotPayload);
          if (assets) {
 diff --git a/src/network/CrossPointWebServer.cpp b/src/network/CrossPointWebServer.cpp
-index b3d4b648..74585bc7 100644
+index 85fb6484..0d3fdd9a 100644
 --- a/src/network/CrossPointWebServer.cpp
 +++ b/src/network/CrossPointWebServer.cpp
-@@ -475,6 +475,10 @@ void CrossPointWebServer::begin() {
+@@ -484,6 +484,10 @@ void CrossPointWebServer::begin() {
      server->sendHeader("Content-Encoding", "gzip");
      server->send_P(200, "application/javascript", PluginHostJs, PluginHostJsCompressedSize);
    });
@@ -458,28 +447,20 @@ index b3d4b648..74585bc7 100644
    server->on("/api/plugins", HTTP_GET, [this] { handlePluginList(); });
    server->on("/plugin", HTTP_GET, [this] { handlePluginFile(); });
    server->on("/plugins-run", HTTP_GET, [this] { handlePluginRunnerPage(); });
-@@ -482,11 +486,14 @@ void CrossPointWebServer::begin() {
-   server->on("/api/plugin-jobs/claim", HTTP_GET, [this] { handlePluginJobClaim(); });
-   server->on("/api/plugin-jobs/complete", HTTP_POST, [this] { handlePluginJobComplete(); });
-   server->on("/api/plugin-jobs/status", HTTP_GET, [this] { handlePluginJobStatus(); });
-+#endif
-+#if !CROSSINK_TAILNET_NO_PLUGINS
-   server->on("/api/relay", HTTP_POST, [this] { handleRelay(); });
-   server->on("/api/crypto", HTTP_POST, [this] { handleCrypto(); });
-   server->on("/api/fetch", HTTP_POST, [this] { handleFetch(); });
-   server->on("/api/book-key", HTTP_POST, [this] { handleBookKey(); });
-   server->on("/api/plugin-fs", HTTP_POST, [this] { handlePluginFs(); }, [this] { handlePluginFsUpload(); });
-+#endif
+@@ -528,6 +532,7 @@ void CrossPointWebServer::begin() {
+         pluginFsUpload.errorStatus = 423;
+         pluginFsUpload.error = "file transfer in progress";
+       });
++ #endif
    server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
    server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
    server->on("/download", HTTP_GET, [this] { handleDownload(); });
 diff --git a/src/util/PluginEvents.cpp b/src/util/PluginEvents.cpp
-index 1898aa19..61775dca 100644
+index e5022511..6f2773e1 100644
 --- a/src/util/PluginEvents.cpp
 +++ b/src/util/PluginEvents.cpp
-@@ -1,5 +1,20 @@
+@@ -1,4 +1,19 @@
  #include "PluginEvents.h"
- 
 +#if CROSSINK_TAILNET_NO_PLUGINS
 +// CrossInk-Tailnet X3 build without plugins: no subscriptions, nothing is queued or sent.
 +namespace pluginevents {
@@ -495,10 +476,10 @@ index 1898aa19..61775dca 100644
 +}  // namespace pluginevents
 +#else
 +
+ 
  #include <ArduinoJson.h>
- #include <HalStorage.h>
- #include <LibraryBuilder.h>
-@@ -546,3 +561,4 @@ void deliverSleepEvents() {
+ #include <FilePublication.h>
+@@ -577,3 +592,4 @@ void deliverSleepEvents() {
  }
  
  }  // namespace pluginevents

@@ -6,7 +6,7 @@ signature is logged and the update installs. Switch ORBIFY_OTA_SIGNATURE (tailne
 Host tests: xteink/test/update_signature_test.cpp, ota_signature_test.cpp.
 
 diff --git a/lib/JsonParser/ReleaseJsonParser.cpp b/lib/JsonParser/ReleaseJsonParser.cpp
-index 904d2773..c3e7c0cc 100644
+index 904d2773..4433764a 100644
 --- a/lib/JsonParser/ReleaseJsonParser.cpp
 +++ b/lib/JsonParser/ReleaseJsonParser.cpp
 @@ -20,6 +20,18 @@ void copyGithubSha256Digest(char* dst, size_t dstSize, const char* value, size_t
@@ -81,7 +81,7 @@ index 904d2773..c3e7c0cc 100644
        break;
    }
 diff --git a/lib/JsonParser/ReleaseJsonParser.h b/lib/JsonParser/ReleaseJsonParser.h
-index f9d869f3..5d621433 100644
+index f9d869f3..cd798ba8 100644
 --- a/lib/JsonParser/ReleaseJsonParser.h
 +++ b/lib/JsonParser/ReleaseJsonParser.h
 @@ -20,6 +20,11 @@ class ReleaseJsonParser {
@@ -112,7 +112,7 @@ index f9d869f3..5d621433 100644
 +  bool currentAssetSigned;
  };
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
-index cd94dd10..f0d30173 100644
+index b9ec2411..e559a78e 100644
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
 @@ -11,6 +11,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
@@ -215,7 +215,7 @@ index cd94dd10..f0d30173 100644
    if (otaSize > 0 && stagedSize != otaSize) {
      LOG_ERR("OTA", "Firmware size mismatch: got %zu, expected %zu", stagedSize, otaSize);
 diff --git a/src/network/OtaUpdater.h b/src/network/OtaUpdater.h
-index 1179e05e..6735c63c 100644
+index 1179e05e..4d8ebb1d 100644
 --- a/src/network/OtaUpdater.h
 +++ b/src/network/OtaUpdater.h
 @@ -9,6 +9,9 @@ class OtaUpdater {

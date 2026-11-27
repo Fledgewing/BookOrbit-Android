@@ -341,10 +341,10 @@ index ea675cce..b177e6d9 100644
    // Written as the pages arrive, so no list of them waits in RAM beside the TLS session;
    // the count goes into the header at the end, and the old file stays until then.
    HalFile file;
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index 9381bfee..80196a55 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -1,6 +1,7 @@
  #include "BookOrbitCatalogBrowserActivity.h"
  
@@ -438,10 +438,10 @@ index 79eee67f..50125698 100644
  
  #if defined(ENABLE_SERIAL_LOG) && LOG_LEVEL >= 2
 diff --git a/src/main.cpp b/src/main.cpp
-index 36b0acdd..677401fa 100644
+index 2f37c828..537d2782 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -94,6 +94,8 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -96,6 +96,8 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #endif
  #endif
  
@@ -450,7 +450,7 @@ index 36b0acdd..677401fa 100644
  #include "AppVersion.h"
  #include "BookOrbitCredentialStore.h"
  #include "CrossPointSettings.h"
-@@ -392,6 +394,32 @@ constexpr uint32_t SILENT_REBOOT_READER_CLEAN_IMAGE_BASE = 1U << 0;
+@@ -394,6 +396,32 @@ constexpr uint32_t SILENT_REBOOT_READER_CLEAN_IMAGE_BASE = 1U << 0;
  constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_MAGIC = 0xC1EAB017;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_AUTO_TURN = 1U << 0;
@@ -483,7 +483,7 @@ index 36b0acdd..677401fa 100644
  constexpr uint32_t NETWORK_RENDER_TASK_STACK_BYTES = 8192;
  // FreeType's anti-aliased rasterizer reserves a 16 KiB scratch pool on its
  // caller's stack. Scalable fonts are S3-only, so leave C3's constrained reader
-@@ -2079,6 +2107,9 @@ void setup() {
+@@ -2106,6 +2134,9 @@ void setup() {
        LOG_INF("BOOT", "Minimal network boot ready: target=%lu free=%u maxAlloc=%u",
                static_cast<unsigned long>(snapshotTarget), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
        tailnet_network_phase_begin(snapshotTarget);
@@ -494,7 +494,7 @@ index 36b0acdd..677401fa 100644
      case BootResume::SplashlessWake:
        // Like upstream, clean the first Home paint unless a saved frame restores
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 043a6c26..69f795ee 100644
+index 917db763..3ddc3177 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -4,6 +4,7 @@
@@ -782,13 +782,10 @@ index 043a6c26..69f795ee 100644
    const std::string url = BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/books/" + std::to_string(bookId) +
                            "?deviceId=" + BookOrbitSyncClient::deviceId();
 -  JsonDocument filter;
--  bookOrbitSetFilter(filter,
--                     R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
--                     R"("devicePath":true}]})");
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    bookOrbitSetFilter(filter,
-+                       R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
-+                       R"("devicePath":true}]})");
+   bookOrbitSetFilter(filter,
+                      R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+                      R"("devicePath":true,"downloadVariant":true}]})");
 +  };
    JsonDocument doc;
 -  if (!fetchJson(url, filter, doc)) return false;
@@ -797,10 +794,10 @@ index 043a6c26..69f795ee 100644
    outDetail.id = doc["id"] | bookId;
    outDetail.title = std::string(doc["title"] | "");
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
-index 1bb8e078..81a5969e 100644
+index 6d0de203..7d36b247 100644
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
-@@ -145,6 +145,23 @@ class BookOrbitCatalogClient {
+@@ -149,6 +149,23 @@ class BookOrbitCatalogClient {
    // UI distinguish "check your connection" from "check your server".
    static bool lastFetchBadResponse;
  
@@ -825,10 +822,10 @@ index 1bb8e078..81a5969e 100644
    static bool fetchRootSections(std::vector<BookOrbitCatalogSection>& outSections);
  
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index 533c4966..42641b83 100644
+index 0842a3be..9b08c766 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -229,6 +229,17 @@ class ProgressNotifier {
+@@ -231,6 +231,17 @@ class ProgressNotifier {
    const HttpDownloader::ProgressCallback* progress_ = nullptr;
  };
  
@@ -846,7 +843,7 @@ index 533c4966..42641b83 100644
  struct Sink {
    const std::vector<HttpDownloader::Header>* headers = nullptr;
    std::function<bool(const uint8_t*, size_t)> write;
-@@ -367,7 +378,10 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+@@ -371,7 +382,10 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
          currentParsed && HttpRedirectPolicy::shouldSendAuthorization(currentOrigin, credentialOrigin, hasCredentials);
  
      freeink::SecureHttpClient localHttp;
@@ -858,7 +855,7 @@ index 533c4966..42641b83 100644
      auto& http = retained ? *retained : localHttp;
      http.setReuse(retained != nullptr);
      http.setTimeout(HTTP_TIMEOUT_MS);
-@@ -861,6 +875,10 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+@@ -865,6 +879,10 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
    if (options.transport != Transport::WOLFSSL && options.session) options.session->reset();
    WifiPowerSaveGuard wifiPowerSaveGuard;
    (void)wifiPowerSaveGuard;
@@ -870,10 +867,10 @@ index 533c4966..42641b83 100644
    const size_t bufferSize = options.bufferSize > 0 ? options.bufferSize : DEFAULT_DOWNLOAD_BUFFER_SIZE;
    if (options.useServerFilename && !options.stageAsPart) {
 diff --git a/src/network/HttpDownloader.h b/src/network/HttpDownloader.h
-index 6a8a24da..ebe8ca5e 100644
+index f44e0932..3bda192a 100644
 --- a/src/network/HttpDownloader.h
 +++ b/src/network/HttpDownloader.h
-@@ -91,6 +91,11 @@ class HttpDownloader {
+@@ -97,6 +97,11 @@ class HttpDownloader {
      // preserves the 4 KiB default; official small-header asset requests use 1 KiB.
      uint16_t httpReceiveBufferSize = 0;
      Transport transport;

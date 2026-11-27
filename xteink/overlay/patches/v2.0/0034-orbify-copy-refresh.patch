@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: copy refresh
 Replace queued outdated book copies during network work.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index 6b68f921..b0799aad 100644
+index 30ac7cba..dcac2610 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -183,6 +183,12 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -44,7 +44,7 @@ index 138a748d..697f23e2 100644
    backgroundSync = doc["backgroundSync"] | static_cast<uint8_t>(0);
  #endif
 diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.h b/lib/BookOrbitSync/BookOrbitCredentialStore.h
-index edee8363..4516bac3 100644
+index b7c4ebda..24c9fdba 100644
 --- a/lib/BookOrbitSync/BookOrbitCredentialStore.h
 +++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
 @@ -44,6 +44,9 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
@@ -76,10 +76,10 @@ index edee8363..4516bac3 100644
  #if CROSSINK_TAILNET_BACKGROUND_SYNC
    // Sync the open book in the background while reading (CrossInk-Tailnet, X4s): how often,
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index c747f475..2eca74b5 100644
+index a33c1b82..cb4cfc12 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-@@ -892,7 +892,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+@@ -904,7 +904,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
                                                             const size_t count,
                                                             void (*visit)(const char* hash, int64_t bookId,
                                                                           int64_t bookFileId, void* context),
@@ -90,7 +90,7 @@ index c747f475..2eca74b5 100644
    outLibraryVersion[0] = '\0';
    lastHttpCode = 0;
    lastTransportError = 0;
-@@ -963,7 +965,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+@@ -975,7 +977,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
    if (httpCode < 200 || httpCode >= 300) return SERVER_ERROR;
  
    JsonDocument filter;
@@ -101,7 +101,7 @@ index c747f475..2eca74b5 100644
    JsonDocument doc;
    if (deserializeJson(doc, response, DeserializationOption::Filter(filter)) != DeserializationError::Ok) {
      LOG_ERR("BookOrbit", "Failed to parse match check response");
-@@ -974,6 +978,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+@@ -986,6 +990,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
      const int64_t bookId = match["bookId"] | static_cast<int64_t>(0);
      const int64_t bookFileId = match["bookFileId"] | static_cast<int64_t>(0);
      if (bookId != 0 && hash[0] != '\0' && visit != nullptr) visit(hash, bookId, bookFileId, context);
@@ -112,7 +112,7 @@ index c747f475..2eca74b5 100644
    snprintf(outLibraryVersion, LIBRARY_VERSION_SIZE, "%s", doc["libraryVersion"] | "");
    return OK;
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
-index 5106bba8..b124f635 100644
+index 531a08d9..321dc4e2 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.h
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
 @@ -139,7 +139,11 @@ class BookOrbitSyncClient {
@@ -129,7 +129,7 @@ index 5106bba8..b124f635 100644
    /**
     * Record a completed sync on the server (POST /plugin/sweeps), the same call BookOrbit's
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 3a1b1265..255f4800 100644
+index 448be560..cc44c5a3 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -291,6 +291,8 @@ STR_BOOKORBIT_ON_DEVICE_ERROR: "Could not list the books on the SD card."
@@ -142,7 +142,7 @@ index 3a1b1265..255f4800 100644
  STR_ORBIFY_NOT_FINISHED: "Not finished"
  STR_ORBIFY_MARK_FINISHED: "Mark finished"
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index ca9a8831..11a7622d 100644
+index ca9a8831..b51b678c 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -11,6 +11,10 @@
@@ -169,7 +169,7 @@ index ca9a8831..11a7622d 100644
  
    SavedWifiConnect::disconnect();
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 9be03e28..ad3743b5 100644
+index 6dc9cc2e..3483a338 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -21,6 +21,9 @@
@@ -182,7 +182,7 @@ index 9be03e28..ad3743b5 100644
  #include "BookOrbitHomeStore.h"
  #include "BookOrbitRemotePosition.h"
  #include "BookOrbitStatsUpload.h"
-@@ -241,6 +244,23 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
+@@ -240,6 +243,23 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
  }
  
  void BookOrbitSyncActivity::startBookUpdate() {
@@ -206,7 +206,7 @@ index 9be03e28..ad3743b5 100644
    BookOrbitCatalogLink link;
    link.bookId = updateBookId;
    link.replacePath = epubPath;
-@@ -341,6 +361,14 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -340,6 +360,14 @@ void BookOrbitSyncActivity::runSleepSync() {
    const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
    if (refreshHome && !sleepSyncWakeRequested()) BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
    if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
@@ -222,10 +222,10 @@ index 9be03e28..ad3743b5 100644
    if (refreshHome && !sleepSyncWakeRequested()) {
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 5947ca37..455d20b9 100644
+index 21e048c4..66e879aa 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
-@@ -35,7 +35,9 @@ namespace fui = freeink::ui;
+@@ -34,7 +34,9 @@ namespace fui = freeink::ui;
  namespace {
  // CrossInk-Tailnet: "Sync While Reading" is the last row, listed only under Smart sync.
  // BookSync (patch 0027): "Mark Finished at End" sits before Home.
@@ -236,7 +236,7 @@ index 5947ca37..455d20b9 100644
  constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
  // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
  // generic and already translated in every language file.
-@@ -49,6 +51,9 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -48,6 +50,9 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
                                       StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
  #if CROSSINK_TAILNET_ORBIFY_FINISH
                                       StrId::STR_ORBIFY_MARK_AT_END,
@@ -246,7 +246,7 @@ index 5947ca37..455d20b9 100644
  #endif
                                       StrId::STR_HOME,
  #if CROSSINK_TAILNET_BACKGROUND_SYNC
-@@ -56,6 +61,7 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -55,6 +60,7 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
  #endif
  };
  constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
@@ -254,7 +254,7 @@ index 5947ca37..455d20b9 100644
  constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
  constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
  // The Home page: the top shelf, the bottom shelf, then the refresh.
-@@ -274,6 +280,12 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -273,6 +279,12 @@ void BookOrbitSettingsActivity::handleSelection() {
      BOOKORBIT_STORE.setOrbifyMarkAtEnd(!BOOKORBIT_STORE.getOrbifyMarkAtEnd());
      BOOKORBIT_STORE.saveToFile();
      requestUpdate();
@@ -267,7 +267,7 @@ index 5947ca37..455d20b9 100644
  #endif
    } else if (selectedIndex == HOME_ROW) {
      startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
-@@ -439,6 +451,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+@@ -438,6 +450,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
      } else if (i == ORBIFY_MARK_ROW) {
        values[i] = BOOKORBIT_STORE.getOrbifyMarkAtEnd() ? tr(STR_ON) : tr(STR_OFF);
  #endif

@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: copy refresh replace
 Replace changed copies during sync, carrying unfinished work to the next run.
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 5e89b07..7a873b5 100644
+index eb7bde79..32e77ef6 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -292,7 +292,6 @@ STR_BOOKORBIT_SYNC_ON_SLEEP: "Sync on Sleep"
@@ -15,7 +15,7 @@ index 5e89b07..7a873b5 100644
  STR_ORBIFY_NOT_FINISHED: "Not finished"
  STR_ORBIFY_MARK_FINISHED: "Mark finished"
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index b992d36..f1c9827 100644
+index 71dd6854..392acea8 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -24,6 +24,7 @@
@@ -50,10 +50,10 @@ index b992d36..f1c9827 100644
    }
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 2ff6fc7..aedf8f0 100644
+index b2374588..426a664a 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -265,6 +265,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
+@@ -264,6 +264,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
  bool BookOrbitSyncActivity::offerBookUpdate() {
    if (updateOffered || !documentIncompatible()) return false;
    updateOffered = true;
@@ -69,7 +69,7 @@ index 2ff6fc7..aedf8f0 100644
    syncSession.reset();  // nothing more goes over it; the update restarts into the catalog
    {
      RenderLock lock(*this);
-@@ -275,23 +284,6 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
+@@ -274,23 +283,6 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
  }
  
  void BookOrbitSyncActivity::startBookUpdate() {
@@ -93,7 +93,7 @@ index 2ff6fc7..aedf8f0 100644
    BookOrbitCatalogLink link;
    link.bookId = updateBookId;
    link.replacePath = epubPath;
-@@ -647,6 +639,15 @@ bool BookOrbitSyncActivity::exchangeReadingData() {
+@@ -646,6 +638,15 @@ bool BookOrbitSyncActivity::exchangeReadingData() {
    if (stopIfWoken()) return false;
    // While the session is open: the offer at the end of the sync needs the book to download.
    if (!sleepSync && documentIncompatible()) resolveUpdateBook();

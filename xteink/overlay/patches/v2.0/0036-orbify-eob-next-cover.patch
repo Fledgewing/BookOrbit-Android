@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: eob next cover
 Fetch and display the next book cover on the End-of-Book page.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index 9ea55bd8..ea84f00a 100644
+index a127f81b..6160f10c 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -209,3 +209,8 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -16,7 +16,7 @@ index 9ea55bd8..ea84f00a 100644
 +#define CROSSINK_TAILNET_ORBIFY_EOB_COVER 0
 +#endif
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 316b80f9..d48ececb 100644
+index 555300c3..6920a460 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -112,6 +112,12 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
@@ -32,7 +32,7 @@ index 316b80f9..d48ececb 100644
    {
      RenderLock lock(*this);
      state = SYNC_COMPLETE;
-@@ -388,6 +394,10 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -387,6 +393,10 @@ void BookOrbitSyncActivity::runSleepSync() {
    if (refreshHome && !sleepSyncWakeRequested()) {
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
    }
@@ -43,7 +43,7 @@ index 316b80f9..d48ececb 100644
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
  #ifdef SIMULATOR
    endSimulatorScenarioIfRequested(static_cast<int>(state));
-@@ -828,8 +838,18 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -827,8 +837,18 @@ void BookOrbitSyncActivity::performUpload() {
    }
  
    syncSession.reset();

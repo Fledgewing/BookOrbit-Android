@@ -6,7 +6,7 @@ login screen offers an unknown or changed certificate for trust, with its SHA-25
 Other hosts keep their existing policy. Host test: xteink/test/server_trust_test.cpp.
 
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index cf2c217..2092cdc 100644
+index b34c9d12..f5f686b6 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -440,6 +440,13 @@ void orbifyCacheAfterWrite(const char* method, const std::string& url, const cha
@@ -36,7 +36,7 @@ index cf2c217..2092cdc 100644
  #if TAILNET_PROBE_CATALOG_LIVE
    tailnet_probe_window_begin(pooled && s_sessionHandshakePaid ? "BookOrbit request (kept session)"
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 0c8a9e1..611bae3 100644
+index 093b9055..23c700ff 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -353,6 +353,10 @@ STR_AUTH_SUCCESS: "Successfully authenticated!"
@@ -51,7 +51,7 @@ index 0c8a9e1..611bae3 100644
  STR_DONE: "Done"
  STR_COMPLETE: "Complete"
 diff --git a/src/activities/settings/BookOrbitAuthActivity.cpp b/src/activities/settings/BookOrbitAuthActivity.cpp
-index ed35393..37cf33a 100644
+index ed353938..7c8cb9e5 100644
 --- a/src/activities/settings/BookOrbitAuthActivity.cpp
 +++ b/src/activities/settings/BookOrbitAuthActivity.cpp
 @@ -12,6 +12,7 @@
@@ -131,7 +131,7 @@ index ed35393..37cf33a 100644
      // This activity replaced the settings stack rather than stacking on it, so there is
      // nothing to return to: both buttons go home. When WiFi came up, onExit() restarts
 diff --git a/src/activities/settings/BookOrbitAuthActivity.h b/src/activities/settings/BookOrbitAuthActivity.h
-index 0943e32..7fa7152 100644
+index 0943e32f..39e1d025 100644
 --- a/src/activities/settings/BookOrbitAuthActivity.h
 +++ b/src/activities/settings/BookOrbitAuthActivity.h
 @@ -20,11 +20,15 @@ class BookOrbitAuthActivity final : public Activity {
@@ -152,10 +152,10 @@ index 0943e32..7fa7152 100644
    void onWifiSelectionComplete(bool success);
    void performAuthentication();
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index cd021ea..d85bd2e 100644
+index 127498e5..53691795 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -29,6 +29,7 @@
+@@ -31,6 +31,7 @@
  #include "util/UrlUtils.h"
  #include "Tailnet.h"
  #include <CrossInkTailnetCuts.h>
@@ -163,7 +163,7 @@ index cd021ea..d85bd2e 100644
  
  struct HttpDownloader::Session::State {
  #if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
-@@ -458,9 +459,16 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+@@ -462,9 +463,16 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
  #else
      http.setReserveFullRecord(sink.options->reserveFullRecord);
  #endif

@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: sleep sync lends session
 Lend the sleep sync TLS session to catalog work instead of opening another.
 
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index c82786f..b0acf38 100644
+index cb4cfc12..ce5602f7 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -543,7 +543,10 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
@@ -18,7 +18,7 @@ index c82786f..b0acf38 100644
    s_sessionHandshakePaid = false;
    s_session = makeUniqueNoThrow<freeink::SecureHttpClient>();
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
-index b124f63..2d0a830 100644
+index 321dc4e2..10badcf8 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.h
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
 @@ -7,6 +7,10 @@
@@ -47,7 +47,7 @@ index b124f63..2d0a830 100644
     * Authenticate with the BookOrbit server (validate credentials).
     * @return OK on success, error code on failure
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 8a8d02f..2ff6fc7 100644
+index d66d58db..b2374588 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -29,6 +29,8 @@
@@ -97,7 +97,7 @@ index 8a8d02f..2ff6fc7 100644
  #endif
    {
      RenderLock lock(*this);
-@@ -367,7 +381,6 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -366,7 +380,6 @@ void BookOrbitSyncActivity::runSleepSync() {
      if (!syncSession) syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
      OrbifyFinish::drain(std::string(), false, &sleepSyncWakeRequested);
    }
@@ -105,7 +105,7 @@ index 8a8d02f..2ff6fc7 100644
    // The BookOrbit Home draws from what this boot's network leaves behind. Each step is
    // retried by the next sync, so a wake press can end it anywhere. Its tile dates the
    // snapshot as the last sync: a sync that failed for the book leaves it as it was, or
-@@ -376,28 +389,52 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -375,28 +388,52 @@ void BookOrbitSyncActivity::runSleepSync() {
    const bool refreshHome = homeShown && state != SYNC_FAILED;
    if (homeShown && !refreshHome) LOG_INF("BookOrbit", "Sleep sync failed: the Home snapshot stays as it was");
    const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
@@ -175,7 +175,7 @@ index 8a8d02f..2ff6fc7 100644
    SavedWifiConnect::disconnect();
    if (refreshHome && !sleepSyncWakeRequested()) {
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
-@@ -848,14 +885,16 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -847,14 +884,16 @@ void BookOrbitSyncActivity::performUpload() {
    if (result == BookOrbitSyncClient::OK) {
      OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
      // BookSync (patch 0028): the open book's series card, near its end (design §5).
@@ -197,7 +197,7 @@ index 8a8d02f..2ff6fc7 100644
  #endif
    // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 31a59e1..686f681 100644
+index 2261a6f7..a0d0f718 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -95,6 +95,10 @@ struct FileJsonReader {
@@ -251,10 +251,10 @@ index 31a59e1..686f681 100644
  void BookOrbitCatalogClient::openBootSession() {
    if (s_bootSession) return;
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
-index cec91fb..382e50d 100644
+index 055fa1ee..774aa4a0 100644
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
-@@ -166,6 +166,21 @@ class BookOrbitCatalogClient {
+@@ -168,6 +168,21 @@ class BookOrbitCatalogClient {
      bool owner_ = false;
    };
  

@@ -12,8 +12,26 @@
    }
  #endif
  
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/boot_sleep/SleepActivity.cpp b/src/activities/boot_sleep/SleepActivity.cpp
+index 4c94a984..6d6b320f 100644
+--- a/src/activities/boot_sleep/SleepActivity.cpp
++++ b/src/activities/boot_sleep/SleepActivity.cpp
+@@ -714,8 +714,9 @@ void SleepActivity::renderSleepScreen() {
+   if (OrbifySleep::active()) {
+     display.setInverted(false);
+     if (renderOrbifyPick()) return;
+-    // No ready cover: the book's own cover, then the default screen (F1).
+-    return renderCoverSleepScreen();
++    // A visible empty state: BookOrbit Pick never silently becomes the open book's cover.
++    OrbifySleep::drawPlaceholder(renderer, pass == SleepScreenPass::Redraw);
++    return;
+   }
+ #endif
+ 
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index 19b78c9c..157bfa8a 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -64,6 +64,8 @@
  #include "components/CompactHeader.h"
  #include "orbify/CacheStore.h"
@@ -23,7 +41,7 @@
  #include "orbify/RefreshBadge.h"
  #include "orbify/core/LocalFirst.h"
  #endif
-@@ -579,13 +581,18 @@
+@@ -579,13 +581,18 @@ void BookOrbitCatalogBrowserActivity::onExit() {
    }
  #endif
    BookOrbitCatalogClient::closeBootSession("leaving the catalog");
@@ -43,7 +61,7 @@
      delay(30);
      silentRestart();
    } else if (networkBoot) {
-@@ -608,6 +615,9 @@
+@@ -608,6 +615,9 @@ void BookOrbitCatalogBrowserActivity::launchWifiSelection() {
  }
  
  void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connected) {
@@ -53,7 +71,7 @@
    if (pendingDownload.fileId != 0) {
      runPendingDownload(connected);
      return;
-@@ -2649,104 +2659,12 @@
+@@ -2649,104 +2659,12 @@ void BookOrbitCatalogBrowserActivity::render(RenderLock&&) {
  // docs/design/write-through-cache.md. Refresh asks the server for this view now and keeps what
  // changed; Full refresh first saves the offline mirror (OrbifyMirror), then reloads the view
  // with the cache bypassed. Offline, either connects first.
@@ -161,7 +179,7 @@
    cacheFirst = false;  // one try: offline, the view's error says so
    LOG_INF("BookOrbit", "Catalog: not in the cache; connecting");
    {
-@@ -2760,6 +2678,7 @@
+@@ -2760,6 +2678,7 @@ bool BookOrbitCatalogBrowserActivity::connectForMiss() {
      return false;
    }
    offlineSession = false;
@@ -169,7 +187,7 @@
    sdFontSystem.releaseForNetwork(renderer);
    return true;
  }
-@@ -2773,6 +2692,8 @@
+@@ -2773,6 +2692,8 @@ void BookOrbitCatalogBrowserActivity::markViewLoaded(const bool fromSessionList)
  }
  
  std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
@@ -178,7 +196,7 @@
    if (mirrorShown.active) {
      char badge[40];
      orbify::mirror::badgeText(mirrorShown.percent, mirrorShown.finished, mirrorShown.failures, badge, sizeof(badge));
-@@ -2789,63 +2710,7 @@
+@@ -2789,63 +2710,7 @@ std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
  // Patch 0041: one progress number for a Full refresh (docs/design/sqlite-cache.md "Xteink: the same
  // rule"). The walk takes one request per loop() when the reader has left the buttons alone for a
  // second and a list is on screen; between requests the catalog answers as usual.
@@ -243,9 +261,11 @@
  
  void BookOrbitCatalogBrowserActivity::syncMirrorShown() {
    RenderLock lock(*this);
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-@@ -212,6 +212,10 @@
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
+index 00bb39d2..a93eb212 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
+@@ -212,6 +212,10 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    mutable unsigned long mirrorBadgeAt = 0;
    // Patch 0037: a Refresh under way; the header's stamp says "Refreshing…" until it ends.
    bool refreshing = false;
@@ -256,6 +276,8 @@
    mutable std::string loggedStamp;  // patch 0038: the last stamp logged (render task)
  #endif
    std::string errorMessage;
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index e066ba6c..6d294cef 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -12,12 +12,14 @@
@@ -273,7 +295,7 @@
  #include "orbify/RefreshBadge.h"
  #endif
  #include "SdCardFontSystem.h"
-@@ -70,8 +72,13 @@
+@@ -70,8 +72,13 @@ void BookOrbitHomeRefreshActivity::connect() {
      return;
    }
  #endif
@@ -289,7 +311,7 @@
    // Shown again if the Wi-Fi screen hands back before the refresh starts.
    state = State::Connecting;
    startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
-@@ -127,6 +134,25 @@
+@@ -127,6 +134,25 @@ void BookOrbitHomeRefreshActivity::setScanSummary(const BookOrbitDeviceScan::Sum
  
  void BookOrbitHomeRefreshActivity::runRefresh() {
    sdFontSystem.releaseForNetwork(renderer);
@@ -315,7 +337,7 @@
    showStep(State::Refreshing);
  
    // The snapshot's age and the reading days depend on the date. WifiSelectionActivity has
-@@ -156,25 +182,7 @@
+@@ -156,25 +182,7 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
      }
  #endif
    }
@@ -342,7 +364,7 @@
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
    if (userFullRefresh && !refreshed) {
      mirrorFinished = true;
-@@ -191,7 +199,16 @@
+@@ -191,7 +199,16 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
  
  void BookOrbitHomeRefreshActivity::finishRefresh(const bool refreshed) {
    const auto sizes = BookOrbitHomeLayout::coverSizes(renderer);
@@ -359,7 +381,7 @@
  
    if (refreshed && BookOrbitHomeStore::hasPendingCovers()) {
      showStep(State::DecodingCovers);
-@@ -226,7 +243,12 @@
+@@ -226,7 +243,12 @@ void BookOrbitHomeRefreshActivity::tickMirror() {
    const unsigned long now = millis();
    const bool input = mappedInput.hasPendingActivity() || mappedInput.wasAnyPressed() || mappedInput.wasAnyReleased();
    const bool done = mirrorFinished || mirrorWalk.finished();
@@ -373,7 +395,7 @@
      if (!done) {
        LOG_INF("BookOrbit", "Home refresh: Full refresh paused at %u%% (%s); it carries on later", mirrorPercent,
                input ? "a press" : "no network");
-@@ -386,7 +408,8 @@
+@@ -386,7 +408,8 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
                                       3);
      // The one %: the content's top-right corner, under the header band.
      char badge[40];
@@ -383,9 +405,11 @@
      const int badgeW =
          std::max(OrbifyRefreshBadge::badgeWidth(renderer), renderer.getTextWidth(SMALL_FONT_ID, badge));
      mirrorBadgeH = renderer.getLineHeight(SMALL_FONT_ID);
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
+index 94095ee4..c716322b 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.h
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
-@@ -52,6 +52,7 @@
+@@ -52,6 +52,7 @@ class BookOrbitHomeRefreshActivity final : public Activity {
    std::unique_ptr<BookOrbitCatalogClient::Session> mirrorSession;
    bool userFullRefresh = false;
    unsigned mirrorPercent = 0;
@@ -393,6 +417,8 @@
    bool mirrorFinished = false;
    size_t mirrorFailures = 0;
    unsigned long mirrorPopupUntil = 0;
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index e7a38ecb..2d699fed 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -1,4 +1,5 @@
@@ -401,7 +427,7 @@
  
  #include <GfxRenderer.h>
  
-@@ -356,6 +357,7 @@
+@@ -355,6 +356,7 @@ void BookOrbitSyncActivity::handleUpdateOfferInput(const bool backRequested) {
  }
  
  void BookOrbitSyncActivity::runSleepSync() {
@@ -409,7 +435,7 @@
    LOG_INF("BookOrbit", "Sleep sync starting (free=%u maxAlloc=%u)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
    sdFontSystem.releaseLoadedFont(renderer);
    // The BookOrbit theme's sync also recognises books copied to the card. Its offline half
-@@ -407,7 +409,7 @@
+@@ -406,7 +408,7 @@ void BookOrbitSyncActivity::runSleepSync() {
  #endif
  #if CROSSINK_TAILNET_ORBIFY_SLEEP
      // BookSync (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
@@ -418,7 +444,7 @@
  #endif
  #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
      // Copies the server rewrote: the match check on the session, then the replacements, one book
-@@ -436,6 +438,7 @@
+@@ -435,6 +437,7 @@ void BookOrbitSyncActivity::runSleepSync() {
      BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
    }
    if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
@@ -426,7 +452,7 @@
    SavedWifiConnect::disconnect();
    if (refreshHome && !sleepSyncWakeRequested()) {
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
-@@ -927,7 +930,13 @@
+@@ -926,7 +929,13 @@ void BookOrbitSyncActivity::performUpload() {
    }
  #endif
    // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
@@ -440,9 +466,11 @@
  #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
    // A manual sync: the radio is off now, so a cover it fetched is decoded before the book comes back.
    if (!sleepSync && !backgroundSync && OrbifyFinish::nextCoverPending()) OrbifyFinish::decodeNextCovers(nullptr);
+diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
+index cf3a603b..cd3ade04 100644
 --- a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
 +++ b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
-@@ -159,12 +159,13 @@
+@@ -159,12 +159,13 @@ void BookOrbitHomeUi::drawTopBar() const {
    static const int pending = OrbifyMirror::pendingPercent();
    if (pending >= 0) {
      char text[40];
@@ -457,9 +485,11 @@
      }
    }
  #endif
+diff --git a/src/main.cpp b/src/main.cpp
+index f1e11595..fe06586d 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -1736,6 +1736,11 @@
+@@ -1738,6 +1738,11 @@ static void takeWakePress(const bool isSleepSyncWake) {
  #endif
  }
  static void logWakeToScreen() {
@@ -471,7 +501,7 @@
    if (wakePressClockMs == 0 || GfxRenderer::displaysSinceBoot() == 0) return;
    LOG_INF("SLP", "Wake: %lums from press to screen", static_cast<unsigned long>(wakeClockMs() - wakePressClockMs));
    wakePressClockMs = 0;
-@@ -2003,6 +2008,7 @@
+@@ -2005,6 +2010,7 @@ void setup() {
    // Power was pressed during the BookOrbit sleep sync: this boot is the wake it stands for.
    const bool isSleepSyncWake = (silentRebootMagic == SLEEP_SYNC_WAKE_MAGIC);
    takeWakePress(isSleepSyncWake);
@@ -479,6 +509,8 @@
    const bool hasRestartFrontlight = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_VALID) != 0;
    const bool restartFrontlightOn = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_ON) != 0;
    silentRebootTarget &= ~(SILENT_REBOOT_FRONTLIGHT_VALID | SILENT_REBOOT_FRONTLIGHT_ON);
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index e2260c17..6309a79f 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -1,4 +1,5 @@
@@ -487,7 +519,7 @@
  
  #include <ArduinoJson.h>
  #ifdef SIMULATOR
-@@ -138,6 +139,8 @@
+@@ -138,6 +139,8 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
    // in the last minute or there is no network; else the request below, whose reply is kept, and
    // the saved reply again if the request fails.
    const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
@@ -496,6 +528,8 @@
    // Patch 0040: offline with nothing saved, no request (orbify::cache::readStep). The cache-first
    // catalog (0038) runs with Wi-Fi never started; a request then panicked in lwIP (X4 Pro, .194,
    // a list's next page). The caller connects (connectForMiss) or shows its error.
+diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
+index 8aed5099..9067f0fc 100644
 --- a/src/network/SavedWifiConnect.cpp
 +++ b/src/network/SavedWifiConnect.cpp
 @@ -1,4 +1,5 @@
@@ -504,7 +538,7 @@
  
  #include <Arduino.h>
  #include <CrossInkTailnetCuts.h>
-@@ -224,6 +225,7 @@
+@@ -217,6 +218,7 @@ bool SavedWifiConnect::connect(const StopCheck shouldStop) {
      return false;
    }
  
@@ -512,7 +546,7 @@
    WiFi.persistent(false);  // WifiCredentialStore owns the credentials; keep the SDK's NVS copy out of it
    if (!WiFi.mode(WIFI_STA)) {
      LOG_ERR("WIFI", "Failed to set station mode for a background join");
-@@ -256,6 +258,7 @@
+@@ -249,6 +251,7 @@ bool SavedWifiConnect::connect(const StopCheck shouldStop) {
  }
  
  void SavedWifiConnect::disconnect() {
@@ -520,10 +554,9 @@
    // No SNTP stop here: syncSystemTimeFromNTP() releases the client before it returns.
    WiFi.disconnect(false);
    delay(100);
-@@ -264,4 +267,5 @@
+@@ -257,4 +260,5 @@ void SavedWifiConnect::disconnect() {
  #if CROSSINK_TAILNET_TLS_ARENA
    tlsArenaRelease();
  #endif
--}
 +  });
-+}
+ }

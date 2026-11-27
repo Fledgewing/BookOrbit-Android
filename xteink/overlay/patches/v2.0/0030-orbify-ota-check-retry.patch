@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: ota check retry
 Retry a failed firmware update check on a fresh connection.
 
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
-index 62a4ddfe..cd94dd10 100644
+index 0de64e17..b9ec2411 100644
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
 @@ -7,6 +7,10 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() { return NO_UPDATE; }

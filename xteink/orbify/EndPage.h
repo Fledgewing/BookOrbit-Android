@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "activities/browser/BookOrbitCatalogLink.h"
+#include "activities/browser/bookorbit/BookOrbitCatalogLink.h"
 #include "core/EndPageLayout.h"
 #include "core/EndPagePlan.h"
 #include "core/SeriesCard.h"

@@ -1,7 +1,7 @@
 Subject: [PATCH] BookSync: Stable / RC / Preview update channels
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 5cc53f5d..069c9493 100644
+index 23c700ff..0ca05d35 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -260,6 +260,10 @@ STR_BOOKORBIT_SYNC: "BookOrbit Sync"
@@ -13,7 +13,7 @@ index 5cc53f5d..069c9493 100644
 +STR_BOOKSYNC_RC: "RC"
 +STR_BOOKSYNC_PREVIEW: "Preview"
  STR_LANGUAGE: "Language"
- STR_KEYBOARD_LAYOUTS: "Keyboard layouts"
+ STR_KEYBOARD_LAYOUTS: "Keyboard Layouts"
  STR_CLEAR_READING_CACHE: "Clear Reading Cache"
 diff --git a/src/CrossPointSettings.cpp b/src/CrossPointSettings.cpp
 index ae30dd19..48797dd0 100644
@@ -32,7 +32,7 @@ index ae30dd19..48797dd0 100644
      return value < maxValue ? value : fallback;
    };
 diff --git a/src/CrossPointSettings.h b/src/CrossPointSettings.h
-index 48228609..3d4db0a7 100644
+index 6771af8a..3237d39c 100644
 --- a/src/CrossPointSettings.h
 +++ b/src/CrossPointSettings.h
 @@ -527,9 +527,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
@@ -48,10 +48,10 @@ index 48228609..3d4db0a7 100644
    // Resetting to 0 (e.g. via the web UI) forces a re-sync on next WiFi connect.
    uint8_t clockHasBeenSynced = 0;
 diff --git a/src/SettingsList.cpp b/src/SettingsList.cpp
-index 06c660a6..4dc8f100 100644
+index d714d4c4..183a2dad 100644
 --- a/src/SettingsList.cpp
 +++ b/src/SettingsList.cpp
-@@ -342,8 +342,9 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
+@@ -347,8 +347,9 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
                           "readingIdleTimeThresholdUnits", StrId::STR_CAT_SYSTEM));
    add(SettingInfo::Toggle(StrId::STR_TRACK_READING_STATS, &CrossPointSettings::trackReadingStats, "trackReadingStats",
                            StrId::STR_CAT_SYSTEM));
@@ -64,10 +64,10 @@ index 06c660a6..4dc8f100 100644
    // Frontlight quick-panel state: persisted + web-exposed, category-less so
    // it stays off the Settings screen (edited from the swipe-down panel).
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 536414fb..7e1d26ce 100644
+index 976ef178..7f652522 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1213,7 +1213,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1202,7 +1202,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
  #if !FREEINK_DEVICE_PICCO
    // Picco retains the vendor recovery slot and has no spare application slot.
    systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
@@ -143,10 +143,10 @@ index a22031ca..4d00c52e 100644
    int simulatorCategoryIndex() const { return selectedCategoryIndex; }
    int simulatorSelectedIndex() const { return selectedSettingIndex; }
 diff --git a/src/main.cpp b/src/main.cpp
-index 5a2a0d35..5959dd34 100644
+index ff654365..a3f227d4 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -135,6 +135,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -137,6 +137,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "activities/reader/bookorbit/BookOrbitSyncActivity.h"
  #include "activities/settings/AssetDownloadActivity.h"
  #include "activities/settings/BookOrbitSettingsActivity.h"
@@ -156,7 +156,7 @@ index 5a2a0d35..5959dd34 100644
  #include "activities/settings/FontDownloadActivity.h"
  #include "activities/settings/KOReaderAuthActivity.h"
  #include "activities/settings/KOReaderSettingsActivity.h"
-@@ -2314,6 +2317,12 @@ void setup() {
+@@ -2337,6 +2340,12 @@ void setup() {
    setupDisplayAndFonts(SleepWakePolicy::shouldInitializeSeamlessly(resume, isUc8279X3, hasValidSleepFrame),
                         resume != BootResume::Network, useReaderRenderStack);
    logBootHeap("display and font resolver ready");
@@ -233,7 +233,7 @@ index 5574cc24..aaf57a23 100644
    ReleaseJsonParser releaseParser(isMatchingFirmwareAssetName, newestListed ? keepNewestListedRelease : nullptr,
                                    &listedPick);
  
-@@ -369,7 +369,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+@@ -369,8 +369,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
    // the same check after a restart got through. A slow read gets more time, and a failed check
    // is asked once more on a fresh connection, as the catalog's fetchJson does.
    client_config.timeout_ms = 15000;
@@ -243,6 +243,7 @@ index 5574cc24..aaf57a23 100644
 +          static_cast<unsigned>(channel));
    for (int attempt = 1;; attempt++) {
      esp_err = checkOnce(client_config);
+     // Before the repository rename, the new default feed does not exist yet.
 @@ -394,8 +394,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
  #else
  

@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: reading quiet
 Defer background UI work while a book is being read.
 
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
-index adb09426..32693e57 100644
+index 47195584..e7da7f9f 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 @@ -12,6 +12,9 @@

@@ -23,12 +23,16 @@ history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.1
 until a stable 2.x bridge and the later stable BookSync releases become available (below).
 Through 0.11, rc labels describe CrossInk, not the overlay's readiness.
 
-When CrossInk-Bookorbit releases, the daily CI run pins its newest 2.x tag in
-`tools/upstreams.lock` (the workflow commits the bump), builds the commit the lock records with the
-overlay and publishes a release here. The build jobs that run upstream's build scripts hold no
-write token and no secret; a separate job, which never runs upstream code, checks the built files
-and publishes them. The only thing that can need hand work is the patch series for that upstream
-line, and CI says so if it stops applying.
+Every event builds the reviewed `crossink-v2.0` commit in `tools/upstreams.lock`.
+Update upstream with `tools/upstreams pin crossink-v2.0 <tag>` on a branch, refresh the
+patches, and merge only after firmware and emulated release CI pass. Daily and manual
+release runs never advance the pin; a supplied `upstream_ref` must match it. The build
+jobs hold no write token or secret; a separate job checks and publishes their files.
+
+The final 2.0 base moved and split the catalog. Patch `0000-catalog-0.11-integration`
+keeps the 0.11 catalog implementation at the new `browser/bookorbit/` location before
+applying the behavior patches. This retains packed rows, download boot returns,
+offline paging (#182), and refresh recovery (#183) together on all three readers.
 
 ### Shared BookSync versions from 0.12
 
@@ -68,7 +72,7 @@ missing or bad signature is only logged (`unsigned`, `signature invalid`) and th
 ### When a release is made
 
 Releases are batched, so readers don't get a new build for every change:
-- **The daily run** publishes only when CrossInk-Bookorbit has a tag no release was built from yet
+- **The daily run** publishes only when the reviewed pin has a tag no release was built from yet
   (a new rc, or the final, which becomes the stable entry). Otherwise it builds and publishes
   nothing.
 - **Our own changes** go out only when someone runs the workflow by hand (`gh workflow run Xteink

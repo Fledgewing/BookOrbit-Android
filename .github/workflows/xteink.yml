@@ -4,9 +4,9 @@ name: Xteink
 # - push / pull request touching xteink/: host tests and every reader's build of both pinned
 #   pinned CrossInk line, crossink-v2.0 in tools/upstreams.lock (no release). Only CrossInk 2.x
 #   and later is built: 1.6 is retired (xteink/scripts/upstream-line.sh refuses it).
-# - daily schedule and manual runs: move tools/upstreams.lock to upstream's newest 2.x tag (rc
-#   included) or the one given (the lock job commits the bump), build the commit the lock records,
-#   then publish a release when this (upstream tag, xteink/ tree) pair has not been released yet. A final upstream tag (no -rc/-beta) is published as a stable release, which
+# - daily schedule and manual runs: build the same reviewed tools/upstreams.lock as PR CI,
+#   then publish an unreleased (upstream tag, xteink/ tree) pair. Update upstream through a PR.
+#   A final upstream tag is published as a stable release, which
 #   makes it the feed's stable entry; an rc or beta stays a pre-release (upstream-line.sh channel). Readers see it under
 #   Settings > Check for updates: the overlay points their updater at this repo's
 #   xteink-v releases (overlay patch ota-tag-prefix).
@@ -20,7 +20,7 @@ name: Xteink
 #   next release over the air.
 #
 # Trust: the build jobs run upstream's PlatformIO scripts, so they get a read-only token, no
-# stored credentials and no secrets. Only the lock, publish and feed jobs can write, and none of
+# stored credentials and no secrets. Only the publish and feed jobs can write, and none of
 # them checks out or runs upstream code: publish downloads the built files, checks them and
 # releases them. Every action is pinned by commit (tools/test/test-workflows.py).
 #
@@ -50,7 +50,7 @@ on:
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: "CrossInk-Bookorbit tag to pin in tools/upstreams.lock and build (empty = upstream's newest 2.x tag)"
+        description: "CrossInk tag or commit (must match the reviewed tools/upstreams.lock; empty = locked commit)"
         required: false
         type: string
       patch_series:
@@ -84,79 +84,30 @@ env:
   FEED_PATH: xteink/releases.json
 
 jobs:
-  # Which upstream commit this run builds, always as recorded in tools/upstreams.lock. Push and
-  # pull request builds take the lock as it is, so an upstream release never turns an unrelated
-  # change red. Daily and manual runs first move the lock to one tag: upstream's newest 2.x
-  # release, rc included, unless one is given (a patch that stops applying shows up there);
-  # upstream's "latest" skips pre-releases. The tag is resolved to its commit here, through the
-  # API, and the bump is committed to this branch, so the release builds a commit, not a tag that
-  # could move. Runs no upstream code; the only job besides publish and feed that can write.
+  # Every event builds the reviewed pin. Upstream bumps belong in a PR alongside
+  # any patch refresh, never in a release job after PR CI has passed.
   lock:
     if: ${{ !inputs.feed_only }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
       sha: ${{ steps.l.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: |
-            xteink/scripts
-            tools
-            shared
-
       - id: l
         env:
-          GH_TOKEN: ${{ github.token }}
           INPUT_REF: ${{ inputs.upstream_ref }}
-          TEST_BUILD: ${{ inputs.test_build }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # Unified releases build the exact Android release commit and its pinned base.
-          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
-            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Pushes, pull requests and test builds without upstream_ref build the lock as it is. A
-          # test build of another upstream tag pins it on its own branch, never on main.
-          if [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ] \
-            || { [ "${TEST_BUILD:-false}" = true ] && [ -z "$INPUT_REF" ]; }; then
-            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -n "$INPUT_REF" ]; then
-            tag="$INPUT_REF"
-          else
-            tag="$(gh api "repos/$UPSTREAM_REPO/releases?per_page=50" -q '.[] | select(.draft | not) | .tag_name' \
-              | xteink/scripts/upstream-line.sh pick)"
-          fi
-          xteink/scripts/upstream-line.sh channel "$tag" >/dev/null  # refuses a 1.x tag
-          commit="$(gh api "repos/$UPSTREAM_REPO/commits/$(printf '%s' "$tag" | sed 's/+/%2B/g')" -q .sha)"
-          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no commit for upstream tag $tag"; exit 1; }
-          read -r _ repo ref pinned < <(awk '$1 == "crossink-v2.0"' tools/upstreams.lock)
-          if [ "$ref" = "$tag" ] && [ "$pinned" = "$commit" ]; then
-            echo "tools/upstreams.lock already pins $tag ($commit)"
-            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "${TEST_BUILD:-false}" = true ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ]; then
-            echo "::error::a test build never moves $DEFAULT_BRANCH's pin; run it on a branch"
+          read -r _ _ tag commit < <(awk '$1 == "crossink-v2.0"' tools/upstreams.lock)
+          if [ -n "$INPUT_REF" ] && [ "$INPUT_REF" != "$tag" ] && [ "$INPUT_REF" != "$commit" ]; then
+            echo "::error::upstream_ref must match tools/upstreams.lock; update the pin in a PR first"
             exit 1
           fi
-          # tools/upstreams pin's format, committed through the API on top of this branch.
-          awk -v r="$tag" -v s="$commit" \
-            '$1 == "crossink-v2.0" && $0 !~ /^#/ {printf "%-17s %-28s %-23s %s\n", $1, $2, r, s; next} {print}' \
-            tools/upstreams.lock > "$RUNNER_TEMP/upstreams.lock"
-          blob="$(gh api "repos/$GITHUB_REPOSITORY/contents/tools/upstreams.lock?ref=$GITHUB_REF_NAME" -q .sha)"
-          sha="$(gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/tools/upstreams.lock" \
-            -f message="Pin CrossInk-Bookorbit $tag (${commit:0:12}) for the Xteink release build" \
-            -f branch="$GITHUB_REF_NAME" -f sha="$blob" -f content="$(base64 -w0 "$RUNNER_TEMP/upstreams.lock")" \
-            -q .commit.sha)"
-          echo "tools/upstreams.lock: $repo $ref ($pinned) -> $tag ($commit) in $sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   resolve:
     needs: lock
