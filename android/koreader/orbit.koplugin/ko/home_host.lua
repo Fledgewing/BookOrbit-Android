@@ -233,6 +233,7 @@ function HomeHost.create()
             self.cardDownload=row.key
             Library.downloadCard(row,function(result)
                 self.cardDownload=nil
+                if result.error=="canceled" then return end
                 if HomeHost.active~=self or topWidget()~=self or reading() then return end
                 if result.local_path then
                     Library.open({local_path=result.local_path}); UIManager:close(self)

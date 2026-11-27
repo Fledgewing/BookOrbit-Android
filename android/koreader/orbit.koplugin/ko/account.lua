@@ -11,13 +11,13 @@ end
 function AccountView.open(kind)
     Library.accountReturned()
     if AccountView.active then AccountView.active:close() end
-    local v=setmetatable({alive=true,state=AccountView.read(),page="summary",focus=kind or "account",generation=0},{__index=AccountView})
+    local v=setmetatable({alive=true,state=AccountView.read(),page="summary",focus=kind or "account"},{__index=AccountView})
     AccountView.active=v
     if kind then v:form(kind) else v:paint() end
     return v
 end
 function AccountView:close()
-    self.alive=false; self.generation=self.generation+1; self.password=nil
+    self.alive=false; self:retireCommand(); self.password=nil
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
     if AccountView.active==self then AccountView.active=nil end
     Library.changed({kind="account"})
@@ -28,8 +28,11 @@ function AccountView:form(kind)
     self.server,self.username,self.password=l.server or "",l.username or "",nil
     self.focus="server"; self:paint()
 end
+function AccountView:retireCommand()
+    if self.pending_cancel then self.pending_cancel();self.pending_cancel=nil end
+end
 function AccountView:back()
-    self.generation=self.generation+1; self.busy=false; self.password=nil; self.error=nil
+    self:retireCommand(); self.busy=false; self.password=nil; self.error=nil
     if self.page=="summary" then self:close(); return end
     if self.page=="signout" then self.focus="signout"
 
@@ -38,12 +41,13 @@ function AccountView:back()
 end
 function AccountView:command(op,args)
     if self.busy then return end
-    self.busy=true; self.error=nil; self.generation=self.generation+1
-    local gen,before=self.generation,self.state
+    self:retireCommand()
+    self.busy=true; self.error=nil
+    local before=self.state
     self.password=nil
     self:paint()
-    Library.accountCommand(op,args,function(result)
-        if not self.alive or self.generation~=gen then return end
+    local accepted,retire=Library.accountCommand(op,args,function(result)
+        if not self.alive then return end
         self.busy=false
         if result.error then
             self.error=AccountPlan.error(result.error); self.focus=self.error[3]
@@ -51,13 +55,14 @@ function AccountView:command(op,args)
             return
         end
         self.state=result.state or self.state
-        Library.accountReturned(); Library.retry()
+        Library.retry()
         if op=="account.signIn" then
             self.result,self.returnFocus=AccountPlan.result(before,self.state); self.page="result"; self.focus="done"
         else self.page="summary"; self.focus=op=="account.signOut" and "account" or self.kind end
         -- Completion may update only the still-visible, explicitly opened form.
         if UIManager:getTopmostVisibleWidget()==self.dialog then self:paint() end
     end)
+    self.pending_cancel=retire
     args.password=nil
 end
 function AccountView:edit(field)

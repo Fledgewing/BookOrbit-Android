@@ -98,8 +98,17 @@ function ReadingSync.run(moment,done,override)
         ReadingSync.running=(ReadingSync.running or 0)+1
         ReadingSync.busy=true
         local finished=false
-        local function finish(ok,why) if finished then return end; finished=true; ReadingSync.running=math.max(0,(ReadingSync.running or 1)-1); ReadingSync.busy=ReadingSync.running>0; done(ok,why) end
-        UIManager:scheduleIn(S.sleep_cap or 20,function() finish(false,"Saved · delivery still pending") end)
+        local timeout
+        local function finish(ok,why)
+            if finished then return end
+            finished=true
+            UIManager:unschedule(timeout)
+            ReadingSync.running=math.max(0,(ReadingSync.running or 1)-1)
+            ReadingSync.busy=ReadingSync.running>0
+            done(ok,why)
+        end
+        timeout=function() finish(false,"Saved · delivery still pending") end
+        UIManager:scheduleIn(S.sleep_cap or 20,timeout)
         if not args.path then
             return ReadingSync.command("sync.drain",{},function(r) finish(not r.error and (r.remaining or 0)==0,r.error) end)
         end
@@ -115,7 +124,8 @@ function ReadingSync.run(moment,done,override)
             local mapped=ReadingSync.geometry(r.snapshot,ui,moment)
             ReadingSync.command("sync.decide",mapped,function(d)
                 local current=liveUI()==ui and ui.document==native and args.automatic==ReadingSync.on()
-                if current and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
+                -- The journal/decision still completes after timeout; late consent must not interrupt reading.
+                if not finished and current and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
                 if current and moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
                 finish(not d.error and (d.remaining or 0)==0,d.error)
             end)
