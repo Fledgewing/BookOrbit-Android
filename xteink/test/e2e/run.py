@@ -364,7 +364,12 @@ def full_refresh_network_restart_and_sleep(ctx: Context, tmp: Path) -> None:
     # Begin real work, then cancel back to Home while its first manifest is
     # delayed. The orderly restart drains that worker. Low heap after Wi-Fi
     # keeps the request pending on Home and through the sleep-sync boot.
-    ctx.faults([{"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1}])
+    ctx.faults([
+        {"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1},
+        # Keep the resumed Home worker active until its memory floor on fast
+        # CI hosts too; a fixed Power timestamp must never race completion.
+        {"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400},
+    ])
     tight = {**SDFAT, "ORBIFY_SIM_HEAP": "w1000:10000/6000"}
     if ctx.profile == "x4-pro":
         x, y = home_tile(home.output, "sync")
