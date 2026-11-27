@@ -141,7 +141,6 @@ function SettingsView.sleepChoices(key, category, offset)
                 end,
                 callback=function()
                     Library.settings.set(key,key=="sleep_from" and SleepPool.togglePick(Library.settings.read(key),id) or SettingsUI.toggleRule(Library.settings.read(key),id))
-                    Library.settings.onChange(key,"settings")
                 end}
         end
         if #(result.items or {})==0 then

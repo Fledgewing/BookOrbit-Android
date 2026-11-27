@@ -18,21 +18,101 @@ return function(here,test,eq,ok)
         end
         return e,e.Library
     end
-    test("UI interface: settings retain shared timestamps and local writes stay local",function()
-        local e,L=world(); local pushes=0
-        e.Shared.set=function(key,value) e.S[key]=value; e.S.settings_at[key]=42; pushes=pushes+1 end
-        e.Shared.onChange=function(key,why) eq(key,"wifi_mode");eq(why,"menu") end
-        e.Shared.refresh=function(why) eq(why,"menu");return true end
-        e.Shared.setupNeededText=function() return "setup needed" end
-        e.Shared.pin_locked=true
-        eq(L.settings.read("home_screen"),"booksync");eq(L.settings.schema(),e.SCHEMA)
-        L.settings.write("news_012_pending",false);eq(e.saves,1);eq(pushes,0)
-        local pair={1,2};L.settings.writePair("font",pair);eq(e.S.reading_pairs.font,pair);eq(e.saves,2)
-        L.settings.set("wifi_mode","jit");eq(e.S.settings_at.wifi_mode,42);eq(pushes,1)
-        L.settings.onChange("wifi_mode","menu");eq(L.settings.refresh("menu"),true)
-        eq(L.settings.mode(),"jit");eq(L.settings.wifiLabel(),"jit label");eq(L.settings.setupNeededText(),"setup needed");eq(L.settings.status("pin_locked"),true)
-        eq(L.settings.read().wifi_mode,"jit");eq(L.settings.read().settings_at,nil,"presentation gets no private timestamp map")
-        local d={type="bool"};eq(L.settings.fromWire(d,L.settings.toWire(d,true)),true)
+    -- Use the real settings service, merge policy, persistence ordering and wire echo.
+    local function settingsWorld()
+        local e,L=world()
+        for _,name in ipairs({"logic/sleep_pool.lua","logic/settings_ui.lua","ko/shared.lua"}) do
+            setfenv(assert(loadfile(root..name)),e)()
+        end
+        local f=assert(io.open(here.."/../../../shared/settings/schema.json"));local raw=f:read("*a");f:close()
+        e.SCHEMA=e.SettingsSync.index(e.SettingsSync.decodeJson(raw))
+        e.S.shared_settings_at=1
+        e.sent={};e.effects={};e.saved={}
+        e.saveSettings=function() e.saves=e.saves+1;e.saved=e.Cache.copy(e.S) end
+        e.Companion.installed=function() return true end
+        e.Companion.has=function() return true end
+        e.Companion.ACTION.SETTINGS="settings"
+        e.Companion.send=function(action,extras)
+            eq(action,"settings");e.sent[#e.sent+1]=extras
+            eq(e.saved.shared_settings_at,e.S.shared_settings_at,"save precedes push")
+        end
+        e.Wifi={applySettings=function() e.effects[#e.effects+1]="wifi" end}
+        e.Shared.onSchedule=function(value) e.effects[#e.effects+1]="schedule:"..value end
+        e.Sleep={changed=function() e.effects[#e.effects+1]="sleep" end}
+        return e,L
+    end
+    test("Settings intents: single edit and toggle apply exactly once after save and push",function()
+        local e,L=settingsWorld()
+        e.Wifi.applySettings=function()
+            eq(e.saves,1);eq(#e.sent,1);eq(e.saved.wifi_mode,"jit")
+            e.effects[#e.effects+1]="wifi"
+        end
+        L.settings.set("wifi_mode","jit")
+        eq(e.S.wifi_mode,"jit");eq(#e.effects,1)
+        eq(e.S.settings_at.wifi_mode,e.S.shared_settings_at)
+        -- The existing menu toggle used Shared.set without onChange; it must be complete too.
+        e.Wifi.applySettings=function() e.effects[#e.effects+1]="wifi" end
+        -- Load the public toggle with the same Library settings interface.
+        e.OrbitAndroid={};setfenv(assert(loadfile(root.."ko/menu.lua")),e)()
+        e.toggle("wifi_via_companion","Wi-Fi").callback()
+        eq(e.S.wifi_via_companion,true);eq(#e.effects,2);eq(e.saves,2);eq(#e.sent,2)
+        L.settings.write("news_012_pending",false);eq(e.saves,3);eq(#e.sent,2)
+        eq(e.S.settings_at.news_012_pending,nil)
+        local pair={1,2};L.settings.writePair("font",pair);eq(e.S.reading_pairs.font,pair)
+        eq(L.settings.read().settings_at,nil)
+        eq(L.settings.onChange,nil,"UI cannot split persistence from effects")
+    end)
+    test("Settings intents: preset publishes one complete snapshot before ordered effects",function()
+        local e,L=settingsWorld();local values=e.SettingsUI.modes[3].values
+        local function complete()
+            eq(e.saves,1);eq(#e.sent,1)
+            for _,key in ipairs(e.SettingsUI.modeKeys) do
+                eq(e.S[key],values[key]);eq(e.saved[key],values[key])
+                eq(e.S.settings_at[key],e.S.shared_settings_at)
+            end
+        end
+        e.Wifi.applySettings=function() complete();e.effects[#e.effects+1]="wifi" end
+        e.Shared.onSchedule=function(value) complete();e.effects[#e.effects+1]="schedule:"..value end
+        L.settings.preset(values)
+        eq(table.concat(e.effects,","),"wifi,wifi,schedule:min10")
+        local wire=e.SettingsSync.decodeJson(e.sent[1].values)
+        eq(wire.sync_on_wake.v,"1");eq(wire.reading_schedule.v,"min10")
+    end)
+    test("Settings intents: incoming newest-wins merge echoes once; replay has no effects",function()
+        local e,L=settingsWorld()
+        e.S.wifi_mode="always_on";e.S.settings_at.wifi_mode=5000
+        e.S.reading_schedule="off";e.S.settings_at.reading_schedule=1
+        e.Companion.status=function() return {settings={values={wifi_mode={v="jit",at=100},reading_schedule={v="min10",at=8000}}}} end
+        e.Companion.updateCaps=function() return false end
+        e.Clicks={parse=function() return {} end,count=0}
+        e.Schedule={request=function() return nil end}
+        e.MenuLock={locked=function() return false end}
+        eq(L.settings.refresh("start"),true)
+        eq(e.S.wifi_mode,"always_on");eq(e.S.reading_schedule,"min10")
+        eq(e.S.settings_at.reading_schedule,8000);eq(e.saves,1);eq(#e.sent,1)
+        eq(table.concat(e.effects,","),"schedule:min10")
+        local wire=e.SettingsSync.decodeJson(e.sent[1].values)
+        eq(wire.wifi_mode.at,5000);eq(wire.reading_schedule.at,8000)
+        eq(L.settings.refresh("start"),false);eq(e.saves,1);eq(#e.effects,1)
+        eq(#e.sent,2,"older remote Wi-Fi still needs an echo")
+    end)
+    test("Settings intents: failed follow-up preserves intent and later preset effects",function()
+        local e,L=settingsWorld();local failures=0
+        e.log=function(_,_,message) if message==": follow-up failed:" then failures=failures+1 end end
+        e.Wifi.applySettings=function() error("fixture failure") end
+        L.settings.preset(e.SettingsUI.modes[3].values)
+        eq(failures,2);eq(e.saves,1);eq(#e.sent,1)
+        eq(e.saved.wifi_mode,"always_on");eq(e.S.settings_at.wifi_mode,e.S.shared_settings_at)
+        eq(table.concat(e.effects,","),"schedule:min10")
+        L.settings.set("sleep_from","scope:42");eq(e.effects[2],"sleep")
+        -- The older sleep interface delegates to the same complete intent, with no second effect.
+        setfenv(assert(loadfile(root.."ko/sleep_backend.lua")),e)()
+        e.Sleep.changed=function() e.effects[#e.effects+1]="sleep" end
+        L.sleep.set("sleep_from","scope:43");eq(#e.effects,3)
+        local commands=0
+        L.backgroundCommand=function() commands=commands+1 end
+        L.settings.set("recommended_choice","all=ours");eq(commands,1)
+        L.settings.set("recommended_choice","");eq(commands,1,"worker acknowledgement must not apply again")
     end)
     test("UI interface: launch consumes all extras and authenticates before dispatch",function()
         local e,L=world();local extras,seen={},{}

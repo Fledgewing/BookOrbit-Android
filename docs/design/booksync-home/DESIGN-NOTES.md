@@ -1147,3 +1147,20 @@ Every screen/widget still inherits its existing row/byte budget: at most 24 disp
 16 KiB per snapshot, zero render-path network/subprocesses and at most one Home batch.
 The existing publication timing span remains. No firmware implementation, new feature,
 release or physical-device timing acceptance is claimed; X4 Pro/X4/X3 follow Android.
+
+## F12 architecture: complete Android settings intents (2026-11-27)
+
+Library settings now owns a complete edit or preset: stamp the shared keys, save
+and push the final values once, then run the existing per-key effects in order.
+UI calls `settings.set` or `settings.preset`; it no longer pairs a write with an
+`onChange` call. Incoming newest-wins merge/echo keeps SettingsSync's existing
+policy. A failed effect is logged; saved intent remains and later effects run.
+Private `write`/`writePair` stay local. The older sleep facade delegates to the
+same intent so it cannot run a second follow-up. Clearing an applied recommendation
+does not dispatch another apply command.
+
+Settings retain their declared screen budgets: paints do no new reads or work;
+presets perform one persistence and one settings dispatch, with no catalog scan,
+network on paint or subprocess. Host operation counts are regression evidence;
+device latency remains acceptance work. This is the authorized Android slice;
+X4 Pro, X4 and X3 implementation remains deferred.

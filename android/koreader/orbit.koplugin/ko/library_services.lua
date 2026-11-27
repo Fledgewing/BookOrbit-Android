@@ -2,7 +2,7 @@
 -- Deliberate UI-facing services. Backends retain their existing behavior and ownership.
 Library.settings={}
 function Library.settings.read(key)
-    -- Borrowed immutable values preserve layout array metadata; edits use write/save.
+    -- Borrowed immutable values preserve layout array metadata; edits use complete settings intents.
     if key then return S[key] end
     local values={}
     for _,name in ipairs(SettingsUI.modeKeys) do values[name]=S[name] end
@@ -17,8 +17,10 @@ end
 function Library.settings.schema() return SCHEMA end
 function Library.settings.toWire(d,value) return SettingsSync.toWire(d,value) end
 function Library.settings.fromWire(d,value) return SettingsSync.fromWire(d,value) end
-function Library.settings.set(key,value) return Shared.set(key,value) end
-function Library.settings.onChange(key,why) return Shared.onChange(key,why) end
+function Library.settings.set(key,value,why) return Shared.set(key,value,why or "settings") end
+function Library.settings.preset(values)
+    return Shared.setMany(SettingsUI.modeKeys,values,"mode")
+end
 function Library.settings.mode() return Shared.mode() end
 function Library.settings.refresh(why) return Shared.refresh(why) end
 function Library.settings.setupNeededText() return Shared.setupNeededText() end

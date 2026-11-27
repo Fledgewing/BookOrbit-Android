@@ -143,7 +143,7 @@ function Shared.mergeValues(values, why)
     return #changed > 0
 end
 
--- What a shared setting needs when the companion changed it (the menu's own callbacks do the same).
+-- Follow-up policy shared by local intents and incoming merges. Failures never undo saved intent.
 function Shared.onChange(key, why)
     local function try(fn, ...) if type(fn) == "function" then local okc, err = pcall(fn, ...); if not okc then log("setting", key, ": follow-up failed:", tostring(err)) end end end
     if key == "wifi_mode" or key == "wifi_idle_min" or key == "wifi_via_companion" then
@@ -160,7 +160,7 @@ function Shared.onChange(key, why)
         if S.mirror_covers then try(Library.backgroundCommand,"covers.refresh", "turned on") end
     elseif key == "sync_mode" then
         try(ReadingSync and ReadingSync.modeChanged, "companion")
-    elseif key == "recommended_choice" then
+    elseif key == "recommended_choice" and S.recommended_choice ~= "" then
         try(Library.backgroundCommand,"preferences.apply", why)
     end
 end
@@ -219,13 +219,23 @@ function Shared.push(why)
     Companion.send(Companion.ACTION.SETTINGS, extras)
 end
 
-function Shared.set(key, value)
-    S[key] = value
-    S.shared_settings_at = os.time() * 1000
-    if SCHEMA.byKey[key] then S.settings_at[key] = S.shared_settings_at end
+-- A complete local intent: publish the final values once, then apply effects in key order.
+-- Presets deliberately retain per-key effect order (including the two Wi-Fi keys).
+function Shared.setMany(keys, values, why)
+    local at = os.time() * 1000
+    for _, key in ipairs(keys) do
+        S[key] = Cache.copy(values[key])
+        if SCHEMA.byKey[key] then S.settings_at[key] = at end
+        log("setting", key, "=", tostring(values[key]), "(sent to the companion)")
+    end
+    S.shared_settings_at = at
     saveSettings()
-    log("setting", key, "=", tostring(value), "(sent to the companion)")
     Shared.push("patch menu")
+    for _, key in ipairs(keys) do Shared.onChange(key, why) end
+end
+
+function Shared.set(key, value, why)
+    return Shared.setMany({key}, {[key]=value}, why or "settings")
 end
 
 function tailscaleConnect(reason)

@@ -68,13 +68,7 @@ function Sleep.on() return Sleep.available() and Sleep.settings().sleep_mode ~= 
 -- A sleep setting changed here: saved, sent to the companion, and the pool or the current cover
 -- follow. value: already valid (the menu only offers valid values).
 function Sleep.set(key, value)
-    local was = Sleep.settings()
-    Shared.set(key, value)
-    local now = Sleep.settings()
-    if was.sleep_mode ~= now.sleep_mode or was.sleep_from ~= now.sleep_from
-        or table.concat(was.sleep_leave_out, "\n") ~= table.concat(now.sleep_leave_out, "\n") then
-        Sleep.changed("setting " .. key)
-    end
+    return Shared.set(key, value)
 end
 
 -- The mode, source or rules changed (here or in the companion): fetch again, and the open book's
