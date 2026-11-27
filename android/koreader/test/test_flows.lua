@@ -3588,6 +3588,54 @@ end
     ok(success, err)
 end)
 
+test("library command results: catalog and sync state never replace account identity", function()
+    local call,schedule,problem,reset=RE.Jni.call,RE.UIManager.scheduleIn,RE.Companion.workerProblem,RE.LibraryAdapter.reset
+    local account,owner=RE.LibraryAdapter.account_snapshot,RE.LibraryAdapter.managed_owner
+    local pending,result
+    RE.UIManager.scheduleIn=function(_,_,fn) pending=fn end
+    RE.Companion.workerProblem=function() end
+    RE.LibraryAdapter.reset=function() end
+    RE.Jni.call=function(_,method)
+        if method:match("SERVER_COMMAND$") then return {ok="1",id="fixture"} end
+        return {ok="1",body=RE.Cache.encode(result)}
+    end
+    local success,err=pcall(function()
+        local original={signedIn=true,owner="fixture"}
+        RE.LibraryAdapter.account_snapshot=original;RE.LibraryAdapter.managed_owner="fixture"
+        for _,state in ipairs({"complete",{phase="complete"}}) do
+            result={state=state}
+            RE.LibraryAdapter.command("catalog.control",{},function(reply) eq(RE.Cache.encode(reply.state),RE.Cache.encode(state)) end)
+            pending()
+            eq(RE.LibraryAdapter.account_snapshot,original);eq(RE.LibraryAdapter.managed_owner,"fixture")
+        end
+        result={state={signedIn=false}}
+        RE.LibraryAdapter.command("account.signOut",{},function() end);pending()
+        eq(RE.LibraryAdapter.account_snapshot.signedIn,false);eq(RE.LibraryAdapter.managed_owner,nil)
+    end)
+    RE.Jni.call,RE.UIManager.scheduleIn,RE.Companion.workerProblem,RE.LibraryAdapter.reset=call,schedule,problem,reset
+    RE.LibraryAdapter.account_snapshot,RE.LibraryAdapter.managed_owner=account,owner
+    ok(success,err)
+end)
+
+test("reader surface: cold bounded SQLite snapshots work without allowing background reading IO", function()
+    local dir,st=fixtureStore()
+    st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
+    local owner,reading=RE.LibraryAdapter.owner,RE.reading
+    RE.LibraryAdapter.owner=function() return DBFX.owner end;RE.reading=function() return true end
+    local request=RE.Cache.encode({op="reader",path="/books/cold.epub",limit=1,bytes=16384})
+    local body=RE.Cache.encode({items={{key="cold-book",title="Cold reader"}}})
+    st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,request,body)
+    local success,err=pcall(function() withStore(dir,function()
+        eq(RE.Library.paint("home"):read("reader",{path="/books/cold.epub",limit=1}).pending,true)
+        local p=RE.Library.paint("reader-top-panel")
+        local row=p:widget("reader-progress"):read("reader",{path="/books/cold.epub",limit=1})
+        eq(row.items[1].title,"Cold reader");eq(p.metrics.bytes,#body);eq(p.metrics.rows,1)
+        eq(RE.reading(),true,"reader panels never relax the reading notification gate")
+    end) end)
+    RE.LibraryAdapter.owner,RE.reading=owner,reading
+    st:close();os.execute("rm -rf '"..dir.."'");ok(success,err)
+end)
+
 test("library ready model: real SQLite reads stay bounded and batch once", function()
     local dir, st = fixtureStore()
     st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")

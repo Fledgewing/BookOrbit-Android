@@ -12,6 +12,28 @@ return function(test,eq,ok,E,W,withHost)
             actions={{id='finished',label='Remove finished books from device',detail='Frees 10 MB · 1 book',token='preview'}},
             folders={{id='Books',label='/Books'},{id='BookSync',label='/BookSync'}},folder='Books',freshness={saved=true}}
     end
+    test('storage: one-row Library caption stays within a portrait tablet tile',function()
+        withHost(function()
+            local text=E.HomeWidgets.text
+            local captions={}
+            E.HomeWidgets.text=function(...)
+                local node=text(...)
+                node.getSize=function() return {w=200,h=28} end
+                captions[#captions+1]=node
+                return node
+            end
+            for _,columns in ipairs({1,2,4}) do
+                local tile=E.StorageUI.widget({w=columns,h=1},{data={total=59,freshness={saved=true},storage=data()}},function() end,{w=288*columns,h=136})
+                local caption=captions[#captions]
+                eq(caption.overlap_offset[2]+caption:getSize().h,134)
+                local canvas=tile[1]
+                local actions=0
+                for _,node in ipairs(canvas) do if node.callback then actions=actions+1;ok(node.height>=50) end end
+                eq(actions,columns==1 and 1 or 2)
+            end
+            E.HomeWidgets.text=text
+        end)
+    end)
     test('storage: patterned bar paints the bounded immutable Home snapshot',function()
         withHost(function()
             local empty=E.HomeWidgets.canvas(100,10)

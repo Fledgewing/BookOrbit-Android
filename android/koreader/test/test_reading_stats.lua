@@ -28,11 +28,12 @@ return function(test,eq,ok,here,Cache)
     for i=1,24 do data.hour_levels[i]=i/24; data.hour_intensity[i]=i%5 end
     test('stats: standalone registry widgets paint bounded snapshots and release text',function()
         local frees, paints, logs = 0, 0, 0
+        local positions={}
         local function class()
             local c={}
             function c:new(o) return setmetatable(o or {},{__index=self}) end
-            function c:getSize() return self.dimen end
-            function c:paintTo() paints=paints+1 end
+            function c:getSize() return self.dimen or {w=100,h=self.bold and 28 or 18} end
+            function c:paintTo(_,x,y) paints=paints+1;if self.text then positions[self.text]={x=x,y=y} end end
             function c:free() frees=frees+1 end
             return c
         end
@@ -51,6 +52,11 @@ return function(test,eq,ok,here,Cache)
             eq(w:getSize().w,600); w:paintTo(bb,10,10); w:free()
         end
         ok(rects>=400); ok(paints>4); eq(frees,paints); eq(logs,8)
+        local sourced={state='not-saved',sources={hours='this reader'}}
+        local w=e.ReadingStatsWidgets.render('when-you-read',sourced,{w=600,h=300,rows=2})
+        w:paintTo(bb,10,10);w:free()
+        ok(positions['This reader only'].y>=positions['When you read'].y+28+4,'badge clears the measured title')
+        ok(positions['Enable KOReader statistics'].y>=positions['This reader only'].y+18+4,'empty message clears the measured badge')
     end)
     test('stats: fixed geometry, hour bars and short strip, immutable snapshot',function()
         local before=Cache.encode(data)

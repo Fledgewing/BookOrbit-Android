@@ -20,16 +20,23 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     local function text(x,y,value,bold,size,width)
         texts[#texts+1]={x=x*scale,y=y*scale,widget=Text:new{text=value,face=Font:getFace('cfont',size or (bold and 18 or 12)),
             bold=bold, max_width=math.max(1,math.min(width and width*scale or placement.w,placement.w-x*scale-8*scale))}}
+        return texts[#texts].widget
     end
-    text(8,4,plan.title,true)
+    local title=text(8,4,plan.title,true)
+    local headerBottom=4+title:getSize().h/scale
     if plan.source then
         local weekStrip=id=='this-week' and plan.sourceInline
         local x,y=weekStrip and 112 or plan.sourceInline and math.max(180,width-160) or 8,plan.sourceInline and 4 or 24
+        if not plan.sourceInline then y=math.max(y,headerBottom+4) end
         local badgeWidth=weekStrip and 118 or math.min(width-x-6,154)
-        plan.sourceRect={x=x-2,y=y-1,w=badgeWidth,h=16}
-        text(x,y,plan.source,false,11,badgeWidth-4)
+        local source=text(x,y,plan.source,false,11,badgeWidth-4)
+        local rect={x=x-2,y=y-1,w=badgeWidth,h=math.max(16,source:getSize().h/scale+2)}
+        headerBottom=math.max(headerBottom,rect.y+rect.h)
+        -- Let the existing pure planner size charts within the remaining height.
+        plan=ReadingStatsPlan.build(id,snapshot,width,height,placement.rows,headerBottom+4)
+        plan.sourceRect=rect
     end
-    if plan.message then text(8,plan.source and 44 or 32,plan.message) end
+    if plan.message then text(8,math.max(headerBottom+4,plan.source and 44 or 32),plan.message) end
     for _,v in ipairs(plan.labels) do text(v.x,v.y,v.text,v.bold,v.size,v.width) end
     local colors={BB.COLOR_WHITE,BB.COLOR_LIGHT_GRAY,BB.COLOR_GRAY,BB.COLOR_DARK_GRAY,BB.COLOR_BLACK}
     function widget:paintTo(bb,x,y)

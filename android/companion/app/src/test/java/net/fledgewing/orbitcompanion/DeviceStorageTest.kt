@@ -124,7 +124,7 @@ class DeviceStorageTest {
                 "key" to "fixture-book", "local_path" to file.takeIf { it.isFile }?.path?.let(LuaValue::str))),"freshness" to mapOf("saved" to true))
         }
         val model=LibraryReadModel(store,log={},adapter=adapter,battery={mapOf("level" to level)})
-        val operations=listOf("window","book","reader","cover","cover.reference","groups","series","counts","facets","sources","battery")
+        val operations=listOf("window","book","reader","reader.finish","cover","cover.reference","groups","series","counts","facets","sources","battery")
         fun request(op:String)=String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1)
         fun result(op:String)=LuaValue.parse(store.db().query("SELECT body FROM library_views WHERE owner=? AND request=?","fixture",request(op)) { it.bytes(0)!! }.single()) as Map<*,*>
         model.publish("fixture",operations.map(::request))

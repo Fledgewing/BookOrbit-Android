@@ -140,7 +140,7 @@ class LibraryReadModel(
 
     /** Removal changes file joins for both catalog and device windows; battery stays retained. */
     fun refreshLocalFiles(owner: String): Boolean = refresh(owner, setOf(
-        "storage.summary", "library.summary", "window", "book", "reader", "cover", "cover.reference",
+        "storage.summary", "library.summary", "window", "book", "reader", "reader.finish", "cover", "cover.reference",
         "groups", "series", "counts", "facets", "sources", "personal.reading"))
 
     fun storageCommand(owner: String, op: String, args: Map<*, *>): Map<String, Any?> {

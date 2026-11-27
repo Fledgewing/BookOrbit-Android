@@ -3,7 +3,7 @@
 ReadingStatsPlan = {}
 local titles = {['year-in-reading']='Year in reading', ['this-week']='This week',
     ['when-you-read']='When you read', ['reading-records']='Reading records'}
-function ReadingStatsPlan.build(id, data, w, h, rows)
+function ReadingStatsPlan.build(id, data, w, h, rows, headerTop)
     assert(titles[id] and w >= 64 and h >= 64)
     local p = {title=titles[id], rects={}, labels={}}
     local function rect(x,y,rw,rh,level,outline)
@@ -29,7 +29,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
     end
     local d=data.display or {}
     p.sourceInline=p.source and rows==1 and w>=300
-    local top=p.source and not p.sourceInline and 48 or 30
+    local top=math.max(headerTop or 0,p.source and not p.sourceInline and 48 or 30)
     if id == 'year-in-reading' and not data.year then
         p.message='Reading days unavailable'; return p
     elseif id == 'when-you-read' and data.hours_available == false then

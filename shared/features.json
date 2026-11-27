@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap expands running Full refresh progress; otherwise refreshes normally; hold offers Full refresh",
+          "note": "Refresh tap expands running Full refresh progress; otherwise refreshes normally; hold offers Full refresh On the 0.12 branch, completed refresh job state no longer replaces account identity.",
           "reason": null,
           "evidence": [
             {
@@ -209,7 +209,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls",
+          "note": "Persistent checkpoint and worker with native refresh progress controls Android emulator review does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -221,7 +221,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls",
+          "note": "Persistent checkpoint and worker with native refresh progress controls Android emulator review does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -233,7 +233,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "X3 flash gate; no PSRAM",
+          "note": "X3 flash gate; no PSRAM Android emulator review does not change this firmware implementation.",
           "reason": "hardware: X3 flash gate and no PSRAM exclude the Full refresh worker and its progress controls",
           "evidence": [
             {
@@ -5385,7 +5385,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner",
+          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets.",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
@@ -5397,7 +5397,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5408,7 +5408,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5419,7 +5419,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5437,7 +5437,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page",
+          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page Device-local Series uses the same bounded ordered projection after sign-out.",
           "reason": "deliberately deferred: bulk next-series download jobs, cached covers and device acceptance remain with the staged Android owners",
           "evidence": [
             {
@@ -5453,7 +5453,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned Series and grouped progress presentation follow Android",
+          "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
           "evidence": [
             {
@@ -5464,7 +5464,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Owned Series and grouped progress presentation follow Android",
+          "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
           "evidence": [
             {
@@ -5475,7 +5475,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Owned Series and grouped progress presentation follow Android",
+          "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
           "evidence": [
             {
@@ -5493,7 +5493,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel; battery line links to the owned Battery page and uses its companion-formatted label; shared Settings action; header action icons, separate bottom scrubber with bounded chapter/bookmark ticks, native Contents/annotations/Go to/search/bookmark dispatch and two-column quick settings with merged Custom editors",
+          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel; battery line links to the owned Battery page and uses its companion-formatted label; shared Settings action; header action icons, separate bottom scrubber with bounded chapter/bookmark ticks, native Contents/annotations/Go to/search/bookmark dispatch and two-column quick settings with merged Custom editors Cold user-opened panels read bounded local snapshots while the reading gate stays engaged; device-local readers use current native progress.",
           "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery estimates need measured rates and 24 h of observed use, while reading stats require saved KOReader records plus the tracked-file ledger.",
           "evidence": [
             {
@@ -5512,7 +5512,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
@@ -5527,7 +5527,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
@@ -5542,7 +5542,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android Android emulator review does not change this firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
@@ -5896,7 +5896,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection",
+          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection One-row Library captions fit the measured portrait-tablet tile height.",
           "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
           "evidence": [
             {
@@ -5911,7 +5911,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned storage and Collections screens follow Android",
+          "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
           "evidence": [
             {
@@ -5922,7 +5922,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Owned storage and Collections screens follow Android",
+          "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
           "evidence": [
             {
@@ -5933,7 +5933,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Owned storage and Collections screens follow Android",
+          "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
           "evidence": [
             {
@@ -6003,7 +6003,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: View series from saved finish membership, next-book card retained, Back restores the finish sheet",
+          "note": "Implemented on feature/0.12: View series from saved finish membership, next-book card retained, Back restores the finish sheet Local saved series membership also supplies View series and the next on-device book.",
           "reason": "deliberately deferred: device visual and timing acceptance pending; not yet released",
           "evidence": [
             {
@@ -6018,7 +6018,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "End-sheet Series entry follows Android",
+          "note": "End-sheet Series entry follows Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
           "evidence": [
             {
@@ -6029,7 +6029,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "End-sheet Series entry follows Android",
+          "note": "End-sheet Series entry follows Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
           "evidence": [
             {
@@ -6040,7 +6040,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "End-sheet Series entry follows Android",
+          "note": "End-sheet Series entry follows Android Android emulator review fixes follow in the deferred firmware implementation.",
           "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
           "evidence": [
             {
