@@ -6,6 +6,7 @@ import java.io.File
  * normalize protocol data before returning it; unsupported operations are explicit. Renderers
  * use LibraryReadModel, never this transport-facing interface. */
 interface ServerAdapter {
+    fun personalReadingSources(owner: String): List<PersonalReadingSource> = emptyList()
     fun recommendedSettings(): List<Map<String,Any?>> = emptyList()
     val id: String
     fun project(owner: String, request: Map<*, *>): Map<String, Any?> = unsupported()

@@ -42,6 +42,11 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 - **UI calls BookSync's library interface.** Binding on the KOReader plugin, Android companion
   and Xteink overlay. Maintainer rule 2026-11-26, verbatim:
   "all API calls the UI makes should be to our own interface so that we can plumb BookOrbit / Grimmory separately."
+  Personal reading data follows the maintainer ruling (2026-11-26), verbatim:
+  "I would build it so that all UI calls for that kind of data go through our interface, which then chooses where to fetch / aggregate data from. We start with on-device info and can extend to server but the ui never needs to change."
+  Request a personal-data kind, never a source. Companion providers declare capabilities,
+  merge in registration order and deduplicate neutral identities; missing/failing providers
+  are skipped. Future remote providers register inside their server adapter, never in UI.
   UI code calls only BookSync's library interface; BookOrbit and Grimmory are adapters behind it.
   Gate server-dependent features on adapter capabilities, never server identity. Filters are
   neutral objects that adapters translate, with local fallback on the cached catalog.
@@ -79,6 +84,9 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   "BookSync Companion needed" or "Update BookSync Companion" and nothing heavy runs.
 
 ## Screen and widget performance budgets
+
+Highlight and A year ago also inherit one-row/16 KiB budgets. Companion providers own
+sidecar parsing, calendar selection, aggregation and dedupe; Lua never scans personal data.
 
 Local optional widgets inherit one-row/16 KiB budgets too: companion-owned vocabulary selection
 and reading messages; native frontlight scalars only in Library. Paint never scans local history.

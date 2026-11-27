@@ -21,6 +21,25 @@ return function(test,eq,ok,E,W,withHost)
             host:onClose(); host:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
+    test('personal widgets: Home batches both neutral kinds with no source selection',function()
+        withHost(function(batches)
+            local kinds={}
+            E.LibraryAdapter.read=function(raw)
+                local args=E.Cache.decode(raw)
+                if args.op=='capabilities' then return {},2 end
+                eq(args.op,'personal.reading'); eq(args.limit,1); eq(args.source,nil)
+                kinds[args.kind]=true
+                return {state='empty',row_count=1,freshness={saved=true}},100
+            end
+            E.S.home_layout=E.Layout.default()
+            E.S.home_layout.pages={{id='personal',tab='Home',name='Personal',placements={
+                {instance='h',widget='highlight',version=1,x=0,y=0,w=2,h=2,settings={}},
+                {instance='y',widget='yearago',version=1,x=2,y=0,w=2,h=2,settings={}}}}}
+            local host=E.HomeHost.create(); E.HomeHost.active=host; W.shown={host}
+            ok(kinds.highlight and kinds.yearago); eq(#batches,1); eq(#batches[1],3)
+            eq(host.metrics.roundTrips,1); eq(host.metrics.spawns,0); eq(host.metrics.network,0)
+        end)
+    end)
     test('local widgets: signed-out pending snapshots keep local loading, not account setup',function()
         withHost(function()
             E.LibraryAdapter.read=function(raw)
@@ -41,14 +60,14 @@ return function(test,eq,ok,E,W,withHost)
     end)
     test('local widgets: every size/state paints immutable data without reads; 50px actions',function()
         withHost(function()
-            for _,id in ipairs({'word','light','buddy'}) do
+            for _,id in ipairs({'word','light','buddy','highlight','yearago'}) do
                 ok(E.HomeWidgets.renderers[id])
                 local offered=false
                 for _,name in ipairs(E.HomeEditor.available({})) do if name==id then offered=true end end
                 ok(offered,id..' offered by installed picker')
                 for _,size in ipairs(E.WidgetRegistry[id].sizes['android-tablet']) do
                     for _,state in ipairs({'ready','empty','loading','error','offline-with-data','offline-without-data','unavailable'}) do
-                        local result={state=state,word='lantern',context='the lantern room',source='The Moon',message='Light · 40%',level=40,
+                        local result={state=state,passage='A saved passage',book_title='The Moon',summary='12 min · 1 day · stopped at p. 9',book={title='The Moon',local_path='/Books/moon.epub'},word='lantern',context='the lantern room',source='The Moon',message='Light · 40%',level=40,
                             freshness={saved=state~='offline-without-data'}}
                         if state=='loading' then result.pending=true end
                         if state=='error' then result.error='unavailable' end

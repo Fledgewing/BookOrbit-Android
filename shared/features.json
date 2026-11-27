@@ -5947,13 +5947,13 @@
     },
     {
       "id": "home-local-widgets",
-      "feature": "Word of the day, Reading buddy and Light picker widgets (0.12; unreleased)",
+      "feature": "Word of the day, Reading buddy, Light, Highlight and A year ago picker widgets (0.12; unreleased)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Installed 2×1 and 2×2 widgets: companion daily vocabulary/context/source, local reading message and native frontlight controls; explicit loading/empty/offline/error states.",
-          "reason": "deliberately deferred: device appearance and latency acceptance pending; Highlight and A year ago need authorized server snapshots.",
+          "note": "Installed 2×1 and 2×2 widgets: vocabulary, local reading message, frontlight, daily sidecar passage and calendar-year-back reading history. Personal data uses ordered companion providers with dedupe and failure isolation; explicit loading/empty/offline/error states.",
+          "reason": "deliberately deferred: device appearance and latency acceptance pending; no remote personal-data provider in this slice.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/local_widgets.lua",
@@ -5963,8 +5963,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Local optional widgets follow Android.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow.",
+          "note": "Personal reading and local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware uses the same kinds when hardware permits.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",
@@ -5974,8 +5974,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Local optional widgets follow Android.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow.",
+          "note": "Personal reading and local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware uses the same kinds when hardware permits.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",
@@ -5985,8 +5985,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Local optional widgets follow Android.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow; X3 also requires measured flash fit.",
+          "note": "Personal reading and local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware uses the same kinds when hardware permits. X3 requires measured flash fit.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",

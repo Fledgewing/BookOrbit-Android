@@ -8,16 +8,16 @@ import java.security.MessageDigest
  * scans and parses native sidecars; LibraryReadModel still bounds every published window. */
 class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
     override val id = "device"
-    companion object { const val OWNER = "device-local" }
-    private val books by lazy {
-        roots.distinctBy { it.canonicalPath }.flatMap { root ->
-            if (!root.isDirectory) emptyList() else root.walkTopDown().onEnter {
+    companion object {
+        const val OWNER = "device-local"
+        fun files(roots: List<File>): Sequence<File> = roots.distinctBy { it.canonicalPath }.asSequence().flatMap { root ->
+            if (!root.isDirectory) emptySequence() else root.walkTopDown().onEnter {
                 BulkWork.checkpoint()
                 Places.inside(it,listOf(root)) != null && !java.nio.file.Files.isSymbolicLink(it.toPath()) && !it.name.endsWith(".sdr")
-            }.filter { it.isFile && it.extension.lowercase() in setOf("epub","pdf","mobi","azw","azw3","fb2","djvu","cbz","cbr","txt") &&
-                Places.inside(it,listOf(root)) != null }.map(::book).toList()
-        }.distinctBy { it["key"] }
+            }.filter { it.isFile && it.extension.lowercase() in setOf("epub","pdf","mobi","azw","azw3","fb2","djvu","cbz","cbr","txt") && Places.inside(it,listOf(root)) != null }
+        }.distinctBy { it.canonicalPath }
     }
+    private val books by lazy { files(roots).map(::book).toList() }
     private fun sidecar(file: File) = File(file.parentFile,"${file.nameWithoutExtension}.sdr")
     private fun book(file: File): Map<String,Any?> {
         BulkWork.checkpoint()

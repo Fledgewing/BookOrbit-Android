@@ -29,7 +29,7 @@ Budgets.screens["filter-picker"] = budget(24, 16384, 50)
 Budgets.libraryBootstrap = budget(1,16384,50)
 Budgets.libraryWindow = budget(32, 32768, 30)
 for _, id in ipairs({"continue-reading", "booklist", "lists", "library", "battery", "this-week",
-    "year-in-reading", "when-you-read", "reading-records", "clock", "word", "light", "buddy"}) do
+    "year-in-reading", "when-you-read", "reading-records", "clock", "word", "light", "buddy", "highlight", "yearago"}) do
     Budgets.widgets[id] = budget(id == "booklist" and 12 or id == "lists" and 8 or 1, 16384, 50)
 end
 -- Library summary + local storage summary are two materialized rows in one batch.
