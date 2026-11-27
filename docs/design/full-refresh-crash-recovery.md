@@ -48,11 +48,12 @@ The generic `ResumedWork` guard writes `refresh.inflight` durably before enterin
 the job and clears it only on ordinary return (success, offline, low heap or
 cancellation). Its temporary marker is also checked after a reset during rename;
 malformed markers fail closed. After two runs never return, the next boot blocks
-a third. `mirror.request.crashed` blocks automatic incremental work across later
-boots too. The request and bulk stage marker (including `.bak`/`.tmp`) are removed.
-Published catalog generations, books, reading state and settings remain. Only an
-explicit Full refresh or credential change clears the breaker; explicit refresh
-starts a fresh staging generation. A storage failure that prevents recording an
+a third. `mirror.request.crashed` blocks automatic resume across later boots too, but
+allows a user-requested normal refresh to rebuild the catalog. The request and bulk stage marker (including `.bak`/`.tmp`) are removed.
+Published catalog generations, books, reading state and settings remain. An explicit Full refresh or credential change clears both worker and boot
+attempt markers and the warning; explicit refresh starts a fresh staging generation.
+A normal refresh also works after quarantine, including when no active pointer
+remains, and clears the durable warning and in-memory banner only on success. A storage failure that prevents recording an
 attempt prevents starting the job.
 
 A second marker, `refresh-boot.inflight`, brackets setup while refresh state is
@@ -60,11 +61,20 @@ pending. After two incomplete setups the recovery hook runs immediately after SD
 mount, before settings/catalog/activity restoration. It also quarantines the bulk
 `active` pointer as `active.crashed` and removes its backup, preventing the suspect
 catalog from being decoded on that boot. The generation bytes remain on SD.
+Quarantine retires the worker attempt; completing setup retires the boot attempt,
+including on the quarantine path. Later boots restore the actionable warning
+("Refresh stopped after a crash. Run Full refresh to rebuild.") without repeating
+quarantine, rearming the boot breaker or moving the pointer again. This also
+settles the exhausted markers left by older firmware. A Full refresh interrupted
+by one restart has a fresh attempt allowance and resumes normally.
 
 Host tests cover marker writes/renames, cold-boot instances, corrupt markers and
 normal pauses. The emulated release scenario injects two abrupt process exits,
-boots twice with the same fault still enabled, checks no network job runs and
-verifies retained bytes, then retries through the real X4 Pro Home hold gesture.
+quarantines once then boots three times with the same fault still enabled,
+checks no network job runs, verifies retained bytes and an unchanged quarantined
+pointer, then interrupts and resumes a new request through the real X4 Pro Home
+hold gesture. A normal-tap scenario repairs both a retained catalog and a disabled
+active pointer and verifies that the durable warning disappears after success.
 
 ## Recover the already installed firmware
 

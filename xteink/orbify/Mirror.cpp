@@ -133,7 +133,7 @@ bool runView(const orbify::mirror::Step& step, int pageNumber) {
 namespace OrbifyMirror {
 
 void refreshChanged(bool (*cancelled)()) {
-  if (OrbifyBulk::active()) { requestIncremental(); return; }
+  if (requestIncremental()) return;
   if (requested() || WiFi.status() != WL_CONNECTED || (cancelled && cancelled()) ||
       !OrbifyHeap::roomForRequest("Catalog incremental"))
     return;

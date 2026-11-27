@@ -218,26 +218,78 @@ def full_refresh_crash_breaker(ctx: Context, tmp: Path) -> None:
         assert (folder / "refresh.inflight").read_text() == str(attempt)
         assert (folder / "mirror.request").exists()
     # Leave the fault enabled: a third worker would immediately kill the process.
-    for name in ("recovered", "still-recovered"):
+    recovery_logs = []
+    for name in ("recovered", "normal-boot-1", "normal-boot-2", "normal-boot-3"):
         run = ctx.sim.run(card, name, script="6000:QUIT", timeout_s=15,
                           env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
         assert run.returncode == 0
-        after(run.output, "crash breaker stopped automatic resume")
+        recovery_logs.append(run.output)
         after(run.output, "Entering activity: Home")
         assert not (folder / "mirror.request").exists()
         assert (folder / "mirror.request.crashed").exists()
         assert not (published.parents[2] / "stage").exists()
+    assert "\n".join(recovery_logs).count("crash breaker stopped automatic resume") == 1
+    assert not (folder / "refresh.inflight").exists()
+    assert not (folder / "refresh-boot.inflight").exists()
     assert len(ctx.requests()) == before, "recovery restarted network work"
     assert published.read_text() == '{"id":1,"title":"kept"}'
     assert (card.fs / path.lstrip("/")).read_bytes() == book_bytes
     assert (card.crosspoint / "bookorbit.json").read_bytes() == credentials
     if ctx.profile == "x4-pro":
         x, y = home_tile(run.output, "sync")
-        retry = ctx.sim.run(card, "explicit-retry", script=f"3000:TAP:{x},{y},1300", timeout_s=100,
+        # Interrupt a legitimate new Full refresh. It gets a fresh allowance,
+        # and the following cold boot must resume instead of quarantining it.
+        interrupted = ctx.sim.run(card, "explicit-interrupted", script=f"3000:TAP:{x},{y},1300", timeout_s=30,
+                                  env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+        assert interrupted.returncode == 86
+        assert (folder / "refresh.inflight").read_text() == "1"
+        assert not (folder / "refresh-boot.inflight").exists()
+        assert not (folder / "mirror.request.crashed").exists()
+        retry = ctx.sim.run(card, "explicit-resumed", timeout_s=100,
                             env={"ORBIFY_SIM_QUIT_BULK_DONE": "1", "ORBIFY_SIM_FLASH_ON_CONNECT": "1"})
+        assert "crash breaker stopped automatic resume" not in retry.output
+        assert "early-boot breaker disabled" not in retry.output
         after(retry.output, "Full refresh: Done")
         assert retry.returncode == 0
         assert not (folder / "refresh.inflight").exists()
+        assert not (folder / "mirror.request.crashed").exists()
+
+
+@scenario("x4-pro")
+def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
+    """A tap repairs both retained and disabled bulk catalogs and retires the banner."""
+    for disable_pointer in (False, True):
+        card = ctx.card(tmp / ("no-active" if disable_pointer else "active"))
+        card.theme(UI_THEME_BOOKORBIT)
+        folder = card.crosspoint / "orbify"
+        folder.mkdir(exist_ok=True)
+        (folder / "mirror.request").write_text("1\n")
+        built = ctx.sim.run(card, f"seed-{disable_pointer}", timeout_s=100,
+                            env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"})
+        assert built.returncode == 0
+        bulk = card.crosspoint / "orbify-catalog" / "bulk"
+        assert (bulk / "active").exists()
+        (folder / "mirror.request").write_text("1\n")
+        (folder / ("refresh-boot.inflight" if disable_pointer else "refresh.inflight")).write_text("2")
+        recovered = ctx.sim.run(card, f"quarantine-{disable_pointer}", script="6000:QUIT", timeout_s=15)
+        assert recovered.returncode == 0
+        assert (folder / "mirror.request.crashed").read_text() == (
+            "Refresh stopped after a crash. Run Full refresh to rebuild.")
+        assert (bulk / "active").exists() != disable_pointer
+        x, y = home_tile(recovered.output, "sync")
+        refreshed = ctx.sim.run(card, f"normal-refresh-{disable_pointer}",
+                                script=f"3000:TAP:{x},{y},100", timeout_s=100,
+                                env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"}, quit_after_sync=False)
+        assert refreshed.returncode == 0
+        after(refreshed.output, "Bulk catalog: ok=1")
+        assert "Full refresh asked for" not in refreshed.output
+        assert (bulk / "active").exists()
+        assert not (folder / "mirror.request.crashed").exists()
+        assert not (folder / "refresh.inflight").exists()
+        settled = ctx.sim.run(card, f"repaired-boot-{disable_pointer}", script="6000:QUIT", timeout_s=15,
+                              env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+        assert settled.returncode == 0
+        assert "crash breaker stopped automatic resume" not in settled.output
         assert not (folder / "mirror.request.crashed").exists()
 
 
@@ -288,7 +340,21 @@ def full_refresh_early_boot_breaker(ctx: Context, tmp: Path) -> None:
     after(run.output, "early-boot breaker disabled saved catalog pointer")
     after(run.output, "Entering activity: Home")
     assert not (bulk / "active").exists() and not (bulk / "active.bak").exists()
-    assert (bulk / "active.crashed").read_text() == "a"
+    pointer = bulk / "active.crashed"
+    assert pointer.read_text() == "a"
+    pointer_stat = pointer.stat()
+    logs = [run.output]
+    for boot in range(3):
+        settled = ctx.sim.run(card, f"settled-{boot}", script="6000:QUIT", timeout_s=15,
+                              env={"ORBIFY_SIM_CRASH_REFRESH_BOOT": "1", "ORBIFY_SIM_CRASH_REFRESH": "1"})
+        assert settled.returncode == 0
+        logs.append(settled.output)
+        assert not (folder / "refresh-boot.inflight").exists()
+        assert pointer.stat().st_mtime_ns == pointer_stat.st_mtime_ns
+        assert pointer.stat().st_ino == pointer_stat.st_ino
+    combined = "\n".join(logs)
+    assert combined.count("crash breaker stopped automatic resume") == 1
+    assert combined.count("early-boot breaker disabled saved catalog pointer") == 1
     assert saved.read_text() == "interrupted cache bytes"
     assert not (folder / "refresh-boot.inflight").exists()
     assert len(ctx.requests()) == before

@@ -217,7 +217,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp; runs in firmware without an Android companion or companion acknowledgement path; flash-safe internal worker stack; two unfinished attempts stop automatic resume, keeping books, settings and the published catalog; explicit Full refresh retries",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp; runs in firmware without an Android companion or companion acknowledgement path; flash-safe internal worker stack; two unfinished attempts stop automatic resume once per incident, keeping books, settings and catalog generation bytes; the warning explains Full refresh recovery; explicit Full refresh resets both breakers; normal refresh can rebuild a quarantined catalog and clears the warning on success",
           "reason": null,
           "evidence": [
             {
@@ -229,7 +229,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp; runs in firmware without an Android companion or companion acknowledgement path; flash-safe internal worker stack; two unfinished attempts stop automatic resume, keeping books, settings and the published catalog; explicit Full refresh retries",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp; runs in firmware without an Android companion or companion acknowledgement path; flash-safe internal worker stack; two unfinished attempts stop automatic resume once per incident, keeping books, settings and catalog generation bytes; the warning explains Full refresh recovery; explicit Full refresh resets both breakers; normal refresh can rebuild a quarantined catalog and clears the warning on success",
           "reason": null,
           "evidence": [
             {

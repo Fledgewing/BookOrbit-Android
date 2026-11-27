@@ -44,10 +44,18 @@ bool write(const char* path, const std::string& text);
 ResumedWork attempt("/.crosspoint/orbify/refresh.inflight");
 ResumedWork bootAttempt("/.crosspoint/orbify/refresh-boot.inflight");
 constexpr const char* CRASHED = "/.crosspoint/orbify/mirror.request.crashed";
+constexpr const char* CRASH_MESSAGE = "Refresh stopped after a crash. Run Full refresh to rebuild.";
+void showCrash() {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  state = Snapshot{};
+  state.active = true; state.finished = true; state.failures = 1;
+  state.result = CRASH_MESSAGE;
+}
 void quarantine() {
   // Disable every automatic entry point before touching the old checkpoint.
   // Keep the published generation, books, credentials and reading state.
-  write(CRASHED, "Stopped at repeated refresh crash");
+  write(CRASHED, CRASH_MESSAGE);
+  attempt.complete();
   Storage.remove(REQUEST);
   Storage.remove(CHECKPOINT);
   Storage.remove("/.crosspoint/orbify-catalog/bulk/stage");
@@ -55,11 +63,7 @@ void quarantine() {
   Storage.remove("/.crosspoint/orbify-catalog/bulk/stage.bak");
   terminalThisBoot.store(true);
   incrementalRequested.store(false);
-  {
-    std::lock_guard<std::mutex> lock(stateMutex);
-    state.active = true; state.finished = true; state.failures = 1;
-    state.result = "Stopped at repeated refresh crash";
-  }
+  showCrash();
   LOG_ERR("ORB", "Full refresh: crash breaker stopped automatic resume; saved catalog and books kept");
 }
 
@@ -132,6 +136,14 @@ void runTask() {
       state.active = !quiet.load(); state.percent = std::max(state.percent,p); state.paused = false;
     }, !quiet.load());
     if(ok) {
+      // A normal refresh can repair a quarantined catalog too. Retire the
+      // durable warning only after the replacement catalog is published.
+      if (Storage.exists(CRASHED)) {
+        Storage.remove(CRASHED);
+        Storage.remove(RESULT);
+        std::lock_guard<std::mutex> lock(stateMutex);
+        state = Snapshot{};
+      }
       BookOrbitHomeStore::markSynced();
       if (!quiet.load()) {
       const auto now=time(nullptr);
@@ -176,7 +188,10 @@ void bootBegin() {
   // Before any saved catalog is decoded or the first activity is selected.
   // A refresh can also leave a published cache that fails during setup, before
   // service() has a chance to see the worker's in-flight marker.
-  if (!requested() && !Storage.exists(CRASHED) && !attempt.exhausted() &&
+  // A quarantined incident is settled. Its warning is restored by service(),
+  // without arming setup again or touching a catalog pointer a second time.
+  if (Storage.exists(CRASHED) && !requested()) return;
+  if (!requested() && !attempt.exhausted() &&
       !Storage.exists("/.crosspoint/orbify/refresh.inflight")) return;
   if (bootAttempt.exhausted() || !bootAttempt.begin()) {
     quarantine();
@@ -195,7 +210,11 @@ void bootBegin() {
   if (std::getenv("ORBIFY_SIM_CRASH_REFRESH_BOOT")) { std::fflush(nullptr); std::_Exit(88); }
 #endif
 }
-void bootComplete() { bootAttempt.complete(); }
+void bootComplete() {
+  // Also retires an exhausted marker on the boot that quarantined the job.
+  bootAttempt.complete();
+  if (Storage.exists(CRASHED)) attempt.complete();
+}
 Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(stateMutex);
   return state;
@@ -211,12 +230,19 @@ void catalogProgress(size_t done, size_t total, size_t books) {
 bool catalogTask() { return xTaskGetCurrentTaskHandle() == workerTask.load(); }
 bool cancelCatalogRequest() { return xTaskGetCurrentTaskHandle() == workerTask.load() && stop(); }
 
-void requestIncremental() {
-  if (Storage.exists(CRASHED) || !OrbifyBulk::active() || running.load() || requested() || WiFi.status()!=WL_CONNECTED) return;
+bool requestIncremental() {
+  // Own normal refresh after quarantine even when boot recovery disabled the
+  // active pointer. The bulk catalog starts a new generation when none exists.
+  const bool recovering = Storage.exists(CRASHED);
+  if (!recovering && !OrbifyBulk::active()) return false;
+  if (running.load() || requested() || WiFi.status()!=WL_CONNECTED) return true;
+  if (recovering) attempt.complete();
   incrementalRequested.store(true);terminalThisBoot.store(false);retryAt.store(0);sleeping.store(false);
+  return true;
 }
 void freshRequest() {
   attempt.complete();
+  bootAttempt.complete();
   Storage.remove(CRASHED);
   fresh.store(true);
   terminalThisBoot.store(false);
@@ -234,10 +260,14 @@ void service() {
   static bool recoveryChecked = false;
   if (!recoveryChecked && Storage.ready()) {
     recoveryChecked = true;
-    if (Storage.exists(CRASHED) || attempt.exhausted()) {
-      if (!terminalThisBoot.load()) {
-        quarantine();
+    if (Storage.exists(CRASHED)) {
+      showCrash();
+      if (!incrementalRequested.load() && !fresh.load()) {
+        terminalThisBoot.store(true);
+        return;
       }
+    } else if (attempt.exhausted()) {
+      quarantine();
       return;
     }
   }
@@ -287,6 +317,7 @@ void credentialsChanging() {
   // Quiesce the task before the settings callback mutates shared credentials.
   // An old account's queued inventory is never resumed on a different account.
   attempt.complete();
+  bootAttempt.complete();
   Storage.remove(CRASHED);
   Storage.remove(REQUEST);
   Storage.remove(CHECKPOINT);
