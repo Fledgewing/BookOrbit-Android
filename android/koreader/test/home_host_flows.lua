@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,height=E.Device.screen.getHeight,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -73,6 +73,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Shared.pin_locked,E.Shared.refresh=saved.pin,saved.refresh
         E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
+        E.Device.screen.getHeight=saved.height
         ok(success,err)
     end
     test("owned Home: the default repeated Home returns to the open book",function() withHost(function()
@@ -276,9 +277,35 @@ return function(test,eq,ok,E,W,Widget)
             layout.pages={{id="shelf",tab="Home",placements={{instance="wide",widget="booklist",version=1,
                 x=0,y=0,w=4,h=2,settings={title="Recently added",src="recent",style=0}}}}}
             E.S.home_layout=layout
+            E.Device.screen.getHeight=function() return 1200 end
             local h=E.HomeHost.create(); E.HomeHost.active=h
             eq(reads[#reads].op,"window"); eq(reads[#reads].limit,4)
             eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
+            E.Device.screen.getHeight=function() return 800 end
+            h.dimen.h=800;h:rebuild()
+            eq(reads[#reads].limit,1,"short shelf requests only its visible compact row")
+        end)
+    end)
+    test("Home card rows: paging consumes exactly the visible books",function()
+        withHost(function()
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                local args=E.Cache.decode(raw)
+                if args.op~="window" then return read(raw) end
+                local items={}
+                for n=args.offset+1,args.offset+args.limit do
+                    items[#items+1]={key="book-"..n,title="Book "..n,progress=25}
+                end
+                local result={items=items,next=args.offset+args.limit,total=20,freshness={saved=true}}
+                return result,#E.Cache.encode(result)
+            end
+            local h=E.HomeHost.create();E.HomeHost.active=h
+            h:showList("Library","library/all")
+            eq(h.list_limit,5);eq(#h.list_result.items,5)
+            eq(h.list_result.items[1].title,"Book 1");eq(h.list_result.items[5].title,"Book 5")
+            h:listPage(1)
+            eq(h.list_result.items[1].title,"Book 6");eq(h.list_result.items[5].title,"Book 10")
+            h:listPage(-1);eq(h.list_result.items[1].title,"Book 1")
         end)
     end)
     test("Home host: immutable snapshots isolate query and renderer errors",function()
@@ -587,6 +614,152 @@ return function(test,eq,ok,E,W,Widget)
                 eq(target,"opaque-book")
             end)
             E.Library.open,E.ReaderPanel=open,panel
+            ok(success,err)
+        end)
+    end)
+
+    test("Home cards: projected labels, overflow routes and deferred cover lifetime",function()
+        withHost(function(_,_,U)
+            local b={key="opaque",title="The Moon",authors={"A"},progress=25,local_path="book.epub",series_key="series-key",
+                series_line="Moon · Book 2",time_left="50 m left",finish_forecast="Done by Tuesday"}
+            local snap=E.HomeHostPlan.snapshot({items={b},freshness={saved=true}})
+            local actions={}
+            local card=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,
+                function(action) actions[#actions+1]=action end,{w=678,h=374})
+            local labels={}
+            for _,child in ipairs(card[1]) do
+                if child.text then labels[child.text]=true end
+                if child.text=="⋯" then child.callback() end
+            end
+            for _,label in ipairs({b.series_line,b.time_left,b.finish_forecast}) do ok(labels[label],label) end
+            eq(actions[1],"more")
+            local unknown=E.HomeHostPlan.snapshot({items={{key="unknown",title="No locator"}},freshness={saved=true}})
+            local missing=E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},unknown,function() end,{w=678,h=178})
+            local unknownLabel=false
+            for _,child in ipairs(missing[1]) do
+                ok(child.text~="0%","missing position never becomes zero progress")
+                if child.text=="—" then unknownLabel=true end
+            end
+            ok(unknownLabel)
+            local dense=E.HomeWidgets.card({widget="booklist",w=4,h=2,settings={style=1,cap=3}},snap,function() end,{w=678,h=156})
+            local caption=false
+            for _,child in ipairs(dense[1]) do if child.text=="25% · 50 m left · A" then caption=true end end
+            ok(caption,"compact rows retain the configured caption alongside pace")
+            for _,height in ipairs({178,374}) do
+                local c=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,function() end,{w=678,h=height})
+                local percent,left,bar
+                for _,child in ipairs(c[1]) do
+                    if child.text=="25%" then percent=child end
+                    if child.text==b.time_left then left=child end
+                    if child.percentage then bar=child end
+                end
+                ok(left.overlap_offset[1]>=percent.overlap_offset[1]+percent.max_width,"pace and percentage occupy separate columns")
+                ok(left.overlap_offset[2]+16<=bar.overlap_offset[2],"pace text clears the progress bar")
+            end
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            h:dispatch("more",b)
+            local dialog=W.shown[#W.shown]
+            eq(dialog.buttons[1][1].text,"Details"); eq(dialog.buttons[2][1].text,"Open")
+            dialog.buttons[3][1].callback(); eq(h.series_key,"series-key")
+            eq(dialog.buttons[4][1].enabled,false,"no alternate status sync writer")
+            eq(dialog.buttons[5][1].enabled,false,"no unsafe file delete fallback")
+            W.shown={h}
+            local prepare,dirty=E.Library.prepareCardCover,E.UIManager.setDirty
+            local dirtied
+            E.UIManager.setDirty=function(_,window) dirtied=window end
+            local calls,canceled,deliver=0,0
+            E.Library.prepareCardCover=function(row,done)
+                eq(row,b); calls=calls+1; deliver=done
+                return function() canceled=canceled+1 end
+            end
+            local success,err=pcall(function()
+                local c=E.HomeWidgets.canvas(80,120)
+                local taps=0
+                local tap=E.HomeWidgets.coverTap(c,function() taps=taps+1 end,10,20,80,100)
+                tap:paintTo({},110,220)
+                eq(tap.dimen.x,110);eq(tap.dimen.y,220)
+                eq(tap.ges_events.TapCardCover[1].range,tap.dimen)
+                ok(tap:onTapCardCover());eq(taps,1,"transparent cover input keeps a live native hit region")
+                local cover=E.HomeWidgets.cover(c,b,0,0,80,120)
+                eq(calls,0,"construction never decodes or acquires")
+                cover:paintTo({},0,0); cover:paintTo({},0,0); eq(calls,1)
+                cover:onCloseWidget(); cover:free(); eq(canceled,1,"native close cancels exactly once")
+                deliver("/unused-after-free"); eq(calls,1,"late delivery ignored")
+                local nativeRequire=E.require
+                local decoded=0
+                E.require=function(name)
+                    if name=="ui/widget/imagewidget" then return U.Frame:extend{_render=function() decoded=decoded+1 end} end
+                    return nativeRequire(name)
+                end
+                local imageCover=E.HomeWidgets.cover(c,b,0,0,80,120)
+                imageCover:paintTo({},0,0); eq(decoded,0)
+                local replacement={}
+                E.HomeHost.active=replacement;W.shown={replacement}
+                deliver("/other-home.jpg");eq(decoded,0,"another Home cannot receive this delivery")
+                E.HomeHost.active=h;W.shown={h}
+                deliver("/saved-cover.jpg"); eq(decoded,1)
+                eq(dirtied,h,"prepared cover flags its initiating window for paint")
+                ok(imageCover[1]._render,"placeholder replaced by prepared bitmap")
+                imageCover:free()
+                E.require=nativeRequire
+            end)
+            E.HomeHost.active=h;W.shown={h}
+            E.Library.prepareCardCover,E.UIManager.setDirty=prepare,dirty
+            ok(success,err)
+        end)
+    end)
+
+    test("Home card covers: off-paint, bounded, coalesced and owner/cancel safe",function()
+        withHost(function()
+            local originalRequire,acquire=E.require,E.Library.acquireCover
+            local owner,size="fixture",100
+            local paths,requests,callback={},0
+            E.LibraryAdapter.owner=function() return owner end
+            E.LibraryAdapter.sent,E.LibraryAdapter.order={},{}
+            E.require=function(name)
+                if name=="lfs" then return {attributes=function() return {mode="file",size=size} end} end
+                return originalRequire(name)
+            end
+            E.Library.acquireCover=function(key,done) requests=requests+1; callback=done end
+            local function schedule(row)
+                local cancel=E.Library.prepareCardCover(row,function(path) paths[#paths+1]=path end,function() return true end)
+                return cancel,W.queue[#W.queue].fn
+            end
+            local success,err=pcall(function()
+                local cancel,task=schedule({cover_path="saved.jpg"})
+                eq(#paths,0);eq(requests,0,"paint schedules no command")
+                task();cancel();eq(paths[1],"saved.jpg")
+                size=E.Budgets.CARD_COVER_BYTES+1
+                cancel,task=schedule({cover_path="oversized.jpg"});task();cancel();eq(#paths,1)
+                size=100
+                cancel,task=schedule({cover_path="canceled.jpg"});cancel();task();eq(#paths,1)
+                cancel,task=schedule({key="remote"});task();cancel();eq(requests,1)
+                local cancelAgain,again=schedule({key="remote"});again();cancelAgain();eq(requests,1,"misses coalesce")
+                local cancelLate,late=schedule({key="other"});late();eq(requests,2)
+                owner="replacement";callback({local_path="wrong-owner.jpg"});cancelLate();eq(#paths,1)
+            end)
+            E.require,E.Library.acquireCover=originalRequire,acquire
+            ok(success,err)
+        end)
+    end)
+
+    test("Home card download: one explicit job and no late reader focus",function()
+        withHost(function()
+            local download,open=E.Library.downloadCard,E.Library.open
+            local calls,opened,deliver=0,0
+            E.Library.downloadCard=function(row,done) eq(row.key,"remote");calls=calls+1;deliver=done end
+            E.Library.open=function(row) eq(row.local_path,"saved.epub");opened=opened+1;return true end
+            local success,err=pcall(function()
+                local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+                h:dispatch("download",{key="remote"});eq(calls,1);eq(h.cardDownload,"remote")
+                h:dispatch("download",{key="remote"});eq(calls,1,"pending download coalesces taps")
+                deliver({local_path="saved.epub"});eq(opened,1);eq(W.shown[#W.shown],nil)
+                deliver({local_path="saved.epub"});eq(opened,1,"leaving Home rejects late focus")
+                local available=E.Library.cardActions({key="remote"},{download=true})
+                eq(available[2].id,"download");eq(available[2].enabled,true)
+                eq(E.Library.cardActions({key="remote"},{download=false})[2].enabled,false)
+            end)
+            E.Library.downloadCard,E.Library.open=download,open
             ok(success,err)
         end)
     end)

@@ -91,12 +91,9 @@ function HomeHost.create()
             local context=paint:widget(p.widget,p.instance)
             local ok,result=pcall(function()
                 local need=(HomeWidgets.needs[p.widget] or HomeHostPlan.need)(p)
-                if p.widget == "lists" or p.widget == "booklist" and (p.settings.style or 0) == 1 then
-                    local pad=scale(rect.h-2<scale(132) and 8 or 14)
-                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(52))/scale(52))))
-                elseif p.widget == "booklist" then
-                    -- Cover shelves are columns, so a row-height limit must not collapse them.
-                    need.limit=math.min(need.limit,rect.h-2<scale(132) and 1 or p.w>=4 and 4 or 3)
+                if p.widget == "lists" or p.widget == "booklist" then
+                    local geometry=HomeHostPlan.cardGeometry(p,rect,scale)
+                    need.limit=math.min(need.limit,math.max(1,geometry.capacity))
                 end
                 if HomeWidgets.stats[p.widget] then
                     if not sharedStats then sharedStats=context:read(need.op,need) end
@@ -217,6 +214,34 @@ function HomeHost.create()
         elseif action == "collections" then StorageUI.show("collections",function(row)
             self:showList(row.title,{kind="collection",key=row.key})
         end)
+        elseif action == "more" then
+            local done=Budgets.span("book-actions.paint",now_s,log)
+            local dialog
+            local buttons={}
+            for _i,item in ipairs(Library.cardActions(row,self.caps)) do
+                local choice=item
+                buttons[#buttons+1]={{text=_(choice.label),height=Device.screen:scaleBySize(50),enabled=choice.enabled,callback=function()
+                    UIManager:close(dialog)
+                    self:dispatch(choice.id,row,p)
+                end}}
+            end
+            dialog=require("ui/widget/buttondialog"):new{title=row.title or _("Book"),buttons=buttons}
+            UIManager:show(dialog) -- gate: user action (card overflow)
+            done()
+        elseif action == "download" then
+            if self.cardDownload then return end
+            self.cardDownload=row.key
+            Library.downloadCard(row,function(result)
+                self.cardDownload=nil
+                if HomeHost.active~=self or topWidget()~=self or reading() then return end
+                if result.local_path then
+                    Library.open({local_path=result.local_path}); UIManager:close(self)
+                else
+                    UIManager:show(InfoMessage:new{text=_("Download unavailable. Try again from the library."),timeout=3}) -- gate: user action (card download result)
+                end
+            end)
+        elseif action == "details" then ReaderPanel.details(row.key)
+        elseif action == "series" then self:showSeries(row.series_key)
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
                 local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}

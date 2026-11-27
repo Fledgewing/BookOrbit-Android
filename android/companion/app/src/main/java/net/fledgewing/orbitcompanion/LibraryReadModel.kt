@@ -51,7 +51,7 @@ class LibraryReadModel(
             val args = LuaValue.parse(request.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: continue
             store.transaction {
                 if (!local && store.meta("owner") != owner) return@transaction
-                val result = try { when (args["op"]) {
+                val projected = try { when (args["op"]) {
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
@@ -67,6 +67,24 @@ class LibraryReadModel(
                     "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true)
                     else -> projection.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
+                // Enrich only the bounded display window, never the full catalog. Saved covers
+                // and personal pace share its row/byte budget and its single Home batch.
+                val result = if (args["op"] == "window") {
+                    val seconds = ((localStats["year"] as? Map<*, *>)?.get("seconds") as? List<*>).orEmpty()
+                    val daily = seconds.takeLast(14).sumOf { (it as? Number)?.toLong() ?: 0 } / 14
+                    projected + mapOf("items" to (projected["items"] as? List<*>).orEmpty().map { raw ->
+                        @Suppress("UNCHECKED_CAST") val row = raw as Map<String, Any?>
+                        val key = row["key"] as? String
+                        val cover = (if (key == null) null else projection.project(owner, mapOf("op" to "cover", "key" to key))["local_path"]) ?: row["cover_path"]
+                        val enriched = personal.card(row, clock(), daily)
+                        val series = (row["series"] as? List<*>)?.firstOrNull() as? String
+                        enriched + mapOf("cover_path" to cover,
+                            "available" to ((row["available"] as? Map<*, *>).orEmpty() + mapOf("cover" to (cover != null))),
+                            "series_line" to series?.let { name -> LuaValue.str(LuaValue.utf8(name) + (row["series_position"]?.let { " · Book $it" } ?: "")) },
+                            "time_left" to (enriched["time_left"] ?: "Not enough reading yet"),
+                            "finish_forecast" to (enriched["finish_forecast"] ?: "Finish date unavailable"))
+                    })
+                } else projected
                 val items = result["items"] as? List<*>
                 val measuredRows = items.orEmpty().size + items.orEmpty().sumOf {
                     ((it as? Map<*, *>)?.get("books") as? List<*>)?.size ?: 0

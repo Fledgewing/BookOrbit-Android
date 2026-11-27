@@ -6102,6 +6102,57 @@
         }
       },
       "deferred": "Server recommendation providers, firmware implementation and real-device appearance/latency acceptance."
+    },
+    {
+      "id": "home-book-cards",
+      "feature": "Continue reading and Book list covers, pace and overflow (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "0.12 window-projected cached covers, series, measured local time-left/finish date and overflow routes; unreleased.",
+          "reason": "deliberately deferred: device appearance/latency acceptance and safe arbitrary-book status/removal commands remain pending.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-CARDS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Book cards follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-CARDS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Book cards follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-CARDS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Book cards follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering. X3 needs measured flash fit.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-CARDS.md",
+              "line": 1
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

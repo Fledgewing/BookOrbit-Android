@@ -10,6 +10,13 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
     override val id = "device"
     companion object {
         const val OWNER = "device-local"
+        fun metadata(file: File, roots: List<File>): Map<*, *>? {
+            val metadata=File(file.parentFile,"${file.nameWithoutExtension}.sdr/metadata.${file.extension}.lua")
+            return if(metadata.isFile && metadata.length()<=1048576 && Places.inside(metadata,roots)!=null) runCatching {
+                val text=metadata.readText(Charsets.ISO_8859_1).replaceFirst(Regex("\\A(?:--[^\\n]*\\n)?\\s*return\\s+"),"")
+                LuaValue.parse(text.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>
+            }.getOrNull() else null
+        }
         fun files(roots: List<File>): Sequence<File> = roots.distinctBy { it.canonicalPath }.asSequence().flatMap { root ->
             if (!root.isDirectory) emptySequence() else root.walkTopDown().onEnter {
                 BulkWork.checkpoint()
@@ -22,10 +29,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
     private fun book(file: File): Map<String,Any?> {
         BulkWork.checkpoint()
         val metadata=File(sidecar(file),"metadata.${file.extension}.lua")
-        val data=if(metadata.isFile && metadata.length()<=1048576 && Places.inside(metadata,roots)!=null) runCatching {
-            val text=metadata.readText(Charsets.ISO_8859_1).replaceFirst(Regex("\\A(?:--[^\\n]*\\n)?\\s*return\\s+"),"")
-            LuaValue.parse(text.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>
-        }.getOrNull() else null
+        val data=metadata(file, roots)
         val props=data?.get("doc_props") as? Map<*,*>
         val summary=data?.get("summary") as? Map<*,*>
         val fraction=(data?.get("percent_finished") as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
@@ -37,6 +41,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
             "authors" to listOfNotNull((props?.get("authors") as? String)?.let { LuaValue.boundedText(LuaValue.utf8(it),256) }),
             "local_path" to LuaValue.str(file.canonicalPath),"on_device" to true,"status" to status,"progress" to fraction?.times(100),
             "last_read" to (metadata.lastModified()/1000).takeIf { metadata.isFile },"cover_path" to cover?.path?.let(LuaValue::str),
+            "series" to listOfNotNull(props?.get("series")),"series_position" to props?.get("series_index"),
             "formats" to listOf(file.extension.lowercase()),"available" to mapOf("cover" to (cover!=null)),"downloadable" to false)
     }
     override fun personalCatalog(owner: String): Map<String, Any?> =
