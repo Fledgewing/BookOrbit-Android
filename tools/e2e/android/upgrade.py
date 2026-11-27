@@ -12,15 +12,18 @@ import sys
 sys.dont_write_bytecode = True
 import run
 
+def reset_profile(device):
+    installed=set(device.shell("pm","list","packages").splitlines())
+    for package in ("org.koreader.launcher",run.PACKAGE):
+        if "package:"+package in installed:
+            device.shell("am","force-stop",package)
+            device.shell("pm","clear",package)
+    device.shell("mkdir","-p","/sdcard/koreader")
+    device.shell("mv","/sdcard/koreader","/sdcard/koreader-upgrade-"+str(time.time_ns()))
+
 def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):
     out.mkdir(parents=True,exist_ok=True)
-    def reset():
-        for package in ("org.koreader.launcher",run.PACKAGE):
-            device.shell("am","force-stop",package)
-            if device.shell("pm","path",package): device.shell("pm","clear",package)
-        device.shell("mkdir","-p","/sdcard/koreader")
-        device.shell("mv","/sdcard/koreader","/sdcard/koreader-upgrade-"+str(time.time_ns()))
-    reset()
+    reset_profile(device)
     source=run.ROOT
     try:
         run.ROOT=legacy_source.resolve()
@@ -37,7 +40,7 @@ def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):
     device.shot(out/"upgrade-012-news.png")
     device.command('click("Done");assert(not S.news_012_pending);HomeHost.show();return true')
     device.shot(out/"upgrade-012-acknowledged.png")
-    reset()
+    reset_profile(device)
     run.setup(device,apk,koreader,apksigner)
     time.sleep(2)
     device.command('assert(S.home_012_migrated);assert(S.home_screen=="booksync");assert(not S.news_012_pending);assert(not S.review_upgrade_marker);assert(HomeHost.show());return true')

@@ -5,13 +5,21 @@ import subprocess
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import sys
 sys.dont_write_bytecode = True
 from run import Emulator
 from build import build, ROOT
+from upgrade import reset_profile
 
 class EmulatorSafetyTest(unittest.TestCase):
+    def test_upgrade_reset_accepts_a_fresh_emulator_and_clears_only_installed_test_apps(self):
+        for installed in ("", "package:net.fledgewing.orbitcompanion\npackage:android"):
+            device=Mock()
+            device.shell.side_effect=lambda *args: installed if args==("pm","list","packages") else ""
+            reset_profile(device)
+            clears=[call.args for call in device.shell.call_args_list if call.args[:2]==("pm","clear")]
+            self.assertEqual([("pm","clear","net.fledgewing.orbitcompanion")] if installed else [],clears)
     def test_fixture_builder_never_overwrites_the_repo_or_an_unrelated_directory(self):
         with patch("shutil.copytree") as copy:
             with self.assertRaises(ValueError): build(ROOT/"fixture")
