@@ -1,6 +1,9 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Included by the existing test_logic.lua harness.
-return function(M, test, ok, eq, JSON)
+return function(M, test, ok, eq, JSON, here)
+local storageEnv=setmetatable({Layout=M.Layout},{__index=_G})
+setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/layout_store.lua")),storageEnv)()
+local Storage=storageEnv.LayoutStore
 local L,R,B=M.Layout,M.WidgetRegistry,M.Budgets
 local codec={decode=function(s) return JSON.decode(s,true) end}
 function codec.encode(v)
@@ -169,16 +172,16 @@ test("layout: atomic storage failures keep previous valid primary/backup and exp
     local files={}; local fail; local writes={}
     local io={readFile=function(p,max) return files[p] and files[p]:sub(1,max) end,
         writeFile=function(p,s) writes[#writes+1]=p; if p == fail then return false end; files[p]=s; return true end}
-    local d,why=L.load("layout",io,codec); eq(why,"No saved layout; using default"); valid(d)
-    ok(L.save("layout",d,io,codec)); local old=files.layout
-    d=L.reset(d); ok(L.save("layout",d,io,codec)); eq(files["layout.bak"],old)
+    local d,why=Storage.load("layout",io,codec); eq(why,"No saved layout; using default"); valid(d)
+    ok(Storage.save("layout",d,io,codec)); local old=files.layout
+    d=L.reset(d); ok(Storage.save("layout",d,io,codec)); eq(files["layout.bak"],old)
     eq(writes[#writes-1],"layout.bak"); eq(writes[#writes],"layout")
-    local current=files.layout; fail="layout.bak"; eq(L.save("layout",L.reset(d),io,codec),nil); eq(files.layout,current)
-    fail="layout"; eq(L.save("layout",L.reset(d),io,codec),nil); eq(files.layout,current)
-    local invalid=L.default(); invalid.schemaVersion=2; eq(L.save("layout",invalid,io,codec),nil); eq(files.layout,current)
-    files.layout="bad JSON"; local recovered,reason=L.load("layout",io,codec); eq(recovered.revision,d.revision); ok(reason:find("Recovered"))
-    fail=nil; ok(L.save("layout",L.reset(recovered),io,codec)); eq(files["layout.bak"],current,"corrupt primary never replaces valid backup")
-    files.layout="bad"; files["layout.bak"]="bad"; local fallback,msg=L.load("layout",io,codec); eq(msg,"Invalid layout; using default"); valid(fallback)
+    local current=files.layout; fail="layout.bak"; eq(Storage.save("layout",L.reset(d),io,codec),nil); eq(files.layout,current)
+    fail="layout"; eq(Storage.save("layout",L.reset(d),io,codec),nil); eq(files.layout,current)
+    local invalid=L.default(); invalid.schemaVersion=2; eq(Storage.save("layout",invalid,io,codec),nil); eq(files.layout,current)
+    files.layout="bad JSON"; local recovered,reason=Storage.load("layout",io,codec); eq(recovered.revision,d.revision); ok(reason:find("Recovered"))
+    fail=nil; ok(Storage.save("layout",L.reset(recovered),io,codec)); eq(files["layout.bak"],current,"corrupt primary never replaces valid backup")
+    files.layout="bad"; files["layout.bak"]="bad"; local fallback,msg=Storage.load("layout",io,codec); eq(msg,"Invalid layout; using default"); valid(fallback)
 end)
 
 test("layout: deterministic fuzz moves/resizes retain invariants and validate only edited page",function()

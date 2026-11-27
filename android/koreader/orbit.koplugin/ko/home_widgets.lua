@@ -8,10 +8,8 @@ function HomeWidgets.register(id, renderer, need)
 end
 function HomeWidgets.ui()
     if HomeWidgets._ui then return HomeWidgets._ui end
-    local u={}
-    for k,path in pairs({Overlap="overlapgroup",Frame="container/framecontainer",Text="textwidget",Button="button",Progress="progresswidget"}) do
-        u[k]=require("ui/widget/"..path)
-    end
+    local u={Overlap=require("ui/widget/overlapgroup"),Frame=require("ui/widget/container/framecontainer"),
+        Text=require("ui/widget/textwidget"),Button=require("ui/widget/button"),Progress=require("ui/widget/progresswidget")}
     u.Font=require("ui/font"); u.BB=require("ffi/blitbuffer")
     HomeWidgets._ui=u; return u
 end

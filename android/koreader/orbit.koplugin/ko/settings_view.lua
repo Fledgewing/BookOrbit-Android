@@ -53,7 +53,7 @@ function SettingsView:paint(attempt)
         if note then text=text.."\n"..note end
         if row.checked_func then text=(row.checked_func() and "● " or "○ ")..text end
         local enabled=row.enabled~=false and (not row.enabled_func or row.enabled_func())
-        buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(S,Shared.mode()) or text,id=row.card_text and "mode-card" or row.id or "setting-"..i,align="left",enabled=enabled,
+        buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()) or text,id=row.card_text and "mode-card" or row.id or "setting-"..i,align="left",enabled=enabled,
             height=screen:scaleBySize(row.card_text and 180 or row.height or 64),text_font_size=row.card_text and 15 or 16,bordersize=row.section and 0 or nil,text_font_bold=row.section or nil,
             callback=function()
                 if not self.alive then return end
@@ -135,13 +135,13 @@ function SettingsView.sleepChoices(key, category, offset)
             local id=item.id
             rows[#rows+1]={text=item.title.." · "..(item.count~=nil and tostring(item.count).." books" or "Count not saved"),
                 checked_func=function()
-                    local values=key=="sleep_from" and SleepPool.sources(S[key]) or SleepPool.decodeRules(S[key])
+                    local values=key=="sleep_from" and SleepPool.sources(Library.settings.read(key)) or SleepPool.decodeRules(Library.settings.read(key))
                     for _,v in ipairs(values) do if v==id then return true end end
                     return false
                 end,
                 callback=function()
-                    Shared.set(key,key=="sleep_from" and SleepPool.togglePick(S[key],id) or SettingsUI.toggleRule(S[key],id))
-                    Shared.onChange(key,"settings")
+                    Library.settings.set(key,key=="sleep_from" and SleepPool.togglePick(Library.settings.read(key),id) or SettingsUI.toggleRule(Library.settings.read(key),id))
+                    Library.settings.onChange(key,"settings")
                 end}
         end
         if #(result.items or {})==0 then

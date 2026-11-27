@@ -6,7 +6,7 @@ FilterSheet = { FIELDS={"show","where","author","series","tags","len","rating","
 local labels={all="All",unread="Unread",reading="Reading",finished="Finished",["want-to-read"]="Want to read",
     anywhere="Anywhere",["on-device"]="On this device",["server-only"]="Server only",none="Not grouped",
     order="List order",match="Best match",title="Title",author="Author",series="Series",last="Last read",added="Added",rating="Rating",asc="Ascending",desc="Descending"}
-local function equal(a,b) return Cache.encode(a) == Cache.encode(b) end
+local function equal(a,b) return UIUtil.encode(a) == UIUtil.encode(b) end
 function FilterSheet.new(context)
     context=context or {}
     local source=context.source or "library/all"

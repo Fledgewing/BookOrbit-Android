@@ -71,7 +71,7 @@ function FinishUI.actions.author(ui,b,name)
     FinishUI.closeSheet();Library.openGrouped(name,{kind="author",key=name},{group="series"})
 end
 function FinishUI.actions.back() FinishUI.closeSheet() end
-function FinishUI.actions.home(ui) FinishUI.leaveForHome(ui);if state.module then state.module:onOrbitGoHome() end end
+function FinishUI.actions.home(ui) FinishUI.leaveForHome(ui);if Library.controller() then Library.controller():onOrbitGoHome() end end
 function FinishUI.actions.book(ui,b,key,title,local_path)
     local sheet=FinishUI.sheet
     FinishUI.onLeave(ui)
@@ -107,8 +107,8 @@ if ok and type(ReaderStatus)=="table" and type(ReaderStatus.markBook)=="function
     end end,"finish")
     wrap(ReaderStatus,"onEndOfBook",function(stock) return function(self,...)
         local b=book(self.ui)
-        if S.eob_sheet==false or not b or not b.key then return stock(self,...) end
-        if b.summary.status~="complete" and S.eob_auto~=false then self:markBook(true);b=book(self.ui) end
+        if Library.settings.read("eob_sheet")==false or not b or not b.key then return stock(self,...) end
+        if b.summary.status~="complete" and Library.settings.read("eob_auto")~=false then self:markBook(true);b=book(self.ui) end
         FinishUI.showSheet(self.ui,b);return true
     end end,"finish")
 end

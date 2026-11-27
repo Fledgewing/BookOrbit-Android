@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,news=E.S.news_012_pending,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -54,9 +54,9 @@ return function(test,eq,ok,E,W,Widget)
             return {items={{key="opaque-book",title="The Moon",authors={"A"},progress=25,local_path="/fixture/book.epub"}},freshness={saved=true}},200
         end,request=function(batch) batches[#batches+1]=batch; return true end}
         local records,files={},{}; local seq=0
-        E.HomeEditor.loaded=true
-        E.HomeEditor.path=function() return "home-layout-fixture" end
-        E.HomeEditor.codec=function() return {encode=function(d)
+        E.Library.layout.loaded=true
+        E.Library.layout.path=function() return "home-layout-fixture" end
+        E.Library.layout.codec=function() return {encode=function(d)
             seq=seq+1; records[tostring(seq)]=E.Layout.copy(d); return tostring(seq)
         end,decode=function(raw) return E.Layout.copy(records[raw]) end} end
         E.Store.readFile=function(path) return files[path] end
@@ -66,7 +66,7 @@ return function(test,eq,ok,E,W,Widget)
         if E.HomeHost.active then E.HomeHost.active:onCloseWidget() end
         E.LibraryAdapter,E.HomeWidgets._ui,E.S.home_layout,E.S.home_screen=saved.adapter,saved.ui,saved.layout,saved.screen
         E.Device.screen.scaleBySize,W.shown,Widget.free,Widget.paintTo,E.require=saved.scale,saved.shown,saved.free,saved.paint,saved.require
-        E.HomeEditor.codec,E.HomeEditor.path,E.HomeEditor.loaded=saved.codec,saved.path,saved.loaded
+        E.Library.layout.codec,E.Library.layout.path,E.Library.layout.loaded=saved.codec,saved.path,saved.loaded
         E.Library.open,E.ReaderPanel=saved.open,saved.panel
         E.HomeEditor.save=saved.save;E.S.news_012_pending=saved.news
         E.liveUI,E.Wifi.state,E.FinishUI.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
@@ -432,7 +432,7 @@ return function(test,eq,ok,E,W,Widget)
                 if p.settings.src=="custom" then found=p end
             end end
             ok(found); eq(found.settings.source,"recently-added"); eq(found.settings.query.show,"unread")
-            E.S.home_layout=nil; E.HomeEditor.loaded=false
+            E.S.home_layout=nil; E.Library.layout.loaded=false
             local reloaded=E.HomeHost.document()
             local restored
             for _,page in ipairs(reloaded.pages) do for _,p in ipairs(page.placements) do

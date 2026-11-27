@@ -101,10 +101,10 @@ function sleepNow(reason)
             saveSettings()
             text = text .. "\n" .. _("BookSync Companion can do this for you: Screen off after Sync and sleep.")
         end
-        UIManager:show(InfoMessage:new{ text = text, timeout = 4 }) -- gate: user action (Sync and sleep)
+        ServiceNotices.showInfo({ text = text, timeout = 4 }) -- gate: user action (Sync and sleep)
     else
         log("sleep now: no companion; asking the reader to press the power button")
-        UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
+        ServiceNotices.showInfo({ -- gate: user action (Sync and sleep)
             text = _("Synced. Press the power button to sleep.\n(Install BookSync Companion to turn the screen off by itself.)"),
             timeout = 4,
         })
@@ -120,7 +120,7 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
     local cap = S.sleep_cap or 20
     local t0 = now_s()
     log("sync and sleep: start")
-    local msg = InfoMessage:new{
+    local msg = ServiceNotices.progress{
         text = _("Syncing…") .. (stay_awake and "" or ("\n" .. _("Then sleep"))),
         dismiss_callback = function()
             if not closing then
@@ -129,8 +129,6 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
             end
         end,
     }
-    UIManager:show(msg) -- gate: user action (Sync and sleep)
-    UIManager:forceRePaint()
 
     local function finish(ok, detail)
         self.sas_running = false
@@ -149,7 +147,7 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
         end
         if cancelled then return end
         if stay_awake then
-            UIManager:show(InfoMessage:new{ -- gate: user action (Sync now)
+            ServiceNotices.showInfo({ -- gate: user action (Sync now)
                 text = ok and _("Synced.") or _("Couldn't reach the server — saved on this device. It sends at the next sync."),
                 timeout = 3,
             })
@@ -159,7 +157,7 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
         if ok then
             sleepNow("sync_and_sleep")
         else
-            UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
+            ServiceNotices.showInfo({ -- gate: user action (Sync and sleep)
                 text = _("Couldn't reach the server — saved on this device.") .. "\n"
                     .. _("It sends first when you next wake it. Sleeping now…"),
                 timeout = 3,

@@ -140,11 +140,11 @@ function C.settingsRows(ui)
         for a=1,(key=="font" and 1 or #ReadingStyle.presets[key]-1) do for b=a+1,#ReadingStyle.presets[key] do
             local selected={a,b}
             choices[#choices+1]={text=ReadingStyle.presets[key][a][1] .. " / " .. ReadingStyle.presets[key][b][1],radio=true,
-                checked_func=function() local p=ReadingStyle.pair(key,S.reading_pairs); return p[1]==a and p[2]==b end,
-                callback=function() S.reading_pairs=S.reading_pairs or {}; S.reading_pairs[key]=selected; saveSettings() end}
+                checked_func=function() local p=ReadingStyle.pair(key,Library.settings.read("reading_pairs")); return p[1]==a and p[2]==b end,
+                callback=function() Library.settings.writePair(key,selected) end}
         end end
         rows[#rows+1]={text_func=function()
-            local p=ReadingStyle.pair(key,S.reading_pairs)
+            local p=ReadingStyle.pair(key,Library.settings.read("reading_pairs"))
             return ReadingStyle.names[key] .. " choices: " .. ReadingStyle.presets[key][p[1]][1] .. " / " .. ReadingStyle.presets[key][p[2]][1]
         end,sub_item_table=choices}
         rows[#rows+1]={menu_item_id="booksync-custom-" .. key,text_func=function() return "Custom " .. ReadingStyle.names[key]:lower() .. ": " .. ReadingStyle.label(Library.readingCustom(),key) end,
@@ -165,7 +165,7 @@ function C.panelRows(ui,refresh,screen)
     local rows={}
     local selected=Library.readingChoices(ui)
     for _,key in ipairs(ReadingStyle.keys) do
-        local pair=ReadingStyle.pair(key,S.reading_pairs)
+        local pair=ReadingStyle.pair(key,Library.settings.read("reading_pairs"))
         local cells={}
         for _,choice in ipairs({pair[1],pair[2],"custom"}) do
             local custom=choice=="custom"

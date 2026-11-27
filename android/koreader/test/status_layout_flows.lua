@@ -31,7 +31,7 @@ return function(here, test, ok, eq)
             error(name)
         end
         local function load(name) local chunk=assert(loadfile(here.."/../orbit.koplugin/"..name)); setfenv(chunk,E); chunk() end
-        load("logic/status_layout.lua"); load("ko/status_layout.lua")
+        E.Library={}; load("ko/library_services.lua"); load("logic/status_layout.lua"); load("ko/status_layout.lua")
         local ui={dimen=Geom:new{w=600,h=800},document={configurable={},info={number_of_pages=340}}, toc={getTocTitleByPage=function() return "Chapter" end}}
         local v={footer_visible=false, view_mode="page", dimen=Geom:new{w=600,h=800}}
         local native={reclaim_height=true}

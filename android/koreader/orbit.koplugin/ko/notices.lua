@@ -13,7 +13,7 @@ function Gate.withBackground(background, fn, ...)
     local key = coroutine.running() or main
     local previous = Gate.backgrounds[key]
     Gate.backgrounds[key] = background
-    local result = pack(pcall(fn, ...))
+    local result = UIUtil.pack(pcall(fn, ...))
     Gate.backgrounds[key] = previous
     if not result[1] then error(result[2], 0) end
     return unpack(result, 2, result.n)
@@ -34,7 +34,7 @@ end
 for _, name in ipairs({ "scheduleIn", "nextTick" }) do
     local stock = UIManager[name]
     UIManager[name] = function(self, ...)
-        local args = pack(...)
+        local args = UIUtil.pack(...)
         local index = name == "scheduleIn" and 2 or 1
         if Gate.inBackground() and type(args[index]) == "function" then args[index] = Gate.bind(args[index]) end
         return stock(self, unpack(args, 1, args.n))

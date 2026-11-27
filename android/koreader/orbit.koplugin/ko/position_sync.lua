@@ -1,14 +1,8 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Only native locator/geometry captures and consent UI. Policy and durable state are companion-owned.
+-- Native locator/geometry captures and answer dispatch; consent UI is position_prompt.lua.
 ReadingSync = { ready=false, busy=false, turn_at=0, generation=0 }
 function ReadingSync.on() return S.sync_mode ~= "custom" end
-function ReadingSync.closePrompt()
-    if ReadingSync.prompt then
-        ReadingSync.prompt.answered=true
-        UIManager:close(ReadingSync.prompt.widget)
-        ReadingSync.prompt=nil
-    end
-end
+function ReadingSync.closePrompt() return PositionPrompt.close() end
 function ReadingSync.capture(ui, moment)
     ui=ui or liveUI()
     if not (ui and ui.document) then return {moment=moment,online=NetworkMgr:isConnected()} end
@@ -65,30 +59,7 @@ local function jump(ui,remote)
         ui:handleEvent(Event:new("GotoPercent",remote.percentage*100))
     end
 end
-function ReadingSync.present(result,ui)
-    if not result or result.stale or not (ui and ui.document) or liveUI()~=ui then return end
-    if result.applied~="ask" then return end
-    local remote=result.remote or {}
-    if ReadingSync.prompt and ReadingSync.prompt.token==result.token then return end
-    ReadingSync.closePrompt()
-    local span=Budgets.span("position-consent.paint",now_s,log)
-    local entry={token=result.token,ui=ui,document=ui.document}
-    local function answer(yes)
-        if entry.answered then return end
-        entry.answered=true
-        if ReadingSync.prompt==entry then ReadingSync.prompt=nil end
-        ReadingSync.command("sync.answer",{document=result.document,token=result.token,yes=yes},function(reply)
-            if yes and reply.move and not reply.stale and liveUI()==ui and ui.document==entry.document then jump(ui,reply.remote or {}) end
-        end)
-    end
-    local args=ReadingSync.geometry({remote=remote},ui,"reading")
-    local label=type(remote.label)=="string" and remote.label or _("another reader")
-    entry.widget=ConfirmBox:new{text=string.format(_("Continue from %s, p. %s?"),label,tostring(args.remote_page or "?")),
-        ok_text=_("Yes"),cancel_text=_("No"),ok_callback=function() answer(true) end,cancel_callback=function() answer(false) end}
-    ReadingSync.prompt=entry
-    UIManager:show(entry.widget) -- gate: BookSync position sync's one-draw consent, maintainer exception
-    span()
-end
+function ReadingSync.present(...) return PositionPrompt.present(...) end
 function ReadingSync.activate(done)
     if Companion.workerProblem() or not (SyncRetirement and SyncRetirement.safe) then if done then done(false) end; return false end
     local ui=liveUI()
@@ -214,5 +185,12 @@ function ReadingSync.verify(ui,document,left)
         ReadingSync.command("sync.verify.result",{document=document,path=native.file,key=row.key,valid=a~=nil and b~=nil and b>=a,page=a},function()
             UIManager:scheduleIn(0.2,function() if ui.document==native then ReadingSync.verify(ui,document,left-1) end end)
         end)
+    end)
+end
+
+Library.position={geometry=function(...) return ReadingSync.geometry(...) end}
+function Library.position.answer(result,yes,ui,document)
+    ReadingSync.command("sync.answer",{document=result.document,token=result.token,yes=yes},function(reply)
+        if yes and reply.move and not reply.stale and liveUI()==ui and ui.document==document then jump(ui,reply.remote or {}) end
     end)
 end

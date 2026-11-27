@@ -1,31 +1,8 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Explicit Home action. Editor draws geometry only; no widget queries or catalog work.
 HomeEditor = {}
-function HomeEditor.codec()
-    local json=require("dkjson")
-    local null=setmetatable({}, {__jsontype="null",__tojson=function() return "null" end})
-    return {encode=json.encode,decode=function(raw)
-        local value,pos,err=json.decode(raw,1,null)
-        assert(not err and not raw:sub(pos):find("%S"),err or "trailing JSON")
-        return value
-    end}
-end
-function HomeEditor.path() return Store.dir().."/home-layout.json" end
-function HomeEditor.load()
-    if HomeEditor.loaded then return end
-    HomeEditor.loaded=true
-    local path=HomeEditor.path()
-    if not Store.readFile(path,1) and not Store.readFile(path..".bak",1) then return end
-    local document,notice=Layout.load(path,Store,HomeEditor.codec())
-    -- Retain the host's existing in-memory layout when no file has been saved yet.
-    if Store.readFile(HomeEditor.path(),1) or Store.readFile(HomeEditor.path()..".bak",1) then S.home_layout=document end
-    HomeEditor.notice=notice
-end
-function HomeEditor.save(document)
-    local ok,err=Layout.save(HomeEditor.path(),document,Store,HomeEditor.codec())
-    if ok then S.home_layout=document end
-    return ok,err
-end
+function HomeEditor.load() return Library.layout.load() end
+function HomeEditor.save(document) return Library.layout.save(document) end
 function HomeEditor.available(caps)
     local out={}
     for id,contract in pairs(HomeHost.installed()) do
@@ -51,7 +28,7 @@ function HomeEditor.create(host)
         local index=1; for i,p in ipairs(document.pages) do if p.id==id then index=i end end
         self.model=HomeEditorPlan.new(document,index)
         self.key_events={Close={{"Back"}},More={{"Menu"}}}
-        self.message=HomeEditor.notice
+        self.message=Library.layout.notice
         self:rebuild()
     end
     function Editor:action(fn)
