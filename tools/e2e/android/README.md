@@ -55,9 +55,11 @@ and source files are unchanged. EPUBs reuse `tools/e2e/kit.py:151`; synthetic
 KOReader sidecars provide saved titles, series and progress.
 
 The test-only user patch `driver.lua` calls real screen entry points and native
-button callbacks. `review.py` exercises default Home pages, editor/picker, sign-in,
+button callbacks. `review.py` exercises default Home pages, editor/picker and
+add/resize/move/save/reset, sign-in,
 Library/filter, Series, Storage, Settings groups, every registered widget, book
-opening, top/bottom reader panels, Custom editors, position consent/acceptance,
+opening, top/bottom reader panels, live Custom value edits with native setting
+assertions, position consent/acceptance,
 end sheet → Series, Full Refresh, and offline Library. It saves PNGs and a small
 `review.json` outside the repository. Projection readiness is polled; an assertion
 failure ends the run. There are no scenario retries.

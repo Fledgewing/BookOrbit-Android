@@ -37,8 +37,13 @@ def review(device, out):
     step("home-second-page",'HomeHost.active:turn(1);return HomeHost.active.index')
     step("editor",'HomeEditor.show(HomeHost.active);return true')
     step("editor-picker",'click("Add widget");return true')
-    # Explicitly close the editor, preserving the saved layout.
+    # Close the picker/editor, then exercise a saved tablet override through its buttons.
     close()
+    step("editor-moved",'HomeEditor.show(HomeHost.active);click("+ Page");click("Add widget");click("Add");click("Size");click("1×2");click("→");click("↓");return true')
+    step("editor-saved",'click("Done");return true',
+         'local d=HomeHost.document();assert(#d.pages==3);local found=false;for i=1,#d.pages do for _,p in ipairs(Layout.editorPage(d,i).placements) do if p.widget=="battery" and p.x==1 and p.y==1 and p.w==1 and p.h==2 then found=true end end end;assert(found);return true')
+    step("editor-reset",'HomeEditor.show(HomeHost.active);click("Reset");click("OK");click("Done");return true',
+         'assert(#HomeHost.document().pages==2);return true')
     step("account",'AccountView.open();return AccountView.active.page')
     step("signin",'AccountView.active:form("account");return true')
     step("signin-result",'AccountView.active:command("account.signIn",{server="https://fixture.example.test",username="reader",password="fixture"});return true',
@@ -72,14 +77,18 @@ def review(device, out):
     device.command('ReaderPanel.close();return true')
     step("reader-bottom",'ReaderPanel.show(require("apps/reader/readerui").instance,"reader-bottom-panel");return true')
     device.command('ReaderPanel.close();return true')
-    for key in ("font","spacing","margins","contrast"):
-        step("custom-"+key,'CustomReading.open("'+key+'",require("apps/reader/readerui").instance);return true')
-        close()
     device.shell("run-as","net.fledgewing.orbitcompanion","rm","-f","files/e2e-position.lua")
     step("position-sync",'local ui=require("apps/reader/readerui").instance;(ui.paging or ui.rolling):onGotoPage(1);ReadingSync.run("manual",function() end);return true',
          'assert(PositionPrompt.current,"expected remote-ahead consent");return true')
     step("position-accepted",'click("Yes");return true',
          'assert(not PositionPrompt.current);assert(require("apps/reader/readerui").instance.document:getCurrentPage()==5);return true')
+    # Apply Custom to the live native reader before editing its saved values.
+    # Run after position acceptance because font/margin edits legitimately repaginate.
+    for key in ("font","spacing","margins","contrast"):
+        step("custom-"+key,'local ui=require("apps/reader/readerui").instance;assert(Library.readingApply(ui,"'+key+'","custom"));CustomReading.open("'+key+'",ui);return true')
+        step("custom-"+key+"-changed",'local key="'+key+'";local field=key=="font" and "weight" or key;local before=Library.readingCustom()[field];local ui=require("apps/reader/readerui").instance;local gamma=ui.font.configurable.font_gamma;click("+");assert(Library.readingCustom()[field]>before);if key=="contrast" then assert(ui.font.configurable.font_gamma>gamma) end;return true',
+             'local key="'+key+'";local ui=require("apps/reader/readerui").instance;local s=Library.readingCustom();assert(Library.readingChoices(ui)[key]=="custom");if key=="font" then assert(ui.font.configurable.font_base_weight==s.weight) elseif key=="spacing" then assert(ui.font.configurable.line_spacing==math.floor(s.spacing*100+.5)) elseif key=="margins" then assert(math.abs(Device.screen:scaleBySize(ui.typeset.unscaled_margins[1])-s.margins)<1) else assert(ui.font.configurable.font_gamma~=nil) end;return true')
+        device.command('click("−");click("Done");return true')
     step("end-of-book",'local ui=require("apps/reader/readerui").instance;(ui.paging or ui.rolling):onGotoPage(ui.document:getPageCount());FinishUI.showSheet(ui,Library.nativeReader(ui));return true')
     step("end-view-series",'local sheet=FinishUI.sheet;assert(sheet);assert(sheet.model.series_key);FinishUI.actions.series(sheet.ui,sheet.book,sheet.model.series_key);return true',
          'assert(HomeHost.active.series_result.total==5);return true')

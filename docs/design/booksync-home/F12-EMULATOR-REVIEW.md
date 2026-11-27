@@ -56,7 +56,8 @@ draws bounded records. Existing info-level spans remain enabled. Emulator timing
 do not establish the physical-reader targets.
 
 Evidence: Android 14 ARM64 tablet AVD, 1200×1600/240 dpi; KOReader v2026.07.1;
-17 registered widgets and the native reading/settings/catalog flows. The separate
+57 native screen/action checks, including all 17 registered widgets, editor
+move/save/reset and live Custom value edits with native setting assertions. The separate
 upgrade run used `main` at `3e2814f1fd2ae69069608172d8e55b70e7568ada`.
 PNG evidence stays outside the repo. No physical reader, release or tag was used.
 The branch's shared version remains its existing 0.11 identity; the reviewed code
