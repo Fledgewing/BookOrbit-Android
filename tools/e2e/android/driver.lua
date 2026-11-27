@@ -14,6 +14,7 @@ local function run()
         -- KOReader's HandlerSandbox retains the original function as .f.
         if type(method)=="table" then method=method.f end
         local env=getfenv(assert(method,"Home handler missing"))
+        local top=env.topWidget or function() return UI:getTopmostVisibleWidget() end
         local chunk=assert(loadstring(code))
         local function click(text)
             local seen={}
@@ -25,9 +26,9 @@ local function run()
                 if node.buttons and visit(node.buttons) then return true end
                 return false
             end
-            assert(visit(UI:getTopmostVisibleWidget()),"missing button: "..text)
+            assert(visit(top()),"missing button: "..text)
         end
-        setfenv(chunk,setmetatable({plugin=plugin,UI=UI,click=click},{__index=env}))
+        setfenv(chunk,setmetatable({plugin=plugin,UI=UI,click=click,top=top},{__index=env}))
         return chunk()
     end)
     local out=assert(io.open(base.."result","wb"));out:write(ok and "OK\n" or "FAIL\n",tostring(result));out:close()

@@ -8,6 +8,8 @@ tag, real-device install or modification of either source checkout is performed 
 import argparse
 from pathlib import Path
 import time
+import sys
+sys.dont_write_bytecode = True
 import run
 
 def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):

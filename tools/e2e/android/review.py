@@ -9,6 +9,8 @@ import argparse
 import json
 from pathlib import Path
 import time
+import sys
+sys.dont_write_bytecode = True
 from run import Emulator
 
 def review(device, out):
@@ -18,7 +20,7 @@ def review(device, out):
         result=device.command(code)
         time.sleep(1)
         deadline=time.monotonic()+20
-        while device.command('local h=HomeHost.active;local top=UI:getTopmostVisibleWidget();local pending=AccountView.active and AccountView.active.busy or h and top==h and ((h.list_result and h.list_result.pending) or (h.series_result and h.series_result.pending));return pending and "pending" or "ready"')=="pending":
+        while device.command('local h=HomeHost.active;local front=top();local pending=AccountView.active and AccountView.active.busy or h and front==h and ((h.list_result and h.list_result.pending) or (h.series_result and h.series_result.pending));return pending and "pending" or "ready"')=="pending":
             if time.monotonic()>deadline: raise TimeoutError(name+" did not publish its projection")
             time.sleep(.2)
         if check: device.command(check)
@@ -26,7 +28,7 @@ def review(device, out):
         evidence.append({"screen":name,"result":result})
         (out/"review.json").write_text(json.dumps(evidence,indent=2)+"\n")
         print(name,flush=True)
-    def close(): device.command('UI:close(UI:getTopmostVisibleWidget());return true')
+    def close(): device.command('UI:close(top());return true')
     step("home",'Library.settings.write("home_layout",nil);HomeHost.show();return HomeHost.active.name')
     step("home-second-page",'HomeHost.active:turn(1);return HomeHost.active.index')
     step("editor",'HomeEditor.show(HomeHost.active);return true')

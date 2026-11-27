@@ -6,6 +6,8 @@ import unittest
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import sys
+sys.dont_write_bytecode = True
 from run import Emulator
 from build import build, ROOT
 
