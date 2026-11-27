@@ -154,3 +154,9 @@ Budgets.screens["book-removal"].displayRows=4
 
 Budgets.screens["book-status"] = budget(1,16384,50)
 Budgets.screens["book-status"].displayRows=3
+
+-- User-started transfer sheets: bounded file choices and one worker-owned job snapshot.
+Budgets.screens["download-options"] = budget(8,16384,50)
+Budgets.screens["download-options"].displayRows = 10
+Budgets.screens["download-job"] = budget(1,16384,50)
+Budgets.screens["download-job"].displayRows = 4

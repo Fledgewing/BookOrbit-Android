@@ -423,6 +423,14 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         if sync then sync.kind="label"; table.insert(rows,sync) end
     else
         local summary=result.items and result.items[1]
+        if screen=="details" and summary then
+            table.insert(rows,button(summary.local_path and "Open" or caps.download==true and "Download" or "Set up downloads",function()
+                local origin=ReaderPanel.sheet
+                if summary.local_path then back();Library.open(summary)
+                elseif caps.download~=true then back();AccountView.open("opds")
+                else DownloadUI.start(origin,summary,function() return ReaderPanel.sheet==origin and topWidget()==origin end) end
+            end))
+        end
         if summary and summary.series_key and not (caps.series and caps.series.read==false) then
             table.insert(rows, button("View series", function()
                 local document=ui and ui.document

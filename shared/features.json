@@ -6210,6 +6210,58 @@
         }
       },
       "deferred": "Physical acceptance and owned-menu recommendation integration."
+    },
+    {
+      "id": "android-owned-download-jobs",
+      "feature": "Owned single-book transfer jobs, format choice, progress and Cancel (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Owned Library transfer control, durable account/file/variant jobs, explicit Resume, safe destination and identity publication.",
+          "reason": "deliberately deferred: physical reader acceptance, release and the separate Series next-N outcome remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned transfer jobs follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware implementation and hardware acceptance remain outside this slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned transfer jobs follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware implementation and hardware acceptance remain outside this slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned transfer jobs follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware implementation and hardware acceptance remain outside this slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Series next-N, firmware and physical-reader acceptance."
     }
   ],
   "release_evidence": {

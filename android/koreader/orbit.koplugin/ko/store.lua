@@ -26,6 +26,9 @@ function Store.defaultDirectory()
     return Store._dir
 end
 
+-- Explicit open action only; never called from paint or background catalog work.
+function Store.fileExists(path) return lfs_ok and lfs.attributes(path,"mode")=="file" end
+
 function Store.readFile(path, max)
     local f = io.open(path, "rb")
     if not f then return nil end

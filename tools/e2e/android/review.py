@@ -95,10 +95,17 @@ def review(device, out):
     step("full-refresh",'Library.fullRefresh();return true',
          'assert(LibraryAdapter.owner()=="emulator-fixture");assert(type(LibraryAdapter.account_snapshot)=="table");return true')
     device.shell("svc","wifi","disable")
+    device.shell("svc","data","disable")
     try:
+        deadline=time.monotonic()+20
+        while device.command('return NetworkMgr:isConnected() and "online" or "offline"')!="offline":
+            if time.monotonic()>deadline: raise TimeoutError("emulator did not go offline")
+            time.sleep(.2)
         step("offline-library",'HomeHost.show();HomeHost.active:showList("Offline books","all",{sort="title"});return true',
              'assert(HomeHost.active.list_result.total==59);return true')
-    finally: device.shell("svc","wifi","enable")
+    finally:
+        device.shell("svc","wifi","enable")
+        device.shell("svc","data","enable")
     return evidence
 
 if __name__=="__main__":

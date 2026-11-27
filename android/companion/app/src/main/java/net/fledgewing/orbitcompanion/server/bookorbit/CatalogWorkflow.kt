@@ -12,7 +12,8 @@ internal data class CatalogStatusOverride(val status:String,val pending:Boolean)
 internal class CatalogWorkflow(private val worker: CacheWorker, private val creds: CacheWorker.Creds,
     private val owner: String, private val transport: BookOrbitServerAdapter.ConnectorTransport,
     private val reading: () -> Boolean = { false }, private val current: () -> Boolean = { true },
-    private val checkpoint: () -> Unit = {}, private val now: () -> Long = { System.currentTimeMillis()/1000 }) {
+    private val checkpoint: () -> Unit = {}, private val now: () -> Long = { System.currentTimeMillis()/1000 },
+    private val retainPartial:()->Boolean = { false }) {
     private val store get()=worker.store
     private val file=File(worker.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua")
     private val state=load(file).toMutableMap()
@@ -212,7 +213,9 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         }
         return mapOf("has_status" to manual.isNotEmpty())
     }
-    fun command(action:String,args:Map<*,*>):Map<String,Any?> {
+    fun command(action:String,args:Map<*,*>):Map<String,Any?> = try { execute(action,args) }
+    catch(e:HttpFailure) { throw ServerFailure(when(e.code) {401,403->"unauthorized";404->"missing";0->"offline";else->"retryable"}) }
+    private fun execute(action:String,args:Map<*,*>):Map<String,Any?> {
         check(); migrate()
         val path=args["path"] as? String
         val hash=args["document"] as? String
@@ -262,12 +265,18 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                 save()
             }
             "finish.drain" -> if(!reading()) { drain(args["manual"]==true,args["open_path"] as? String); pendingDownloads() }
+            "download.prepare" -> return downloadOptions(args)
             "finish.download" -> {
                 val book=id(args) ?: throw ServerFailure("missing")
                 if(args["later"]==true) { downloads[book.toString()]=mapOf("book_id" to book);save() }
                 else {
                     val target=args["destination"] as? String
-                    val selected=if(args["file_reference"]!=null) CopiesLogic.pick((detail(book)["files"] as? List<*>).orEmpty(),args["file_reference"]) else null
+                    var selected=if(args["file_reference"]!=null) { val wanted=args["file_reference"];CopiesLogic.pick((detail(book)["files"] as? List<*>).orEmpty(),wanted)?.takeIf { number(it["id"])==number(wanted) } ?: throw ServerFailure("missing") } else null
+                    if(args["variant"]!=null) {
+                        val variant=args["variant"] as? String
+                        require(variant in setOf("original","audioless_epub"))
+                        selected=selected?.plus(mapOf("downloadVariant" to variant))
+                    }
                     return mapOf("local_path" to download(book,target,selected,catalog=true))
                 }
             }
@@ -341,6 +350,52 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         worker.event(mapOf("kind" to "copy.identity","owner" to owner,"path" to path,"before" to job["old"],"after" to hash,
             "reference" to book,"file_reference" to job["file_id"],"token" to job["token"]))
     }
+    private fun downloadDirectory(requested:String?=null):File {
+        val external=worker.root.parentFile?.parentFile?.parentFile ?: throw ServerFailure("forbidden")
+        val path=requested ?: (globalSetting("download_dir") ?: globalSetting("home_dir") ?: globalSetting("lastdir")) as? String
+        val directory=path?.let { File(LuaValue.utf8(it)) } ?: File(external,"Books")
+        require(Places.inside(directory,listOf(external))!=null)
+        return directory
+    }
+    private fun destination(book:Long,f:Map<*,*>,d:Map<*,*>,requested:String?=null):File {
+        val external=worker.root.parentFile?.parentFile?.parentFile ?: throw ServerFailure("forbidden")
+        val directory=downloadDirectory(requested)
+        val relative=(f["devicePath"] as? String)?.let(LuaValue::utf8)
+        require(relative==null || !relative.startsWith("/") && !relative.startsWith("\\") && !Regex("^[A-Za-z]:").containsMatchIn(relative))
+        val devicePath=relative?.split('/','\\')?.filter { it.isNotEmpty() }
+        require(devicePath==null || devicePath.all { it!="." && it!=".." && it.length<=255 })
+        val title=(d["title"] as? String)?.let(LuaValue::utf8) ?: "book-$book"
+        val authors=(d["authors"] as? List<*>)?.firstOrNull()?.toString()?.let(LuaValue::utf8)
+        val filename=(title+(if(authors!=null) " - $authors" else "")).replace(Regex("[/:*?\"<>|\\\\]+")," ")
+            .replace(Regex("\\s+")," ").trim().ifBlank { "book-$book" }+"."+(f["format"] as? String ?: "epub").lowercase()
+        var destination=File(directory,devicePath?.joinToString("/") ?: filename)
+        require(Places.inside(destination,listOf(external))!=null)
+        val expected=f["fileHash"] as? String
+        if(destination.isFile && !partial(destination).equals(expected,true)) {
+            destination=File(destination.parentFile,destination.nameWithoutExtension+"-$book-"+(expected ?: "unknown").take(8)+"."+destination.extension)
+            require(Places.inside(destination,listOf(external))!=null)
+            if(destination.isFile && !partial(destination).equals(expected,true)) throw ServerFailure("exists")
+        }
+        return destination
+    }
+    private fun downloadOptions(args:Map<*,*>):Map<String,Any?> {
+        val book=id(args) ?: throw ServerFailure("missing")
+        val d=(store.detail(book)?.first as? Map<*,*>) ?: detail(book)
+        val files=(d["files"] as? List<*>).orEmpty().mapNotNull { it as? Map<*,*> }.filter {
+            CopiesLogic.pick(listOf(it),it["id"])!=null && (it["fileHash"] as? String)?.matches(Regex("[a-fA-F0-9]{32}"))==true
+        }
+        require(files.size<=8)
+        val root=args["root"] as? String
+        val rows=files.mapIndexed { index,f ->
+            val target=destination(book,f,d,root)
+            val format=(f["format"] as? String) ?: "File"
+            val duplicate=files.count { it["format"]==f["format"] }>1
+            mapOf("file_reference" to f["id"],"variant" to (f["downloadVariant"] ?: delivery()["variant"]),
+                "label" to (format+if(duplicate) " · file ${index+1}" else ""),"bytes" to f["size"],
+                "destination" to LuaValue.str(target.path),"destination_label" to LuaValue.boundedText(downloadDirectory(root).path,160))
+        }
+        return mapOf("items" to rows,"row_count" to rows.size)
+    }
     private fun download(book:Long,target:String?,selected:Map<*,*>?=null,deferred:Boolean=false,catalog:Boolean=false):String {
         val local=BookOrbitLibrary.localPaths(store,owner)?.get(book)
         if(target==null && local!=null) return local
@@ -348,34 +403,28 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         val f=selected ?: CopiesLogic.pick((d?.get("files") as? List<*>).orEmpty(),null) ?: throw ServerFailure("missing")
         val expected=f["fileHash"] as? String ?: throw ServerFailure("invalid")
         require(Regex("[a-fA-F0-9]{32}").matches(expected))
-        val external=worker.root.parentFile?.parentFile?.parentFile ?: throw ServerFailure("forbidden")
-        val downloadRoot=(globalSetting("download_dir") ?: globalSetting("home_dir") ?: globalSetting("lastdir")) as? String
-        val directory=downloadRoot?.let { File(LuaValue.utf8(it)) } ?: File(external,"books")
-        val devicePath=(f["devicePath"] as? String)?.let(LuaValue::utf8)?.split('/','\\')?.filter { it.isNotEmpty() }
-        require(devicePath==null || devicePath.all { it!="." && it!=".." && it.length<=255 })
-        val title=(d?.get("title") as? String)?.let(LuaValue::utf8) ?: "book-$book"
-        val authors=(d?.get("authors") as? List<*>)?.firstOrNull()?.toString()?.let(LuaValue::utf8)
-        val filename=(title+(if(authors!=null) " - $authors" else "")).replace(Regex("[/:*?\"<>|\\\\]+")," ")
-            .replace(Regex("\\s+")," ").trim().ifBlank { "book-$book" }+"."+(f["format"] as? String ?: "epub").lowercase()
-        val destination=if(target!=null) File(LuaValue.utf8(target)) else File(directory,devicePath?.joinToString("/") ?: filename)
-        require(Places.inside(destination,listOf(external))!=null)
-        if((target==null || catalog) && destination.isFile && (target==null || partial(destination).equals(expected,true))) {
+        val destination=if(target!=null) bookFile(target) else destination(book,f,d.orEmpty())
+        if((target==null || catalog) && destination.isFile) {
             if(!partial(destination).equals(expected,true)) throw ServerFailure("exists")
             recordDownload(book,f,destination,expected,deferred,d?.get("title"))
             return LuaValue.str(destination.path)
         }
         val part=File(destination.path+".booksync-part");destination.parentFile?.mkdirs()
+        require(!java.nio.file.Files.isSymbolicLink(part.toPath()))
         val params=mapOf("variant" to (f["downloadVariant"] as? String ?: delivery()["variant"].orEmpty()),"selection" to (f["selection"] as? String ?: ""))
         try {
             checkpoint();check()
             val ok=transport.download(creds.server,"/koreader/plugin/catalog/files/${f["id"]}/download?"+MirrorLogic.encQuery(params),
                 mapOf("x-auth-user" to creds.user,"x-auth-key" to creds.key,"Accept" to "application/octet-stream"),part)
-            check(ok && part.isFile && partial(part).equals(expected,true))
+            if(!ok || !part.isFile) throw ServerFailure("retryable")
+            if(!partial(part).equals(expected,true)) {
+                part.delete();File(part.path+".http-resume").delete();throw ServerFailure("invalid")
+            }
             check(); if(reading() && target!=null) throw ServerFailure("reading")
             check(part.renameTo(destination))
             if(target==null || catalog) recordDownload(book,f,destination,expected,deferred,d?.get("title"))
             return LuaValue.str(destination.path)
-        } finally { part.delete() }
+        } finally { if(!retainPartial() || !part.isFile) { part.delete();File(part.path+".http-resume").delete() } }
     }
     private fun bookFile(path:String):File {
         val file=File(LuaValue.utf8(path))
@@ -394,6 +443,9 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
     private fun recordDownload(book:Long,f:Map<*,*>,destination:File,hash:String,deferred:Boolean,title:Any?) {
         val path=LuaValue.str(destination.path)
         recordLocal(book,f["id"],path,hash)
+        worker.libraryReadModel().refreshLocalFiles(owner)
+        worker.libraryReadModel().refreshLocalFiles(DeviceLibrary.OWNER)
+        worker.event(mapOf("kind" to "library_source","owner" to owner))
         worker.event(mapOf("kind" to "download.saved","owner" to owner,"path" to path,"document" to hash,"reference" to book,"file_reference" to f["id"],"deferred" to deferred,"title" to title))
     }
     private fun drain(manual:Boolean,open:String?) {

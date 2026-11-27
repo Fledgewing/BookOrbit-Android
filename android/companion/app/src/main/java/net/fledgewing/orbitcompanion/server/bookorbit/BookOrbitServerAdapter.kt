@@ -19,6 +19,14 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     override val id = "bookorbit"
     internal interface ConnectorTransport {
         fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply
+        fun transfer(server:String,path:String,headers:Map<String,String>,destination:File,
+            progress:(Long,Long?)->Unit,canceled:()->Boolean):Boolean {
+            if(canceled()) throw ServerFailure("canceled")
+            val ok=download(server,path,headers,destination)
+            progress(destination.length(),destination.length().takeIf { ok })
+            if(canceled()) throw ServerFailure("canceled")
+            return ok
+        }
         fun download(server: String, path: String, headers: Map<String, String>, destination: File): Boolean
     }
     private var dashboardUnavailableOwner: String? = null

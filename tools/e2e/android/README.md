@@ -98,3 +98,11 @@ emulator-N --out <evidence>`. This checks real native Undo/Done/confirmation wid
 and companion-backed file removal/cancel with exact sidecar preservation. It saves
 and restores one synthetic EPUB. Status presentation uses a temporary test-only
 Library double; the real adapter/journal protocol and ordering are JVM tests.
+
+
+Transfer jobs: `python3 tools/e2e/android/downloads.py --serial emulator-N --out
+<evidence>` covers offline consent, format/destination choice, Cancel, explicit
+Resume and completion after departure without reader focus. The disposable
+fixture uses production durable job control and synthetic file bytes; HTTP range
+recovery and real catalog linking are JVM integration tests. Both this flow and
+`review.py` disable Wi-Fi and mobile data before asserting offline behavior.

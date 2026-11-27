@@ -1,5 +1,105 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- One screen owner; widgets receive only an immutable snapshot and a dispatch handle.
+DownloadUI={intents={},preparing={}}
+function DownloadUI.update(origin)
+    if HomeHost.active==origin and topWidget()==origin and not reading() then origin:invalidate() end
+end
+function DownloadUI.watch(origin,row,wanted,open)
+    local job=Library.downloadState(row.key)
+    if not job or not job.id then return end
+    local intent={id=job.id,open=open};DownloadUI.intents[row.key]=intent
+    local function poll()
+        if DownloadUI.intents[row.key]~=intent then return end
+        if not wanted() then intent.open=false;DownloadUI.intents[row.key]=nil;return end
+        Library.downloadControl(row,"status",function(result)
+            if DownloadUI.intents[row.key]~=intent then return end
+            if not wanted() then intent.open=false;DownloadUI.intents[row.key]=nil;return end
+            DownloadUI.update(origin)
+            if result.state=="complete" then
+                DownloadUI.intents[row.key]=nil
+                if intent.open and result.local_path then
+                    if HomeHost.active==origin then UIManager:close(origin)
+                    elseif ReaderPanel.sheet==origin then ReaderPanel.close() end
+                    Library.open({local_path=result.local_path})
+                end
+            elseif result.error or result.state=="canceled" or result.state=="paused" then
+                DownloadUI.intents[row.key]=nil
+            else UIManager:scheduleIn(1,poll) end
+        end)
+    end
+    UIManager:nextTick(poll)
+end
+function DownloadUI.cancel(origin,row)
+    local intent=DownloadUI.intents[row.key]
+    if intent then intent.open=false;DownloadUI.intents[row.key]=nil end
+    Library.downloadControl(row,"cancel",function(result)
+        DownloadUI.update(origin)
+        if result.state=="canceling" then DownloadUI.watch(origin,row,function()
+            return topWidget()==origin and (HomeHost.active==origin or ReaderPanel.sheet==origin)
+        end,false) end
+    end)
+end
+function DownloadUI.info(origin,row,wanted)
+    local paint=Budgets.span("download-job.paint",now_s,log)
+    local job=Library.downloadState(row.key) or {}
+    local dialog
+    local state=job.state
+    local resume=state=="error" or state=="paused" or state=="canceled"
+    dialog=require("ui/widget/buttondialog"):new{title=(row.title or "Book").."\n"..(job.progress_text or job.error or "Preparing download"),buttons={{{
+        text=resume and "Resume" or "Cancel",callback=function()
+            UIManager:close(dialog)
+            if resume then Library.downloadControl(row,"resume",function() DownloadUI.watch(origin,row,wanted,false) end)
+            else DownloadUI.cancel(origin,row) end
+        end},{text="Back",callback=function() UIManager:close(dialog);DownloadUI.watch(origin,row,wanted,false) end}}}}
+    UIManager:show(dialog) -- gate: user action (download information)
+    paint()
+end
+function DownloadUI.start(origin,row,wanted)
+    local existing=Library.downloadState(row.key)
+    if existing and existing.id and existing.state~="complete" then return DownloadUI.info(origin,row,wanted) end
+    if DownloadUI.preparing[row.key] then return end
+    DownloadUI.preparing[row.key]=true
+    local function prepare()
+        Library.downloadPrepare(row,function(result)
+            if not wanted() then DownloadUI.preparing[row.key]=nil;return end
+            local options=result.items or {}
+            if result.error or #options==0 then
+                DownloadUI.preparing[row.key]=nil
+                Library.rememberDownload(row.key,{state="error",error=result.error or "unsupported",progress_text="No supported file available"})
+                DownloadUI.update(origin);return
+            end
+            local paint=Budgets.span("download-options.paint",now_s,log)
+            local buttons,dialog={}
+            for _,choice in ipairs(options) do
+                local selected=choice
+                buttons[#buttons+1]={{text=(choice.label or "File").." · "..(choice.bytes and tostring(choice.bytes).." bytes" or "size unknown"),callback=function()
+                    DownloadUI.preparing[row.key]=nil;UIManager:close(dialog)
+                    Library.downloadStart(row,selected,function(started)
+                        if not wanted() then return end
+                        DownloadUI.update(origin);DownloadUI.watch(origin,row,wanted,true)
+                    end)
+                end}}
+            end
+            buttons[#buttons+1]={{text="Cancel",callback=function() DownloadUI.preparing[row.key]=nil;UIManager:close(dialog) end}}
+            dialog=require("ui/widget/buttondialog"):new{title="Download · "..(row.title or "Book").."\n"..(options[1].destination_label or options[1].destination or ""),buttons=buttons}
+            dialog.tap_close_callback=function() DownloadUI.preparing[row.key]=nil end
+            UIManager:show(dialog) -- gate: user action (download format and destination)
+            paint()
+        end)
+    end
+    if NetworkMgr:isConnected() then prepare() else
+        local dialog
+        dialog=require("ui/widget/buttondialog"):new{title="Not downloaded — connect to get it",buttons={{{text="Connect and download",callback=function()
+            UIManager:close(dialog);Library.downloadConnect(function(ready)
+                if not wanted() then DownloadUI.preparing[row.key]=nil;return end
+                if ready then prepare() else DownloadUI.preparing[row.key]=nil;Library.rememberDownload(row.key,{state="error",error="offline",progress_text="Could not connect · Try again"});DownloadUI.update(origin) end
+            end)
+        end},{text="Cancel",callback=function() DownloadUI.preparing[row.key]=nil;UIManager:close(dialog) end}}}}
+        dialog.tap_close_callback=function() DownloadUI.preparing[row.key]=nil end
+        UIManager:show(dialog) -- gate: user action (offline download confirmation)
+    end
+end
+
 HomeHost = {}
 -- Reuse the central visible stack: owned dialogs remain above Home, and a reader
 -- placed above Home restores the reading gate. No separate dialog-specific gate.
@@ -289,18 +389,8 @@ function HomeHost.create()
                 paint()
             end)
         elseif action == "download" then
-            if self.cardDownload then return end
-            self.cardDownload=row.key
-            Library.downloadCard(row,function(result)
-                self.cardDownload=nil
-                if result.error=="canceled" then return end
-                if HomeHost.active~=self or topWidget()~=self or reading() then return end
-                if result.local_path then
-                    Library.open({local_path=result.local_path}); UIManager:close(self)
-                else
-                    UIManager:show(InfoMessage:new{text=_("Download unavailable. Try again from the library."),timeout=3}) -- gate: user action (card download result)
-                end
-            end)
+            DownloadUI.start(self,row,function() return HomeHost.active==self and topWidget()==self and not reading() end)
+        elseif action == "download-cancel" then DownloadUI.cancel(self,row)
         elseif action == "details" then ReaderPanel.details(row.key)
         elseif action == "series" then self:showSeries(row.series_key)
         elseif action == "book" then
@@ -310,8 +400,11 @@ function HomeHost.create()
                 UIManager:show(prompt) -- gate: user action (server-only book)
                 return
             end
-            if Library.open(row) then
+            if not row.local_path and self.caps.download==true then return self:dispatch("download",row) end
+            local opened,why=Library.open(row)
+            if opened then
                 if HomeHost.active==self then UIManager:close(self) end
+            elseif why=="missing" then self:rebuild();UIManager:setDirty(self,"ui")
             elseif not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
                 UIManager:show(TextViewer:new{title=row.title or _("Book details"),text=_("This book is not saved on this reader.")}) -- gate: user action (widget book)
             end

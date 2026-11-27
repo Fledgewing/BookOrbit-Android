@@ -43,6 +43,7 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/device/android/device.lua", { {"home_dir", F} } },
     -- Library's native reader-control adapter (pin documented in G-READER-NOTES.md).
     { "frontend/apps/reader/modules/readertoc.lua", { "onShowToc", {"toc", F} } },
     { "frontend/apps/reader/modules/readerannotation.lua", { {"annotations", F} } },

@@ -155,6 +155,33 @@ class CatalogWorkflowTest {
         assertEquals(.4,saved["percent_finished"]);assertEquals("locator:old",saved["last_xpointer"])
         assertEquals("saved note",((saved["annotations"] as List<*>).single() as Map<*,*>)["text"])
     }
+    @Test fun downloadOptionsUseSavedSupportedManifestsWithoutFetchingAndRejectUnsafePaths()=World().use { w ->
+        val key=BookOrbitLibrary.key(w.owner,"book",7)
+        val epub=(w.detail()["files"] as List<*>).single() as Map<*,*>
+        val pdf=epub+mapOf("id" to 71L,"format" to "PDF","devicePath" to "Fiction/Next.pdf")
+        w.worker.store.putDetail(7,w.detail()+mapOf("files" to listOf(epub,pdf,epub+mapOf("format" to "exe"))),100)
+        val options=w.run("download.prepare",mapOf("key" to key))["items"] as List<*>
+        assertEquals(2,options.size);assertTrue(w.calls.isEmpty())
+        assertTrue((options.first() as Map<*,*>)["destination"].toString().endsWith("Fiction/Next.epub"))
+        val chosen=File(w.external,"Chosen")
+        val explicit=(w.run("download.prepare",mapOf("key" to key,"root" to chosen.path))["items"] as List<*>).first() as Map<*,*>
+        assertTrue(explicit["destination"].toString().startsWith(chosen.path+"/"));assertEquals(chosen.path,explicit["destination_label"])
+        for(path in listOf("/absolute.epub","../escape.epub","C:/outside.epub")) {
+            w.worker.store.putDetail(7,w.detail()+mapOf("files" to listOf(epub+mapOf("devicePath" to path))),100)
+            assertThrows(IllegalArgumentException::class.java) { w.run("download.prepare",mapOf("key" to key)) }
+        }
+    }
+    @Test fun selectingAMissingRevisionCannotDownloadADifferentPrimaryFile()=World().use { w ->
+        try { w.run("finish.download",mapOf("reference" to 7L,"file_reference" to 999L));fail("missing revision") }
+        catch(e:ServerFailure) { assertEquals("missing",e.kind) }
+        assertFalse(w.calls.any { it.startsWith("DOWNLOAD") })
+    }
+    @Test fun catalogDownloadNeverOverwritesAnUnrelatedExplicitDestination()=World().use { w ->
+        val target=File(w.external,"books/collision.epub").apply { writeText("unrelated bytes") }
+        try { w.run("finish.download",mapOf("reference" to 7L,"destination" to target.path,"file_reference" to 70L));fail("collision") }
+        catch(e:ServerFailure) { assertEquals("exists",e.kind) }
+        assertEquals("unrelated bytes",target.readText());assertFalse(w.calls.any { it.startsWith("DOWNLOAD") })
+    }
     @Test fun ownedSyncMatchSurvivesNativeLedgerRefreshAndPreparesOfflineFinish()=World().use { w ->
         val matched=File(w.external,"books/matched.epub").apply { writeText("matched bytes") }
         val hash=CatalogWorkflow.partial(matched)
