@@ -24,6 +24,7 @@ bool recoveryPending();
 // Main-loop scheduling only: no network, parsing, scans, or waiting on the UI
 // task.
 void service();
+void beforeRestart();
 void stopForSleep();
 void credentialsChanging();
 bool busy();
@@ -35,6 +36,7 @@ bool catalogTask();
 inline void bootBegin() {}
 inline void bootComplete() {}
 inline void service() {}
+inline void beforeRestart() {}
 inline void stopForSleep() {}
 inline bool busy() { return false; }
 #endif

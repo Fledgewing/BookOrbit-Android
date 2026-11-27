@@ -29,7 +29,7 @@ ROOT = HERE.parents[2]
 sys.path[:0] = [str(ROOT / "tools" / "e2e"), str(HERE)]
 import bofault  # noqa: E402
 import kit  # noqa: E402
-from sim import PROFILES, UI_THEME_BOOKORBIT, SdCard, Simulator, dark_pixels  # noqa: E402
+from sim import NetworkBootTarget, PROFILES, UI_THEME_BOOKORBIT, SdCard, Simulator, dark_pixels  # noqa: E402
 
 FAULTS = ROOT / "shared" / "fixtures" / "e2e" / "faults"
 X4S = ("x4-pro", "x4-classic")
@@ -213,7 +213,9 @@ def full_refresh_crash_breaker(ctx: Context, tmp: Path) -> None:
     before = len(ctx.requests())
     for attempt in (1, 2):
         run = ctx.sim.run(card, f"crash-{attempt}", timeout_s=15,
-                          env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+                          env={**SDFAT, "ORBIFY_SIM_CRASH_REFRESH": "1"},
+                          boot_target=(NetworkBootTarget.HOME_REFRESH if attempt == 1 else NetworkBootTarget.CATALOG))
+        after(run.output, f"Minimal network boot ready: target={36 if attempt == 1 else 35}")
         assert run.returncode == 86, f"worker did not reach injected crash: {run.returncode}"
         assert (folder / "refresh.inflight").read_text() == str(attempt)
         assert (folder / "mirror.request").exists()
@@ -253,6 +255,184 @@ def full_refresh_crash_breaker(ctx: Context, tmp: Path) -> None:
         assert retry.returncode == 0
         assert not (folder / "refresh.inflight").exists()
         assert not (folder / "mirror.request.crashed").exists()
+
+
+# PR #190's host stub and simulator both accepted mkdir(existing), whereas
+# SdFat rejects it. Exercise that device contract AND setup's real RTC targets.
+SDFAT = {"ORBIFY_SIM_SDFAT_MKDIR": "1"}
+
+
+def quarantined_refresh_card(ctx: Context, tmp: Path):
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    (folder / "refresh.inflight").write_text("2")
+    (folder / "refresh-boot.inflight").write_text("2")
+    path = card.add_book(ctx.source("Standalone 01"))
+    before = (card.fs / path.lstrip("/")).read_bytes()
+    credentials = (card.crosspoint / "bookorbit.json").read_bytes()
+    run = ctx.sim.run(card, "quarantined", script="3000:QUIT", timeout_s=10, env=SDFAT)
+    assert run.returncode == 0
+    after(run.output, "crash breaker stopped automatic resume")
+    assert (folder / "mirror.request.crashed").exists()
+    assert not (folder / "mirror.request").exists()
+    return card, folder, run, path, before, credentials
+
+
+def assert_refresh_completed(ctx: Context, card: SdCard, folder: Path, output: str) -> None:
+    assert "crash breaker stopped automatic resume" not in output
+    assert "early-boot breaker disabled" not in output
+    after(output, "Full refresh: Done")
+    assert not (folder / "mirror.request").exists()
+    assert not (folder / "mirror.request.crashed").exists()
+    assert not (folder / "refresh.inflight").exists()
+    assert not (folder / "refresh-boot.inflight").exists()
+    assert (folder / "walk.result").read_text() == "Done"
+    bulk = card.crosspoint / "orbify-catalog/bulk"
+    generation = (bulk / "active").read_text()
+    assert (bulk / generation / "complete").exists()
+    assert len(list((bulk / generation / "books").rglob("*.json"))) == len(ctx.manifest["books"])
+
+
+def full_refresh_network_entry(ctx: Context, tmp: Path, entry: str) -> None:
+    card, folder, home, book, before, credentials = quarantined_refresh_card(ctx, tmp)
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
+    env = {**SDFAT, "ORBIFY_SIM_QUIT_BULK_DONE": "1"}
+    if entry == "sync":
+        if ctx.profile == "x4-pro":
+            x, y = home_tile(home.output, "sync")
+            script = f"3000:TAP:{x},{y},1300"
+        else:
+            script = "3000:DOWN:120;4500:CONFIRM:1300"
+        run = ctx.sim.run(card, "sync-hold", script=script, after_reboot="", timeout_s=100, env=env)
+        after(run.output, "Home: Full refresh asked for from the sync tile")
+        after(run.output, "Minimal network boot ready: target=36")
+    elif entry == "catalog":
+        # Open the catalog's real network boot, then use its actual header
+        # control; button readers focus the same control by pressing Up.
+        opened = ctx.sim.run(card, "catalog-network", script="6000:QUIT", timeout_s=15,
+                             boot_target=NetworkBootTarget.CATALOG, env=SDFAT)
+        after(opened.output, "Minimal network boot ready: target=35")
+        if ctx.profile == "x4-pro":
+            stamp = STAMP.search(opened.output)
+            assert stamp, "catalog did not expose its refresh control"
+            script = f"6000:TAP:{stamp.group(7)},{stamp.group(8)},1300"
+        else:
+            script = "6000:UP:120;7500:CONFIRM:1300"
+        run = ctx.sim.run(card, "catalog-hold", script=script, timeout_s=100,
+                          boot_target=NetworkBootTarget.CATALOG, env=env)
+        after(run.output, "Minimal network boot ready: target=35")
+        after(run.output, "Catalog: Full refresh of view")
+    else:
+        # This real boot opens Settings > BookOrbit > Home with Refresh
+        # selected. Down selects the Full refresh row; Confirm activates it.
+        run = ctx.sim.run(card, "settings-row", script="10000:DOWN:120;11500:CONFIRM:120",
+                          boot_target=NetworkBootTarget.HOME_SHELVES, after_reboot="",
+                          timeout_s=110, env=env)
+        after(run.output, "Minimal network boot ready: target=37")
+        after(run.output, "Entering activity: BookOrbitSettings")
+        after(run.output, "Minimal network boot ready: target=36")
+    assert run.returncode == 0
+    assert_refresh_completed(ctx, card, folder, run.output)
+    # A moving on-screen percentage, rather than only a worker success log.
+    percentages = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", run.output)]
+    assert any(0 < p < 100 for p in percentages), f"no visible progress: {percentages}"
+    assert (card.fs / book.lstrip("/")).read_bytes() == before
+    assert (card.crosspoint / "bookorbit.json").read_bytes() == credentials
+
+
+@scenario(*X4S)
+def full_refresh_quarantine_sync_network(ctx: Context, tmp: Path) -> None:
+    full_refresh_network_entry(ctx, tmp, "sync")
+
+
+@scenario(*X4S)
+def full_refresh_quarantine_catalog_network(ctx: Context, tmp: Path) -> None:
+    full_refresh_network_entry(ctx, tmp, "catalog")
+
+
+@scenario(*X4S)
+def full_refresh_quarantine_settings_network(ctx: Context, tmp: Path) -> None:
+    full_refresh_network_entry(ctx, tmp, "settings")
+
+
+@scenario(*X4S)
+def full_refresh_network_restart_and_sleep(ctx: Context, tmp: Path) -> None:
+    card, folder, home, *_ = quarantined_refresh_card(ctx, tmp)
+    # Begin real work, then cancel back to Home while its first manifest is
+    # delayed. The orderly restart drains that worker. Low heap after Wi-Fi
+    # keeps the request pending on Home and through the sleep-sync boot.
+    ctx.faults([
+        {"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1},
+        # Keep the resumed Home worker active until its memory floor on fast
+        # CI hosts too; a fixed Power timestamp must never race completion.
+        {"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400},
+    ])
+    tight = {**SDFAT, "ORBIFY_SIM_HEAP": "w1000:10000/6000"}
+    if ctx.profile == "x4-pro":
+        x, y = home_tile(home.output, "sync")
+        script = f"3000:TAP:{x},{y},1300"
+    else:
+        script = "3000:DOWN:120;4500:CONFIRM:1300"
+    paused = ctx.sim.run(card, "requested-network-restart", script=script,
+                         after_reboot="1000:BACK:120", timeout_s=18, env=tight)
+    after(paused.output, "Minimal network boot ready: target=36")
+    after(paused.output, "Home refresh: Full refresh continues in background")
+    after(after(paused.output, "Home refresh: Full refresh continues in background"), "Entering activity: Home")
+    assert "crash breaker" not in paused.output
+    assert not (folder / "refresh.inflight").exists()
+    assert (folder / "mirror.request").exists()
+    assert not (folder / "mirror.request.crashed").exists()
+    assert not (folder / "refresh-boot.inflight").exists()
+    # The resumed partial catalog can finish in under a second. Apply the
+    # floor from boot here so it stays pending until the sleep-sync target,
+    # rather than racing the worker against the scripted Power press.
+    slept = sleep_sync(ctx, card, "requested-sleep",
+                       env={**SDFAT, "ORBIFY_SIM_HEAP": "0:10000/6000"})
+    after(slept.output, "Minimal network boot ready: target=33")
+    assert slept.returncode == 0
+    assert (folder / "mirror.request").exists()
+    assert not (folder / "refresh-boot.inflight").exists()
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
+    resumed = ctx.sim.run(card, "resumed-home-network", boot_target=NetworkBootTarget.HOME_REFRESH,
+                          timeout_s=100, env={**SDFAT, "ORBIFY_SIM_QUIT_BULK_DONE": "1"})
+    after(resumed.output, "Minimal network boot ready: target=36")
+    assert resumed.returncode == 0
+    assert_refresh_completed(ctx, card, folder, resumed.output)
+
+
+@scenario(*X4S)
+def full_refresh_marker_io_is_not_crash(ctx: Context, tmp: Path) -> None:
+    card = ctx.card(tmp)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    built = ctx.sim.run(card, "io-seed", timeout_s=100,
+                        env={**SDFAT, "ORBIFY_SIM_QUIT_BULK_DONE": "1"})
+    assert built.returncode == 0
+    bulk = card.crosspoint / "orbify-catalog/bulk"
+    pointer = (bulk / "active").read_bytes()
+    (folder / "mirror.request").write_text("1\n")
+    for boot in range(3):
+        failed = ctx.sim.run(card, f"io-unavailable-{boot}", script="5000:QUIT", timeout_s=15,
+                             boot_target=NetworkBootTarget.HOME_REFRESH,
+                             env={**SDFAT, "ORBIFY_SIM_MARKER_IO_ERROR": "1"})
+        assert failed.returncode == 0
+        after(failed.output, "cannot save boot marker; request and saved catalog kept")
+        after(failed.output, "cannot save worker marker; request retained")
+        assert "crash breaker" not in failed.output
+        assert (bulk / "active").read_bytes() == pointer
+        assert (folder / "mirror.request").exists()
+        assert not (folder / "mirror.request.crashed").exists()
+        assert not (folder / "refresh.inflight").exists()
+        assert not (folder / "refresh-boot.inflight").exists()
+    resumed = ctx.sim.run(card, "io-restored", timeout_s=100,
+                          boot_target=NetworkBootTarget.HOME_REFRESH,
+                          env={**SDFAT, "ORBIFY_SIM_QUIT_BULK_DONE": "1"})
+    assert resumed.returncode == 0
+    assert_refresh_completed(ctx, card, folder, resumed.output)
 
 
 @scenario("x4-pro")
@@ -351,7 +531,8 @@ def full_refresh_early_boot_breaker(ctx: Context, tmp: Path) -> None:
     before = len(ctx.requests())
     for attempt in (1, 2):
         run = ctx.sim.run(card, f"early-crash-{attempt}", timeout_s=15,
-                          env={"ORBIFY_SIM_CRASH_REFRESH_BOOT": "1"})
+                          env={**SDFAT, "ORBIFY_SIM_CRASH_REFRESH_BOOT": "1"},
+                          boot_target=NetworkBootTarget.HOME_REFRESH)
         assert run.returncode == 88
         assert (folder / "refresh-boot.inflight").read_text() == str(attempt)
     run = ctx.sim.run(card, "early-recovered", script="6000:QUIT", timeout_s=15,

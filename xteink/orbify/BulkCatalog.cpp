@@ -118,7 +118,7 @@ class SdFiles final:public orbify::bulk::Files {
     const auto budget=orbify::mirror::budget(used,0,length+4096,limit,total>taken?total-taken:0);
     if(budget!=orbify::mirror::Stop::None){OrbifyCache::setStorageStop(budget);return false;}
     const auto file=path(p),tmp=file+".tmp",bak=file+".bak";const auto parent=file.substr(0,file.find_last_of('/'));
-    if(!Storage.mkdir(parent.c_str()))return false;
+    if(!Storage.exists(parent.c_str())&&!Storage.mkdir(parent.c_str()))return false;
     const size_t old=size(p);HalFile f;if(!Storage.openFileForWrite("ORBB",tmp,f))return false;
     const bool ok=body(f)&&f.sync();f.close();if(!ok){Storage.remove(tmp.c_str());return false;}
     Storage.remove(bak.c_str());

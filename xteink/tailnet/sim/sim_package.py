@@ -107,6 +107,37 @@ inline BaseType_t xTaskCreateWithCaps(void (*fn)(void*), const char* name,
 """
 
 
+def patch_storage(src_dir):
+    """Opt-in SdFat semantics: creating an existing final directory fails.
+
+    The package's POSIX EEXIST success hid device-only marker failures. Keep
+    this in BookSync's package shim, never patch the upstream project.
+    """
+    changed = []
+    anchor = '  return ::mkdir(full.c_str(), 0777) == 0 || errno == EEXIST;'
+    def transform(text):
+        return text.replace(anchor, '  if (std::getenv("ORBIFY_SIM_SDFAT_MKDIR"))\n'
+                            '    return ::mkdir(full.c_str(), 0777) == 0;\n' + anchor, 1)
+    _edit(Path(src_dir) / "HalStorage.cpp", "ORBIFY_SIM_SDFAT_MKDIR", transform,
+          changed, "SdFat mkdir semantics")
+    # The device's ensureDirectoryExists is idempotent even though mkdir is
+    # not. Preserve that distinct contract when the strict model is enabled.
+    ensure_anchor = 'bool HalStorage::ensureDirectoryExists(const char *path) { return mkdir(path); }'
+    _edit(Path(src_dir) / "HalStorage.cpp", "return exists(path) || mkdir(path);",
+          lambda text: text.replace(ensure_anchor,
+                                    ensure_anchor.replace('return mkdir(path);', 'return exists(path) || mkdir(path);'), 1),
+          changed, "idempotent ensureDirectoryExists")
+    write_anchor = '  file = open(path, O_RDWR | O_CREAT | O_TRUNC);'
+    def fail_marker(text):
+        return text.replace(write_anchor,
+                            '  if (std::getenv("ORBIFY_SIM_MARKER_IO_ERROR") &&\n'
+                            '      std::string(path).find(".inflight.tmp") != std::string::npos) return false;\n'
+                            + write_anchor, 1)
+    _edit(Path(src_dir) / "HalStorage.cpp", "ORBIFY_SIM_MARKER_IO_ERROR", fail_marker,
+          changed, "in-flight marker I/O failure")
+    return changed
+
+
 def patch_flash(src_dir):
     src = Path(src_dir)
     (src / "orbify_sim_flash.h").write_text(FLASH_MODEL)
@@ -253,7 +284,7 @@ def _edit(path, marker, transform, changed, what):
 def patch(src_dir):
     """Patch the package sources in src_dir (.pio/libdeps/<env>/simulator/src). Returns what changed."""
     heap = Path(src_dir) / "esp_heap_caps.h"
-    changed = patch_input(src_dir) + patch_flash(src_dir)
+    changed = patch_input(src_dir) + patch_flash(src_dir) + patch_storage(src_dir)
     clock = Path(src_dir) / WIFI_CLOCK_HEADER
     if not clock.exists() or clock.read_text() != WIFI_CLOCK:
         clock.write_text(WIFI_CLOCK)

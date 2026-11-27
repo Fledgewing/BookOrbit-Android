@@ -11,18 +11,29 @@ class ResumedWork {
  public:
   explicit ResumedWork(const char* file) : path(file), tmp(path + ".tmp") {}
   bool exhausted() const { return count() >= 2; }
-  bool begin() {
+  enum class Start { Started, Exhausted, StorageError };
+  Start begin() {
     const unsigned prior = count();
-    if (prior >= 2) return false;
-    if (!Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str())) return false;
+    if (prior >= 2) return Start::Exhausted;
+    // SdFat mkdir fails if the final directory already exists (the simulator
+    // accepts EEXIST). A normal card already has this directory.
+    const auto dir = path.substr(0, path.find_last_of('/'));
+    if (!Storage.exists(dir.c_str()) && !Storage.mkdir(dir.c_str())) return Start::StorageError;
     HalFile file;
-    if (!Storage.openFileForWrite("ORB", tmp.c_str(), file)) return false;
+    if (!Storage.openFileForWrite("ORB", tmp.c_str(), file)) return Start::StorageError;
     const char next = '1' + prior;
     const bool ok = file.write(reinterpret_cast<const uint8_t*>(&next), 1) == 1 && file.sync();
     file.close();
-    if (!ok) return false;
+    if (!ok) {
+      Storage.remove(tmp.c_str());
+      return Start::StorageError;
+    }
     Storage.remove(path.c_str());
-    return Storage.rename(tmp.c_str(), path.c_str());
+    if (!Storage.rename(tmp.c_str(), path.c_str())) {
+      Storage.remove(tmp.c_str());
+      return Start::StorageError;
+    }
+    return Start::Started;
   }
   void complete() { Storage.remove(path.c_str()); Storage.remove(tmp.c_str()); }
  private:

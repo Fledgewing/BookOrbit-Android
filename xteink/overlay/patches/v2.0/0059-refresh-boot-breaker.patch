@@ -4,7 +4,15 @@ diff --git a/src/main.cpp b/src/main.cpp
 index a3f227d4..7bceeb81 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -2199,6 +2199,7 @@ void setup() {
+@@ -517,4 +517,7 @@ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
+   if (deepSleepInProgress) return false;
++  // Drain the worker before taking the render lock or flushing the SD card.
++  // A requested network boot must not leave an unfinished crash attempt.
++  OrbifyMirror::beforeRestart();
+   BatteryStats::onRestart();  // CrossInk-Tailnet patch 0025 (before the flush below)
+   // Tailnet overlay: the framebuffer may be parked while Tailscale runs; draw only once it is back.
+   const bool displayReady = tailnet_display_ready(3000);
+@@ -2199,6 +2202,7 @@ void setup() {
  
    HalSystem::checkPanic();
    orbifyBootStep(orbify::boottrail::Step::StorageReady);
@@ -12,10 +20,11 @@ index a3f227d4..7bceeb81 100644
  
    if (!PluginBundle::recoverPending()) LOG_ERR("PLUG", "Plugin install recovery pending");
    // I2C light capabilities must be known before settings validate saved gestures.
-@@ -2606,6 +2607,7 @@ void setup() {
+@@ -2606,6 +2610,8 @@ void setup() {
  #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
    frontlightReapplyFrom = millis() + FRONTLIGHT_REAPPLY_AFTER_SETUP_MS;
  #endif
++  // All successful setup routes, including minimal network and sleep-sync boots.
 +  OrbifyMirror::bootComplete();
    orbifyBootStep(orbify::boottrail::Step::SetupDone);
  }
