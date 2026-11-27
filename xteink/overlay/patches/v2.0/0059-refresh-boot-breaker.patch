@@ -1,0 +1,20 @@
+Subject: [PATCH] BookSync: break refresh crashes before saved catalog boot reads
+
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -2176,6 +2176,7 @@
+ 
+   HalSystem::checkPanic();
+   orbifyBootStep(orbify::boottrail::Step::StorageReady);
++  OrbifyMirror::bootBegin();
+ 
+   if (!PluginBundle::recoverPending()) LOG_ERR("PLUG", "Plugin install recovery pending");
+   // I2C light capabilities must be known before settings validate saved gestures.
+@@ -2583,6 +2584,7 @@
+ #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
+   frontlightReapplyFrom = millis() + FRONTLIGHT_REAPPLY_AFTER_SETUP_MS;
+ #endif
++  OrbifyMirror::bootComplete();
+   orbifyBootStep(orbify::boottrail::Step::SetupDone);
+ }
+ 

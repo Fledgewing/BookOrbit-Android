@@ -7,6 +7,9 @@
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#ifdef SIMULATOR
+#include <orbify_sim_flash.h>
+#endif
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
@@ -166,6 +169,11 @@ bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>&
   const auto start=millis();
   const bool ok=catalog.refresh(owner(),[&](const std::string& path,JsonDocument& out){
     if(!OrbifyHeap::roomForRequest("Full refresh"))return false;
+#ifdef SIMULATOR
+    // The simulator omits Tailscale. Inject its synchronous resolver-side
+    // rememberServer/storePin NVS write, with ESP-IDF's cache-disabled stack rule.
+    orbify_sim_flash::write();
+#endif
     fetching.store(xTaskGetCurrentTaskHandle());
     const bool result=BookOrbitCatalogClient::fetchBulk(path+(path.find("/manifest?")!=std::string::npos?"&deviceId="+orbify::bulk::encode(BookOrbitSyncClient::deviceId()):""),out);
     fetching.store(nullptr);return result;

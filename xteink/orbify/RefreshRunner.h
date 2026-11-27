@@ -13,6 +13,8 @@ struct Snapshot {
   std::string result;
 };
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
+void bootBegin();
+void bootComplete();
 Snapshot snapshot();
 void freshRequest();
 void requestIncremental();
@@ -27,6 +29,8 @@ void catalogProgress(size_t done, size_t total, size_t books);
 bool cancelCatalogRequest();
 bool catalogTask();
 #else
+inline void bootBegin() {}
+inline void bootComplete() {}
 inline void service() {}
 inline void stopForSleep() {}
 inline bool busy() { return false; }

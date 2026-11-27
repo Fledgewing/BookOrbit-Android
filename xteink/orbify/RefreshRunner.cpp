@@ -7,9 +7,10 @@
 #include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/idf_additions.h>
+#include "ResumedWork.h"
 #ifndef SIMULATOR
 #include <esp_heap_caps.h>
-#include <freertos/idf_additions.h>
 #endif
 #include <atomic>
 #include <cstdlib>
@@ -39,6 +40,29 @@ std::atomic<unsigned long> retryAt{0}, requestCount{0};
 std::atomic<TaskHandle_t> workerTask{nullptr};
 std::mutex stateMutex;
 Snapshot state;
+bool write(const char* path, const std::string& text);
+ResumedWork attempt("/.crosspoint/orbify/refresh.inflight");
+ResumedWork bootAttempt("/.crosspoint/orbify/refresh-boot.inflight");
+constexpr const char* CRASHED = "/.crosspoint/orbify/mirror.request.crashed";
+void quarantine() {
+  // Disable every automatic entry point before touching the old checkpoint.
+  // Keep the published generation, books, credentials and reading state.
+  write(CRASHED, "Stopped at repeated refresh crash");
+  Storage.remove(REQUEST);
+  Storage.remove(CHECKPOINT);
+  Storage.remove("/.crosspoint/orbify-catalog/bulk/stage");
+  Storage.remove("/.crosspoint/orbify-catalog/bulk/stage.tmp");
+  Storage.remove("/.crosspoint/orbify-catalog/bulk/stage.bak");
+  terminalThisBoot.store(true);
+  incrementalRequested.store(false);
+  {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    state.active = true; state.finished = true; state.failures = 1;
+    state.result = "Stopped at repeated refresh crash";
+  }
+  LOG_ERR("ORB", "Full refresh: crash breaker stopped automatic resume; saved catalog and books kept");
+}
+
 #ifndef SIMULATOR
 TaskHandle_t taskHandle = nullptr;  // owned/reaped only by the main task
 void reap() {
@@ -66,6 +90,13 @@ std::string read(const char* path) {
 bool stop() { return stopping.load() || fresh.load() || OrbifyHeap::starved(); }
 void runTask() {
   const unsigned long began = millis();
+  // Survives power loss and panics, unlike an in-memory running flag. An ordinary
+  // return (including offline, low heap or cancellation) is never a crash.
+  if (!attempt.begin()) { quarantine(); return; }
+  struct Completed { ~Completed() { attempt.complete(); } } completed;
+#ifdef SIMULATOR
+  if (std::getenv("ORBIFY_SIM_CRASH_REFRESH")) { std::fflush(nullptr); std::_Exit(86); }
+#endif
   workerTask.store(xTaskGetCurrentTaskHandle());
   requestCount.store(0);
   const bool reset = fresh.exchange(false);
@@ -122,7 +153,7 @@ void runTask() {
     }
     LOG_INF("ORB","Full refresh worker: ok=%d requests=%lu elapsedMs=%lu",ok,requestCount.load(),millis()-began);
 #ifdef SIMULATOR
-    if (std::getenv("ORBIFY_SIM_QUIT_BULK_DONE")) {std::fflush(nullptr);std::_Exit(ok ? 0 : 1); }
+    if (std::getenv("ORBIFY_SIM_QUIT_BULK_DONE")) {attempt.complete();std::fflush(nullptr);std::_Exit(ok ? 0 : 1); }
 #endif
   }
   workerTask.store(nullptr);
@@ -141,11 +172,35 @@ void task(void*) {
 #endif
 }
 }  // namespace
+void bootBegin() {
+  // Before any saved catalog is decoded or the first activity is selected.
+  // A refresh can also leave a published cache that fails during setup, before
+  // service() has a chance to see the worker's in-flight marker.
+  if (!requested() && !Storage.exists(CRASHED) && !attempt.exhausted() &&
+      !Storage.exists("/.crosspoint/orbify/refresh.inflight")) return;
+  if (bootAttempt.exhausted() || !bootAttempt.begin()) {
+    quarantine();
+    // Disable the suspect cache by moving only its pointer, never the books or
+    // the catalog generation itself. Do not decode any of it during recovery.
+    constexpr const char* active = "/.crosspoint/orbify-catalog/bulk/active";
+    if (Storage.exists(active)) {
+      Storage.remove("/.crosspoint/orbify-catalog/bulk/active.crashed");
+      Storage.rename(active, "/.crosspoint/orbify-catalog/bulk/active.crashed");
+    }
+    Storage.remove("/.crosspoint/orbify-catalog/bulk/active.bak");
+    LOG_ERR("ORB", "Full refresh: early-boot breaker disabled saved catalog pointer");
+    return;
+  }
+#ifdef SIMULATOR
+  if (std::getenv("ORBIFY_SIM_CRASH_REFRESH_BOOT")) { std::fflush(nullptr); std::_Exit(88); }
+#endif
+}
+void bootComplete() { bootAttempt.complete(); }
 Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(stateMutex);
   return state;
 }
-bool busy() { return running.load() && !snapshot().finished; }
+bool busy() { return running.load(); }
 void countCatalogRequest() {
   if (xTaskGetCurrentTaskHandle() == workerTask.load()) ++requestCount;
 }
@@ -157,10 +212,12 @@ bool catalogTask() { return xTaskGetCurrentTaskHandle() == workerTask.load(); }
 bool cancelCatalogRequest() { return xTaskGetCurrentTaskHandle() == workerTask.load() && stop(); }
 
 void requestIncremental() {
-  if (!OrbifyBulk::active() || running.load() || requested() || WiFi.status()!=WL_CONNECTED) return;
+  if (Storage.exists(CRASHED) || !OrbifyBulk::active() || running.load() || requested() || WiFi.status()!=WL_CONNECTED) return;
   incrementalRequested.store(true);terminalThisBoot.store(false);retryAt.store(0);sleeping.store(false);
 }
 void freshRequest() {
+  attempt.complete();
+  Storage.remove(CRASHED);
   fresh.store(true);
   terminalThisBoot.store(false);
   retryAt.store(0);
@@ -174,6 +231,16 @@ void service() {
   reap();
   if (taskHandle) return;
 #endif
+  static bool recoveryChecked = false;
+  if (!recoveryChecked && Storage.ready()) {
+    recoveryChecked = true;
+    if (Storage.exists(CRASHED) || attempt.exhausted()) {
+      if (!terminalThisBoot.load()) {
+        quarantine();
+      }
+      return;
+    }
+  }
   const auto retry = retryAt.load();
   if (sleeping.load() || terminalThisBoot.load() || running.load() || !Storage.ready() ||
       (retry && static_cast<int32_t>(millis() - retry) < 0))
@@ -199,12 +266,16 @@ void service() {
   if (!OrbifyHeap::roomForRequest("Full refresh worker")) return;
   running.store(true);
   stopping.store(false);
+  // This task can reach flash writes (Wi-Fi PHY / Tailscale peer NVS).
+  // Its stack must remain accessible with the flash/PSRAM cache disabled.
+  // Library-sized JSON and indexes still use the separate PSRAM arena.
+  const auto created = xTaskCreateWithCaps(task, "orb_catalog", 16 * 1024, nullptr, 1,
 #ifdef SIMULATOR
-  const auto created = xTaskCreate(task, "orb_catalog", 16 * 1024, nullptr, 1, nullptr);
+                                           nullptr,
 #else
-  const auto created = xTaskCreateWithCaps(task, "orb_catalog", 16 * 1024, nullptr, 1, &taskHandle,
-                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                                           &taskHandle,
 #endif
+                                           MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (created != pdPASS) {
     running.store(false);
     retryAt.store(millis() + 60000);
@@ -215,6 +286,8 @@ void credentialsChanging() {
   stopForSleep();
   // Quiesce the task before the settings callback mutates shared credentials.
   // An old account's queued inventory is never resumed on a different account.
+  attempt.complete();
+  Storage.remove(CRASHED);
   Storage.remove(REQUEST);
   Storage.remove(CHECKPOINT);
   Storage.remove(RESULT);

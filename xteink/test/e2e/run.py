@@ -146,7 +146,9 @@ def mirror_urls(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    run = ctx.sim.run(card, "full-home", script="90000:QUIT", timeout_s=105)
+    run = ctx.sim.run(card, "full-home", script="90000:QUIT", timeout_s=105,
+                      env={"ORBIFY_SIM_FLASH_ON_CONNECT": "1"})
+    after(run.output, "Flash write on internal task stack: orb_catalog")
     after(run.output, "Full refresh: Done")
     assert not (folder / "mirror.request").exists()
     assert (folder / "walk.result").read_text() == "Done"
@@ -163,6 +165,110 @@ def mirror_urls(ctx: Context, tmp: Path) -> None:
     assert len(list((bulk / generation / "books").rglob("*.json"))) == len(ctx.manifest["books"])
     assert "open catalog to resume" not in run.output
 
+
+
+@scenario("x4-pro")
+def full_refresh_large_catalog(ctx: Context, tmp: Path) -> None:
+    """Thousands of books through the real worker, HTTP parser and SD adapter.
+    The synthetic catalog is independent of the small live server library.
+    """
+    import os
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "xteink/test/bulk_bench.py"), "--checkout",
+         str(ctx.sim.program.parents[3]), "--out", str(tmp), "--books", "3000",
+         "--modes", "cold", "--timeout", "580"],
+        env={**os.environ, "ORBIFY_SIM_FLASH_ON_CONNECT": "1"},
+        capture_output=True, text=True, timeout=600)
+    (ctx.artifacts / "large-catalog.log").write_text(result.stdout + result.stderr)
+    assert result.returncode == 0, result.stderr
+    stats = json.loads((tmp / "results.json").read_text())[0]
+    assert stats["rows"] == 3000 and stats["psramPeakBytes"] < 1024 * 1024
+    after((tmp / "card/cold.log").read_text(), "Flash write on internal task stack: orb_catalog")
+
+
+@scenario(*X4S)
+def full_refresh_crash_breaker(ctx: Context, tmp: Path) -> None:
+    """Two unclean worker exits across cold boots must never start a third.
+    Keep settings, books and the published catalog; an explicit hold retries.
+    """
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    # No usable catalog is required for this safety boundary. Preserve arbitrary
+    # published bytes and books without parsing or deleting them in recovery.
+    published = card.crosspoint / "orbify-catalog" / "bulk" / "a" / "books" / "1.json"
+    published.parent.mkdir(parents=True)
+    published.write_text('{"id":1,"title":"kept"}')
+    (published.parents[2] / "stage").write_text("b")
+    path = card.add_book(ctx.source("Standalone 01"))
+    book_bytes = (card.fs / path.lstrip("/")).read_bytes()
+    credentials = (card.crosspoint / "bookorbit.json").read_bytes()
+    before = len(ctx.requests())
+    for attempt in (1, 2):
+        run = ctx.sim.run(card, f"crash-{attempt}", timeout_s=15,
+                          env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+        assert run.returncode == 86, f"worker did not reach injected crash: {run.returncode}"
+        assert (folder / "refresh.inflight").read_text() == str(attempt)
+        assert (folder / "mirror.request").exists()
+    # Leave the fault enabled: a third worker would immediately kill the process.
+    for name in ("recovered", "still-recovered"):
+        run = ctx.sim.run(card, name, script="6000:QUIT", timeout_s=15,
+                          env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+        assert run.returncode == 0
+        after(run.output, "crash breaker stopped automatic resume")
+        after(run.output, "Entering activity: Home")
+        assert not (folder / "mirror.request").exists()
+        assert (folder / "mirror.request.crashed").exists()
+        assert not (published.parents[2] / "stage").exists()
+    assert len(ctx.requests()) == before, "recovery restarted network work"
+    assert published.read_text() == '{"id":1,"title":"kept"}'
+    assert (card.fs / path.lstrip("/")).read_bytes() == book_bytes
+    assert (card.crosspoint / "bookorbit.json").read_bytes() == credentials
+    if ctx.profile == "x4-pro":
+        x, y = home_tile(run.output, "sync")
+        retry = ctx.sim.run(card, "explicit-retry", script=f"3000:TAP:{x},{y},1300", timeout_s=100,
+                            env={"ORBIFY_SIM_QUIT_BULK_DONE": "1", "ORBIFY_SIM_FLASH_ON_CONNECT": "1"})
+        after(retry.output, "Full refresh: Done")
+        assert retry.returncode == 0
+        assert not (folder / "refresh.inflight").exists()
+        assert not (folder / "mirror.request.crashed").exists()
+
+
+@scenario(*X4S)
+def full_refresh_early_boot_breaker(ctx: Context, tmp: Path) -> None:
+    """A setup crash while refresh state exists must be broken before cache reads."""
+    card = ctx.card(tmp)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    bulk.mkdir(parents=True)
+    (bulk / "active").write_text("a")
+    (bulk / "active.bak").write_text("b")
+    saved = bulk / "a" / "books" / "1.json"
+    saved.parent.mkdir(parents=True)
+    saved.write_text("interrupted cache bytes")
+    credentials = (card.crosspoint / "bookorbit.json").read_bytes()
+    before = len(ctx.requests())
+    for attempt in (1, 2):
+        run = ctx.sim.run(card, f"early-crash-{attempt}", timeout_s=15,
+                          env={"ORBIFY_SIM_CRASH_REFRESH_BOOT": "1"})
+        assert run.returncode == 88
+        assert (folder / "refresh-boot.inflight").read_text() == str(attempt)
+    run = ctx.sim.run(card, "early-recovered", script="6000:QUIT", timeout_s=15,
+                      env={"ORBIFY_SIM_CRASH_REFRESH_BOOT": "1"})
+    assert run.returncode == 0
+    after(run.output, "early-boot breaker disabled saved catalog pointer")
+    after(run.output, "Entering activity: Home")
+    assert not (bulk / "active").exists() and not (bulk / "active.bak").exists()
+    assert (bulk / "active.crashed").read_text() == "a"
+    assert saved.read_text() == "interrupted cache bytes"
+    assert not (folder / "refresh-boot.inflight").exists()
+    assert len(ctx.requests()) == before
+    assert (card.crosspoint / "bookorbit.json").read_bytes() == credentials
 
 
 @scenario("x4-pro")
