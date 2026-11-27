@@ -543,9 +543,67 @@ def home_refresh_completion_stamp(ctx: Context, tmp: Path) -> None:
     offline = ctx.sim.run(card,"ordinary-refresh-offline-pages",
         script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};6000:DOWN:100;6500:CONFIRM:100;"+downs+";24000:QUIT", timeout_s=30)
     after(offline.output,"Listing page 3")
+    assert "Catalog blocking paint:" not in after(offline.output, "Listing page 1"), "saved sectioned list painted Loading"
     assert "Joining saved network" not in offline.output and not ctx.requests()[before:], "refreshed 100-row data woke the network"
     samples=[int(n) for n in re.findall(r"Heap after saved catalog window: internal free=(\d+)",offline.output)]
     assert len(samples)>=3 and min(samples)>=60*1024, f"ordinary refresh paging heap: {samples}"
+
+
+@scenario("x4-pro")
+def offline_cached_list_no_loading(ctx: Context, tmp: Path) -> None:
+    """Ordinary refresh's 100-row SD sources, never-visited pages, both swipe directions.
+
+    Full refresh uses a separate bulk adapter; this must also work without a bulk generation
+    or session-list files. Cross 12 browser-page boundaries in a 245-book saved listing.
+    """
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    # Compact rows keep screen boundaries fixed while walking the whole list both ways.
+    # The ordinary-refresh scenario below also checks the default sectioned layout.
+    card.settings["libraryListExpanded"] = 0
+    card.save()
+    sleep_pick(card, **{"from": "library", "hours": 0})
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    template = kit.Device().call("GET", "/plugin/catalog/books?format=epub&size=1")["items"][0]
+    rows = [{**template, "id": 700000 + n, "title": f"Offline cached book {n:03}",
+             "formats": ["epub"], "addedAt": "2026-11-01T00:00:00Z"} for n in range(245)]
+    rules = []
+    for page in range(1, 4):
+        rules.append({"match": {"path": "/plugin/catalog/books$", "query": {"size": "^100$", "page": f"^{page}$"}},
+                      "action": "status", "status": 200, "body": json.dumps({"items": rows[(page-1)*100:page*100],
+                      "page": page, "size": 100, "total": len(rows), "hasNext": page < 3})})
+    ctx.faults(rules)
+    seeded = ctx.sim.run(card, "ordinary-refresh", script=f"3000:TAP:{sx},{sy},120", after_reboot="",
+                         timeout_s=100, env={"ORBIFY_SIM_QUIT_HOME_DONE": "1"})
+    after(seeded.output, "Home refresh over (ok=1")
+    assert not (card.crosspoint / "orbify-catalog" / "bulk" / "active").exists()
+    # Each process starts with Wi-Fi off. No saved network permits a genuine miss to hide
+    # behind a successful reconnect. The proxy also rejects any accidental HTTP request.
+    (card.crosspoint / "wifi.json").unlink()
+    ctx.faults("offline")
+    library = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
+    cx, cy = home_tile(library.output, "catalog")
+    before = len(ctx.requests())
+    turns = []
+    for n in range(32):
+        turns.append(f"{8000+n*650}:SWIPE:0.5,0.8,0.5,0.2,150")
+    for n in range(32):
+        turns.append(f"{30000+n*650}:SWIPE:0.5,0.2,0.5,0.8,150")
+    run = ctx.sim.run(card, "offline-cached-swipes", timeout_s=65, quit_after_sync=False,
+        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};6000:DOWN:100;6500:CONFIRM:100;" +
+               ";".join(turns) + ";53000:QUIT")
+    listing = after(run.output, "Listing page 1")
+    assert "Catalog blocking paint:" not in listing, "cached paging painted a blocking Loading screen"
+    assert not ctx.requests()[before:], "cached paging attempted HTTP"
+    assert "Joining saved network" not in listing and "[WIFI] Joined" not in listing
+    pages = [int(p) for p in re.findall(r"Listing page (\d+) from cache", listing)]
+    assert max(pages, default=0) >= 13, f"did not traverse the saved list: {pages}"
+    samples = [(int(a), int(b), int(ms)) for a, b, ms in
+               re.findall(r"Catalog page turn: from=(\d+) to=(\d+) elapsedMs=(\d+)", listing)]
+    assert len(samples) == 64, f"lost swipe inputs: {samples}"
+    assert any(b > a for a, b, _ in samples) and any(b < a for a, b, _ in samples)
+    assert samples[-1][1] == 0, f"reverse paging did not return to the beginning: {samples[-1]}"
+    assert max(ms for _, _, ms in samples) < 250, f"cached page exceeded 250 ms (including paint): {samples}"
 
 
 @scenario("x4-pro")
