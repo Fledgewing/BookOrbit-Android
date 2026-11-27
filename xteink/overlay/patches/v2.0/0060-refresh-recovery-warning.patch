@@ -1,0 +1,83 @@
+Subject: [PATCH] BookSync: actionable refresh warning and normal-tap recovery
+
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index d8489e5e..63935ea5 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+@@ -2760,7 +2760,7 @@ std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
+   if (refreshPaused) return "Paused — no Wi-Fi";
+   if (regularRefresh) return tr(STR_ORBIFY_REFRESHING);
+   if (mirrorShown.active) {
+-    if (mirrorShown.finished && OrbifyMirror::snapshot().result.find("Stopped at ") == 0) return "Stopped";
++    if (mirrorShown.finished && OrbifyMirror::snapshot().stopped()) return "Stopped";
+     char badge[40];
+     orbify::mirror::badgeText(mirrorShown.percent, mirrorShown.finished, mirrorShown.failures, badge, sizeof(badge));
+     return badge;
+@@ -2802,7 +2802,7 @@ void BookOrbitCatalogBrowserActivity::paintMirrorBadge() {
+ void BookOrbitCatalogBrowserActivity::drawMirrorPopup() const {
+   if (mirrorShown.active && mirrorShown.finished) {
+     const auto result = OrbifyMirror::snapshot().result;
+-    if (result.find("Stopped at ") == 0) { OrbifyRefreshBadge::drawMessage(renderer, result.c_str()); return; }
++    if (OrbifyMirror::snapshot().stopped()) { OrbifyRefreshBadge::drawMessage(renderer, result.c_str()); return; }
+   }
+   if (mirrorPopupUntil == 0) return;
+   OrbifyRefreshBadge::drawStartPopup(renderer, mirrorShown.percent);
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index 31a2dfcd..4ebc04bd 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -145,6 +145,9 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
+   // catalog's ⟳ hold that a reset cut short) saves the catalog for offline here. Patch 0041: one
+   // start popup, then the walk runs from loop() with its % in the corner; a press goes back to Home.
+   // Automatic ones (7 days, a new library version) wait for the sleep sync instead.
++  // A normal tap can repair a stopped catalog too. Queue it durably before
++  // this foreground refresh has a chance to restart back into Home.
++  if (OrbifyMirror::recoveryPending()) OrbifyMirror::requestIncremental();
+   if (OrbifyMirror::requested()) {
+     // The global refresh worker owns its connection.
+     mirrorWalk.begin();
+@@ -281,7 +284,7 @@ void BookOrbitHomeRefreshActivity::tickMirror() {
+   const bool done = mirrorFinished || mirrorWalk.finished();
+   const auto snapshot = OrbifyMirror::snapshot();
+   mirrorPaused = snapshot.paused;
+-  if (input || (done && now >= mirrorDoneUntil && snapshot.result.find("Stopped at ") != 0)) {
++  if (input || (done && now >= mirrorDoneUntil && !snapshot.stopped())) {
+     if (!done) {
+       LOG_INF("BookOrbit", "Home refresh: Full refresh continues in background at %u%% (%s)", mirrorPercent,
+               input ? "a press" : "no network");
+@@ -458,7 +461,7 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
+                                      3);
+     // The one %: the content's top-right corner, under the header band.
+     char badge[40];
+-    if (refreshResult.find("Stopped at ") == 0) snprintf(badge, sizeof(badge), "Stopped");
++    if (OrbifyMirror::snapshot().stopped()) snprintf(badge, sizeof(badge), "Stopped");
+     else if (mirrorPaused) snprintf(badge, sizeof(badge), "Paused — no Wi-Fi");
+     else orbify::mirror::badgeText(mirrorPercent, mirrorFinished, mirrorFailures, badge, sizeof(badge));
+     const int badgeW =
+diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
+index 0995cfdc..6fda4457 100644
+--- a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
++++ b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
+@@ -157,10 +157,18 @@ void BookOrbitHomeUi::drawTopBar() const {
+   // BookSync (patch 0041): a Full refresh left unfinished shows its one % in the header's left corner
+   // (it carries on in the catalog and at the sleep syncs). Home makes no requests: read once per boot.
+   const auto refresh = OrbifyMirror::snapshot();
+-  if (refresh.finished && refresh.result.find("Stopped at ") == 0) {
+-    const auto colon = refresh.result.find(':');
+-    renderer.drawText(SMALL_FONT_ID, BookOrbitHomeLayout::kMargin, metrics.topPadding + 4,
+-                      refresh.result.substr(0, colon).c_str());
++  if (refresh.stopped()) {
++    // Keep storage-limit details; fit the crash recovery instruction beside
++    // the header's battery/status icons. The catalog popup shows the full text.
++    const auto label = refresh.result.find("Stopped at ") == 0
++                           ? refresh.result.substr(0, refresh.result.find(':'))
++                           : "Refresh stopped. Run Full refresh.";
++    renderer.drawText(SMALL_FONT_ID, BookOrbitHomeLayout::kMargin, metrics.topPadding + 4, label.c_str());
++    static bool warningLogged = false;
++    if (!warningLogged) {
++      warningLogged = true;
++      LOG_INF("HOME", "BookOrbit Home: refresh stopped: %s", refresh.result.c_str());
++    }
+   }
+   const int pending = OrbifyMirror::pendingPercent();
+   if (pending >= 0) {
