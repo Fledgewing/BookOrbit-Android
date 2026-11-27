@@ -13,7 +13,7 @@ return function(test,eq,ok,M)
     end)
     test("Series: M8C geometry stays bounded and group drills preserve filters",function()
         local g=P.geometry(702,936,function(n) return n end)
-        eq(g.limit,9); eq(g.groups,4); eq(g.covers,9)
+        eq(g.limit,8); ok(g.top>=416,"room for a 50-pixel Series download target"); eq(g.groups,4); eq(g.covers,9)
         ok(g.top+(g.limit-4)*g.row<=936-g.bottom)
         local original={group="series",q="calder",where="on-device",show="unread"}
         local q=P.groupQuery(original,{field="series",value=""})

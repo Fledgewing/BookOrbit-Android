@@ -175,15 +175,43 @@ object AdapterWorker : ServerRuntime {
 
     private var transferJobs:CatalogTransfers?=null
     @Synchronized private fun transferJobs():CatalogTransfers = transferJobs ?: CatalogTransfers(root()).also { transferJobs=it }
+    private var seriesJobs:SeriesTransfers?=null
+    @Synchronized private fun seriesJobs():SeriesTransfers = seriesJobs ?: SeriesTransfers(root(),transferJobs()).also { seriesJobs=it }
+    private fun performTransfer(ctx:Context,credentials:CacheWorker.Creds,owner:String,saved:Map<String,Any?>):Map<String,Any?> {
+        val control=transferJobs();val id=saved["id"] as String
+        val observed=object:BookOrbitServerAdapter.ConnectorTransport {
+            override fun request(server:String,path:String,method:String,body:Map<String,Any?>?,headers:Map<String,String>)=ConnectorHttp.request(server,path,method,body,headers)
+            override fun download(server:String,path:String,headers:Map<String,String>,destination:File):Boolean = ConnectorHttp.transfer(server,path,headers,destination,
+                { bytes,total -> control.progress(owner,id,bytes,total) },{ control.canceled(owner,id) || owner!=LibraryAccount.owner() })
+        }
+        return CatalogWorkflow(worker(),credentials,owner,observed,reading={Reading.now(ctx)},
+            current={owner==LibraryAccount.owner() && !control.canceled(owner,id)},checkpoint=BulkWork::checkpoint,
+            retainPartial={owner==LibraryAccount.owner() && !control.canceled(owner,id)},staging=saved["staging"] as? String)
+            .command("finish.download",saved)
+    }
+    private fun scheduleSeries(ctx:Context,credentials:CacheWorker.Creds,owner:String,id:String) {
+        synchronized(lock) { patches.addLast { catalogActionWork {
+            val again=seriesJobs().step(owner,id) { performTransfer(ctx,credentials,owner,it) }
+            if(again) scheduleSeries(ctx,credentials,owner,id)
+        } };lock.notifyAll() }
+    }
     fun catalogAction(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, args: Map<*,*>,
         done: (Map<String,Any?>?,String?) -> Unit) {
         app=ctx.applicationContext
         BulkWork.attach(ctx)
-        if(action in setOf("download.status","download.cancel")) {
+        if(action in setOf("download.status","download.cancel","series.status","series.cancel","series.find")) {
             val result=runCatching {
                 if(owner!=LibraryAccount.owner()) throw ServerFailure("canceled")
-                val id=args["id"] as? String ?: throw ServerFailure("invalid")
-                if(action=="download.cancel") transferJobs().cancel(owner,id) else transferJobs().read(owner,id)
+                if(action=="series.find") seriesJobs().find(owner,args["key"] as? String ?: throw ServerFailure("invalid")) ?: mapOf("row_count" to 1)
+                else {
+                    val id=args["id"] as? String ?: throw ServerFailure("invalid")
+                    when(action) {
+                        "series.cancel" -> seriesJobs().cancel(owner,id)
+                        "series.status" -> seriesJobs().read(owner,id)
+                        "download.cancel" -> transferJobs().cancel(owner,id)
+                        else -> transferJobs().read(owner,id)
+                    }
+                }
             }
             result.fold({done(it,null)},{done(null,(it as? ServerFailure)?.kind ?: "unavailable")});return
         }
@@ -196,18 +224,20 @@ object AdapterWorker : ServerRuntime {
                     val started=if(action=="download.start") control.start(owner,args) else control.resume(owner,args["id"] as? String ?: throw ServerFailure("invalid"))
                     val id=started["id"] as String
                     done(started,null)
-                    control.run(owner,id) { saved ->
-                        val observed=object:BookOrbitServerAdapter.ConnectorTransport {
-                            override fun request(server:String,path:String,method:String,body:Map<String,Any?>?,headers:Map<String,String>)=ConnectorHttp.request(server,path,method,body,headers)
-                            override fun download(server:String,path:String,headers:Map<String,String>,destination:File):Boolean = ConnectorHttp.transfer(server,path,headers,destination,
-                                { bytes,total -> control.progress(owner,id,bytes,total) },{ control.canceled(owner,id) || owner!=LibraryAccount.owner() })
-                        }
-                        CatalogWorkflow(worker(),credentials,owner,observed,reading={Reading.now(ctx)},
-                            current={owner==LibraryAccount.owner() && !control.canceled(owner,id)},checkpoint=BulkWork::checkpoint,
-                            retainPartial={owner==LibraryAccount.owner() && !control.canceled(owner,id)})
-                            .command("finish.download",saved)
-                    }
+                    control.run(owner,id) { saved -> performTransfer(ctx,credentials,owner,saved) }
                     return@catalogActionWork
+                }
+                if(action=="series.preview") return@runCatching BookOrbitProjection(worker().store).project(owner,args+mapOf("op" to "series.preview"))
+                if(action in setOf("series.start","series.resume")) {
+                    val started=if(action=="series.resume") seriesJobs().resume(owner,args["id"] as? String ?: throw ServerFailure("invalid")) else {
+                        val preview=BookOrbitProjection(worker().store).project(owner,args+mapOf("op" to "series.preview"))
+                        if(preview["error"]!=null || preview["token"]!=args["token"]) throw ServerFailure("changed")
+                        val choices=CatalogWorkflow(worker(),credentials,owner,ConnectorHttp,current={owner==LibraryAccount.owner()})
+                            .command("series.choices",args+mapOf("items" to preview["items"]))["items"] as List<*>
+                        @Suppress("UNCHECKED_CAST")
+                        seriesJobs().start(owner,args["key"] as? String ?: throw ServerFailure("invalid"),choices as List<Map<String,Any?>>)
+                    }
+                    done(started,null);scheduleSeries(ctx,credentials,owner,started["id"] as String);return@catalogActionWork
                 }
                 CatalogWorkflow(worker(),credentials,owner,ConnectorHttp,reading={ Reading.now(ctx) },
                     current={ owner==LibraryAccount.owner() },checkpoint=BulkWork::checkpoint).command(action,args)

@@ -183,7 +183,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                     "finished" to (a["finished"] != null || remote?.finished != null),
                     "yearReview" to false, "activityDetails" to false, "celebrations" to false),
                 "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
-                "series" to mapOf("read" to true, "downloadNext" to false),
+                "series" to mapOf("read" to true, "downloadNext" to opds),
                 "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh").takeIf { !managed || (server["catalog"] as? Map<*,*>)?.get("canRefresh")==true }),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         }
@@ -261,16 +261,21 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 else -> mapOf("items" to listOf(summary), "freshness" to freshness(true), "detail_at" to detail?.second)
             }
         }
-        require(op == "series" || op == "groups" || op == "window" || op == "counts" || op == "facets" || op == "library.summary")
+        require(op == "series.preview" || op == "series" || op == "groups" || op == "window" || op == "counts" || op == "facets" || op == "library.summary")
         val f = a["query"] as? Map<*, *> ?: emptyMap<Any, Any>()
         BookOrbitLibrary.translate(f) // validates; same plan is available to future remote checks
-        val source = if (op == "library.summary") "library/all" else if (op == "series") mapOf("kind" to "series", "key" to a["key"]) else a["source"]
+        val source = if (op == "library.summary") "library/all" else if (op in setOf("series","series.preview")) mapOf("kind" to "series", "key" to a["key"]) else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
         require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "series", "author", "search", "selection"))
-        val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
+        val activeGeneration = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
+        val completeGeneration=store.meta("bulk_complete")?.toLongOrNull()
+        val incomplete=completeGeneration!=activeGeneration
+        if(op=="series.preview" && incomplete) return mapOf("error" to "incomplete","items" to emptyList<Any>(),"row_count" to 1)
+        val seriesContext=kind=="series" || op=="groups" && f["group"]=="series"
+        val g=if(seriesContext && incomplete) completeGeneration ?: return empty(false) else activeGeneration
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
-        if ((kind in setOf("series", "list", "collection") || op == "groups" && f["group"] == "series") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
+        if (kind in setOf("list", "collection") && incomplete) return empty(false)
 
         val localPaths = BookOrbitLibrary.localPaths(store, owner)
         val local = localPaths?.keys
@@ -347,6 +352,20 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             selected.removeAll { it["key"]==current!!["key"] }
             facet?.include(current!!,-1)
         }
+        if(op=="series.preview") {
+            if(incomplete || local==null) return mapOf("error" to "incomplete","items" to emptyList<Any>(),"row_count" to 1)
+            val currentKey=localPaths.entries.firstOrNull { it.value==a["open_path"] }?.key?.let { BookOrbitLibrary.key(owner,"book",it) }
+            val plan=SeriesDownloadPlan.select(selected,((a["count"] as? Number)?.toInt() ?: 3),currentKey,a["start_key"] as? String,CatalogTransfers.activeKeys(store.root,owner))
+            val rows=plan.books.map { b ->
+                val id=BookOrbitLibrary.id(owner,"book",b["key"])!!
+                val d=store.detail(id)?.first as? Map<*,*>
+                val files=(d?.get("files") as? List<*>).orEmpty().mapNotNull { it as? Map<*,*> }.filter { CopiesLogic.pick(listOf(it),it["id"])!=null }
+                mapOf("key" to b["key"],"title" to b["title"],"number" to b["series_position"],"bytes" to files.singleOrNull()?.get("size"))
+            }
+            val fingerprint=LuaValue.encode(mapOf("g" to g,"series" to sourceKey,"anchor" to plan.anchor,"keys" to rows.map { it["key"] }))
+            val token=java.security.MessageDigest.getInstance("SHA-256").digest(fingerprint).joinToString("") { "%02x".format(it) }
+            return mapOf("items" to rows,"token" to token,"earlier_key" to plan.earlier?.get("key"),"earlier_title" to plan.earlier?.get("title"),"row_count" to (1+rows.size),"freshness" to freshness(true))
+        }
         val total = selected.size
         if (op == "facets") {
             val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
@@ -377,7 +396,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 }
                 result + mapOf("items" to rows)
             } else result
-            return projected + mapOf("freshness" to freshness(true))
+            return projected + mapOf("membership_incomplete" to incomplete,"freshness" to (freshness(true)+mapOf("stale" to incomplete)))
         }
         // Internal worker input only; UI window requests keep their original row cap.
         if (personal) return mapOf("items" to selected, "freshness" to freshness(true))

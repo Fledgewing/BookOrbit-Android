@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import java.io.File
 import net.fledgewing.orbitcompanion.server.bookorbit.CatalogTransfers
+import net.fledgewing.orbitcompanion.server.bookorbit.SeriesTransfers
 
 /** Compiled only in the disposable emulator build. Never added to app source sets. */
 object ServerAdapters {
@@ -15,6 +16,17 @@ object ServerAdapters {
     private val signedIn get() = context != null && prefs.getBoolean("signedIn", false)
     private const val OWNER = "emulator-fixture"
     private val transfers by lazy { CatalogTransfers(File(root,"emulator-transfers")) }
+    private val seriesTransfers by lazy { SeriesTransfers(File(root,"emulator-transfers"),transfers) }
+    private fun perform(owner:String,job:Map<String,Any?>):Map<String,Any?> {
+        val id=job["id"] as String
+        repeat(20) {
+            if(transfers.canceled(owner,id)) throw ServerFailure("canceled")
+            transfers.progress(owner,id,(it+1)*1024L,null);Thread.sleep(250)
+        }
+        val target=File(job["destination"] as String);target.parentFile!!.mkdirs()
+        File(android.os.Environment.getExternalStorageDirectory(),"Books/001 Seedfall.epub").copyTo(target,overwrite=true)
+        return mapOf("local_path" to target.path)
+    }
     private val adapter = object : ServerAdapter {
         override val id = "fixture"
         override fun owner() = OWNER.takeIf { signedIn }
@@ -31,7 +43,7 @@ object ServerAdapters {
         }
         override fun signOut() { prefs.edit().putBoolean("signedIn", false).commit() }
         override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
-            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("download" to true,"lists" to mapOf("read" to true,"save" to false))
+            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("series" to mapOf("read" to true,"downloadNext" to true),"download" to true,"lists" to mapOf("read" to true,"save" to false))
             if(request["op"]=="lists") return mapOf("items" to listOf(mapOf("key" to "fixture-list","title" to "Fixture shelf","count" to 59)),"freshness" to mapOf("saved" to true))
             return books.project(DeviceLibrary.OWNER, request)
         }
@@ -43,6 +55,20 @@ object ServerAdapters {
         override fun catalogAction(owner:String,action:String,args:Map<*,*>,done:(Map<String,Any?>?,String?)->Unit) {
             try {
                 when(action) {
+                    "series.preview" -> {
+                        val count=(args["count"] as? Number)?.toInt() ?: 3
+                        done(mapOf("items" to (1..count).map { mapOf("key" to "series-review-$it","title" to "Series review $it","number" to it) },"token" to "fixture-series-$count","row_count" to count+1),null)
+                    }
+                    "series.find" -> done(seriesTransfers.find(owner,args["key"] as String) ?: mapOf("row_count" to 1),null)
+                    "series.status" -> done(seriesTransfers.read(owner,args["id"] as String),null)
+                    "series.cancel" -> done(seriesTransfers.cancel(owner,args["id"] as String),null)
+                    "series.start","series.resume" -> {
+                        val count=(args["count"] as? Number)?.toInt() ?: 3
+                        val result=if(action=="series.resume") seriesTransfers.resume(owner,args["id"] as String) else seriesTransfers.start(owner,args["key"] as String,
+                            (1..count).map { mapOf("key" to "series-review-$it","title" to "Series review $it","file_reference" to 1L,"destination" to "/storage/emulated/0/BookSync/Series review $it.epub") })
+                        done(result,null)
+                        BulkWork.executor.execute { seriesTransfers.run(owner,result["id"] as String) { perform(owner,it) } }
+                    }
                     "download.prepare" -> done(mapOf("items" to listOf(
                         mapOf("file_reference" to 1L,"label" to "EPUB","destination" to "/storage/emulated/0/BookSync/Transfer review.epub"),
                         mapOf("file_reference" to 2L,"label" to "PDF","destination" to "/storage/emulated/0/BookSync/Transfer review.pdf")),"row_count" to 2),null)
@@ -51,16 +77,7 @@ object ServerAdapters {
                     "download.start","download.resume" -> {
                         val result=if(action=="download.start") transfers.start(owner,args) else transfers.resume(owner,args["id"] as String)
                         done(result,null)
-                        BulkWork.executor.execute { transfers.run(owner,result["id"] as String) { job ->
-                            val id=job["id"] as String
-                            repeat(20) {
-                                if(transfers.canceled(owner,id)) throw ServerFailure("canceled")
-                                transfers.progress(owner,id,(it+1)*1024L,null);Thread.sleep(250)
-                            }
-                            val target=File(job["destination"] as String);target.parentFile!!.mkdirs()
-                            File(android.os.Environment.getExternalStorageDirectory(),"Books/001 Seedfall.epub").copyTo(target,overwrite=true)
-                            mapOf("local_path" to target.path)
-                        } }
+                        BulkWork.executor.execute { transfers.run(owner,result["id"] as String) { perform(owner,it) } }
                     }
                     else -> done(null,"unsupported")
                 }

@@ -73,4 +73,18 @@ class CatalogTransfersTest {
         repeat(40) { val next=start(q,key="book-$it");q.cancel("account",next) }
         try { q.read("account",id);fail("old terminal history retained") } catch(e:ServerFailure) { assertEquals("missing",e.kind) }
     }
+    @Test fun cancelPausedJobOnlyDeletesItsOwnStagingFilesAndKeepsTheBook() {
+        val external=Files.createTempDirectory("transfer-staging").toFile()
+        try {
+            val root=java.io.File(external,"koreader/settings/cache");val q=CatalogTransfers(root)
+            val destination=java.io.File(external,"Books/book.epub").apply { parentFile!!.mkdirs();writeText("saved") }
+            val id=q.start("a",mapOf("key" to "b","destination" to destination.path))["id"] as String
+            val stage=java.io.File(destination.path+".booksync-part.$id").apply { writeText("partial") }
+            val other=java.io.File(destination.path+".booksync-part.other").apply { writeText("other job") }
+            val resume=java.io.File(stage.path+".http-resume").apply { writeText("validator") }
+            val restarted=CatalogTransfers(root);restarted.cancel("a",id)
+            assertFalse(stage.exists());assertFalse(resume.exists());assertTrue(other.exists());assertEquals("saved",destination.readText())
+        } finally { external.deleteRecursively() }
+    }
+
 }

@@ -17,15 +17,16 @@ object SeriesPresentation {
             else -> when (book["on_device"]) { true -> "On device"; false -> "On server"; else -> "Device state not saved" }
         }
         return mapOf("key" to book["key"], "title" to book["title"], "authors" to book["authors"],
-            "series_key" to book["series_key"], "number" to book["series_position"], "local_path" to book["local_path"],
+            "series_key" to book["series_key"], "status" to book["status"],"on_device" to book["on_device"],"cover_path" to book["cover_path"], "number" to book["series_position"], "local_path" to book["local_path"],
             "status_text" to LuaValue.str(status), "dot" to state(book), "progress" to progress)
     }
     fun series(books: List<Map<String, Any?>>, title: String?, offset: Int, limit: Int): Map<String, Any?> {
         val sorted = books.sortedWith(order)
         val dotOffset = if (sorted.size <= 24) 0 else offset / 24 * 24
-        val current = sorted.indexOfFirst { state(it) == "reading" }
-        val remaining = sorted.drop(current + 1).filter { state(it) != "read" }
-        val next = remaining.filter { it["on_device"] == false }.take(3).map(::row)
+        val selection=SeriesDownloadPlan.select(sorted)
+        val anchor=sorted.indexOfFirst { it["key"]==selection.anchor }
+        val remaining=sorted.drop(anchor+1).filter { state(it)!="read" }
+        val next=selection.books.map(::row)
         // Summary and next previews consume rows too; every wire row is charged to the caller.
         val window = sorted.drop(offset).take((limit - 4).coerceAtLeast(0)).map(::row)
         val author = sorted.flatMap { (it["authors"] as? List<*>)?.filterIsInstance<String>().orEmpty() }.map(LuaValue::utf8).distinct().joinToString(" · ")
@@ -33,7 +34,7 @@ object SeriesPresentation {
             "subtitle" to LuaValue.str("${author}${if (author.isEmpty()) "" else " · "}${books.size} ${if (books.size == 1) "book" else "books"} · ${books.count { state(it) == "read" }} read, ${books.count { state(it) == "reading" }} reading"),
             "dots" to sorted.drop(dotOffset).take(24).map(::state), "dot_offset" to dotOffset, "dot_caption" to if (sorted.size > 24) LuaValue.str("Books ${dotOffset + 1}–${minOf(sorted.size, dotOffset + 24)} of ${sorted.size}") else null,
             "total" to books.size, "offset" to offset, "next" to (offset + window.size).takeIf { window.isNotEmpty() && it < sorted.size },
-            "next_books" to next, "remaining_saved" to (remaining.isNotEmpty() && remaining.all { it["on_device"] == true }),
+            "next_books" to next,"earlier_pending" to (selection.earlier!=null), "remaining_saved" to (remaining.isNotEmpty() && remaining.all { it["on_device"] == true }),
             "local_known" to books.all { it["on_device"] != null })
     }
     fun groups(books: List<Map<String, Any?>>, filter: Map<*, *>, offset: Int, limit: Int, preview: Int = 3, groupLimit: Int = limit / 4): Map<String, Any?> {

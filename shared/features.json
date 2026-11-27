@@ -6219,7 +6219,7 @@
         "android": {
           "status": "partial",
           "note": "Owned Library transfer control, durable account/file/variant jobs, explicit Resume, safe destination and identity publication.",
-          "reason": "deliberately deferred: physical reader acceptance, release and the separate Series next-N outcome remain.",
+          "reason": "deliberately deferred: physical reader acceptance and publication remain.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-DOWNLOADS.md",
@@ -6261,7 +6261,59 @@
           ]
         }
       },
-      "deferred": "Series next-N, firmware and physical-reader acceptance."
+      "deferred": "Firmware and physical reader acceptance; Series next-N is recorded separately."
+    },
+    {
+      "id": "android-owned-series-downloads",
+      "feature": "Owned Series next-N preview and sequential download queue (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Exact next-N/file review, durable sequential jobs, cancel remaining, explicit Resume and no bulk auto-open.",
+          "reason": "deliberately deferred: physical reader acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-SERIES-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Series download queues follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware is outside this outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-SERIES-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Series download queues follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware is outside this outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-SERIES-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Series download queues follow the Android implementation.",
+          "reason": "deliberately deferred: maintainer authorised Android first; firmware is outside this outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-SERIES-DOWNLOADS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Firmware and physical reader acceptance."
     }
   ],
   "release_evidence": {

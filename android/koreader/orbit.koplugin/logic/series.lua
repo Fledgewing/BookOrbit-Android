@@ -11,8 +11,8 @@ function SeriesPlan.state(result)
 end
 function SeriesPlan.geometry(w,h,scale)
     local bottom=scale(60)
-    local count=math.max(1,math.min(8,math.floor((h-scale(410)-bottom)/scale(92))))
-    return {gap=scale(18),top=scale(410),bottom=bottom,row=scale(92),limit=count+4,
+    local count=math.max(1,math.min(8,math.floor((h-scale(430)-bottom)/scale(92))))
+    return {gap=scale(18),top=scale(430),bottom=bottom,row=scale(92),limit=count+4,
         covers=math.max(1,math.min(9,math.floor((w-2*scale(18)+scale(10))/scale(72)))),
         groups=math.max(1,math.min(4,math.floor((h-scale(170)-bottom)/scale(168))))}
 end

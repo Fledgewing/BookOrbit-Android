@@ -646,3 +646,13 @@ while transfer IO occupies the catalog worker. Restart requires explicit Resume.
 contacting a server, including the signed-out device owner. A missing-file open
 uses this command and never silently downloads. Widgets receive a charged,
 immutable transfer overlay from Library rather than polling during paint.
+
+### Series transfer commands (0.12)
+
+Through Library `catalog.action`, `series.preview` returns at most ten neutral book
+rows plus a selection token. `series.start` validates that saved token again and
+resolves exact cached file choices. `series.find/status/cancel/resume` return one
+summary plus at most ten job rows (16 KiB). Status and Cancel bypass transfer IO;
+the adapter yields between sequential files. Root, file and variant freeze before
+running. Restart requires explicit Resume; bulk never opens books. This contains
+no new plugin-side server vocabulary or transport.
