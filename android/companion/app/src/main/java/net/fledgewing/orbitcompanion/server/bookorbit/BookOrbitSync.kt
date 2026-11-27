@@ -33,30 +33,9 @@ internal class BookOrbitSync(private val settings: File,
     private fun file(snapshot: Map<*, *>) = (snapshot["file"] as? String)?.let { File(LuaValue.utf8(it)) }?.also {
         require(allowed(it)); (snapshot["digest"] as? String)?.let { hash -> hashes[it.path]=hash }
     }
-    private fun sidecar(book: File): File {
-        val name="metadata.${book.extension.ifEmpty { "_" }}.lua"
-        val doc=File(book.parentFile,"${book.nameWithoutExtension}.sdr/$name")
-        val dir=File(settings.parentFile,"docsettings${book.path.substringBeforeLast('.')}.sdr/$name")
-        val hash=hashes[book.path]
-        val hashed=hash?.let { File(settings.parentFile,"hashdocsettings/${it.take(2)}/$it.sdr/$name") }
-        val candidates=when(global["document_metadata_folder"]) {
-            "hash" -> listOfNotNull(hashed,doc,dir)
-            "dir" -> listOfNotNull(dir,doc,hashed)
-            else -> listOfNotNull(doc,dir,hashed)
-        }
-        return (candidates.firstOrNull { it.isFile } ?: candidates.first()).also { require(allowed(it)) }
-    }
-    private fun readSidecar(book: File): Map<String,Any?> {
-        val source=sidecar(book)
-        if(!source.isFile) return emptyMap()
-        val parsed=LegacyLifecycleImport.literal(source) ?: throw ServerFailure("invalid-sidecar")
-        return map(parsed)
-    }
-    private fun writeSidecar(book: File, data: Map<String,Any?>) {
-        val dest=sidecar(book); require(allowed(dest)); dest.parentFile?.mkdirs()
-        val temp=File(dest.parentFile,dest.name+".booksync.tmp")
-        temp.writeBytes("return ".toByteArray()+LuaValue.encode(data)); check(temp.renameTo(dest))
-    }
+    private val sidecars by lazy { ReaderSidecar(settings,{ hashes[it.path] },allowed) }
+    private fun readSidecar(book:File)=sidecars.read(book)
+    private fun writeSidecar(book:File,data:Map<String,Any?>)=sidecars.write(book,data)
     fun directions(): PositionDirections {
         val root=LegacyLifecycleImport.literal(File(settings.parentFile,"settings.reader.lua")).orEmpty()
         val owned=map(root["orbit_android"]); val legacy=map(root["bookorbit"])
@@ -81,7 +60,22 @@ internal class BookOrbitSync(private val settings: File,
         val digest=if(book.isFile) hash.digest().joinToString("") { "%02x".format(it) }
             else (args["document"] as? String)?.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) } ?: throw ServerFailure("missing")
         hashes[book.path]=digest
-        val data=readSidecar(book); val summary=map(data["summary"])+map(args["summary"])
+        val data=readSidecar(book)
+        var summary=map(data["summary"])+map(args["summary"])
+        var nativeToken=args["native_status_token"] ?: data["booksync_status_token"]
+        var manualStatusPending=false
+        (args["catalog_owner"] as? String)?.let { owner ->
+            val state=CatalogWorkflow.load(File(settings,"orbit-cache/workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
+            val manual=(state["finishes"] as? Map<*,*>).orEmpty().values.mapNotNull { it as? Map<*,*> }
+                .firstOrNull { it["hash"]==digest && it["manual_status"]!=null }
+            if(manual!=null) {
+                manualStatusPending=true
+                // Until the Undo control closes, background captures retain the previous status.
+                val fields=map(manual[if(manual["ready"]==true) "native_summary" else "before_native"])
+                summary=summary.filterKeys { it !in setOf("status","modified") }+fields
+                nativeToken=manual["native_token"] ?: manual["token"]
+            }
+        }
         val statsId=(args["stats_id"] as? Number)?.toLong()
         val ids=if(statsId!=null) listOf(statsId) else if(File(settings,"statistics.sqlite3").isFile)
             openSql(File(settings,"statistics.sqlite3")).use { sql -> sql.query("SELECT id FROM book WHERE md5=?",digest) { it.long(0)!! } } else emptyList()
@@ -89,7 +83,7 @@ internal class BookOrbitSync(private val settings: File,
             "progress" to position,"status" to summary["status"],"status_modified" to summary["modified"],
             "rating" to (summary["rating"] as? Number)?.toInt()?.takeIf { it in 1..5 },"review_note" to bounded(summary["note"],10000),"ts" to args["captured_at"],
             "title" to (data["doc_props"] as? Map<*, *>)?.get("title"),"authors" to (data["doc_props"] as? Map<*, *>)?.get("authors"),
-            "stats_ids" to ids,"annotations" to annotations(data,false),"bookmarks" to annotations(data,true),"native_capture" to true,
+            "stats_ids" to ids,"annotations" to annotations(data,false),"bookmarks" to annotations(data,true),"native_capture" to true,"native_status_token" to nativeToken,"manual_status_pending" to manualStatusPending,
             "annotation_sync" to ((LegacyLifecycleImport.literal(File(settings.parentFile,"settings.reader.lua"))?.get("bookorbit") as? Map<*, *>)?.get("annotation_sync")!=false))
         return digest to LuaValue.encode(snapshot)
     }
@@ -214,7 +208,7 @@ internal class BookOrbitSync(private val settings: File,
                 if(state.isEmpty()) {
                     val known=journal.query("SELECT body FROM adapter_sync_books WHERE owner=? AND document=?",entry.owner,entry.document) { map(LuaValue.parse(it.bytes(0)!!)) }.firstOrNull().orEmpty()
                     val sent=mutableMapOf<String,Any?>("hash" to entry.document)
-                    if(snap["status"]!=null) { sent["status"]=snap["status"]; if(snap["status_modified"]!=null) sent["statusModified"]=snap["status_modified"] }
+                    if(snap["status"]!=null && snap["manual_status_pending"]!=true) { sent["status"]=snap["status"]; if(snap["status_modified"]!=null) sent["statusModified"]=snap["status_modified"] }
                     if(snap["rating"]!=null) sent["rating"]=snap["rating"]
                     else if(known["ratingSyncedKnown"]==true && known["ratingSynced"]!=null) sent["ratingCleared"]=true
                     if(snap["review_note"]!=null) sent["reviewNote"]=snap["review_note"]
@@ -231,7 +225,10 @@ internal class BookOrbitSync(private val settings: File,
                 }
                 if(book==null || !book.isFile || isOpen) return done(false)
                 val data=readSidecar(book); val summary=map(data["summary"]).toMutableMap()
-                if(state["status_known"]==true) { summary["status"]=state["status"]; summary["modified"]=state["status_modified"] }
+                // A late application from an older capture cannot replace a newer explicit mark/Undo.
+                if(state["status_known"]==true && snap["manual_status_pending"]!=true && data["booksync_status_token"]==snap["native_status_token"]) {
+                    summary["status"]=state["status"]; summary["modified"]=state["status_modified"]
+                }
                 if(state["rating_known"]==true) summary["rating"]=state["rating"]
                 if(state["review_known"]==true) summary["note"]=state["review_note"]
                 writeSidecar(book,data+("summary" to summary)); pending.remove("state"); checkpoint["remote_pending"]=pending

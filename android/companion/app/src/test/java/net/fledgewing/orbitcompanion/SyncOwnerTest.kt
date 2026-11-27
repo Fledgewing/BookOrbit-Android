@@ -11,6 +11,7 @@ class SyncOwnerTest {
         override val id="toy"
         var account="account/one"
         var offline=false
+        var captures=0
         var directions=PositionDirections()
         override fun positionDirections()=directions
         var remote: Map<String,Any?> = emptyMap()
@@ -23,8 +24,8 @@ class SyncOwnerTest {
             if(update!=null) { writes+=update; remote=mapOf("percentage" to update["percentage"],"position" to update["position"],"timestamp" to update["capturedAt"]) }
             return remote
         }
-        override fun captureLifecycle(capture: Map<*, *>): Pair<String,ByteArray> = "urn:toy:book" to LuaValue.encode(mapOf(
-            "percentage" to capture["percentage"],"position" to capture["position"],"capturedAt" to capture["captured_at"],"finished" to capture["finished"]))
+        override fun captureLifecycle(capture: Map<*, *>): Pair<String,ByteArray> { captures++;return "urn:toy:book" to LuaValue.encode(mapOf(
+            "percentage" to capture["percentage"],"position" to capture["position"],"capturedAt" to capture["captured_at"],"finished" to capture["finished"])) }
         override fun lifecyclePhase(entry: LifecycleQueue.Entry,phase: String,checkpoint: ByteArray,openPath: String?): SyncPhaseResult {
             phases+=phase; leases+=openPath; return SyncPhaseResult(checkpoint)
         }
@@ -38,6 +39,38 @@ class SyncOwnerTest {
             val q=LifecycleQueue(sql); val a=Toy(); val owner=SyncOwner(q,root,{}, { 1000L })
             owner.activate(a,true); test(root,q,owner,a)
         } } finally { root.deleteRecursively() }
+    }
+    @Test fun catalogCaptureTokenSurvivesRestartAndDoesNotBecomeAMigrationBackup() = fixture { root,q,owner,a ->
+        owner.captureOnce(a,args(online=false),"intent-one")
+        val restarted=SyncOwner(q,root,{}, {2000L});restarted.activate(a,true)
+        restarted.captureOnce(a,args(.6,online=false),"intent-one")
+        assertEquals(1,a.captures);assertEquals(1,q.pending(a.id,a.account))
+        restarted.drain(a)
+        assertEquals(1,a.writes.size);assertEquals(0,q.pending(a.id,a.account))
+        restarted.captureOnce(a,args(.7,online=false),"intent-one")
+        assertEquals(1,a.captures);assertEquals(0,q.pending(a.id,a.account))
+        restarted.acknowledgeCapture(a,"intent-one")
+        assertNull(q.captureToken(a.id,a.account,"intent-one"))
+        assertEquals(0L,q.sql.query("SELECT COUNT(*) FROM lifecycle_jobs") { it.long(0)!! }.single())
+    }
+    @Test fun catalogPositionProofWaitsBehindTheBoundedBacklogAndIsNotifiedOnce() = fixture { _,q,owner,a ->
+        repeat(LifecycleQueue.WINDOW) { owner.command(a,"sync.capture",args(at=1000L+it,online=false)) }
+        owner.captureOnce(a,args(at=2000,online=false),"after-backlog")
+        owner.drain(a)
+        assertEquals(1,q.pending(a.id,a.account));assertTrue(owner.completedCaptures(a).isEmpty())
+        owner.drain(a)
+        assertEquals(listOf("after-backlog"),owner.completedCaptures(a))
+        owner.notifyCapture(a,"after-backlog")
+        assertTrue(owner.completedCaptures(a).isEmpty())
+        assertNotNull(q.captureToken(a.id,a.account,"after-backlog"))
+    }
+    @Test fun catalogCaptureTokensAreOwnerScoped() = fixture { _,q,owner,a ->
+        owner.captureOnce(a,args(online=false),"intent-one")
+        a.account="account/two";owner.activate(a,true)
+        owner.captureOnce(a,args(online=false),"intent-one")
+        assertEquals(2,a.captures);assertEquals(1,q.pending(a.id,"account/one"));assertEquals(1,q.pending(a.id,a.account))
+        owner.acknowledgeCapture(a,"intent-one")
+        assertNotNull(q.captureToken(a.id,"account/one","intent-one"))
     }
     @Test fun quiescenceIsRequiredAndOfflineSnapshotsSurviveCompanionRestart() = fixture { root,q,owner,a ->
         assertThrows(IllegalStateException::class.java) { SyncOwner(q,root,{}).activate(a,false) }

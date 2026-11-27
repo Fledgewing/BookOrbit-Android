@@ -124,12 +124,77 @@ object LibraryAccount {
             main.post { result.fold({done(it,null)},{done(null,"unavailable")}) }
         }
     }
+    @Volatile private var statusRetryOwner:String?=null
+    @Synchronized private fun retryStatus(ctx:Context,owner:String,delay:Long) {
+        if(statusRetryOwner!=null || published.owner!=owner) return
+        statusRetryOwner=owner
+        main.postDelayed({
+            synchronized(this) { statusRetryOwner=null }
+            if(published.owner==owner) catalogAction(ctx,owner,"finish.drain",mapOf("manual" to false)) { _,_-> }
+        },delay)
+    }
     fun catalogAction(ctx: Context, owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) {
         val app=ctx.applicationContext
         queue.execute {
-            try { adapter(app).catalogAction(owner,action,args) { value,error -> main.post { done(value,error) } } }
-            catch(e: ServerFailure) { main.post { done(null,e.kind) } }
-            catch(_: Exception) { main.post { done(null,"unavailable") } }
+            val a=adapter(app)
+            fun fail(error:String) {
+                if(action=="finish.drain" && error !in setOf("canceled","unauthorized","unsupported") && a.positionOwner()==owner) retryStatus(app,owner,60000)
+                main.post { done(null,error) }
+            }
+            fun deliver() = a.catalogAction(owner,action,if(action=="finish.drain") args+mapOf("open_path" to syncOwner?.currentPath()) else args) { value,error ->
+                if(action=="finish.ack" && error==null && value?.get("retained")!=true && a.positionOwner()==owner) queue.execute {
+                    (args["token"] as? String)?.let { syncOwner(app).acknowledgeCapture(a,it) }
+                }
+                if(action=="finish.drain" && value?.get("status_pending")==true) retryStatus(app,owner,60000)
+                main.post { done(value,error) }
+            }
+            fun publishPositions(tokens:List<String>,index:Int=0) {
+                if(index>=tokens.size) { deliver();return }
+                val token=tokens[index]
+                a.statusPositioned(owner,token) { value,error -> queue.execute {
+                    try {
+                        if(error!=null) throw ServerFailure(error)
+                        if(value?.get("missing")==true) syncOwner(app).acknowledgeCapture(a,token) else syncOwner(app).notifyCapture(a,token)
+                        publishPositions(tokens,index+1)
+                    } catch(e:ServerFailure) { fail(e.kind) }
+                    catch(_:Exception) { fail("unavailable") }
+                } }
+            }
+            fun drainAndDeliver(hasStatus:Boolean) {
+                if(hasStatus && !Reading.now(app)) {
+                    val drained=syncOwner(app).drain(a)
+                    (drained["error"] as? String)?.let { throw ServerFailure(it) }
+                }
+                if(hasStatus) publishPositions(syncOwner(app).completedCaptures(a)) else deliver()
+            }
+            fun captureNext(remaining:Int,hadStatus:Boolean) {
+                if(remaining==0) { drainAndDeliver(hadStatus);return }
+                a.statusCapture(owner,syncOwner?.currentPath()) { capture,error -> queue.execute {
+                    try {
+                        if(error!=null) throw ServerFailure(error)
+                        val hasStatus=hadStatus || capture?.get("has_status")==true
+                        if(hasStatus && (a.owner()!=owner || a.positionOwner()!=owner)) throw ServerFailure("canceled")
+                        val row=capture?.get("capture") as? Map<*,*>
+                        if(row==null) drainAndDeliver(hasStatus) else {
+                            val token=capture["token"] as? String ?: throw ServerFailure("invalid")
+                            syncOwner(app).captureOnce(a,row,token)
+                            a.statusCaptured(owner,token) { _,ackError -> queue.execute {
+                                try {
+                                    if(ackError!=null) throw ServerFailure(ackError)
+                                    captureNext(remaining-1,true)
+                                } catch(e:ServerFailure) { fail(e.kind) }
+                                catch(_:Exception) { fail("unavailable") }
+                            } }
+                        }
+                    } catch(e:ServerFailure) { fail(e.kind) }
+                    catch(_:Exception) { fail("unavailable") }
+                } }
+            }
+            try {
+                // Account-scoped tokens link bounded catalog intents to the sole lifecycle writer.
+                if(action=="finish.drain") captureNext(24,false) else deliver()
+            } catch(e:ServerFailure) { fail(e.kind) }
+            catch(_:Exception) { fail("unavailable") }
         }
     }
     fun catalogControl(ctx: Context, owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {

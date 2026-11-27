@@ -147,3 +147,10 @@ Budgets.CARD_COVER_BYTES = 524288
 
 -- Yield between post-paint card cover windows, including local bitmap delivery.
 Budgets.CARD_COVER_BATCH = 4
+
+-- Explicit remove preview/confirmation: one worker row and static native controls.
+Budgets.screens["book-removal"] = budget(1,16384,50)
+Budgets.screens["book-removal"].displayRows=4
+
+Budgets.screens["book-status"] = budget(1,16384,50)
+Budgets.screens["book-status"].displayRows=3

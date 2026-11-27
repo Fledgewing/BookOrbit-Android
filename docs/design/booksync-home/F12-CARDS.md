@@ -76,3 +76,41 @@ Validation: plugin logic and flow suites, including every card size/state/style;
 UI/server boundary guards; companion unit tests (ReadingCardTest covers layout
 changes, invalid/missing history, exact checksum identity and source precedence),
 shared-version verification, debug assembly and lint. No device acceptance claimed.
+
+
+## Arbitrary-book actions
+
+Approved rev 16 §5.1 overflow now exposes status and removal only when the
+Library capabilities permit them. Unknown status remains disabled. A manual
+status intent updates cached/native status immediately, retains its exact previous
+status/date for Undo and shows a local-save confirmation rather than a server ack.
+Done, dismiss or reader restart releases the hold; Undo replaces the held intent.
+The existing native position and annotations never become a fabricated 100% finish.
+
+CatalogWorkflow owns the account-scoped outbox. A durable token links its saved
+native capture to the existing LifecycleQueue/SyncOwner; only that owner sends
+positions. A bounded backlog cannot turn enqueue success into position proof.
+Lifecycle book-state exchange suppresses manual status until the explicit outbox
+writes after the progress checkpoint. Rejections retain the local intent for an
+explicit retry. Pending overrides survive stale catalog replies and an in-flight
+refresh generation. A later independent catalog generation may reflect changes
+made on another device.
+
+ReaderSidecar retains the adapter's existing native metadata-location rules.
+Live native documents receive in-memory summary/cache updates; the companion
+retains the writeback until closure and never rewrites an open sidecar. Status
+phase tokens reject late replies from older marks. Rating/review and annotation
+sync remain in their existing owners; legacy queues/import proofs stay intact.
+
+Remove download first previews a tracked file, then revalidates its identity token,
+account and current-book exclusion before removing only that file. Native sidecars,
+annotations and unrelated books remain. Navigating away drops late dialogs/redraws.
+The two action surfaces each receive one bounded command result (≤16 KiB); no scan,
+hash, transport or file write runs on the KOReader UI thread.
+
+Validation: companion 847 tests (0 failures/errors, 4 skipped), Lua logic 256 and
+flows 266. Native emulator review covers all existing 57 screens plus four card
+checks (Undo, Done, cancel, confirmed removal preserving the exact sidecar bytes).
+The native status presentation uses a test-only Library double; production adapter,
+held intent, owner isolation, position ordering and writeback are exercised by JVM
+integration tests. Emulator evidence is local; no physical reader was touched.

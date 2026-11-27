@@ -123,7 +123,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         return count
     }
     override fun positionDirections() = sync?.directions() ?: PositionDirections()
-    override fun captureLifecycle(capture: Map<*, *>) = (sync ?: throw ServerFailure("writer-active")).capture(capture)
+    override fun captureLifecycle(capture: Map<*, *>) = (sync ?: throw ServerFailure("writer-active")).capture(capture+mapOf("catalog_owner" to positionOwner()))
     override fun positionIntent(document: String, update: Map<String,Any?>) = LuaValue.encode(mapOf(
         "digest" to document,"percentage" to update["percentage"],"progress" to update["position"],"ts" to update["capturedAt"]))
     override fun lifecyclePosition(payload: ByteArray): CapturedPosition {
@@ -169,7 +169,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             "username" to accountState["username"], "server" to accountState["server"],
             "account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
             "sync" to status("sync"), "opds" to status("opds"), "owner" to sourceOwner,
-            "catalog" to mapOf("cachedDetail" to (legacy!=null || credentials.login("sync")?.let { it.adopted && it.owner()==sourceOwner }==true),"canRefresh" to (legacy!=null || credentials.login("sync")?.owner()==sourceOwner)))
+            "catalog" to mapOf("canWriteStatus" to (sourceOwner!=null && sourceOwner==positionOwner()),"cachedDetail" to (legacy!=null || credentials.login("sync")?.let { it.adopted && it.owner()==sourceOwner }==true),"canRefresh" to (legacy!=null || credentials.login("sync")?.owner()==sourceOwner)))
     }
     override fun signIn(server: String, username: String, password: CharArray) {
         try {
@@ -272,6 +272,9 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         require(LuaValue.encode(result).size <= 16384)
         return result
     }
+    override fun statusCapture(owner: String, openPath: String?, done: (Map<String,Any?>?,String?)->Unit) = catalogAction(owner,"status.capture",mapOf("open_path" to openPath),done)
+    override fun statusPositioned(owner:String,token:String,done:(Map<String,Any?>?,String?)->Unit) = catalogAction(owner,"status.positioned",mapOf("token" to token),done)
+    override fun statusCaptured(owner: String, token: String, done: (Map<String,Any?>?,String?)->Unit) = catalogAction(owner,"status.captured",mapOf("token" to token),done)
     override fun catalogAction(owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) {
         require(owner == owner())
         val c=credentials.login("sync")?.takeIf { it.owner()==owner }?.let { login("sync") }

@@ -235,6 +235,59 @@ function HomeHost.create()
             dialog=require("ui/widget/buttondialog"):new{title=row.title or _("Book"),buttons=buttons}
             UIManager:show(dialog) -- gate: user action (card overflow)
             done()
+        elseif action == "status" then
+            Library.cardStatus(row,nil,function(result)
+                if HomeHost.active~=self or topWidget()~=self or reading() then return end
+                self:rebuild();UIManager:setDirty(self,"ui")
+                if result.error then
+                    UIManager:show(InfoMessage:new{text="Reading status could not be saved. Try again.",timeout=3}) -- gate: user action (status result)
+                    return
+                end
+                local paint=Budgets.span("book-status.paint",now_s,log)
+                local dialog
+                local released=false
+                local function release()
+                    if released then return end
+                    released=true;Library.cardStatusLeave(result)
+                end
+                dialog=require("ui/widget/buttondialog"):new{title="Saved on this reader · delivery pending",buttons={{{text="Undo",callback=function()
+                    released=true;UIManager:close(dialog)
+                    Library.cardStatus(row,result.token,function(reply)
+                        if HomeHost.active==self and topWidget()==self and not reading() then
+                            self:rebuild();UIManager:setDirty(self,"ui")
+                            if reply.error then UIManager:show(InfoMessage:new{text="Status changed. Review the book before trying Undo again.",timeout=3}) end -- gate: user action (Undo result)
+                        end
+                    end)
+                end},{text="Done",callback=function() release();UIManager:close(dialog) end}}}}
+                local close=dialog.onCloseWidget
+                dialog.onCloseWidget=function(self,...)
+                    release();if close then return close(self,...) end
+                end
+                dialog.tap_close_callback=release
+                UIManager:show(dialog) -- gate: user action (status Undo)
+                paint();return true
+            end)
+        elseif action == "remove" then
+            Library.cardRemoval(row,nil,function(result)
+                if HomeHost.active~=self or topWidget()~=self or reading() then return end
+                if result.error or not result.token then
+                    UIManager:show(InfoMessage:new{text="Download cannot be removed while open or unavailable.",timeout=3}) -- gate: user action (remove preview result)
+                    return
+                end
+                local paint=Budgets.span("book-removal.paint",now_s,log)
+                local dialog
+                dialog=require("ui/widget/confirmbox"):new{text="Remove download?\n"..(row.title or "Book").."\n"..result.detail,
+                    ok_text="Remove",ok_callback=function()
+                        Library.cardRemoval(row,result.token,function(reply)
+                            if HomeHost.active~=self or topWidget()~=self or reading() then return end
+                            if reply.error then
+                                UIManager:show(InfoMessage:new{text="Download changed or cannot be removed. Review it and try again.",timeout=3}) -- gate: user action (remove command result)
+                            else self:rebuild();UIManager:setDirty(self,"ui") end
+                        end)
+                    end}
+                UIManager:show(dialog) -- gate: user action (remove download confirmation)
+                paint()
+            end)
         elseif action == "download" then
             if self.cardDownload then return end
             self.cardDownload=row.key

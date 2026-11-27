@@ -6110,8 +6110,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "0.12 window-projected cached covers, series, measured local time-left/finish date and overflow routes; unreleased.",
-          "reason": "deliberately deferred: device appearance/latency acceptance and safe arbitrary-book status/removal commands remain pending.",
+          "note": "0.12 cached covers, series and local forecasts; capability-gated Mark read/unread with Undo, durable position-before-status delivery and confirmed local-file removal that retains sidecars. Unreleased.",
+          "reason": "deliberately deferred: physical reader appearance/latency acceptance and release publication remain separate.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-CARDS.md",
@@ -6121,7 +6121,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Book cards follow the Android implementation.",
+          "note": "Card presentation, status intents and confirmed local removal follow the Android implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering.",
           "evidence": [
             {
@@ -6132,7 +6132,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Book cards follow the Android implementation.",
+          "note": "Card presentation, status intents and confirmed local removal follow the Android implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering.",
           "evidence": [
             {
@@ -6143,7 +6143,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Book cards follow the Android implementation.",
+          "note": "Card presentation, status intents and confirmed local removal follow the Android implementation.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows with hardware-appropriate rendering. X3 needs measured flash fit.",
           "evidence": [
             {
@@ -6152,7 +6152,8 @@
             }
           ]
         }
-      }
+      },
+      "deferred": "Physical reader acceptance and firmware implementation under the Android-first ruling."
     },
     {
       "id": "android-addon-012-followups",

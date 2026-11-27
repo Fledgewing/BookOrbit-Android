@@ -10,7 +10,8 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
     private var active=false
     private var activatedOwner: String?=null
     private var readerEpoch: String?=null
-    private var openPath: String?=null
+    @Volatile private var openPath: String?=null
+    fun currentPath(): String? = openPath
     @Volatile private var previews: Map<String,Map<String,Any?>> = emptyMap()
     private fun map(value: Any?) = (value as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }.orEmpty()
     private fun number(value: Any?) = (value as? Number)?.toDouble()
@@ -62,6 +63,22 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
         journal.enqueue(a.id,scope(a),document,a.positionIntent(document,intent),LifecycleQueue.PHASES.take(4).toSet())
         return drain(a)
     }
+    /** A catalog intent checkpoints its native capture once before its status outbox can drain.
+     * The token is account scoped by the caller and retained as source proof across restarts. */
+    fun captureOnce(a: ServerAdapter, args: Map<*,*>, token: String) {
+        ensure()
+        require(token.length in 1..100)
+        val owner=scope(a)
+        if(journal.captureToken(a.id,owner,token)!=null) return
+        val capture=a.captureLifecycle(args)
+        journal.enqueue(a.id,owner,capture.first,capture.second,intentToken=token)
+    }
+    fun completedCaptures(a:ServerAdapter) = journal.completedCaptures(a.id,scope(a))
+    fun notifyCapture(a:ServerAdapter,token:String) = journal.notifyCapture(a.id,scope(a),token)
+    fun acknowledgeCapture(a: ServerAdapter, token: String) {
+        journal.acknowledgeCapture(a.id,scope(a),token)
+    }
+
     fun command(a: ServerAdapter, op: String, args: Map<*, *>): Map<String,Any?> {
         val started=System.nanoTime()
         try {

@@ -81,6 +81,7 @@ end
 function HomeWidgets.caption(settings, book)
     local cap=settings.cap or 0
     if cap==1 then return book.added and tostring(book.added):sub(1,10) or "—" end
+    if type(book.status_note)=="string" then return book.status_note end
     if cap==2 then return book.status=="finished" and _("Finished") or book.progress and string.format("%d%%",book.progress) or _("Not started") end
     if cap==3 then return book.authors and book.authors[1] or "" end
     return ""

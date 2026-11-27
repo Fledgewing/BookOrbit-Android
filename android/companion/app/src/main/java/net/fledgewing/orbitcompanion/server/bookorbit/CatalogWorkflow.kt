@@ -5,6 +5,8 @@ import net.fledgewing.orbitcompanion.*
 import java.io.File
 import java.security.MessageDigest
 
+internal data class CatalogStatusOverride(val status:String,val pending:Boolean)
+
 /** Catalog actions share CacheWorker's sole writer. Queue files are account scoped and survive
  * cache resets. No lifecycle/position queue is drained or rewritten here. */
 internal class CatalogWorkflow(private val worker: CacheWorker, private val creds: CacheWorker.Creds,
@@ -17,9 +19,10 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
     private val jobs=(state["finishes"] as? Map<*,*>).orEmpty().entries.associate { it.key.toString() to (it.value as Map<*,*>).toMutableMap() }.toMutableMap()
     private val copies=(state["copies"] as? List<*>).orEmpty().mapNotNull { it as? Map<*,*> }.toMutableList()
     private val downloads=(state["downloads"] as? Map<*,*>).orEmpty().toMutableMap()
+    private val statusUndo=(state["status_undo"] as? Map<*,*>).orEmpty().toMutableMap()
     private fun check() { if(!current() || store.meta("owner")!=owner) throw ServerFailure("canceled") }
     private fun save() {
-        check(); state["finishes"]=jobs;state["copies"]=copies;state["downloads"]=downloads
+        check(); state["finishes"]=jobs;state["copies"]=copies;state["downloads"]=downloads;state["status_undo"]=statusUndo
         file.parentFile?.mkdirs(); val tmp=File(file.path+".new")
         tmp.outputStream().use { it.write(LuaValue.encode(state)); it.fd.sync() }
         check(); check(tmp.renameTo(file))
@@ -138,11 +141,96 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         }
         state["migrated"]=true; save()
     }
+    private val sidecars by lazy { ReaderSidecar(worker.root.parentFile!!,{ partial(it) },{ Places.inside(it,listOf(worker.root.parentFile!!.parentFile!!.parentFile!!))!=null }) }
+    private fun statusMark(args:Map<*,*>,undo:Boolean):Map<String,Any?> {
+        val book=id(args) ?: throw ServerFailure("missing")
+        val before=(store.detail(book)?.first ?: store.bookItem(book)) as? Map<*,*> ?: throw ServerFailure("missing")
+        val prior=statusUndo[book.toString()] as? Map<*,*>
+        if(undo && (prior==null || prior["token"]!=args["token"])) throw ServerFailure("stale")
+        if(undo && jobs.values.none { it["token"]==args["token"] && it["ready"]==false }) throw ServerFailure("stale")
+        val target=if(undo) prior!!["before_status"] as? String else when(args["status"]) { "finished"->"read";"unread"->"unread";else->null }
+        require(target in setOf("unread","want_to_read","reading","on_hold","read","abandoned"))
+        val previous=when(args["before_status"]) { "finished"->"read";"on-hold"->"on_hold";"rereading"->"reading";"unread","reading","abandoned"->args["before_status"] as String;else->before["readStatus"] as? String ?: "unread" }
+        val local=ledger().firstOrNull { number(it["book_id"])==book && (it["path"] as? String)?.let { p -> File(LuaValue.utf8(p)).isFile }==true }
+        val path=local?.get("path") as? String
+        val file=path?.let(::bookFile)
+        val hash=file?.let(::partial)
+        val native=file?.let { sidecars.read(it) }
+        val isOpen=path!=null && (args["open_path"] as? String)?.let { File(LuaValue.utf8(it)).canonicalFile==file?.canonicalFile }==true
+        val oldSummary=(args["before_native"] as? Map<*,*>)?.takeIf { isOpen } ?: native?.get("summary") as? Map<*,*>
+        if(undo && file!=null && native?.get("booksync_status_token")!=prior!!["token"] &&
+            !(isOpen && args["native_token"]==prior["token"])) throw ServerFailure("stale")
+        if(undo && file!=null && prior?.get("document")!=hash) throw ServerFailure("changed")
+        val token=java.util.UUID.randomUUID().toString()
+        val document=hash ?: "catalog:$book"
+        val activeCapture=(args["native_capture"] as? Map<*,*>)?.takeIf { isOpen }
+        val nativeSummary=if(undo) prior!!["before_native"] as? Map<*,*> else mapOf("status" to if(target=="read") "complete" else "new",
+            "modified" to java.time.Instant.ofEpochSecond(now()).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString())
+        val existing=jobs.values.firstOrNull { number(it["book_id"])==book }
+        // An explicit newer mark replaces only this book's finish intent, retaining its rating.
+        jobs.entries.removeAll { number(it.value["book_id"])==book }
+        val job=mutableMapOf<Any?,Any?>("book_id" to book,"file" to path,"hash" to hash,"token" to token,"created_at" to now(),
+            "ready" to undo,"manual_status" to target,"before_native" to oldSummary?.filterKeys { it in setOf("status","modified") },"native_token" to token,"captured" to (file==null),"position_done" to (file==null),"native_pending" to (file!=null),
+            "native_summary" to nativeSummary,"rating" to existing?.get("rating"))
+        if(file!=null) job["native_capture"]=activeCapture ?: mapOf("path" to path,"document" to hash,
+            "percentage" to native?.get("percent_finished"),"position" to (native?.get("last_xpointer") ?: native?.get("last_page")),"summary" to oldSummary)
+        jobs[document]=job
+        state["status_sequence"]=(number(state["status_sequence"]) ?: 0L)+1
+        statusUndo[book.toString()]=mapOf("sequence" to state["status_sequence"],"token" to token,"document" to hash,"before_status" to previous,"before_native" to oldSummary?.filterKeys { it in setOf("status","modified") },"after_status" to target)
+        while(statusUndo.size>32) statusUndo.remove(statusUndo.entries.minByOrNull { number((it.value as? Map<*,*>)?.get("sequence")) ?: 0L }!!.key)
+        save()
+        applyStatusNative(job,args["open_path"] as? String)
+        worker.patch(book,mapOf("readStatus" to target),true,false)
+        worker.libraryReadModel().refreshLocalFiles(owner)
+        return mapOf("ok" to true,"token" to token,"document" to document,"path" to path,"native_summary" to nativeSummary,"native_token" to token)
+    }
+    private fun applyStatusNative(job:MutableMap<Any?,Any?>,open:String?):Boolean {
+        if(job["native_pending"]!=true) return true
+        val path=job["file"] as? String ?: return true
+        val file=bookFile(path)
+        if(open!=null && file.canonicalFile==File(LuaValue.utf8(open)).canonicalFile) return false
+        if(!file.isFile) { job["native_pending"]=false;save();return true }
+        if(!partial(file).equals(job["hash"] as? String,true)) throw ServerFailure("changed")
+        val data=sidecars.read(file)
+        val summary=(data["summary"] as? Map<*,*>).orEmpty().filterKeys { it !in setOf("status","modified") }+(job["native_summary"] as? Map<*,*>).orEmpty()
+        sidecars.write(file,data+mapOf("summary" to summary,"booksync_status_token" to (job["native_token"] ?: job["token"])))
+        job["native_pending"]=false;save();return true
+    }
+    private fun statusCapture(open:String?):Map<String,Any?> {
+        val manual=jobs.values.filter { it["manual_status"]!=null && it["ready"]==true && it["phase"]!="writeback" }
+        for(job in manual) {
+            if(job["captured"]==true) continue
+            val path=job["file"] as? String ?: continue
+            val native=job["native_capture"] as? Map<*,*>
+            val applied=applyStatusNative(job,open)
+            if(!applied && native==null) continue
+            val data=sidecars.read(bookFile(path))
+            val capture=(native?.entries?.associate { it.key.toString() to it.value } ?: mapOf("path" to path,"document" to job["hash"],
+                "percentage" to data["percent_finished"],"position" to (data["last_xpointer"] ?: data["last_page"]),
+                "summary" to ((data["summary"] as? Map<*,*>).orEmpty().filterKeys { it !in setOf("status","modified") }+(job["native_summary"] as? Map<*,*>).orEmpty())))+mapOf("summary" to ((data["summary"] as? Map<*,*>).orEmpty().filterKeys { it !in setOf("status","modified") }+(job["native_summary"] as? Map<*,*>).orEmpty()),"native_status_token" to (job["native_token"] ?: job["token"]),"current" to false,"online" to false,"captured_at" to now())
+            return mapOf("has_status" to true,"token" to job["token"],"capture" to capture)
+        }
+        return mapOf("has_status" to manual.isNotEmpty())
+    }
     fun command(action:String,args:Map<*,*>):Map<String,Any?> {
         check(); migrate()
         val path=args["path"] as? String
         val hash=args["document"] as? String
         when(action) {
+            "status.mark" -> return statusMark(args,false)
+            "status.undo" -> return statusMark(args,true)
+            "status.leave" -> {
+                val j=jobs.values.firstOrNull { it["manual_status"]!=null && it["token"]==args["token"] } ?: return mapOf("error" to "stale")
+                if(j["ready"]!=true) { j["ready"]=true;j["native_token"]=java.util.UUID.randomUUID().toString();j["native_pending"]=j["file"]!=null;j["native_notified"]=false;save() }
+                applyStatusNative(j,args["open_path"] as? String)
+                return mapOf("ok" to true,"native_token" to j["native_token"],"path" to j["file"])
+            }
+            "status.capture" -> return statusCapture(args["open_path"] as? String)
+            "status.positioned" -> {
+                val j=jobs.values.firstOrNull { it["token"]==args["token"] } ?: return mapOf("missing" to true)
+                j["position_done"]=true;save();return mapOf("ok" to true)
+            }
+            "status.captured" -> { jobs.values.filter { it["token"]==args["token"] }.forEach { it["captured"]=true };save() }
             "copies.check" -> if(args["enabled"]!=false && !reading()) checkCopies(args["open_path"] as? String)
             "copies.ack" -> {
                 copies.removeAll { it["token"]==args["token"] && it["phase"]=="identity" };save()
@@ -161,10 +249,19 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                     "progressPercentage" to ((args["percentage"] as? Number)?.toDouble()?.times(100))),true,false) }
             }
             "finish.rate" -> { jobs[hash]?.set("rating", args["rating"] ?: "clear"); save() }
-            "finish.leave" -> { jobs[hash]?.set("ready",true); save() }
+            "finish.leave" -> { if(jobs[hash]?.get("manual_status")==null) jobs[hash]?.set("ready",true); save() }
             "finish.validate" -> return mapOf("apply" to (jobs[hash]?.get("phase")=="writeback" && jobs[hash]?.get("token")==args["token"]))
-            "finish.ack" -> { if(jobs[hash]?.get("phase")=="writeback" && jobs[hash]?.get("token")==args["token"]) jobs.remove(hash); save() }
-            "finish.drain" -> if(!reading()) { drain(args["manual"]==true); pendingDownloads() }
+            "finish.ack" -> {
+                val j=jobs[hash]
+                if(j?.get("phase")=="writeback" && j["token"]==args["token"]) {
+                    if(j["manual_status"]!=null && !applyStatusNative(j,args["open_path"] as? String)) {
+                        j["native_notified"]=true;save();return mapOf("ok" to true,"retained" to true)
+                    }
+                    jobs.remove(hash)
+                }
+                save()
+            }
+            "finish.drain" -> if(!reading()) { drain(args["manual"]==true,args["open_path"] as? String); pendingDownloads() }
             "finish.download" -> {
                 val book=id(args) ?: throw ServerFailure("missing")
                 if(args["later"]==true) { downloads[book.toString()]=mapOf("book_id" to book);save() }
@@ -184,11 +281,18 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                 if(args["local_only"]!=true && !reading()) book?.let { detail(it) }
                 return mapOf("key" to book?.let { BookOrbitLibrary.key(owner,"book",it) },"reference" to book,"document" to hash,"path" to path,"owner" to owner,"row_count" to 1)
             }
-            "initialize" -> ledger()
+            "initialize" -> {
+                ledger()
+                // A restarted reader no longer has the user-opened Undo control.
+                for(j in jobs.values) if(j["manual_status"]!=null && j["ready"]==false) {
+                    j["ready"]=true;j["native_token"]=java.util.UUID.randomUUID().toString();j["native_pending"]=j["file"]!=null;j["native_notified"]=false
+                }
+                save()
+            }
             else -> throw ServerFailure("unsupported")
         }
         worker.libraryReadModel().refreshReadingIntents(owner)
-        return mapOf("ok" to true)
+        return mapOf("ok" to true,"status_pending" to jobs.values.any { it["manual_status"]!=null && it["ready"]==true && it["parked"]!=true })
     }
     private fun checkCopies(open:String?) {
         val books=ledger()
@@ -292,23 +396,34 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         recordLocal(book,f["id"],path,hash)
         worker.event(mapOf("kind" to "download.saved","owner" to owner,"path" to path,"document" to hash,"reference" to book,"file_reference" to f["id"],"deferred" to deferred,"title" to title))
     }
-    private fun drain(manual:Boolean) {
+    private fun drain(manual:Boolean,open:String?) {
         for((hash,job) in jobs.entries.sortedBy { number(it.value["created_at"]) ?: 0L }) {
             check(); if(reading()) return
-            if(job["phase"]=="writeback") { finishEvent(hash,job);continue }
+            if(job["manual_status"]!=null && (job["captured"]!=true || job["position_done"]!=true)) continue
+            if(job["phase"]=="writeback") {
+                if(job["manual_status"]!=null) applyStatusNative(job,open)
+                if(job["native_pending"]!=true || job["native_notified"]!=true) finishEvent(hash,job)
+                continue
+            }
             if(job["ready"]!=true || !manual && (job["parked"]==true || (number(job["next_try_at"]) ?: 0L)>now())) continue
             try {
                 val id=number(job["book_id"])
                 if(id==null) { jobs.remove(hash);save();continue }
                 val remote=detail(id)
-                val write=FinishLogic.sendStatus(job["status_seen"],remote["readStatus"])
-                if(write) request("/koreader/plugin/catalog/books/$id/read-status","PUT",mapOf("status" to "read"))
-                if(job["rating"]!=null) request("/koreader/plugin/catalog/books/$id/rating","PUT",mapOf("rating" to job["rating"].takeIf { it!="clear" }))
-                job["phase"]="writeback";job["status_written"]=write;save();finishEvent(hash,job)
+                val target=job["manual_status"] as? String ?: "read"
+                val write=job["manual_status"]!=null || FinishLogic.sendStatus(job["status_seen"],remote["readStatus"])
+                if(write) request("/koreader/plugin/catalog/books/$id/read-status","PUT",mapOf("status" to target))
+                if(job["rating"]!=null && (job["manual_status"]==null || job["manual_status"]=="read")) request("/koreader/plugin/catalog/books/$id/rating","PUT",mapOf("rating" to job["rating"].takeIf { it!="clear" }))
+                job["phase"]="writeback";job["status_written"]=write
+                if(job["manual_status"]!=null) {
+                    val undo=statusUndo[id.toString()] as? Map<*,*>
+                    if(undo?.get("token")==job["token"]) statusUndo[id.toString()]=undo!!+mapOf("blocked_generations" to listOfNotNull(store.meta("bulk_active"),store.meta("bulk_stage_g")).distinct())
+                }
+                save();finishEvent(hash,job)
             } catch(e:HttpFailure) {
                 when(e.code) {
-                    401 -> return
-                    400,403,404 -> { jobs.remove(hash);save() }
+                    401 -> { if(job["manual_status"]!=null) { job["parked"]=true;save() };return }
+                    400,403,404 -> { if(job["manual_status"]!=null) job["parked"]=true else jobs.remove(hash);save() }
                     else -> retry(job)
                 }
             } catch(_:Exception) { retry(job) }
@@ -319,7 +434,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         job["next_try_at"]=now()+minOf(3600,60L shl (attempts-1).coerceAtMost(6).toInt());job["parked"]=attempts>=5;save()
     }
     private fun finishEvent(hash:String,j:Map<*,*>) = worker.event(mapOf("kind" to "finish.applied","owner" to owner,"document" to hash,
-        "token" to j["token"],"path" to j["file"],"complete" to j["status_written"],"date" to j["finished_on"],"rated" to (j["rating"]!=null),"rating" to j["rating"].takeIf { it!="clear" }))
+        "token" to j["token"],"path" to j["file"],"native_summary" to j["native_summary"],"native_token" to j["native_token"],"complete" to j["status_written"],"date" to j["finished_on"],"rated" to (j["rating"]!=null),"rating" to j["rating"].takeIf { it!="clear" }))
     private fun pendingDownloads() {
         for((key,value) in downloads.toMap()) {
             if(reading()) return
@@ -328,6 +443,23 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         }
     }
     companion object {
+        internal fun statusOverrides(store:CacheStore,owner:String):Map<Long,CatalogStatusOverride> {
+            val state=load(File(store.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
+            val generation=store.meta("bulk_active")
+            val out=mutableMapOf<Long,CatalogStatusOverride>()
+            for((id,raw) in (state["status_undo"] as? Map<*,*>).orEmpty()) {
+                val row=raw as? Map<*,*> ?: continue
+                val blocked=(row["blocked_generations"] as? List<*>).orEmpty()
+                val target=row["after_status"] as? String ?: continue
+                if(row.containsKey("blocked_generations") && (generation==null || generation in blocked)) id.toString().toLongOrNull()?.let { out[it]=CatalogStatusOverride(target,false) }
+            }
+            for(raw in (state["finishes"] as? Map<*,*>).orEmpty().values) {
+                val row=raw as? Map<*,*> ?: continue
+                val id=(row["book_id"] as? Number)?.toLong() ?: continue
+                (row["manual_status"] as? String)?.let { out[id]=CatalogStatusOverride(it,row["phase"]!="writeback") }
+            }
+            return out
+        }
         internal fun load(file:File):Map<*,*> {
             if(!file.isFile) return emptyMap<Any,Any>()
             require(file.length()<=16777216) { "workflow source exceeds import limit" }

@@ -61,6 +61,17 @@ object ServerAdapters {
     val cachedLists get() = ShippingServerAdapters.cachedLists
     val covers get() = ShippingServerAdapters.covers
     val runtime = object : ServerRuntime {
+        override fun localCommand(ctx:Context,op:String,args:Map<*,*>,done:(Map<String,Any?>?,String?)->Unit) {
+            context=ctx.applicationContext
+            BulkWork.executor.execute {
+                try {
+                    val owner=args["owner"] as? String ?: throw ServerFailure("unauthorized")
+                    if(owner!=(LibraryAccount.owner() ?: DeviceLibrary.OWNER)) throw ServerFailure("canceled")
+                    val result=projectionStore(root).use { store -> LibraryReadModel(store,adapter=adapter).storageCommand(owner,op,args) }
+                    done(result,null);event()
+                } catch(_:Exception) { done(null,"unavailable") }
+            }
+        }
         override fun accountChanged(ctx: Context) {
             context=ctx.applicationContext
             BulkWork.executor.execute {

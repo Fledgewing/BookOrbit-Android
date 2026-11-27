@@ -10,11 +10,18 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null }) : ServerAdapter {
     override val id = "bookorbit"
+    private var statusOverrides:Map<Long,CatalogStatusOverride> = emptyMap()
+    private fun summary(owner:String,raw:Map<*,*>,rank:Long,local:Boolean?):Map<String,Any?> {
+        val id=(raw["id"] as? Number)?.toLong()
+        val override=id?.let(statusOverrides::get)
+        return BookOrbitLibrary.summary(owner,if(override==null) raw else raw+mapOf("readStatus" to override.status),rank,local)+
+            mapOf("status_note" to "Not synced".takeIf { override?.pending==true })
+    }
     override fun localFiles(owner: String): List<LocalBook>? = BookOrbitLibrary.localEntries(store, owner)?.mapNotNull { entry ->
         val path = (entry["path"] as? String)?.let(LuaValue::utf8) ?: return@mapNotNull null
         val id = (entry["book_id"] as? Number)?.toLong() ?: return@mapNotNull null
         val raw = store.bookItem(id) as? Map<*, *> ?: emptyMap<Any, Any>()
-        val book = BookOrbitLibrary.summary(owner, raw, 0, true)
+        val book = summary(owner, raw, 0, true)
         LocalBook(java.io.File(path), book["status"] == "finished", entry["md5"] as? String)
     }
 
@@ -61,7 +68,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         val items=raw.take(limit).mapNotNull { it as? Map<*,*> }.map { row ->
             if(view=="index") mapOf("reference" to row["id"],"title" to (row["name"] ?: row["title"]),"count" to (row["count"] ?: row["bookCount"]),
                 "series_reference" to row["seriesId"],"reading" to row["readingCount"],"finished" to row["finishedCount"])
-            else BookOrbitLibrary.summary(owner,row,0,null) + mapOf("reference" to row["id"],"cover_revision" to row["updatedAt"],
+            else summary(owner,row,0,null) + mapOf("reference" to row["id"],"cover_revision" to row["updatedAt"],
                 "cover_available" to (row["hasCover"]==true),"series_reference" to row["seriesId"],
                 "description" to (row["description"] as? String)?.take(2048),
                 "files" to (row["files"] as? List<*>).orEmpty().take(8).mapNotNull { it as? Map<*,*> }.map { file ->
@@ -119,6 +126,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
     override fun personalCatalog(owner: String) = projectSaved(owner, mapOf("op" to "window", "source" to "all"), true)
     override fun project(owner: String, a: Map<*, *>): Map<String, Any?> = projectSaved(owner, a, false)
     private fun projectSaved(owner: String, a: Map<*, *>, personal: Boolean): Map<String, Any?> {
+        statusOverrides=CatalogWorkflow.statusOverrides(store,owner)
         if (store.meta("owner") != owner) return mapOf("error" to "unauthorized", "items" to emptyList<Any>())
         val op = a["op"]
         if (op == "copies.state") {
@@ -167,7 +175,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
             return mapOf("collections" to (!managed || cachedDetail), "catalog" to (!managed || opds || cachedDetail), "detail" to (!managed || cachedDetail), "download" to opds,
                 "lists" to mapOf("read" to (!managed || cachedDetail), "save" to false), "progress" to mapOf("read" to (!managed || sync || cachedDetail), "write" to sync, "syncCurrent" to (!managed || cachedDetail)),
-                "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
+                "status" to mapOf("read" to true, "write" to ((server["catalog"] as? Map<*,*>)?.get("canWriteStatus")==true)), "ratings" to mapOf("read" to true, "write" to false),
                 "account" to server,
                 "stats" to mapOf("days" to (a["days"] != null || remote?.days != null), "streak" to (remote?.streak != null),
                     "hours" to (a["hours"] != null), "sessions" to (a["sessions"] != null),
@@ -233,7 +241,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         if (op in setOf("book", "progress", "status")) {
             val id = BookOrbitLibrary.id(owner, "book", a["key"]) ?: return mapOf("error" to "missing")
             val raw = store.bookItem(id) as? Map<*, *> ?: return mapOf("error" to "missing", "freshness" to freshness(false))
-            val summary = BookOrbitLibrary.summary(owner, raw, 0, null).toMutableMap()
+            val summary = summary(owner, raw, 0, null).toMutableMap()
             if (op == "book") {
                 val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { (it["book_id"] as? Number)?.toLong() == id }
                 summary["stats"] = ReaderBookStats.read(store.root, entry)
@@ -321,7 +329,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 val raw = LuaValue.parse(bytes) as? Map<*, *> ?: continue
                 val context = membership?.get(id).orEmpty()
                 val enriched = raw.entries.associate { it.key to it.value } + context
-                val b = BookOrbitLibrary.summary(owner, enriched, (context["_booksyncRank"] as? Number)?.toLong() ?: id, local?.contains(id)).toMutableMap()
+                val b = summary(owner, enriched, (context["_booksyncRank"] as? Number)?.toLong() ?: id, local?.contains(id)).toMutableMap()
                 b["local_path"] = localPaths?.get(id)
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()

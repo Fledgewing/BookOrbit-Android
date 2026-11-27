@@ -16,7 +16,7 @@ internal object FinishLogic {
         val d=id?.let { (store.detail(it)?.first ?: store.bookItem(it)) as? Map<*,*> }.orEmpty()
         val state=CatalogWorkflow.load(File(store.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
         val hash=args["document"] as? String ?: entry?.get("md5")
-        val job=(state["finishes"] as? Map<*,*>)?.get(hash) as? Map<*,*>
+        val job=((state["finishes"] as? Map<*,*>)?.get(hash) as? Map<*,*>)?.takeIf { it["manual_status"]==null || it["manual_status"]=="read" }
         val paths=BookOrbitLibrary.localPaths(store,owner).orEmpty()
         fun card(b:Map<*,*>,line:String):Map<String,Any?> {
             val bid=(b["id"] as? Number)?.toLong()

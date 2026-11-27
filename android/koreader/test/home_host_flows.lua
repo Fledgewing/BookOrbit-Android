@@ -33,7 +33,7 @@ return function(test,eq,ok,E,W,Widget)
             return require(name)
         end
         E.HomeWidgets._ui=U
-        E.LibraryAdapter={watch=function() end,reset=function() end,read=function(raw)
+        E.LibraryAdapter={owner=function() return "fixture" end,watch=function() end,reset=function() end,read=function(raw)
             local a=E.Cache.decode(raw); reads[#reads+1]=a
             if a.op == "capabilities" then return {lists={read=true},collections=true},80 end
             if a.op == "library.summary" then return {total=7,on_device=2,freshness={saved=true}},100 end
@@ -78,6 +78,41 @@ return function(test,eq,ok,E,W,Widget)
         E.Device.screen.getHeight=saved.height
         ok(success,err)
     end
+    test("owned card status: Undo and dismiss release one intent and stale replies never show",function() withHost(function()
+        local status,leave=E.Library.cardStatus,E.Library.cardStatusLeave
+        local pending,released,undo
+        E.Library.cardStatus=function(_,token,done) if token then undo=token;done({ok=true}) else pending=done end end
+        E.Library.cardStatusLeave=function(result) released=(released or 0)+1;eq(result.token,"saved") end
+        local success,err=pcall(function()
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            h:dispatch("status",{key="book"});eq(W.shown[#W.shown],h)
+            eq(pending({token="saved"}),true)
+            local dialog=W.shown[#W.shown];eq(dialog.buttons[1][1].text,"Undo")
+            dialog.buttons[1][2].callback();dialog:onCloseWidget();eq(released,1,"Done/close share one release")
+            W.shown={h};h:dispatch("status",{key="book"});pending({token="saved"})
+            dialog=W.shown[#W.shown];dialog.buttons[1][1].callback();eq(undo,"saved");eq(released,1,"Undo replaces the held intent")
+            W.shown={h};h:dispatch("status",{key="book"});E.HomeHost.active=nil
+            eq(pending({token="saved"}),nil);eq(W.shown[#W.shown],h,"departed screen receives no dialog")
+        end)
+        E.Library.cardStatus,E.Library.cardStatusLeave=status,leave
+        ok(success,err)
+    end) end)
+    test("owned card removal: preview before confirm and stale completion never redraws",function() withHost(function()
+        local removal,req=E.Library.cardRemoval,E.require
+        local pending,token
+        E.require=function(name) if name=="ui/widget/confirmbox" then return Widget:extend{} end;return req(name) end
+        E.Library.cardRemoval=function(_,t,done) token=t;pending=done end
+        local success,err=pcall(function()
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            h:dispatch("remove",{key="book",title="A book",local_path="/fixture/book.epub"});eq(token,nil)
+            pending({token="exact-file",detail="Annotations stay"})
+            local dialog=W.shown[#W.shown];eq(dialog.ok_text,"Remove")
+            W.shown={h};dialog.ok_callback();eq(token,"exact-file")
+            E.HomeHost.active=nil;pending({ok=true});eq(W.shown[#W.shown],h)
+        end)
+        E.Library.cardRemoval,E.require=removal,req
+        ok(success,err)
+    end) end)
     test("owned Home: the default repeated Home returns to the open book",function() withHost(function()
         E.S.home_screen="booksync"
         local ui={document={file="/fixture/current.epub"}};E.liveUI=function() return ui end
@@ -767,6 +802,8 @@ return function(test,eq,ok,E,W,Widget)
     test("Home card covers: off-paint, bounded, coalesced and owner/cancel safe",function()
         withHost(function()
             local originalRequire,acquire=E.require,E.Library.acquireCover
+            local savedCoverJobs=E.Library.cardCoverJobs
+            E.Library.cardCoverJobs={head=1,tail=0,active=0}
             local owner,size="fixture",100
             local paths,requests,callback={},0
             E.LibraryAdapter.owner=function() return owner end
@@ -793,6 +830,7 @@ return function(test,eq,ok,E,W,Widget)
                 local cancelLate,late=schedule({key="other"});late();eq(requests,2)
                 owner="replacement";callback({local_path="wrong-owner.jpg"});cancelLate();eq(#paths,1)
             end)
+            E.Library.cardCoverJobs=savedCoverJobs
             E.require,E.Library.acquireCover=originalRequire,acquire
             ok(success,err)
         end)

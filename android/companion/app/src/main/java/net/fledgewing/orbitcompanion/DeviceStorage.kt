@@ -89,10 +89,32 @@ class DeviceStorage(private val store: ProjectionStore, private val adapter: Ser
             "parts" to parts,"actions" to actions,"folder" to (selected ?: destination?.name?.takeIf(folders::contains)),"download_path" to destination?.path?.let(LuaValue::str),"folder_label" to LuaValue.boundedText(label,160),
             "folders" to folders.map { mapOf("id" to it,"label" to "/$it") },"local_coverage" to if(books==null) "not-saved" else "tracked-files")
     }
+    private fun identified(owner: String, args: Map<*,*>): File {
+        require(owner == DeviceLibrary.OWNER || store.meta("owner")==owner)
+        val path=(args["path"] as? String)?.let(LuaValue::utf8) ?: error("path")
+        val file=Places.inside(File(path),listOf(volume)) ?: error("path")
+        val excluded=(args["exclude_path"] as? String)?.let(LuaValue::utf8)?.let { File(it).canonicalPath }
+        require(file.canonicalPath!=excluded) { "open" }
+        require(files(owner).orEmpty().any { it.file.canonicalPath==file.canonicalPath }) { "untracked" }
+        require(file.isFile && !java.nio.file.Files.isSymbolicLink(File(path).toPath())) { "missing" }
+        return file
+    }
+    fun removal(owner: String, args: Map<*,*>): Map<String,Any?> {
+        val file=identified(owner,args)
+        return mapOf("token" to token(listOf(file)),"bytes" to file.length(),
+            "detail" to "Removes ${format(file.length())} from this reader. Reading state and annotations stay.","row_count" to 1)
+    }
     fun command(owner: String, op: String, args: Map<*,*>): Map<String,Any?> {
         require(owner == DeviceLibrary.OWNER || store.meta("owner")==owner)
         val excludePath=(args["exclude_path"] as? String)?.let(LuaValue::utf8)?.let { File(it).canonicalPath }
         when(op) {
+            "storage.remove.preview" -> return removal(owner,args)
+            "storage.remove" -> {
+                val file=identified(owner,args)
+                if(args["token"]!=token(listOf(file))) return mapOf("error" to "changed")
+                check(file.delete()) { "remove failed" }
+                return mapOf("ok" to true)
+            }
             "storage.folder" -> {
                 val value=args["folder"] as? String ?: error("folder")
                 require(value in folders)
