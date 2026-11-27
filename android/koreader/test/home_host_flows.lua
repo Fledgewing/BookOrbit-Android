@@ -633,6 +633,14 @@ return function(test,eq,ok,E,W,Widget)
             end
             for _,label in ipairs({b.series_line,b.time_left,b.finish_forecast}) do ok(labels[label],label) end
             eq(actions[1],"more")
+            local unknown=E.HomeHostPlan.snapshot({items={{key="unknown",title="No locator"}},freshness={saved=true}})
+            local missing=E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},unknown,function() end,{w=678,h=178})
+            local unknownLabel=false
+            for _,child in ipairs(missing[1]) do
+                ok(child.text~="0%","missing position never becomes zero progress")
+                if child.text=="—" then unknownLabel=true end
+            end
+            ok(unknownLabel)
             local dense=E.HomeWidgets.card({widget="booklist",w=4,h=2,settings={style=1,cap=3}},snap,function() end,{w=678,h=156})
             local caption=false
             for _,child in ipairs(dense[1]) do if child.text=="25% · 50 m left · A" then caption=true end end

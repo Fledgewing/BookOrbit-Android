@@ -45,6 +45,7 @@ CloseWidget and `:454` documents window-level repaint;
 `frontend/ui/widget/imagewidget.lua:600` and `:614` release native bitmaps on close.
 
 Continue reading keeps percentage, one plain progress bar and Resume/Details.
+Missing progress is explicitly unknown (—), never fabricated as zero percent.
 Larger cards add author/series and finish date; smaller ones prioritize title,
 percentage and time left. Book list retains caption settings, bounded source order
 and both styles, with covers, richer rows and a per-book overflow target. Short

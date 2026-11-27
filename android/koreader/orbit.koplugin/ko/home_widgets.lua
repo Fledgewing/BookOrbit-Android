@@ -129,9 +129,10 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         local percentW=scale(short and 48 or 70)
         HomeWidgets.text(canvas,b.time_left or _("Not enough reading yet"),tx+percentW,h-scale(short and 102 or 121),tw-percentW,12,true)
         if h>=scale(290) then HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),tx,h-scale(146),tw,13,true) end
-        local pct=math.max(0,math.min(100,tonumber(b.progress) or 0))
-        HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(short and 105 or 128),percentW,short and 16 or 26,true,true)
-        HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=pct/100,radius=0,margin_h=0,margin_v=0,
+        local pct=tonumber(b.progress)
+        pct=pct and pct==pct and math.max(0,math.min(100,pct)) or nil
+        HomeWidgets.text(canvas,pct and string.format("%d%%",pct) or _("—"),tx,h-scale(short and 105 or 128),percentW,short and 16 or 26,true,true)
+        HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=(pct or 0)/100,radius=0,margin_h=0,margin_v=0,
             bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
         HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
     elseif geometry.shelf then
