@@ -620,6 +620,25 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Settings labels: multi-line choices reuse the measured TextBox label",function()
+        withHost(function()
+            local freed=0
+            local button={label_container={dimen={w=480,h=96}},label_widget={fgcolor=0,free=function() freed=freed+1 end}}
+            local require=E.require
+            E.require=function(name)
+                if name=="ui/widget/buttondialog" then return Widget:extend{
+                    getButtonById=function(_,id) if id=="channel" then return button end end,moveFocusTo=function() end} end
+                if name=="ui/widget/textboxwidget" then return Widget:extend{} end
+                if name=="ui/font" then return {getFace=function(_,_,size) return {size=size} end} end
+                return require(name)
+            end
+            local view=E.SettingsView.open("Channel",function() return {{id="channel",text="Stable\nTested releases only",height=96}} end,"settings-updates")
+            eq(freed,1);eq(button.label_widget.text,"Stable\nTested releases only")
+            eq(button.label_widget.width,480);eq(button.label_widget.height,96)
+            eq(button.label_container[1],button.label_widget)
+            view.alive=false
+        end)
+    end)
     test("Home host: a covered event redraws after reveal without reading on paint",function()
         withHost(function()
             local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}

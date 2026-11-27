@@ -42,6 +42,11 @@ Defects corrected:
 6. A missing startup status could cache a false companion-version mismatch for
    30 seconds. Only the matching version keeps that positive cache; pending/stale
    statuses can become usable immediately, without relaxing the exact-version gate.
+7. The direct Updates entry bypassed the owned group renderer and flattened channel
+   explanations in a stock single-line menu. It now reuses `SettingsView`, including
+   the existing 96-pixel choice rows and multiline TextBox labels. Rapid reader edits
+   also receive increasing per-key timestamps, preventing a stale companion echo
+   from undoing Preview → Stable within one clock second.
 
 Performance rule inherited from AGENTS.md: every screen/widget and interface call
 retains its declared row and decoded-byte budget, zero subprocesses/network on

@@ -3432,6 +3432,47 @@ test("settings: every group has a budget and neutral screen text; one channel ro
     eq(channel, 1)
 end)
 
+test("settings: rapid edits reject a stale companion echo",function()
+    local oldos,oldvalue,oldat,oldshared=RE.os,RE.S.update_channel,RE.S.settings_at.update_channel,RE.S.shared_settings_at
+    RE.os=setmetatable({time=function() return 1234 end},{__index=os})
+    RE.S.settings_at.update_channel=1234000
+    RE.S.shared_settings_at=1234000
+    local success,err=pcall(function()
+        RE.Shared.set("update_channel","preview")
+        local first=RE.S.settings_at.update_channel
+        RE.Shared.set("update_channel","stable")
+        local second=RE.S.settings_at.update_channel
+        ok(second>first)
+        RE.Shared.mergeValues({update_channel={v="preview",at=first}},"stale echo")
+        eq(RE.S.update_channel,"stable");eq(RE.S.settings_at.update_channel,second)
+    end)
+    RE.os=oldos;RE.S.update_channel=oldvalue;RE.S.settings_at.update_channel=oldat;RE.S.shared_settings_at=oldshared
+    ok(success,err)
+end)
+
+test("settings: direct Updates uses the owned multi-line channel picker",function()
+    local _,m=newUI(false)
+    local open,pin=RE.SettingsView.open,RE.Shared.pin_locked
+    local marker={};local seen=false
+    RE.Shared.pin_locked=false
+    RE.SettingsView.open=function(title,make,screen)
+        eq(title,"Updates");eq(screen,"settings-updates")
+        for _,row in ipairs(make()) do
+            if row.text_func and row.text_func():find("Update channel:",1,true)==1 then
+                seen=true;eq(#row.sub_item_table,3)
+                for _,choice in ipairs(row.sub_item_table) do
+                    ok(choice.text:find("\n",1,true),"channel explanation retains its own line")
+                    eq(choice.height,96)
+                end
+            end
+        end
+        return marker
+    end
+    local success,err=pcall(function() eq(m:showSettings("updates"),marker);ok(seen) end)
+    RE.SettingsView.open,RE.Shared.pin_locked=open,pin
+    ok(success,err)
+end)
+
 test("settings: mode estimates come from one bounded library read; presets and Custom keep every control", function()
     local _, m = newUI(false)
     local oldRead, oldRequest = RE.LibraryAdapter.read, RE.LibraryAdapter.request

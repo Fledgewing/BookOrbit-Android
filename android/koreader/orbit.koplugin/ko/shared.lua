@@ -224,12 +224,13 @@ end
 function Shared.setMany(keys, values, why)
     local finish = Budgets.span("library.settings.edit", now_s, log)
     local at = os.time() * 1000
+    for _, key in ipairs(keys) do at = SettingsSync.changedAt(at, S.settings_at[key]) end
     for _, key in ipairs(keys) do
         S[key] = Cache.copy(values[key])
         if SCHEMA.byKey[key] then S.settings_at[key] = at end
         log("setting", key, "=", tostring(values[key]), "(sent to the companion)")
     end
-    S.shared_settings_at = at
+    S.shared_settings_at = math.max(S.shared_settings_at or 0, at)
     saveSettings()
     Shared.push("patch menu")
     for _, key in ipairs(keys) do Shared.onChange(key, why) end

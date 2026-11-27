@@ -4919,7 +4919,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Plugin delegates update checks to the companion.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Plugin delegates update checks to the companion. The 0.12 direct Updates entry uses the owned multi-line picker.",
           "reason": null,
           "evidence": [
             {
@@ -4931,7 +4931,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Android picker presentation does not change this firmware channel control.",
           "reason": null,
           "evidence": [
             {
@@ -4943,7 +4943,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Android picker presentation does not change this firmware channel control.",
           "reason": null,
           "evidence": [
             {
@@ -4955,7 +4955,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Android picker presentation does not change this firmware channel control.",
           "reason": null,
           "evidence": [
             {

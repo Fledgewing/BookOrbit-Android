@@ -45,7 +45,7 @@ function SettingsView:paint(attempt)
             self.offset=math.floor((i-1)/pageSize)*pageSize; self.focus=i-self.offset; break
         end end
     end
-    local buttons,pending={},false
+    local buttons,pending,multiline={},false,{}
     for i=self.offset+1,math.min(#items,self.offset+pageSize) do
         local row=items[i]
         local text=row.card_text and row.card_text() or row.text_func and row.text_func() or row.text or ""
@@ -53,7 +53,9 @@ function SettingsView:paint(attempt)
         if note then text=text.."\n"..note end
         if row.checked_func then text=(row.checked_func() and "● " or "○ ")..text end
         local enabled=row.enabled~=false and (not row.enabled_func or row.enabled_func())
-        buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()) or text,id=row.card_text and "mode-card" or row.id or "setting-"..i,align="left",enabled=enabled,
+        local id=row.card_text and "mode-card" or row.id or "setting-"..i
+        if row.card_text or text:find("\n",1,true) then multiline[id]={text=text,size=row.card_text and 15 or 16} end
+        buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()) or text,id=id,align="left",enabled=enabled,
             height=screen:scaleBySize(row.card_text and 180 or row.height or 64),text_font_size=row.card_text and 15 or 16,bordersize=row.section and 0 or nil,text_font_bold=row.section or nil,
             callback=function()
                 if not self.alive then return end
@@ -93,17 +95,18 @@ function SettingsView:paint(attempt)
     local dialog=require("ui/widget/buttondialog"):new{title=_(self.title)..(self.notice and "\n"..self.notice or ""),buttons=buttons,
         width=math.min(screen:getWidth()-screen:scaleBySize(24),screen:scaleBySize(760)),
         tap_close_callback=function() self:back() end}
-    -- Button owns focus, border and tap geometry; a multiline label draws the full card.
+    -- Button owns focus, border and tap geometry; its TextWidget otherwise drops
+    -- explicit newlines. Reuse the mode-card TextBox label for every multiline row.
     -- KOReader 9192014d button.lua:200-216 exposes the label container at a fixed height.
-    local card=dialog:getButtonById("mode-card")
-    if card then
-        local full
-        for _,row in ipairs(items) do if row.card_text then full=row.card_text(); break end end
-        local label=require("ui/widget/textboxwidget"):new{text=full,width=card.label_container.dimen.w,
-            height=card.label_container.dimen.h,face=require("ui/font"):getFace("cfont",15),
-            alignment="left",height_adjust=false}
-        card.label_widget:free()
-        card.label_widget=label; card.label_container[1]=label
+    for id,spec in pairs(multiline) do
+        local card=dialog:getButtonById(id)
+        if card then
+            local label=require("ui/widget/textboxwidget"):new{text=spec.text,width=card.label_container.dimen.w,
+                height=card.label_container.dimen.h,face=require("ui/font"):getFace("cfont",spec.size),
+                fgcolor=card.label_widget.fgcolor,alignment="left",height_adjust=false}
+            card.label_widget:free()
+            card.label_widget=label; card.label_container[1]=label
+        end
     end
     dialog.onClose=function() self:back(); return true end
     dialog:moveFocusTo(1,math.min(self.focus or 1,#buttons))

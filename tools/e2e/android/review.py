@@ -54,6 +54,11 @@ def review(device, out):
     close()
     for group in ("sync","library","reading","home","sleep","updates","about"):
         step("settings-"+group,'plugin:showSettings("'+group+'");return true')
+        if group=="updates":
+            step("update-channel",'click("Update channel: Stable");return true')
+            step("update-channel-preview",'click("○ "..SettingsUI.channelText("preview","Preview",PATCH_VERSION));return true',
+                 'assert(Library.settings.read("update_channel")=="preview");return true')
+            device.command('click("Update channel: Preview");click("○ "..SettingsUI.channelText("stable","Stable",PATCH_VERSION));assert(Library.settings.read("update_channel")=="stable");return true')
         close()
     device.command('HomeHost.show();return true')
     installed=device.command('local ids={};for id in pairs(HomeHost.installed()) do ids[#ids+1]=id end;table.sort(ids);return table.concat(ids,",")').split(',')
