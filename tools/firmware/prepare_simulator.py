@@ -14,6 +14,8 @@ text = ini.read_text()
 # for generated gzip byte arrays declared as char; the device build is untouched.
 replacements = {
     "  -Wno-c++11-narrowing\n": "  -Wno-narrowing\n",
+    "  pre:scripts/simulator_tls.py\n":
+        "  pre:../../tools/firmware/simulator_build.py\n  pre:scripts/simulator_tls.py\n",
     f'  simulator={config["repository"]}\n':
         f'  simulator={config["repository"]}#{config["commit"]}\n',
 }
