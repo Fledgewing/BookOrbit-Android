@@ -15,6 +15,7 @@ from run import Emulator
 
 def review(device, out):
     out.mkdir(parents=True,exist_ok=True)
+    device.wait_companion()
     device.command('Library.companion.setupLater();local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then click("Later") end;return true')
     time.sleep(1)
     device.command('Library.settings.refresh("emulator-review");return true')

@@ -13,6 +13,20 @@ from build import build, ROOT
 from upgrade import reset_profile
 
 class EmulatorSafetyTest(unittest.TestCase):
+    def test_startup_wait_polls_readiness_without_repeating_a_ui_action(self):
+        device=object.__new__(Emulator)
+        device.command=Mock(side_effect=["pending","pending","ready"])
+        with patch("time.sleep"): device.wait_companion()
+        self.assertEqual(3,device.command.call_count)
+        for call in device.command.call_args_list:
+            self.assertIn("Companion.workerProblem()",call.args[0])
+            self.assertNotIn("HomeHost.show",call.args[0])
+
+    def test_startup_wait_fails_when_the_matching_status_never_arrives(self):
+        device=object.__new__(Emulator);device.command=Mock(return_value="pending")
+        with patch("time.monotonic",side_effect=[0,21]):
+            with self.assertRaises(TimeoutError): device.wait_companion()
+
     def test_upgrade_reset_accepts_a_fresh_emulator_and_clears_only_installed_test_apps(self):
         for installed in ("", "package:net.fledgewing.orbitcompanion\npackage:android"):
             device=Mock()

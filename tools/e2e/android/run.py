@@ -30,6 +30,11 @@ class Emulator:
         return self.adb("shell",*args).decode().strip()
     def push(self,path,destination):
         self.adb("push",path,destination)
+    def wait_companion(self,timeout=20):
+        deadline=time.monotonic()+timeout
+        while self.command('return Companion.workerProblem()==nil and "ready" or "pending"')!="ready":
+            if time.monotonic()>=deadline: raise TimeoutError("matching companion status was not published")
+            time.sleep(.2)
     def command(self,code,timeout=20):
         self.shell("rm","-f","/sdcard/koreader/e2e-result")
         with tempfile.TemporaryDirectory() as directory:

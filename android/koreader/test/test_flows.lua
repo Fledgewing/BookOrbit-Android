@@ -1229,7 +1229,7 @@ test("companion: a missing or stale startup status cannot cache a false version 
     RE.Companion.readFile=function() reads=reads+1;return current and {version=current} end
     RE.Companion.version,RE.Companion.version_at=nil,nil
     local success,err=pcall(function()
-        ok(RE.Companion.workerProblem()~=nil)
+        ok(RE.Companion.workerProblem():find("Companion needed",1,true),"missing startup status never claims the installed app is older")
         current=RE.PATCH_VERSION
         eq(RE.Companion.workerProblem(),nil,"same-version status is usable immediately")
         eq(reads,2)
