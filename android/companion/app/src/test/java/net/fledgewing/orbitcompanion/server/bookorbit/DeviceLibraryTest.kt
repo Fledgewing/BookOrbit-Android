@@ -8,6 +8,32 @@ import java.io.File
 import java.nio.file.Files
 
 class DeviceLibraryTest {
+    @Test fun localSeriesAndEndSheetUseTheSameBoundedNeutralRows() {
+        val root=Files.createTempDirectory("local-series").toFile()
+        try {
+            for(i in 1..30) {
+                File(root,"book-$i.epub").writeText("fixture")
+                val sidecar=File(root,"book-$i.sdr").apply { mkdirs() }
+                File(sidecar,"metadata.epub.lua").writeText("return "+String(LuaValue.encode(mapOf(
+                    "doc_props" to mapOf("title" to "Book $i","series" to "Fixture series","series_index" to i.toString()),
+                    "summary" to mapOf("status" to if(i==1) "reading" else "new"))),Charsets.ISO_8859_1))
+            }
+            val adapter=DeviceLibrary(listOf(root))
+            val series=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "series","key" to "Fixture series","limit" to 6))
+            assertEquals(2,(series["items"] as List<*>).size)
+            assertEquals(3,series["row_count"])
+            assertEquals(24,(series["dots"] as List<*>).size)
+            assertEquals("Book 1",((series["items"] as List<*>).first() as Map<*,*>)["title"])
+            val finish=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "reader.finish","path" to File(root,"book-1.epub").canonicalPath,"rating" to 4))
+            assertEquals("Fixture series",finish["series_key"])
+            assertEquals("Book 2",(finish["next"] as Map<*,*>)["title"])
+            assertEquals("Next in series · Book 2",LuaValue.utf8((finish["next"] as Map<*,*>)["line"] as String))
+            assertEquals(2,finish["row_count"])
+            assertEquals(4,finish["stars"])
+            assertEquals("missing",adapter.project(DeviceLibrary.OWNER,mapOf("op" to "series","key" to "absent"))["error"])
+            assertEquals("unauthorized",adapter.project("other-owner",mapOf("op" to "series","key" to "Fixture series"))["error"])
+        } finally { root.deleteRecursively() }
+    }
     @Test fun localProjectionsWorkWithoutAdapterOrCatalogOwnershipAndAfterSignOut() {
         val volume=Files.createTempDirectory("device-library").toFile()
         try {
@@ -39,6 +65,9 @@ class DeviceLibraryTest {
                     val row=(data["items"] as List<*>).single() as Map<*,*>
                     assertEquals("Local title",row["title"]); assertEquals(book.canonicalPath,row["local_path"])
                     assertEquals(25.0,(row["progress"] as Number).toDouble(),0.001)
+                    val reader=(read("reader","path" to book.canonicalPath,"native_progress" to 0.75)["items"] as List<*>).single() as Map<*,*>
+                    assertEquals(75.0,(reader["progress"] as Number).toDouble(),0.001)
+                    assertEquals("local-reader",reader["progress_origin"])
                     assertEquals(cover.path,read("cover","key" to row["key"])["local_path"])
                     assertEquals(true,read("capabilities")["onDevice"])
                     assertEquals(false,read("capabilities")["download"])

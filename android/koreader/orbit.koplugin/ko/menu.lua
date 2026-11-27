@@ -432,8 +432,9 @@ function OrbitAndroid:showSettings(group)
     for _,row in ipairs(self:menuItems()) do
         if row.settings_group then items[#items+1]=row end
     end
-    -- Storage returns to its owned Library group; preserve the reader's native Reading route.
-    if group=="library" then
+    -- Storage and multi-line channel choices use their owned groups. Preserve the
+    -- reader's native Reading route and the other established direct entry points.
+    if group=="library" or group=="updates" then
         for _,row in ipairs(items) do if row.settings_group==group then
             local make=row.sub_item_table_func
             return SettingsView.open(row.text,function()

@@ -11,6 +11,11 @@
 
 SettingsSync = { FUTURE_MS = 86400000 }
 
+-- Preserve ordering for rapid edits and when the wall clock moves backwards.
+function SettingsSync.changedAt(now, previous)
+    return math.max(now, (previous or 0) + 1)
+end
+
 -- schema: the decoded schema.json. -> { settings = {…}, byKey = {…}, sections = {…} }
 function SettingsSync.index(schema, choiceIds)
     local out = { settings = {}, byKey = {}, sections = {} }

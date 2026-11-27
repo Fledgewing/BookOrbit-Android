@@ -15,6 +15,10 @@ CrossInk 2.x only; 1.6 is retired).
 
 ## Next release (0.12): BookSync Home
 
+Android emulator acceptance covers fresh/0.11 upgrades, every registered widget,
+catalog/settings/reading flows and offline refresh continuity; Android building,
+X4 Pro/X4/X3 deferred to firmware acceptance. Reproduction: [emulator review](docs/design/booksync-home/F12-EMULATOR-REVIEW.md).
+
 | Outcome | Platforms | Status |
 |---|---|---|
 | Safe connection setup, upgrade/import recovery, verified update recovery and retained device controls through Library, with local diagnostics and first-run guidance. | X4 Pro, X4, X3; Android keeps its approved Home and native system controls | designing ([firmware screen gallery](docs/design/booksync-firmware/mockups.html); B1–B5 approval pending) |

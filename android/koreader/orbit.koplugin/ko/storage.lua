@@ -39,7 +39,24 @@ function StorageUI.widget(p,snapshot,dispatch,rect)
     local short=p.h==1; local tiny=p.w==1
     local pad=s(8); local half=math.floor((w-3*pad)/2)
     local label=st.widget_label or (st.pending and "Loading storage…" or "Space unavailable")
-    if tiny then
+    if short then
+        -- A grid row can be shorter than 68 scaled pixels on a portrait tablet.
+        -- Keep the two actions in one band and anchor the measured caption to the
+        -- actual tile bottom; the tall tile's fixed offsets would paint outside it.
+        local x=tiny and pad or 2*pad+half
+        local width=tiny and w-2*pad or half
+        HomeWidgets.button(c,(tiny and "Library · " or "")..total.." books ›",pad,0,tiny and width or half,s(50),function() dispatch("all") end)
+        if not tiny then
+            HomeWidgets.button(c,(st.on_device~=nil and tostring(st.on_device) or d.on_device~=nil and tostring(d.on_device) or "—").." on device ›",
+                x,0,width,s(50),function() dispatch("storage") end)
+        end
+        local caption=HomeWidgets.text(c,label,x,0,width,11)
+        caption.padding=0
+        local y=h-caption:getSize().h
+        caption.overlap_offset[2]=math.max(0,y)
+        local barHeight=math.min(s(3),y-s(50))
+        if barHeight>0 then StorageUI.bar(c,st.parts,x,y-barHeight,width,barHeight) end
+    elseif tiny then
         HomeWidgets.button(c,"Library · "..total.." ›",pad,0,w-2*pad,s(50),function() dispatch("all") end)
         HomeWidgets.text(c,label,pad,s(54),w-2*pad,11)
     else

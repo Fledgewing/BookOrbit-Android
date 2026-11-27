@@ -1222,6 +1222,27 @@ end)
 local RE = getfenv(Orbit.onSuspend)
 
 ---------------------------------------------------------------- the companion's signer (security.md)
+test("companion: a missing or stale startup status cannot cache a false version mismatch",function()
+    local state,readFile,version,at=RE.Companion.state,RE.Companion.readFile,RE.Companion.version,RE.Companion.version_at
+    local current,reads=nil,0
+    RE.Companion.state=function() return "ok" end
+    RE.Companion.readFile=function() reads=reads+1;return current and {version=current} end
+    RE.Companion.version,RE.Companion.version_at=nil,nil
+    local success,err=pcall(function()
+        ok(RE.Companion.workerProblem():find("Companion needed",1,true),"missing startup status never claims the installed app is older")
+        current=RE.PATCH_VERSION
+        eq(RE.Companion.workerProblem(),nil,"same-version status is usable immediately")
+        eq(reads,2)
+        eq(RE.Companion.workerProblem(),nil);eq(reads,2,"matching versions retain the bounded positive cache")
+        current="0.0.0";RE.Companion.version=current
+        ok(RE.Companion.workerProblem()~=nil)
+        current=RE.PATCH_VERSION
+        eq(RE.Companion.workerProblem(),nil,"an updated companion is usable without waiting 30 seconds")
+    end)
+    RE.Companion.state,RE.Companion.readFile,RE.Companion.version,RE.Companion.version_at=state,readFile,version,at
+    ok(success,err)
+end)
+
 test("companion: an app with its name and another signer gets nothing, the login above all", function()
     W.companion_cert = "1234abcd"
     RE.installed_cache.at = -1000
@@ -3411,6 +3432,47 @@ test("settings: every group has a budget and neutral screen text; one channel ro
     eq(channel, 1)
 end)
 
+test("settings: rapid edits reject a stale companion echo",function()
+    local oldos,oldvalue,oldat,oldshared=RE.os,RE.S.update_channel,RE.S.settings_at.update_channel,RE.S.shared_settings_at
+    RE.os=setmetatable({time=function() return 1234 end},{__index=os})
+    RE.S.settings_at.update_channel=1234000
+    RE.S.shared_settings_at=1234000
+    local success,err=pcall(function()
+        RE.Shared.set("update_channel","preview")
+        local first=RE.S.settings_at.update_channel
+        RE.Shared.set("update_channel","stable")
+        local second=RE.S.settings_at.update_channel
+        ok(second>first)
+        RE.Shared.mergeValues({update_channel={v="preview",at=first}},"stale echo")
+        eq(RE.S.update_channel,"stable");eq(RE.S.settings_at.update_channel,second)
+    end)
+    RE.os=oldos;RE.S.update_channel=oldvalue;RE.S.settings_at.update_channel=oldat;RE.S.shared_settings_at=oldshared
+    ok(success,err)
+end)
+
+test("settings: direct Updates uses the owned multi-line channel picker",function()
+    local _,m=newUI(false)
+    local open,pin=RE.SettingsView.open,RE.Shared.pin_locked
+    local marker={};local seen=false
+    RE.Shared.pin_locked=false
+    RE.SettingsView.open=function(title,make,screen)
+        eq(title,"Updates");eq(screen,"settings-updates")
+        for _,row in ipairs(make()) do
+            if row.text_func and row.text_func():find("Update channel:",1,true)==1 then
+                seen=true;eq(#row.sub_item_table,3)
+                for _,choice in ipairs(row.sub_item_table) do
+                    ok(choice.text:find("\n",1,true),"channel explanation retains its own line")
+                    eq(choice.height,96)
+                end
+            end
+        end
+        return marker
+    end
+    local success,err=pcall(function() eq(m:showSettings("updates"),marker);ok(seen) end)
+    RE.SettingsView.open,RE.Shared.pin_locked=open,pin
+    ok(success,err)
+end)
+
 test("settings: mode estimates come from one bounded library read; presets and Custom keep every control", function()
     local _, m = newUI(false)
     local oldRead, oldRequest = RE.LibraryAdapter.read, RE.LibraryAdapter.request
@@ -3586,6 +3648,53 @@ end
     RE.Library.catalog_active=active
     ReaderUI.instance = nil; W.shown = {}
     ok(success, err)
+end)
+
+test("library command results: catalog and sync state never replace account identity", function()
+    local call,schedule,problem,reset=RE.Jni.call,RE.UIManager.scheduleIn,RE.Companion.workerProblem,RE.LibraryAdapter.reset
+    local account,owner=RE.LibraryAdapter.account_snapshot,RE.LibraryAdapter.managed_owner
+    local pending,result
+    RE.UIManager.scheduleIn=function(_,_,fn) pending=fn end
+    RE.Companion.workerProblem=function() end
+    RE.LibraryAdapter.reset=function() end
+    RE.Jni.call=function(_,method)
+        if method:match("SERVER_COMMAND$") then return {ok="1",id="fixture"} end
+        return {ok="1",body=RE.Cache.encode(result)}
+    end
+    local success,err=pcall(function()
+        local original={signedIn=true,owner="fixture"}
+        RE.LibraryAdapter.account_snapshot=original;RE.LibraryAdapter.managed_owner="fixture"
+        for _,state in ipairs({"complete",{phase="complete"}}) do
+            result={state=state}
+            RE.LibraryAdapter.command("catalog.control",{},function(reply) eq(RE.Cache.encode(reply.state),RE.Cache.encode(state)) end)
+            pending()
+            eq(RE.LibraryAdapter.account_snapshot,original);eq(RE.LibraryAdapter.managed_owner,"fixture")
+        end
+        -- Account commands now refresh current state through their named delivery
+        -- policy (test_delivery.lua); historical command snapshots are ignored.
+    end)
+    RE.Jni.call,RE.UIManager.scheduleIn,RE.Companion.workerProblem,RE.LibraryAdapter.reset=call,schedule,problem,reset
+    RE.LibraryAdapter.account_snapshot,RE.LibraryAdapter.managed_owner=account,owner
+    ok(success,err)
+end)
+
+test("reader surface: cold bounded SQLite snapshots work without allowing background reading IO", function()
+    local dir,st=fixtureStore()
+    st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
+    local owner,reading=RE.LibraryAdapter.owner,RE.reading
+    RE.LibraryAdapter.owner=function() return DBFX.owner end;RE.reading=function() return true end
+    local request=RE.Cache.encode({op="reader",path="/books/cold.epub",limit=1,bytes=16384})
+    local body=RE.Cache.encode({items={{key="cold-book",title="Cold reader"}}})
+    st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,request,body)
+    local success,err=pcall(function() withStore(dir,function()
+        eq(RE.Library.paint("home"):read("reader",{path="/books/cold.epub",limit=1}).pending,true)
+        local p=RE.Library.paint("reader-top-panel")
+        local row=p:widget("reader-progress"):read("reader",{path="/books/cold.epub",limit=1})
+        eq(row.items[1].title,"Cold reader");eq(p.metrics.bytes,#body);eq(p.metrics.rows,1)
+        eq(RE.reading(),true,"reader panels never relax the reading notification gate")
+    end) end)
+    RE.LibraryAdapter.owner,RE.reading=owner,reading
+    st:close();os.execute("rm -rf '"..dir.."'");ok(success,err)
 end)
 
 test("library ready model: real SQLite reads stay bounded and batch once", function()

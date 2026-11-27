@@ -27,6 +27,9 @@ jobs:
       - name: Shared BookSync versions
         run: python3 tools/test/test-booksync-version.py
 
+      - name: Emulator driver safety
+        run: python3 tools/e2e/android/test_driver.py
+
       # Java, setup-gradle and the SDK (.github/actions/android-setup). PRs write the Gradle cache
       # too (into their own scope, which only that PR restores), so a PR that adds a dependency
       # downloads it once, not on every push.

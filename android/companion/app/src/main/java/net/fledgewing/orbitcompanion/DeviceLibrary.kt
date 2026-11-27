@@ -67,11 +67,40 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         }
         if(op=="catalog.state") return mapOf("state" to "idle","freshness" to fresh)
         if(op=="library.summary") return mapOf("total" to books.size,"on_device" to books.size,"freshness" to fresh)
+        if(op=="series") {
+            val key=request["key"] as? String ?: return mapOf("error" to "missing")
+            val members=books.filter { it["series_key"]==key }
+            if(members.isEmpty()) return mapOf("error" to "missing")
+            val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val limit=((request["limit"] as? Number)?.toInt() ?: 12).coerceIn(5,24)
+            return SeriesPresentation.series(members,key,offset,limit)+mapOf("freshness" to fresh)
+        }
+        if(op=="reader.finish") {
+            val row=books.firstOrNull { it["local_path"]==request["path"] } ?: return mapOf("error" to "missing")
+            val key=row["series_key"]
+            val position=(row["series_position"] as? Number)?.toDouble() ?: (row["series_position"] as? String)?.toDoubleOrNull()
+            val next=if(key==null || position==null) null else books.filter { it["series_key"]==key && it["key"]!=row["key"] }
+                .mapNotNull { candidate ->
+                    val number=(candidate["series_position"] as? Number)?.toDouble() ?: (candidate["series_position"] as? String)?.toDoubleOrNull()
+                    number?.takeIf { it>position }?.let { it to candidate }
+                }.minByOrNull { it.first }?.second
+            val finished=row["status"]=="finished"
+            return mapOf("key" to row["key"],"title" to row["title"],"author" to (row["authors"] as? List<*>)?.firstOrNull(),
+                "series_key" to key,"stars" to request["rating"],"undo" to finished,"can_mark" to !finished,
+                "status" to LuaValue.str(if(finished) "✓ Marked as finished" else "Not marked as finished"),
+                "next" to next?.let { mapOf("line" to LuaValue.str("Next in series · Book ${it["series_position"]}"),"title" to it["title"],
+                    "book_id" to it["key"],"local_path" to it["local_path"],"action" to "open") },
+                "row_count" to if(next==null) 1 else 2,"freshness" to fresh)
+        }
         if(op in setOf("book","reader","progress","status","cover")) {
             val row=books.firstOrNull { if(op=="reader") it["local_path"]==request["path"] else it["key"]==request["key"] } ?: return rows(emptyList<Any>())
             return when(op) {
                 "cover" -> mapOf("local_path" to row["cover_path"],"freshness" to fresh)
                 "progress","status" -> row + mapOf("freshness" to fresh)
+                "reader" -> {
+                    val current=(request["native_progress"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+                    rows(listOf(if(current==null) row else row+mapOf("progress" to current*100,"progress_origin" to "local-reader")))
+                }
                 else -> rows(listOf(row))
             }
         }

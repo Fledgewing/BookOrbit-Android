@@ -144,6 +144,8 @@ Book list settings use a zero-read budget; source picker pages read at most six 
 source rows and 16 KiB in one batch. Presets share the Book list renderer and widget budget.
 Reader progress surfaces reuse a one-row widget budget, including Book info and
 Details; completion callbacks redraw only a still-visible user-opened panel.
+Explicit reader surfaces may read their bounded local SQLite snapshots while a book
+is open; background reads remain memo-only and the reading notification gate stays engaged.
 
 Reader controls copy at most 64 already-loaded native chapter and annotation entries per kind;
 the companion projects their marker/position snapshot. Never load a TOC, scan a sidecar or

@@ -6,7 +6,7 @@ if not rawget(getfenv(1),"LibraryAdapter") then
 LibraryAdapter={sent={},order={},ready={}}
 LibraryAdapter.LOCAL_OWNER="device-local"
 function LibraryAdapter.owner() return LibraryAdapter.managed_owner or LibraryAdapter.LOCAL_OWNER end
-function LibraryAdapter.read(request,op)
+function LibraryAdapter.read(request,op,screen)
     if op=="settings.recommendations" and LibraryAdapter.recommendations then
         return LibraryAdapter.recommendations,#Cache.encode(LibraryAdapter.recommendations)
     end
@@ -21,7 +21,10 @@ function LibraryAdapter.read(request,op)
         end
         return nil
     end
-    local result, bytes = Store.library(owner, request)
+    -- Explicit reader surfaces may read one bounded local snapshot while the book
+    -- stays foreground. Background reads retain Store's memo-only reading rule.
+    local user_surface=screen=="reader-top-panel" or screen=="reader-bottom-panel" or screen=="book-info" or screen=="details" or screen=="end-of-book"
+    local result, bytes = Store.library(owner, request, user_surface)
     if op=="capabilities" and LibraryAdapter.account_snapshot then
         local merged={}
         for k,v in pairs(result or {}) do merged[k]=v end
@@ -242,7 +245,7 @@ local function counts()
 end
 function Library.paint(screen)
     local budget = Budgets.get("screens", screen)
-    return setmetatable({budget=budget, screen_budget=budget, usage=counts(), widgets={}, pending={}, seen={},
+    return setmetatable({screen=screen,budget=budget, screen_budget=budget, usage=counts(), widgets={}, pending={}, seen={},
         metrics=counts(), finish=Budgets.span(screen .. ".paint", now_s, log)}, {__index=Library})
 end
 function Library:widget(name, instance)
@@ -250,7 +253,7 @@ function Library:widget(name, instance)
     local key = name .. ":" .. tostring(instance or name)
     assert(#key <= 256, "Widget instance key exceeds budget")
     if not self.widgets[key] then self.widgets[key] = counts() end
-    return setmetatable({budget=budget, screen_budget=self.screen_budget, usage=self.widgets[key], widgets=self.widgets,
+    return setmetatable({screen=self.screen,budget=budget, screen_budget=self.screen_budget, usage=self.widgets[key], widgets=self.widgets,
         is_widget=true, pending=self.pending, seen=self.seen, metrics=self.metrics}, {__index=Library})
 end
 function Library:read(op, args)
@@ -268,7 +271,7 @@ function Library:read(op, args)
     assert(self.metrics.bytes + args.bytes <= self.screen_budget.bytes, "Library page byte budget exhausted")
     assert(self.metrics.rows + args.limit <= self.screen_budget.rows, "Library page row budget exhausted")
     assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
-    local result, decoded = LibraryAdapter.read(request,op)
+    local result, decoded = LibraryAdapter.read(request,op,self.screen)
     if result then
         rows, bytes = result.row_count or (result.items and #result.items or 1), decoded or 0
         assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")

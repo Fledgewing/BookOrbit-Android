@@ -78,9 +78,9 @@ function Store.conn(owner)
 end
 
 -- Runs fn(conn) in one read transaction. -> fn's result, or nil (logged once per kind of failure).
-local function within(owner, what, fn)
+local function within(owner, what, fn, user_surface)
     local while_reading = Db.pid() == Store.ui_pid and not Store.inChild() and reading and reading()
-        and not (Library and Library.catalog_opening)
+        and not (Library and Library.catalog_opening) and not user_surface
     if while_reading and not Store.directoryReady() then return nil end
     local memo_key = Store.path() .. "|" .. tostring(owner) .. "|" .. what
     local function fallback(err)
@@ -146,7 +146,7 @@ Store.within = within
 
 -- Ready-to-draw 0.12 results: one row, size checked by SQLite before decoding.
 -- Reuse the same owner/reading/busy gate as all existing cache reads.
-function Store.library(owner, request)
+function Store.library(owner, request, user_surface)
     -- Device rows share this DB without claiming or reading the catalog's owner.
     local catalog_owner = owner ~= "device-local" and owner or nil
     return within(catalog_owner, "library:" .. request, function(conn)
@@ -155,7 +155,7 @@ function Store.library(owner, request)
         local body = r and r[1]
         if type(body) ~= "string" then return nil end
         return Cache.decode(body), #body
-    end)
+    end,user_surface)
 end
 
 function Store.meta(conn, k)

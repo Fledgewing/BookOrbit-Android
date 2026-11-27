@@ -9,10 +9,12 @@ return function(test,eq,ok,E,W,Widget)
         Widget.free=function() end
         local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
+        U.Text.getSize=function(self) return {w=self.max_width or 0,h=20} end
         Widget.paintTo=function(self,bb,x,y)
             for _,child in ipairs(self) do if child.paintTo then child:paintTo(bb,x,y) end end
         end
         E.require=function(name)
+            if name=="ui/widget/textwidget" then return U.Text end
             if name=="ffi/blitbuffer" then return U.BB end
             if name=="ui/size" then return {padding={buttontable=0}} end
             if name=="ui/widget/touchmenu" then return Widget:extend{} end
@@ -618,6 +620,59 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Settings labels: multi-line choices reuse the measured TextBox label",function()
+        withHost(function()
+            local freed=0
+            local button={label_container={dimen={w=480,h=96}},label_widget={fgcolor=0,free=function() freed=freed+1 end}}
+            local require=E.require
+            E.require=function(name)
+                if name=="ui/widget/buttondialog" then return Widget:extend{
+                    getButtonById=function(_,id) if id=="channel" then return button end end,moveFocusTo=function() end} end
+                if name=="ui/widget/textboxwidget" then return Widget:extend{} end
+                if name=="ui/font" then return {getFace=function(_,_,size) return {size=size} end} end
+                return require(name)
+            end
+            local view=E.SettingsView.open("Channel",function() return {{id="channel",text="Stable\nTested releases only",height=96}} end,"settings-updates")
+            eq(freed,1);eq(button.label_widget.text,"Stable\nTested releases only")
+            eq(button.label_widget.width,480);eq(button.label_widget.height,96)
+            eq(button.label_container[1],button.label_widget)
+            view.alive=false
+        end)
+    end)
+    test("Home host: a covered event redraws after reveal without reading on paint",function()
+        withHost(function()
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            local nextTick=E.UIManager.nextTick
+            local pending,calls=nil,0
+            local rebuild=h.rebuild
+            h.rebuild=function(self) calls=calls+1;return rebuild(self) end
+            E.UIManager.nextTick=function(_,fn) pending=fn end
+            local success,err=pcall(function()
+                W.shown={h,{name="dialog"}}
+                h:invalidate();pending();eq(calls,0);eq(h.invalid,true)
+                pending=nil;W.shown={h}
+                h:paintTo({paintRect=function() end},0,0)
+                eq(calls,0,"paint only schedules the redraw")
+                ok(pending,"revealing Home resumes its pending invalidation")
+                pending();eq(calls,1);eq(h.invalid,nil)
+            end)
+            E.UIManager.nextTick=nextTick
+            ok(success,err)
+        end)
+    end)
+    test("Home cards: hero cover clears its measured heading",function()
+        withHost(function(_,_,U)
+            U.Text.getSize=function() return {w=100,h=60} end
+            local cover=E.HomeWidgets.cover
+            local y,height
+            E.HomeWidgets.cover=function(_,_,_,top,_,h) y,height=top,h end
+            local snapshot=E.HomeHostPlan.snapshot({items={{key="fixture",title="Fixture"}},freshness={saved=true}})
+            E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},snapshot,function() end,{w=600,h=280})
+            E.HomeWidgets.cover=cover
+            ok(y>=14+60+4,"cover border must not strike through the heading")
+            ok(y+height<=278-14,"cover stays within the tile")
+        end)
+    end)
     test("Home cards: projected labels, overflow routes and deferred cover lifetime",function()
         withHost(function(_,_,U)
             local b={key="opaque",title="The Moon",authors={"A"},progress=25,local_path="book.epub",series_key="series-key",
