@@ -25,7 +25,7 @@ class Emulator:
         if self.adb("shell", "getprop", "ro.kernel.qemu").strip() != b"1":
             raise ValueError("target does not identify itself as an emulator")
     def adb(self,*args):
-        return subprocess.check_output(["adb","-s",self.serial,*map(str,args)],stderr=subprocess.PIPE)
+        return subprocess.check_output(["adb","-s",self.serial,*map(str,args)],stderr=subprocess.PIPE,timeout=60)
     def shell(self,*args):
         return self.adb("shell",*args).decode().strip()
     def push(self,path,destination):

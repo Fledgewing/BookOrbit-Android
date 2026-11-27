@@ -52,7 +52,15 @@ class EmulatorSafetyTest(unittest.TestCase):
     def test_emulator_name_alone_does_not_authorize_mutations(self):
         with patch("subprocess.check_output",return_value=b"0\n") as adb:
             with self.assertRaises(ValueError): Emulator("emulator-5580")
-            adb.assert_called_once_with(["adb","-s","emulator-5580","shell","getprop","ro.kernel.qemu"],stderr=subprocess.PIPE)
+            adb.assert_called_once_with(["adb","-s","emulator-5580","shell","getprop","ro.kernel.qemu"],stderr=subprocess.PIPE,timeout=60)
+
+    def test_unresponsive_emulator_fails_without_retrying_or_changing_target(self):
+        with patch("subprocess.check_output",side_effect=[b"1\n",subprocess.TimeoutExpired("adb",60)]) as adb:
+            emulator=Emulator("emulator-5580")
+            with self.assertRaises(subprocess.TimeoutExpired): emulator.shell("getprop","sys.boot_completed")
+            self.assertEqual(2,adb.call_count)
+            self.assertEqual(60,adb.call_args.kwargs["timeout"])
+            self.assertEqual(["adb","-s","emulator-5580"],adb.call_args.args[0][:3])
 
     def test_every_call_keeps_the_explicit_emulator_serial(self):
         with patch("subprocess.check_output",return_value=b"1\n") as adb:
