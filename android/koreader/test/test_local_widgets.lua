@@ -4,11 +4,11 @@ return function(test,eq,ok,here,Cache)
     for _,file in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/local_widgets.lua'}) do
         setfenv(assert(loadfile(here..'/../orbit.koplugin/'..file)),e)()
     end
-    for _,id in ipairs({'word','light','buddy'}) do
+    for _,id in ipairs({'word','light','buddy','highlight','yearago'}) do
         test('local widget: '..id..' state and contract',function()
             eq(#e.WidgetRegistry[id].sizes['android-tablet'],2)
             for _,state in ipairs({'ready','empty','loading','error','offline-with-data','offline-without-data','unavailable'}) do
-                local p=e.LocalWidgetPlan.build(id,{state=state,data={state=state,word='lantern',message='Local message'}})
+                local p=e.LocalWidgetPlan.build(id,{state=state,data={state=state,passage='A saved passage',book_title='The Moon',summary='12 min · 1 day · stopped at p. 9',book={title='The Moon',local_path='/Books/moon.epub'},word='lantern',message='Local message'}})
                 eq(p.ready,state=='ready' or state=='offline-with-data'); ok(#p.message>0)
                 eq(p.word,p.ready and 'lantern' or false)
             end

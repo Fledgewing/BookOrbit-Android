@@ -20,17 +20,33 @@ class LocalWidgetsTest {
             }
             val adapter=object:ServerAdapter {
                 override val id="fixture"
+                override fun personalReadingSources(owner:String)=listOf(object:PersonalReadingSource {
+                    override val capabilities=setOf("highlight","yearago")
+                    override fun read(kind:String,now:Long)=listOf(PersonalReadingRecord("toy",mapOf("passage" to "Toy saved passage")))
+                })
                 override fun project(owner:String,request:Map<*,*>):Map<String,Any?> = error("no server projection")
             }
             var reads=0
             val model=LibraryReadModel(store,{86400},{},readingStats={reads++; mapOf("state" to "empty")},
-                vocabulary={java.io.File(dir,"missing.sqlite3")},adapter=adapter)
+                vocabulary={java.io.File(dir,"missing.sqlite3")},adapter=adapter,personalDevice={object:PersonalReadingSource {
+                    override val capabilities=PersonalReading.KINDS
+                    override fun read(kind:String,now:Long)=emptyList<PersonalReadingRecord>()
+                }})
             val requests=listOf("local.word","local.buddy","local.light").map { op ->
                 String(LuaValue.encode(mapOf("op" to op,"limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)
             }
+            val personalRequests=listOf("highlight","yearago").map { kind ->
+                String(LuaValue.encode(mapOf("op" to "personal.reading","kind" to kind,"limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)
+            }
+            assertTrue(model.publish("fixture",personalRequests))
+            val personal=sql.query("SELECT body FROM library_views WHERE owner=?","fixture") { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }
+            assertEquals(2,personal.size); assertTrue(personal.all { it["passage"]=="Toy saved passage" })
+            assertTrue(model.publish(DeviceLibrary.OWNER,personalRequests))
+            val localPersonal=sql.query("SELECT body FROM library_views WHERE owner=?",DeviceLibrary.OWNER) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }
+            assertTrue(localPersonal.all { it["state"]=="empty" && it["passage"]==null })
             assertTrue(model.publish("fixture",requests)); assertEquals(1,reads)
             val rows=sql.query("SELECT body FROM library_views") { it.bytes(0)!! }
-            assertEquals(3,rows.size)
+            assertEquals(7,rows.size)
             for(body in rows) {
                 assertTrue(body.size<=16384)
                 val result=LuaValue.parse(body) as Map<*,*>
@@ -39,7 +55,7 @@ class LocalWidgetsTest {
             assertFalse(model.publish("another-owner",requests))
             assertTrue(model.publish(DeviceLibrary.OWNER,requests))
             assertEquals(2,reads)
-            assertEquals(3,sql.query("SELECT body FROM library_views WHERE owner=?",DeviceLibrary.OWNER) { it.bytes(0)!! }.size)
+            assertEquals(5,sql.query("SELECT body FROM library_views WHERE owner=?",DeviceLibrary.OWNER) { it.bytes(0)!! }.size)
         } } finally { dir.deleteRecursively() }
     }
     @Test fun vocabularyIsOneBoundedDailyRecordWithContextAndSource() {

@@ -22,6 +22,11 @@ for _,id in ipairs({"word","light","buddy"}) do
     widget(id, "local."..id, {{2,1},{2,2}}, {{2,1}})
     WidgetRegistry[id].localOnly=true
 end
+for _,id in ipairs({"highlight","yearago"}) do
+    widget(id,"personal.reading",{{2,1},{2,2}},{{2,2}})
+    WidgetRegistry[id].localOnly=true
+    WidgetRegistry[id].refreshSeconds=60
+end
 WidgetRegistry.word.refreshSeconds = 60 -- daily selection is companion-owned
 WidgetRegistry.clock.refreshSeconds = 60 -- host-owned refresh, only while visible
 -- The Library tile also displays local storage; both small needs share its budget and
@@ -41,6 +46,8 @@ local descriptions={
     ["year-in-reading"]={"Year in reading","A calendar of your reading days."},
     ["when-you-read"]={"When you read","Your reading by hour of day."},
     ["reading-records"]={"Reading records","Your reading streaks and records."},
+    highlight={"Highlight of the day","A daily passage from your saved highlights."},
+    yearago={"A year ago","Books and reading from this date last year."},
     word={"Word of the day","A daily word from your KOReader vocabulary."},
     light={"Light","Control this reader's frontlight."},
     buddy={"Reading buddy","A reading message from activity on this reader."},

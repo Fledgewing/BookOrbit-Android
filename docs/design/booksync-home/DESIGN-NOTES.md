@@ -101,7 +101,8 @@ text-only line each widget becomes on the X3.
 | When you read | 0.13 (restored on Stats) | 2×2, 2×3, 2×1, 4×1 | 2×1, 2×2, 1×2 | **M8C 2×2 and larger: 24 hourly bars** that touch (no gaps, one gray), the peak hour black with a ▼ "22:00" marker above it, and an hour axis. That makes it unlike This week, which has separate, labelled day columns. **2×1, 4×1 and the X4:** a shaded 24-hour strip, peak ringed. "Evenings · most at 22:00". | Mostly evenings · peak 22:00 |
 | Reading records | Later | 3×2, 2×3, 2×2, 4×1 | 2×2, 2×3 | Pages turned as the hero number, a hairline, then four stats; the streak line fills the foot. No empty left column. | 48,210 pages · longest 3 h 12 m · streak 12 |
 | Clock | Optional | 1×2, 2×1, 2×2 | 2×2, 1×1, 2×1 | Time and date. Its battery is now only a small link ("▭ 78% ›") into the Battery page. 1×2 fills the column (bigger time, sync line, battery link). | 21:42 · Tue 25 Nov |
-| Recommended, Highlight, Buddy, Discover, Year ago, Word, Light | Later | — | — | Picker only. | — |
+| Recommended, Discover | Later | — | — | Picker only. | — |
+| Highlight, Buddy, Year ago, Word, Light | Android implemented | 2×1 / 2×2 | — | Companion projections; firmware later. | Device acceptance pending. |
 
 ## 3. Book list: one widget, many lists
 
@@ -1028,8 +1029,14 @@ KOReader vocabulary snapshot with context/source and native lookup. Buddy uses o
 local statistics, labelled On this reader; it does not imply account completion or
 achievements. Light uses native frontlight capability and cached intensity, with
 50 px decrease/increase actions; unsupported hardware has an explicit explanation.
-Highlight needs an authorized saved passage and A year ago a cached server snapshot
-(DESIGN §3.1–3.2); both remain staged with Recommended and Discover.
+Highlight and A year ago now use the neutral source-aggregating personal reading
+interface, starting with device sidecars and KOReader page-stat history. Both Android
+picker sizes are installed. Later remote providers register behind ServerAdapter without
+changing the UI. Recommended and Discover remain separate staged work.
+
+Maintainer ruling (2026-11-26), verbatim:
+"I would build it so that all UI calls for that kind of data go through our interface, which then chooses where to fetch / aggregate data from. We start with on-device info and can extend to server but the ui never needs to change."
+See [source implementation and limits](F12-G-SOURCES.md).
 
 Each widget inherits one row, 16 KiB, zero subprocesses/render network and one shared
 Home batch from budgets.lua. Selection, count and messages stay in the companion;
