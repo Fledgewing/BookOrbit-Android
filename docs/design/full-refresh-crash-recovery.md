@@ -75,6 +75,10 @@ verifies retained bytes, then retries through the real X4 Pro Home hold gesture.
    keep using ordinary Refresh and avoid Full refresh until installing a tested fix.
    Do not delete `/.crosspoint`, `bookorbit.json`, `wifi.json`, books or reading
    state, and do not erase NVS. The bulk stage files alone do not schedule work.
+   If it still fails while restoring the catalog, rename only the metadata folder
+   `/.crosspoint/orbify-catalog` to `/.crosspoint/orbify-catalog.recovery` on the card
+   and restart. This hides all bulk pointers/backups together and preserves their
+   bytes for inspection. Books and settings live elsewhere and remain intact.
 3. Once booting, OTA can install a subsequently published fixed firmware through
    the normal update screen/channel. This change publishes no firmware. A test
    artifact is not offered by OTA; install a matching X4 Pro test image through

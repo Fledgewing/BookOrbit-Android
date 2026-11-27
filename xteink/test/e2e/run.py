@@ -182,6 +182,9 @@ def full_refresh_large_catalog(ctx: Context, tmp: Path) -> None:
         capture_output=True, text=True, timeout=600)
     ctx.artifacts.mkdir(parents=True, exist_ok=True)
     (ctx.artifacts / "large-catalog.log").write_text(result.stdout + result.stderr)
+    import shutil
+    if (tmp / "card/cold.log").exists():
+        shutil.copy2(tmp / "card/cold.log", ctx.artifacts / "large-catalog-firmware.log")
     assert result.returncode == 0, result.stderr
     stats = json.loads((tmp / "results.json").read_text())[0]
     assert stats["rows"] == 3000 and stats["psramPeakBytes"] < 1024 * 1024
@@ -236,6 +239,26 @@ def full_refresh_crash_breaker(ctx: Context, tmp: Path) -> None:
         assert retry.returncode == 0
         assert not (folder / "refresh.inflight").exists()
         assert not (folder / "mirror.request.crashed").exists()
+
+
+@scenario(*X4S)
+def full_refresh_sd_card_recovery(ctx: Context, tmp: Path) -> None:
+    """The recovery instruction cancels the persisted job without wiping settings."""
+    card = ctx.card(tmp)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    first = ctx.sim.run(card, "crashed", timeout_s=15,
+                        env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+    assert first.returncode == 86
+    # The sole card-reader operation prescribed for the installed firmware.
+    (folder / "mirror.request").unlink()
+    before = len(ctx.requests())
+    recovered = ctx.sim.run(card, "sd-recovered", script="6000:QUIT", timeout_s=15,
+                            env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+    assert recovered.returncode == 0
+    after(recovered.output, "Entering activity: Home")
+    assert len(ctx.requests()) == before
 
 
 @scenario(*X4S)

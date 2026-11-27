@@ -476,6 +476,7 @@ series-card cover fetch and no lent connection, so it runs the three that apply 
 | `sync_through_proxy` | foundation | all |
 | `mirror_urls` | X5, flash-safe refresh task stack | X4s |
 | `full_refresh_crash_breaker` | two unclean worker boots, durable quarantine, retained books/settings | X4s |
+| `full_refresh_sd_card_recovery` | remove the single persisted request, boot without retrying | X4s |
 | `full_refresh_early_boot_breaker` | two setup crashes, disable suspect catalog before cache reads | X4s |
 | `full_refresh_large_catalog` | 3,000-book full catalog with modeled flash-stack constraint | X4 Pro |
 | `copy_refresh_sleep_sync` | X6 | all |
