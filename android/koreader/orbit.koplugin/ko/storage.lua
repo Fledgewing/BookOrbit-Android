@@ -53,7 +53,8 @@ function StorageUI.widget(p,snapshot,dispatch,rect)
         local caption=HomeWidgets.text(c,label,x,0,width,11)
         local y=h-caption:getSize().h
         caption.overlap_offset[2]=math.max(0,y)
-        if y>=s(56) then StorageUI.bar(c,st.parts,x,y-s(5),width,s(3)) end
+        local barHeight=math.min(s(3),y-s(50))
+        if barHeight>0 then StorageUI.bar(c,st.parts,x,y-barHeight,width,barHeight) end
     elseif tiny then
         HomeWidgets.button(c,"Library · "..total.." ›",pad,0,w-2*pad,s(50),function() dispatch("all") end)
         HomeWidgets.text(c,label,pad,s(54),w-2*pad,11)
