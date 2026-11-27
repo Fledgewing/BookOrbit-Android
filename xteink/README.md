@@ -33,8 +33,12 @@ links the simulator's MD5 dependency and isolates duplicate checksum fallbacks;
 these adjustments apply only to the host simulator. Device builds also pin the
 PlatformIO core inside the platform's SDK subprocess environment, matching the
 legacy build's tool setup so a nested build cannot replace SCons mid-process.
-Actions is disabled in the firmware repository and its inherited workflows are
-removed. This foundation changes no reader behavior and is not a release.
+The firmware repository's only workflow is now `.github/workflows/check.yml`,
+with read-only tokens, SHA-pinned Actions, host tests, all six profiles, simulator
+boot receipts and the same application reserve. Inherited release/publish jobs
+remain removed. The integration job checks byte equality of the shared size
+contract before building the immutable firmware pin. This foundation changes no
+reader behavior and is not a release.
 
 `tools/firmware/budgets.json` records the 6,553,600-byte app slot and minimum
 131,072 free bytes for every device. The gate uses actual `firmware.bin` bytes,
