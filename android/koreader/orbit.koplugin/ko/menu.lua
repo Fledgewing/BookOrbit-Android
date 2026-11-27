@@ -107,7 +107,6 @@ function OrbitAndroid:settingRow(key)
     end
     local function set(value)
         Library.settings.set(key, value)
-        Library.settings.onChange(key, "settings")
     end
     local row = { help_text = _(display(d.line or "")) }
     row.note_func=function()
@@ -248,8 +247,7 @@ function OrbitAndroid:menuItems()
                     checked_func=function() return SettingsUI.mode(Library.settings.read(), Library.settings.mode()) == mode.id end,
                     callback=function()
                         if not Library.companion.has("wifi") then return end
-                        for _i, key in ipairs(SettingsUI.modeKeys) do Library.settings.set(key, mode.values[key]) end
-                        for _i, key in ipairs(SettingsUI.modeKeys) do Library.settings.onChange(key, "mode") end
+                        Library.settings.preset(mode.values)
                     end}
             end
             local modeRow={text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(Library.settings.read(), Library.settings.mode())) end, sub_item_table=modes,
