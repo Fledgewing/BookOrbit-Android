@@ -95,6 +95,8 @@ Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 
+Budgets.screens["position-consent"] = budget(1, 16384, 50)
+Budgets.screens["position-verification"] = budget(1, 16384, 50)
 -- Storage, its confirmations and folder chooser use one local materialized row.
 Budgets.screens.storage = budget(1,16384,50)
 Budgets.screens.collections = budget(6,16384,50)

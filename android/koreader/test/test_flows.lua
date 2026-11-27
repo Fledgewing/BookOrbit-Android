@@ -303,6 +303,7 @@ local PluginLoader = {}
 function PluginLoader:loadPlugins() return { { name = "bookorbit" } }, {} end
 function PluginLoader:genPluginManagerSubItem() return self:loadPlugins() end
 function PluginLoader:getPluginInstance() return nil end
+function PluginLoader:createPluginInstance(plugin, attr) return true,plugin:new(attr) end
 
 local ReaderUI, FileManager = {}, {}
 function ReaderUI:showReader(file) W.opened = file end
@@ -411,7 +412,7 @@ local preload = {
         mkdir = function(dir) sh("mkdir -p", dir) return true end },
     json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
     -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
-    ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end },
+    ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end, md5=function(s) return W.fake_sha(s):sub(1,32) end },
 }
 for k, v in pairs(preload) do package.preload[k] = function() return v end end
 
@@ -631,6 +632,33 @@ store.orbit_android.open_book_at_exit = "/books/killed.epub"
 store.orbit_android.sync_mode = "custom"
 local PLUGIN_MAIN = here .. "/../orbit.koplugin/main.lua"
 local Orbit = dofile(PLUGIN_MAIN)
+-- Neutral companion port. Policy is tested against the real Kotlin owner/shared fixtures;
+-- these native flows control only the asynchronous response and never emulate server JSON.
+local SYNC_OPS={ ["sync.activate"]=true,["sync.capture"]=true,["sync.override"]=true,["sync.pull"]=true,
+    ["sync.decide"]=true,["sync.drain"]=true,["sync.answer"]=true,["sync.verify.next"]=true,["sync.verify.result"]=true }
+local SyncEnv=getfenv(Orbit.onSuspend)
+local stockCommand=SyncEnv.LibraryAdapter.command
+SyncEnv.LibraryAdapter.command=function(op,args,done)
+    if not SYNC_OPS[op] then return stockCommand(op,args,done) end
+    W.sync_commands=W.sync_commands or {}; table.insert(W.sync_commands,{op=op,args=args})
+    if op=="sync.capture" or op=="sync.override" then
+        W.sync_captures=W.sync_captures or {}; table.insert(W.sync_captures,args)
+    end
+    UIManager:scheduleIn(0.01,function()
+        if W.sync_reply then return done(W.sync_reply(op,args)) end
+        if op=="sync.activate" then return done({ok=true}) end
+        if op=="sync.capture" or op=="sync.override" or op=="sync.pull" then
+            if args.online==false then return done({queued=true}) end
+            if W.server_code==nil then return done({error="offline"}) end
+            return done({document="toy:document",snapshot={token="toy:place",remote={percentage=0.4,position="/p120",at=10}}})
+        end
+        if W.server_code==nil then return done({error="offline"}) end
+        if op=="sync.answer" then return done({move=args.yes,remote={percentage=0.4,position="/p120"}}) end
+        return done({decision="push",applied="no",remaining=0})
+    end)
+    return true
+end
+
 -- Historical upstream Home compatibility scenarios explicitly exercise that path.
 assert(store.orbit_android.home_screen == "booksync", "fresh 0.12 defaults to owned Home")
 store.orbit_android.home_screen = "server"
@@ -641,7 +669,7 @@ local ADDON = { "install", "setup", "stats", "relaunch" }
 local FULL = { "install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "screen_off", "clicker", "pin" }
 local function capsFile(mode, caps)
     local f = io.open(CAPS_FILE, "wb")
-    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps } end
+    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps, version=SyncEnv.PATCH_VERSION } end
     f:close()
 end
 do
@@ -703,49 +731,34 @@ test("dispatcher actions are registered", function()
     end
 end)
 
-test("start: network up, then drain and pull with the debounce cleared", function()
-    W.broadcasts = {}
-    local ui = newUI(true)
-    run(30)
-    local p = ui.bookorbit
-    ok(lastBroadcast(".NET_UP"), "NET_UP sent")
-    ok(lastBroadcast(".NET_UP").extras.reason == "start", "reason start")
-    ok(has(p.calls, "drain:orbit_start"), "drain")
-    ok(has(p.calls, "pull:orbit_start:0"), "pull")
-    ok(W.probed == "https://books.example.test", "probed server")
+test("start: network preparation dispatches only neutral companion sync", function()
+    W.sync_commands={}; W.probed=nil
+    local ui=newUI(true); run(30)
+    ok(lastBroadcast(".NET_UP"),"network preparation")
+    ok(#W.sync_commands>0,"companion command dispatched")
+    ok(not has(ui.bookorbit.calls,"drain:orbit_start"),"retired writer untouched")
+    eq(W.probed,nil,"no plugin HTTP probe")
 end)
 
-test("plugin's Push while reading is off while Sync while reading is on, then restored", function()
-    local ui, m = newUI(true)
-    local p = ui.bookorbit
-    p.settings.pages_before_update = 7
-    store.orbit_android.reading_schedule = "pg25"
-    m:hookPluginPagePush()
-    ok(p.settings.pages_before_update == 0, "off while ours is on")
-    ok(store.orbit_android.saved_pages_before_update == 7, "kept the reader's value")
-    m:hookPluginPagePush() -- again (another UI): still kept
-    ok(store.orbit_android.saved_pages_before_update == 7, "not overwritten by 0")
-    store.orbit_android.reading_schedule = "off"
-    m:hookPluginPagePush()
-    ok(p.settings.pages_before_update == 7, "restored")
-    ok(store.orbit_android.saved_pages_before_update == nil, "forgotten")
-    p.settings.pages_before_update = nil
+test("sync retirement: legacy classes and API entry points are inert before instances start", function()
+    local original=package.loaded.bookorbit_api
+    local called=0
+    package.loaded.bookorbit_api={request=function() called=called+1 end,updateProgress=function() called=called+1 end}
+    local plugin={name="bookorbit",new=function(self) return self end,requestLifecycleOutboxDrain=function() called=called+1 end}
+    local yes,instance=PluginLoader:createPluginInstance(plugin,{})
+    ok(yes); instance:requestLifecycleOutboxDrain("startup")
+    package.loaded.bookorbit_api:updateProgress("digest",.5)
+    package.loaded.bookorbit_api:request("PUT","retired")
+    eq(called,0,"old code never runs")
+    package.loaded.bookorbit_api=original
 end)
 
-test("suspend with the screen off: plugin drain, wait, NET_DONE ok", function()
-    W.broadcasts = {}
-    W.screen_on = false
-    local ui, m = newUI(true)
-    run(5)
-    local p = ui.bookorbit
-    p.calls = {}
-    p.pending = 1
-    m:onSuspend()
-    run(30)
-    ok(has(p.calls, "drain:orbit_sleep"), "drain")
-    local done = lastBroadcast(".NET_DONE")
-    ok(done and done.extras.ok == "1", "NET_DONE ok")
-    ok(store.orbit_android.last_sleep_sync.ok == true, "recorded")
+test("suspend with the screen off: companion capture, drain and NET_DONE", function()
+    W.screen_on=false; W.sync_captures={}; W.broadcasts={}
+    local ui,m=newUI(true); run(5); m:onSuspend(); run(30)
+    ok(#W.sync_captures>0,"native capture saved")
+    local done=lastBroadcast(".NET_DONE"); ok(done and done.extras.ok=="1","sync complete")
+    ok(not has(ui.bookorbit.calls,"onSuspend"),"retired snapshot not called")
 end)
 
 test("suspend with the screen on (app switch): no sleep sync", function()
@@ -775,19 +788,13 @@ test("suspend: server never answers -> NET_DONE not ok at the cap", function()
     W.server_code = 200
 end)
 
-test("sync and sleep: plugin snapshot, then SLEEP_NOW, and the following Suspend is skipped", function()
-    W.broadcasts = {}
-    local ui, m = newUI(true)
-    run(30)
-    W.broadcasts = {}
-    m:onOrbitSyncAndSleep()
-    run(5) -- (the Wi-Fi timer keeps the fake clock running; the skip window is 15 s)
-    ok(has(ui.bookorbit.calls, "onSuspend"), "plugin _onSuspend")
-    ok(lastBroadcast(".SLEEP_NOW"), "SLEEP_NOW")
-    local n = #W.broadcasts
-    m:onSuspend()
-    run(10)
-    ok(#W.broadcasts == n, "suspend after sync-and-sleep skipped")
+test("sync and sleep: companion capture then sleep; the following sleep sync is skipped", function()
+    local ui,m=newUI(true); run(30); W.broadcasts={}; W.sync_captures={}
+    m:onOrbitSyncAndSleep(); run(5)
+    ok(#W.sync_captures>0,"captured through companion")
+    ok(lastBroadcast(".SLEEP_NOW"),"screen off")
+    local n=#W.broadcasts; m:onSuspend(); run(10)
+    eq(#W.broadcasts,n,"no second sleep flow")
 end)
 
 test("sync and sleep failure: message, then sleep anyway", function()
@@ -829,32 +836,24 @@ test("wifi turn-on goes to the companion, not Android settings", function()
     ok(not W.settings_opened, "settings not opened")
 end)
 
-test("sync while reading, every 25 pages: push when this device is ahead", function()
-    store.orbit_android.reading_schedule = "pg25"
-    local ui, m = newUI(true)
+test("sync while reading: page cadence delegates to the companion", function()
+    store.orbit_android.reading_schedule="pg25"
+    local ui,m=newUI(true); run(30); W.sync_captures={}
+    for page=1,25 do m:onPageUpdate(page) end
     run(30)
-    local p = ui.bookorbit
-    p.calls = {}
-    p.remote = { digest = "d1", percentage = 0.4 }
-    for pg = 1, 25 do m:onPageUpdate(pg) end
-    run(30)
-    ok(has(p.calls, "fetch"), "fetched")
-    ok(has(p.calls, "push:orbit_reading"), "pushed")
-    store.orbit_android.reading_schedule = "off"
+    ok(#W.sync_captures>0,"capture dispatched")
+    ok(not has(ui.bookorbit.calls,"fetch"),"no old API")
+    store.orbit_android.reading_schedule="off"
 end)
 
-test("sync while reading, every chapter: Ask + server ahead never pulls or prompts", function()
-    store.orbit_android.reading_schedule = "ch1"
-    local ui, m = newUI(true)
+test("sync while reading: chapter cadence never invokes the retired client", function()
+    store.orbit_android.reading_schedule="ch1"
+    local ui,m=newUI(true); run(30); W.sync_captures={}
+    for page=5,12 do m:onPageUpdate(page) end
     run(30)
-    local p = ui.bookorbit
-    p.calls = {}
-    p.remote = { digest = "d1", percentage = 0.9 }
-    for pg = 5, 12 do m:onPageUpdate(pg) end
-    run(30)
-    ok(has(p.calls, "fetch"), "fetched")
-    ok(count(p.calls, function(c) return c:match("^pull") or c:match("^push") end) == 0, "no pull/push")
-    store.orbit_android.reading_schedule = "off"
+    ok(#W.sync_captures>0,"capture dispatched")
+    ok(not has(ui.bookorbit.calls,"fetch"),"no old API")
+    store.orbit_android.reading_schedule="off"
 end)
 
 test("home from the companion: library home opens over the book, which stays open", function()
@@ -888,32 +887,19 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     end
 end)
 
-test("pull debounce: cleared only when the last pull was within 25 s", function()
-    local ui, m = newUI(true)
-    run(30)
-    local p = ui.bookorbit
-    p.pull_timestamp = W.clock * 1e6 - 5e6 -- 5 s ago
-    p.calls = {}
-    m:wakeFlow("wake")
-    run(5)
-    ok(has(p.calls, "pull:orbit_wake:0"), "recent pull: debounce cleared")
-    p.pull_timestamp = W.clock * 1e6 - 100e6 -- 100 s ago
-    local before = p.pull_timestamp
-    p.calls = {}
-    m:wakeFlow("wake")
-    run(5)
-    ok(has(p.calls, "pull:orbit_wake:" .. before), "old pull: left alone")
-    p.pull_timestamp = 0
+test("sync: retired debounce state is never read or changed", function()
+    local ui,m=newUI(true); ui.bookorbit.pull_timestamp=1234
+    m:wakeFlow("retry"); run(30)
+    eq(ui.bookorbit.pull_timestamp,1234)
+    ok(not has(ui.bookorbit.calls,"pull:orbit_retry:0"))
 end)
 
-test("test sync path reports five steps", function()
-    local ui, m = newUI(false)
-    run(30)
-    W.shown = {}
-    m:testSyncPath()
-    run(30)
-    local viewer = W.shown[#W.shown]
-    ok(viewer and viewer.text and viewer.text:match("5%. library plugin synced ✓"), viewer and viewer.text or "no viewer")
+test("test sync path reports companion-owned delivery", function()
+    local ui,m=newUI(true); run(30); W.shown={}; W.sync_commands={}
+    m:testSyncPath(); run(30)
+    ok(#W.sync_commands>0,"worker tested")
+    local text=""; for _,w in ipairs(W.shown) do text=text..tostring(w.text or "") end; ok(text:find("Companion",1,true),text)
+    ok(not has(ui.bookorbit.calls,"fetch"),"no upstream test sync")
 end)
 
 ---------------------------------------------------------------- Wi-Fi modes (v0.2)
@@ -2181,39 +2167,25 @@ test("home button menu says it is about KOReader, and notes the companion's Home
     ok(not homeText():find("(", 1, true), "no companion: no note")
 end)
 
-test("compat: a check that found something missing early doesn't stick", function()
-    local ui, m = newUI(true)
-    local q = newPlugin()
-    local drain, outbox = q.requestLifecycleOutboxDrain, q.getLifecycleOutbox
-    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain, q.PLUGIN_VERSION = nil, nil, "9.9.8"
-    ui.bookorbit = q
-    ok(m:statusText():find("BookOrbit 9.9.8 changed", 1, true), "missing at first")
-    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain = outbox, drain -- the plugin finished init
-    ok(not m:statusText():find("BookOrbit 9.9.8 changed", 1, true), "re-checked: " .. m:statusText())
+test("compat: missing retired sync APIs do not disable owned sync", function()
+    local ui,m=newUI(true)
+    ui.bookorbit.getLifecycleOutbox=nil; ui.bookorbit.requestLifecycleOutboxDrain=nil
+    W.sync_commands={}; m:readingSync(); run(30)
+    ok(#W.sync_commands>0,"own sync remains available")
 end)
 
-test("compat: a plugin without its outbox API -> sleep sync leaves it to the plugin, no error", function()
-    local ui, m = newUI(true)
-    local q = newPlugin()
-    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain, q.PLUGIN_VERSION = nil, nil, "9.9.9"
-    ui.bookorbit = q
-    W.broadcasts = {}
-    m:sleepSync("sleep")
-    run(30)
-    local done = lastBroadcast(".NET_DONE")
-    ok(done and done.extras.ok == "1", "NET_DONE ok")
-    ok(m:statusText():find("BookOrbit 9.9.9 changed: wake and sleep syncs use the plugin's own sync", 1, true),
-        "menu status: " .. m:statusText())
+test("compat: sleep sync uses the companion without an upstream outbox", function()
+    local ui,m=newUI(true); run(5)
+    ui.bookorbit=nil; W.broadcasts={}
+    m:sleepSync("sleep"); run(30)
+    local done=lastBroadcast(".NET_DONE"); ok(done and done.extras.ok=="1","no upstream dependency")
 end)
 
-test("compat: a plugin without fetchRemoteProgress -> Sync while reading does nothing", function()
-    local ui, m = newUI(true)
-    local q = newPlugin(); q.fetchRemoteProgress = nil
-    ui.bookorbit = q
-    m:readingSync()
-    run(30)
-    ok(not has(q.calls, "fetch"), "no fetch")
-    ok(m:statusText():find("Sync while reading is off", 1, true), "status says so")
+test("compat: reading sync does not require an upstream progress API", function()
+    local ui,m=newUI(true); ui.bookorbit.fetchRemoteProgress=nil
+    W.sync_commands={}; m:readingSync(); run(30)
+    ok(#W.sync_commands>0,"neutral sync called")
+    ok(not has(ui.bookorbit.calls,"fetch"))
 end)
 
 test("compat: a catalog without dashboardMode -> not treated as library home", function()
@@ -3311,18 +3283,19 @@ test("background notices: start and wake pulls are silent, including delayed cal
     local burst, restore, Trapper = noticeFixture()
     local ui, m = newUI(false)
     local p = ui.bookorbit
-    local pulls = 0
-    function p:requestLifecycleOutboxDrain()
-        pulls = pulls + 1
-        burst("pull")
-        UIManager:nextTick(function() burst("delayed pull") end)
-        Trapper:wrap(function()
-            burst("coroutine pull")
-            local co = coroutine.running()
-            UIManager:scheduleIn(0.1, function() assert(coroutine.resume(co)) end)
-            coroutine.yield()
-            burst("resumed pull")
-        end)
+    local pulls=0
+    local command=E.LibraryAdapter.command
+    E.LibraryAdapter.command=function(op,args,done)
+        if op=="sync.capture" or op=="sync.drain" then
+            pulls=pulls+1; burst("pull")
+            UIManager:nextTick(function() burst("delayed pull") end)
+            Trapper:wrap(function()
+                burst("coroutine pull"); local co=coroutine.running()
+                UIManager:scheduleIn(0.1,function() assert(coroutine.resume(co)) end)
+                coroutine.yield(); burst("resumed pull")
+            end)
+        end
+        return command(op,args,done)
     end
     local started = E.state.started
     E.state.started = false
@@ -3344,6 +3317,7 @@ test("background notices: start and wake pulls are silent, including delayed cal
     burst("explicit action")
     ok(#W.shown > 0 and noticeLog("notice: shown: explicit action: direct InfoMessage"), "user notices show and log text after background finishes")
     E.state.started = started
+    E.LibraryAdapter.command=command
     restore()
 end)
 
@@ -3525,19 +3499,14 @@ test("end of book: a finish marked here leaves Continue reading at once (plugin 
     E.LocalState.data.books["d1"] = nil
 end)
 
-test("outbox: an entry backing off (not drainable) neither holds Wi-Fi nor runs the wait to its cap", function()
-    local ui = newUI(true)
-    local p = ui.bookorbit
-    p.getLifecycleOutbox = function() return { diagnostics = function() return { count = 1, blocked = 0, drainable = 0 } end } end
-    local done_at
-    local t0 = W.clock
-    E.Sync.waitOutbox(p, 20, function(okw) done_at = W.clock; W.wait_ok = okw end)
-    run(25)
-    ok(done_at and done_at - t0 < 2 and W.wait_ok, "done at once, not at the cap: " .. tostring(done_at and done_at - t0))
-    local busy = E.Wifi.busy()
-    ok(not busy, "Wi-Fi not held for it")
-    p.getLifecycleOutbox = function() return { diagnostics = function() return { count = 1, blocked = 0, drainable = 1 } end } end
-    ok(E.Wifi.busy(), "a drainable entry still holds Wi-Fi")
+test("outbox: completion releases the native sync lease without polling upstream diagnostics", function()
+    local ui,m=newUI(true); run(30); W.sync_commands={}
+    local completed=false
+    local env=getfenv(Orbit.onSuspend)
+    env.ReadingSync.run("manual",function() completed=true end)
+    run(1); ok(completed,"asynchronous command completed")
+    ok(not env.ReadingSync.busy,"native busy flag released")
+    ok(not has(ui.bookorbit.calls,"fetch"))
 end)
 
 test("end of book: a finished book's stale position is held", function()
@@ -4095,28 +4064,18 @@ test("wifi: just in time keeps Wi-Fi on while BookOrbit's Home is over the book,
     E.Library.catalog_active=nil
 end)
 
-test("suspend: a Home press (app switch) with the book unmoved skips BookOrbit's snapshot; a page turn, Sync and sleep always snapshot", function()
-    local snaps = 0
-    local p = { last_page = 10 }
-    function p:getDocumentDigest() return "d1" end
-    function p:getLastPercent() return 0.25 end
-    function p:_onSuspend() snaps = snaps + 1 end
-    p.onSuspend = p._onSuspend
-    local ui = { annotation = { annotations = {} }, doc_settings = { readSetting = function() return { status = "reading" } end } }
-    local hosts, inter = E.serverPlugin, E.Jni.isInteractive
-    E.serverPlugin = function() return p end
-    E.Jni.isInteractive = function() return true end
-    E.state.last_snapshot_key = nil
-    local self = setmetatable({ ui = ui }, { __index = E.OrbitAndroid })
-    self:hookSuspendSnapshot()
-    p:onSuspend(); p:onSuspend(); p:onSuspend()
-    ok(snaps == 1, "three Home presses, one snapshot: " .. snaps)
-    p.last_page = 11
-    p:onSuspend()
-    ok(snaps == 2, "a page turned: snapshot")
-    E.state.force_snapshot = true; p:_onSuspend(); E.state.force_snapshot = nil
-    ok(snaps == 3, "Sync and sleep: always")
-    E.serverPlugin, E.Jni.isInteractive = hosts, inter
+test("suspend: unchanged app switches coalesce native captures; real sleep always captures", function()
+    local ui,m=newUI(true); run(30)
+    local env=getfenv(Orbit.onSuspend); local interactive=env.Jni.isInteractive
+    env.Jni.isInteractive=function() return true end
+    env.ReadingSync.last_snapshot=nil; W.sync_captures={}
+    env.ReadingSync.queue("suspend",ui); env.ReadingSync.queue("suspend",ui); run(1)
+    eq(#W.sync_captures,1)
+    env.ReadingSync.last_page=11; env.ReadingSync.queue("suspend",ui); run(1)
+    eq(#W.sync_captures,2)
+    env.Jni.isInteractive=function() return false end
+    env.ReadingSync.queue("suspend",ui); run(1); eq(#W.sync_captures,3)
+    env.Jni.isInteractive=interactive
 end)
 
 test("remove: with a book open (no file browser) BookOrbit's remove asks through KOReader's delete; the open book stays", function()
@@ -4975,35 +4934,15 @@ test("reading: finish sync skips catalog calls and file writes, then completes o
     RE.reading, RE.EOB.usable = reading, usable
 end)
 
-test("network: even an unanswered probe runs only in a background worker", function()
+test("network: native preparation never probes a server or starts a subprocess", function()
     run(30)
-    local background, probe = RE.Background.run, RE.probeServer
-    local job, done
-    local jobs, probes = 0, 0
-    RE.Background.run = function(name, fn, timeout, cb)
-        jobs = jobs + 1; job = { fn = fn, cb = cb }
-    end
-    RE.probeServer = function()
-        probes = probes + 1
-        ok(W.in_child, "HTTP must never execute on the UI thread")
-        return false, "timeout"
-    end
-    uiWorkBudget(function()
-        RE.Net.up(newPlugin(), { reason = "tap regression", cap = 2, need_server = true }, function() done = true end)
-    end)
-    eq(jobs, 1, "one background job")
-    eq(probes, 0, "no synchronous probe")
-    ok(job and not done, "probe pending without blocking input")
-    W.in_child = true
-    local result = job.fn()
-    W.in_child = nil
-    -- The whole network budget elapsed while input remained available.
-    W.clock = W.clock + 2
-    job.cb(result)
-    RE.Background.run, RE.probeServer = background, probe
-    ok(done and RE.Net.inflight == nil, "timeout completes, no synchronous retry")
-    eq(jobs, 1, "no retry job")
-    eq(probes, 1, "only the background probe ran")
+    local background=RE.Background.run; local jobs=0
+    RE.Background.run=function() jobs=jobs+1 end
+    local done=false
+    uiWorkBudget(function() RE.Net.up(nil,{reason="tap regression",cap=2},function() done=true end) end)
+    RE.Background.run=background
+    ok(done,"network preparation complete"); eq(jobs,0,"zero subprocesses")
+    eq(RE.probeServer,nil,"no Lua transport primitive")
 end)
 
 test("main-loop diagnostics: slow callbacks log, preserve returns/errors and cancel by original identity", function()
@@ -5035,514 +4974,12 @@ test("sqlite stress: the verdict line", function()
     ok(notes[1]:find("didn't answer") ~= nil)
 end)
 
----------------------------------------------------------------- OrbiSmart sync (docs/design/position-sync.md)
--- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
--- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
--- ko/server/bookorbit/orbismart.lua like the real one.
-local OSMApi = { puts = 0 }
-function OSMApi:getProgress(d) return W.osm_server end
-function OSMApi:updateProgress(d, pct, progress, ts)
-    OSMApi.puts = OSMApi.puts + 1
-    W.osm_server = { percentage = pct, progress = progress, timestamp = ts, device = "M8C", device_id = "me" }
-    return { document = d, timestamp = ts }
-end
-package.loaded["bookorbit_api"] = OSMApi
-local OSM = RE.OSM
-local function osmLog(pat)
-    for i = #W.logs, 1, -1 do if W.logs[i]:find(pat, 1, true) then return W.logs[i] end end
-end
-local function osmPopup()
-    for i = #W.shown, 1, -1 do local w = W.shown[i]; if type(w) == "table" and w.ok_callback and w.cancel_callback then return w end end
-end
-local function osmAnswer(yes)
-    local w = osmPopup()
-    UIManager:close(w) -- KOReader's ConfirmBox closes itself, then runs the callback
-    if yes then w.ok_callback() else w.cancel_callback() end
-end
-local function osmServer(page, at, device)
-    W.osm_server = { percentage = page / 300, progress = "/p" .. page, timestamp = at, device = device or "Boox", device_id = "boox" }
-end
--- A book open on this reader at page `page`, OrbiSmart on, with what this reader knew before.
-local function osmBook(page, rec)
-    store.orbit_android.sync_mode = "orbismart"
-    store.orbit_android.orbismart = { d1 = rec }
-    store.orbit_android.osm_saved_plugin = nil
-    W.page, W.logs, W.shown, OSMApi.puts = page, {}, {}, 0
-    W.osm_server = nil
-    local ui, m = newUI(true)
-    ui.document.info = {}
-    function ui.document:getPageCount() return 300 end
-    function ui.document:getCurrentPage() return W.page end
-    function ui.document:getPageFromXPointer(xp) return tonumber(xp:match("%d+")) end
-    ui.doc_settings = { readSetting = function(_, k) if k == "summary" then return { status = W.osm_status } end end }
-    local p = ui.bookorbit
-    p.device_id = "me"
-    function p:getLastPercent() return W.page / 300 end
-    function p:getLastProgress() return "/p" .. W.page end
-    function p:syncToProgress(progress) W.page = tonumber(progress:match("%d+")); table.insert(p.calls, "goto:" .. W.page) end
-    function p:noteProgressCompared() end
-    function p:fetchRemoteProgress(d, cb)
-        table.insert(p.calls, "fetch")
-        local body = require("bookorbit_api"):getProgress(d)
-        p.last_remote_progress = body and { digest = d, percentage = body.percentage, progress = body.progress, timestamp = body.timestamp } or nil
-        UIManager:nextTick(function() cb(body ~= nil) end)
-    end
-    function p:requestProgressPush(_, _, src)
-        table.insert(p.calls, "push:" .. src)
-        require("bookorbit_api"):updateProgress("d1", W.page / 300, "/p" .. W.page, os.time())
-    end
-    return ui, m, p
-end
-local function osmRec() return store.orbit_android.orbismart.d1 end
+---------------------------------------------------------------- Companion-owned position sync
 
--- KOReader doShowReader constructs ReaderUI in a coroutine, sends ReaderReady during
--- init, then shows it. BookOrbit runInSyncCoroutine reuses ANY current coroutine
--- (Trapper:isWrapped), and its background GET yields until the first 125 ms poll.
--- An empty window stack exits UIManager before that poll can resume construction.
-test("startup smoke: last document remains the top reader through a yielding progress pull", function()
-    W.queue, W.shown = {}, {}
-    capsReset()
-    W.wifi, W.vpn, W.server_code = true, true, 200
-    W.radio = true
-    RE.Net.inflight, RE.state.started = nil, nil
-    store.lastfile = "/b.epub"
-    store.orbit_android.open_book_at_exit = store.lastfile
-    store.orbit_android.wifi_mode = "jit"
-    RE.Wifi.plan = nil
-    local ui, m, p = osmBook(120, nil)
-    local closes, quits = 0, W.quits or 0
-    local stock_close = UIManager.close
-    UIManager.close = function(self, w, ...)
-        if w == ui then closes = closes + 1 end
-        return stock_close(self, w, ...)
-    end
-    W.after_fail = function() UIManager.close = stock_close end
-    -- Host LuaJIT builds with Lua 5.2 compatibility may return (main_thread, true)
-    -- on the main thread. KOReader's Trapper expects Lua 5.1's nil there.
-    local function running()
-        local co, main = coroutine.running()
-        return not main and co or nil
-    end
-    local Trapper = {
-        isWrapped = function() return running() ~= nil end,
-        wrap = function(_, fn)
-            local resumed, err = coroutine.resume(coroutine.create(fn))
-            assert(resumed, err)
-        end,
-    }
-    -- CI also runs this case with the pinned KOReader's actual Trapper methods.
-    local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
-    if checkout then
-        local chunk = assert(loadfile(checkout .. "/frontend/ui/trapper.lua"))
-        local co_api = setmetatable({ running = running }, { __index = coroutine })
-        setfenv(chunk, setmetatable({ coroutine = co_api, require = function(name)
-            if name == "string.buffer" then return {} end
-            return require(name)
-        end }, { __index = _G }))
-        Trapper = chunk()
-        UIManager.preventStandby, UIManager.allowStandby = function() end, function() end
-    end
-    local started, completed = 0, 0
-    function p:fetchRemoteProgress(_, cb)
-        local function fetch()
-            started = started + 1
-            local co = coroutine.running()
-            UIManager:scheduleIn(0.125, function()
-                local resumed, err = coroutine.resume(co)
-                assert(resumed, err)
-            end)
-            coroutine.yield()
-            completed = completed + 1
-            cb(false)
-        end
-        if Trapper:isWrapped() then return fetch() end
-        return Trapper:wrap(fetch)
-    end
-    -- The opening message has expired; the reader is the only persistent window.
-    local co = coroutine.create(function()
-        m:onReaderReady()
-        UIManager:show(ui)
-    end)
-    local resumed, err = coroutine.resume(co)
-    ok(resumed, err)
-    eq(UIManager:getTopmostVisibleWidget(), ui, "ReaderReady must finish before yielding network work")
-    eq(coroutine.status(co), "dead", "reader construction completed")
-    eq(started, 0, "network pull deferred until after construction")
-    run(30)
-    ok(started > 0, "progress pull actually ran")
-    eq(completed, started, "yielding pulls resumed and completed")
-    eq(UIManager:getTopmostVisibleWidget(), ui, "reader stays on top after open and wake tasks")
-    eq(closes, 0, "no reader close requested")
-    eq(W.quits or 0, quits, "no exit requested")
-    UIManager.close = stock_close
-    store.orbit_android.sync_mode = "custom"
-end)
-
-test("orbismart: before render, a further place already known opens there with no popup", function()
-    local ui, m, p = osmBook(120, { server = { at = 5000, pct = 214 / 300, progress = "/p214", device = "Boox" } })
-    m:onReaderReady()
-    eq(W.page, 214, "opened at the further place")
-    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (prerender, now)"), "decision logged")
-    run(30)
-    eq(osmPopup(), nil, "no popup")
-end)
-
-test("orbismart: after render, a further place asks; Yes moves there", function()
-    local ui, m, p = osmBook(120, nil)
-    m:onReaderReady()
-    run(5)
-    osmServer(214, 5000)
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    local w = osmPopup()
-    ok(w, "popup")
-    eq(w.text, "Continue from Boox, p. 214?")
-    eq(w.ok_text, "Yes"); eq(w.cancel_text, "No")
-    eq(W.page, 120, "not moved before the answer")
-    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (open, ask)"), "decision logged")
-    osmAnswer(true)
-    eq(W.page, 214, "moved")
-    eq(osmRec().m.at, 5000, "marker")
-    ok(osmLog("orbismart: popup 120->214 yes"), "answer logged")
-end)
-
-test("orbismart: after render, No stays, pushes nothing and never asks again for that place", function()
-    local ui, m, p = osmBook(120, nil)
-    m:onReaderReady()
-    run(5)
-    osmServer(214, 5000)
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    osmAnswer(false)
-    eq(W.page, 120, "stayed")
-    eq(osmRec().declined_at, 5000, "declined")
-    eq(osmRec().override, nil, "No is not an override")
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    eq(osmPopup(), nil, "not asked again")
-    ok(osmLog("orbismart: declined L=120 R=214 -> stay (open, no)"), "declined logged")
-    eq(OSMApi.puts, 0, "nothing pushed")
-    -- A newer place elsewhere asks again.
-    osmServer(230, 5200)
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    ok(osmPopup() and osmPopup().text == "Continue from Boox, p. 230?", "a newer place asks")
-    osmAnswer(false)
-end)
-
-test("orbismart: No declines a standing reset until normal progress returns", function()
-    local ui, m, p = osmBook(120, {})
-    run(1)
-    OSM.installApi()
-    local function reset(at)
-        OSM.onPulled("d1", { percentage = 0, progress = "/p0", timestamp = at,
-            device = "web", device_id = "bookorbit-web" })
-        run(1)
-    end
-    reset(5000)
-    ok(OSM.popup, "reset asks")
-    osmAnswer(false)
-    reset(5001)
-    eq(OSM.popup, nil, "same standing reset was only re-dated")
-    OSM.onPulled("d1", { percentage = 0.4, progress = "/p120", timestamp = 6000, device_id = "other" })
-    run(1)
-    eq(osmRec().declined_reset, nil, "normal progress ends the declined reset")
-    reset(7000)
-    ok(OSM.popup, "a later reset asks again")
-    osmAnswer(false)
-end)
-
-test("orbismart: scheduled reading sync asks once, no silent jump", function()
-    local ui, m, p = osmBook(100, nil)
-    osmServer(100, 4000)
-    m:onReaderReady()
-    run(30)
-    eq(osmPopup(), nil, "same place: no popup")
-    for pg = 101, 110 do W.page = pg; m:onPageUpdate(pg) end
-    osmServer(214, 5000)
-    m:readingSync()
-    run(5)
-    ok(has(p.calls, "fetch"), "the pause pulled")
-    local w = osmPopup()
-    ok(w and w.text == "Continue from Boox, p. 214?", "asked")
-    eq(W.page, 110, "no silent jump mid-book")
-    ok(osmLog("orbismart: rule3 L=110 R=214 -> take (pause, ask)"), "logged as a pause")
-    osmAnswer(true)
-    eq(W.page, 214)
-end)
-
-test("orbismart: scheduled reading sync where this reader is further pushes", function()
-    local ui, m, p = osmBook(100, nil)
-    osmServer(100, 4000)
-    m:onReaderReady()
-    run(30)
-    for pg = 101, 140 do W.page = pg; m:onPageUpdate(pg) end
-    m:readingSync()
-    run(5)
-    ok(has(p.calls, "push:orbismart"), "pushed")
-    eq(W.osm_server.progress, "/p140")
-    ok(osmLog("orbismart: rule4 L=140 R=100 -> push (pause, no)"), "logged")
-end)
-
-test("orbismart: never push behind the server's place (the behind-hold), further goes", function()
-    local ui, m, p = osmBook(150, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
-    run(1)
-    OSM.installApi()
-    p:requestProgressPush(false, false, "close")
-    eq(OSMApi.puts, 0, "held")
-    ok(osmLog("orbismart: push held L=150 R=214 (behind the server)"), "held logged")
-    -- The outbox's snapshot goes through the same client.
-    local body = require("bookorbit_api"):updateProgress("d1", 150 / 300, "/p150", 6000)
-    ok(body and body.orbit_held, "answered as done, not sent")
-    eq(OSMApi.puts, 0)
-    W.page = 230
-    p:requestProgressPush(false, false, "close")
-    eq(OSMApi.puts, 1, "further: sent")
-    -- A closed book (no open document for it): compared by percent.
-    store.orbit_android.orbismart.d2 = { server = { at = 1, pct = 0.6 } }
-    require("bookorbit_api"):updateProgress("d2", 0.3, nil, 7000)
-    eq(OSMApi.puts, 1, "closed book held too")
-end)
-
-test("orbismart: Read from here everywhere online: sent now, skipping the hold", function()
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
-    run(1)
-    OSM.installApi()
-    OSM.readFromHere("test")
-    run(30)
-    eq(OSMApi.puts, 1, "sent")
-    eq(W.osm_server.progress, "/p50", "the server has this place")
-    eq(osmRec().override, nil, "done")
-    ok(osmLog("orbismart: override sent"), "logged")
-end)
-
-test("orbismart: Read from here everywhere offline: queued, then sent first at the next sync", function()
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
-    run(1)
-    OSM.installApi()
-    W.server_code = nil
-    OSM.readFromHere("test")
-    run(40)
-    W.server_code = 200
-    ok(osmLog("orbismart: override queued (offline)"), "queued")
-    eq(OSMApi.puts, 0)
-    ok(osmRec().override, "still queued")
-    -- The next sync (a wake after a real sleep): the override decides first and goes.
-    osmServer(214, 5000)
-    RE.state.paused_for = 900
-    m:wakeFlow("wake")
-    run(40)
-    ok(osmLog("orbismart: override L=50 R=214 -> override (wake, no)"), "decided first")
-    eq(W.osm_server.progress, "/p50", "sent")
-    eq(osmRec().override, nil)
-end)
-
-test("orbismart: a released reread replaces a completed place short of the end once", function()
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 0.9, progress = "/p270" } })
-    run(1)
-    W.osm_status = "complete"
-    RE.EOB.session.d1 = { released = true, forward = 10 }
-    OSM.installApi()
-    OSM.decide("pause")
-    eq(W.osm_server.progress, "/p50", "released reread starts behind completed place")
-    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
-    eq(OSMApi.puts, 1, "exemption consumed after successful push")
-    W.osm_status = nil
-end)
-
-test("orbismart: a finished-book override is one shot and later stale pushes stay held", function()
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 1, progress = "/p300" } })
-    run(1)
-    W.osm_status = "complete"
-    OSM.installApi()
-    OSM.readFromHere("test")
-    run(30)
-    eq(W.osm_server.progress, "/p50", "backward override starts reread")
-    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
-    eq(OSMApi.puts, 1, "reread release cannot exempt another backward push")
-    W.osm_status = nil
-end)
-
-test("orbismart: offline override sends the chosen place before an older outbox snapshot", function()
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" } })
-    run(1)
-    OSM.installApi()
-    W.server_code = nil
-    OSM.readFromHere("test")
-    run(40)
-    eq(osmRec().override.progress, "/p50", "chosen place persisted")
-    W.page = 80
-    W.server_code = 200
-    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
-    eq(W.osm_server.progress, "/p50", "override precedes the stale snapshot and later reading")
-    eq(osmRec().override, nil, "acknowledged once")
-    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
-    eq(OSMApi.puts, 1, "stale snapshot is now held")
-end)
-
-test("orbismart: a deferred pull cannot move or ask for a different open book", function()
-    local ui, m, p = osmBook(120, {})
-    run(1)
-    OSM.installApi()
-    osmServer(214, 5000)
-    OSM.onPulled("d1", W.osm_server)
-    p.getDocumentDigest = function() return "d2" end
-    run(1)
-    eq(osmPopup(), nil)
-    eq(W.page, 120)
-end)
-
-test("orbismart: a further place found at sleep is asked at wake, before any network", function()
-    W.screen_on = false
-    local ui, m, p = osmBook(120, nil)
-    osmServer(120, 4000)
-    m:onReaderReady()
-    run(30)
-    osmServer(214, 5000)
-    m:onSuspend()
-    run(30)
-    eq(osmPopup(), nil, "nothing shown at sleep")
-    ok(osmRec().pending, "kept for the wake")
-    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (sleep, wake)"), "logged")
-    W.server_code = nil -- the wake's network never comes up
-    m:onResume()
-    local w = osmPopup()
-    ok(w and w.text == "Continue from Boox, p. 214?", "asked at once")
-    osmAnswer(true)
-    eq(W.page, 214)
-    run(40)
-    W.server_code = 200
-end)
-
-test("orbismart: an update keeps Custom for a reader whose sync settings were changed by hand", function()
-    local S0 = store.orbit_android
-    local saved = { S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode }
-    S0.orbismart_migrated, S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = nil, "pg25", "orbismart", 1
-    OSM.migrate()
-    eq(S0.sync_mode, "custom", "Sync while reading was set by hand")
-    ok(S0.settings_at.sync_mode > 1, "sent to the companion")
-    S0.orbismart_migrated, S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = nil, "off", "orbismart", 1
-    OSM.migrate()
-    eq(S0.sync_mode, "orbismart", "untouched settings: OrbiSmart")
-    S0.orbismart_migrated, S0.reading_schedule, S0.settings_at.sync_mode = nil, "pg25", 5000
-    OSM.migrate()
-    eq(S0.sync_mode, "orbismart", "a Sync value chosen already stays")
-    OSM.migrate()
-    S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = saved[1], saved[2], saved[3]
-end)
-
-test("orbismart: no wake check after a short nap", function()
-    local ui, m, p = osmBook(120, nil)
-    run(30)
-    p.calls = {}
-    RE.state.paused_for = 60
-    m:wakeFlow("wake")
-    run(30)
-    ok(not has(p.calls, "fetch"), "no pull")
-    ok(osmLog("no wake check under 300 s"), "logged")
-    RE.state.paused_for = nil
-end)
-
-test("orbismart: a move back elsewhere (an override there) is asked, labelled", function()
-    local ui, m, p = osmBook(214, { server = { at = 4000, pct = 214 / 300, progress = "/p214" }, m = { at = 4000, pct = 214 / 300, progress = "/p214" } })
-    m:onReaderReady()
-    run(5)
-    osmServer(12, 5000, "X4 Pro")
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    local w = osmPopup()
-    ok(w and w.text == "Continue from X4 Pro, p. 12 (moved back there)?", w and w.text)
-    osmAnswer(true)
-    eq(W.page, 12)
-end)
-
-test("orbismart: OrbiSmart enables automatic lifecycle sync and Custom restores it", function()
-    local ui, m, p = osmBook(120, {})
-    run(1)
-    p.settings.auto_sync = false
-    OSM.preset(p)
-    eq(p.settings.auto_sync, true, "lifecycle snapshots and drains enabled")
-    eq(OSM.savedPluginSetting("auto_sync").value, false, "Custom value kept")
-    store.orbit_android.sync_mode = "custom"
-    OSM.modeChanged("test")
-    eq(p.settings.auto_sync, false, "Custom value restored")
-    store.orbit_android.sync_mode = "orbismart"
-end)
-
-test("orbismart: the plugin never moves the reader itself (today's newest-dated jump); Custom gives its settings back", function()
-    local ui, m, p = osmBook(120, nil)
-    p.settings.sync_forward, p.settings.sync_backward = 2, 3
-    m:onReaderReady()
-    eq(p.settings.sync_forward, 3, "further ahead: Don't sync")
-    eq(p.settings.sync_backward, 3, "further behind: Don't sync")
-    -- A newer-dated place behind this reader, while reading here: furthest wins, no move.
-    for pg = 121, 125 do W.page = pg; m:onPageUpdate(pg) end
-    p.last_page_turn_timestamp = os.time()
-    osmServer(60, os.time() - 30)
-    store.orbit_android.orbismart.d1 = { m = { at = 1, pct = 120 / 300, progress = "/p120" } }
-    p:fetchRemoteProgress("d1", function() end)
-    run(2)
-    eq(W.page, 125, "not moved back")
-    eq(osmPopup(), nil, "not asked either")
-    ok(osmLog("orbismart: rule6 L=125 R=60 -> push"), "furthest wins")
-    store.orbit_android.sync_mode = "custom"
-    OSM.modeChanged("test")
-    eq(p.settings.sync_forward, 2, "given back")
-    store.orbit_android.sync_mode = "orbismart"
-end)
-
-test("orbismart: Recommended settings review the plugin's own value kept for Custom", function()
-    local ui, m, p = osmBook(50, nil)
-    p.settings.sync_forward, p.settings.sync_backward = 1, 3
-    m:onReaderReady()
-    eq(OSM.savedPluginSetting("sync_forward").value, 1, "the reader's Ask, kept")
-    ok(OSM.setSavedPluginSetting("sync_forward", 2), "Recommended writes the kept value")
-    eq(p.settings.sync_forward, 3, "OrbiSmart's stays in force")
-    store.orbit_android.sync_mode = "custom"
-    OSM.modeChanged("test")
-    eq(p.settings.sync_forward, 2, "Custom gets the recommended value")
-    eq(OSM.savedPluginSetting("sync_forward"), nil, "nothing kept under Custom")
-    store.orbit_android.sync_mode = "orbismart"
-end)
-
-test("orbismart: This book sheet gets Read from here everywhere", function()
-    local made = {}
-    package.loaded["bookorbit_menu_ui"] = { row = function(w, o) local r = { row = o }; table.insert(made, r); return r end,
-        divider = function() return { divider = true } end }
-    package.loaded["bookorbit_menu_page"] = { runAction = function(page, action) page.ran = action.kind end }
-    package.loaded["bookorbit_board_ui"] = { vstack = function(o, kids) return { stack = kids } end }
-    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 0.7, progress = "/p210" } })
-    OSM.sheet_hooked = nil
-    m:onReaderReady()
-    local MenuUI = package.loaded["bookorbit_menu_ui"]
-    local auto = MenuUI.row(400, { label = "Auto-sync", action = { kind = "auto" } })
-    ok(auto.stack and auto.stack[3].row.label == "Read from here everywhere", "the row under Auto-sync")
-    local other = MenuUI.row(400, { label = "Book details", action = { kind = "details" } })
-    eq(other.stack, nil, "other rows unchanged")
-    local page = { close = function(pg) pg.closed = true end }
-    package.loaded["bookorbit_menu_page"].runAction(page, { kind = "orbit_read_here" })
-    ok(page.closed, "sheet closed")
-    run(1)
-    ok(osmLog("orbismart: override queued (This book)"), "override made from the sheet")
-    package.loaded["bookorbit_menu_page"].runAction(page, { kind = "sync" })
-    eq(page.ran, "sync", "the sheet's own actions still run")
-    run(40)
-end)
-
-test("settings: Off reading cadence adds no pause sync under the furthest-position rule", function()
-    local ui, m, p = osmBook(100, nil)
-    RE.S.reading_schedule = "off"
-    m:onReaderReady()
-    run(30)
-    p.calls = {}
-    W.page = 110; m:onPageUpdate(110)
-    run(150)
-    ok(not has(p.calls, "fetch"), "Off means no automatic pause pull")
-    eq(OSM.pause_task, nil)
-end)
+dofile(here .. "/position_sync_flows.lua")(test,eq,ok,RE,W,UIManager,run,newUI,ReaderUI,FileManager)
 
 test("settings: sync controls remain visible under either position rule", function()
-    local _, m = osmBook(50, nil)
+    local _, m = newUI(true)
     for _, mode in ipairs({"orbismart", "custom"}) do
         store.orbit_android.sync_mode = mode
         local texts = {}
@@ -5552,36 +4989,6 @@ test("settings: sync controls remain visible under either position rule", functi
         ok(all:find("Sleep sync limit", 1, true), "sleep budget always visible")
         eq(not not all:find("Read from here everywhere", 1, true), mode == "orbismart")
     end
-end)
-
-test("settings: Sync now uses the existing snapshot/drain without sleeping", function()
-    local ui, m = newUI(true)
-    run(30)
-    W.broadcasts = {}; ui.bookorbit.calls = {}
-    local release, handled = RE.Wifi.release, nil
-    RE.Wifi.release = function(name, flag)
-        if name == "sync_and_sleep" then handled = flag end
-        return release(name, flag)
-    end
-    RE.Library.syncNow(m)
-    run(5)
-    RE.Wifi.release = release
-    eq(handled, false, "normal Wi-Fi lease restoration")
-    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
-    ok(has(ui.bookorbit.calls, "onSuspend"), "current position snapshotted")
-    ok(not lastBroadcast(".SLEEP_NOW"), "screen stays awake")
-end)
-
-test("settings: failed Sync now leaves the screen awake", function()
-    W.server_code = nil
-    local _, m = newUI(true)
-    run(30)
-    W.broadcasts = {}
-    RE.Library.syncNow(m)
-    run(40)
-    ok(not lastBroadcast(".SLEEP_NOW"), "failed sync also stays awake")
-    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
-    W.server_code = 200
 end)
 
 test("settings PIN: keep-open Custom editors and copy remain read-only", function()

@@ -461,7 +461,7 @@ time-left fields remain absent until its evidence thresholds are met). The `book
 `days_start_to_finish`. Joins and SQLite aggregation run in the companion;
 no metadata file or statistics database is parsed by the reader UI. The
 `progress.syncCurrent` capability advertises the existing explicit Sync action
-behind the library adapter, with no new sync writer. See
+through the companion’s sole sync owner (the legacy writer is retired). See
 [reader progress notes](../../docs/design/booksync-home/F12-H-NOTES.md).
 
 The owned Home host also uses `lists(limit)` on the library context. Its materialized
@@ -471,6 +471,37 @@ worker-checked file ledger. The plugin opens only that local file through
 `Library.open`; no widget resolves identities or performs a download. A changed
 publication emits `library`; catalog publication emits `library_source`. These reuse
 the acknowledged event queue. They invalidate an already visible Home, never show it.
+
+
+### 0.12 companion-owned sync (F12-Q)
+
+The library dispatches `sync.activate`, `sync.capture`, `sync.pull`, `sync.decide`,
+`sync.answer`, `sync.override`, `sync.drain`, `sync.verify.next` and `sync.verify.result`
+through the existing serial command worker. Activation requires a successful native
+retirement handshake and reader process epoch. A restarted companion repeats that
+handshake before retrying. Native captures carry a path, optional cached document ID,
+locator/fraction, page geometry, capture time, small summary, selected automatic/Custom
+mode and lifecycle moment. Direction preferences are translated privately by the
+companion adapter. A post-close drain releases the open-sidecar lease by `closed_path`
+only after native closure; offline closure does not initiate transport. Captures
+from a no-longer-current document carry `current=false`, preserving the active lease.
+The companion owns catalog/statistics/sidecar work and all server protocol. Secrets
+and backend response fields never return to the plugin.
+
+Responses contain a bounded neutral document/token/remote/marker/pending projection.
+The public cached position snapshot is at most 16 KiB; the reader rejects larger files.
+`SYNC_PREVIEW` evaluates only an immutable in-memory projection with caller-supplied
+native geometry, returning decision/applied/remote/token/document. It performs no SQL,
+network or writes. Token-checked `sync.answer` commits consent or decline; native code
+moves only the still-open initiating document. Native verification reads one row with
+key/start/end and returns valid/page through a separate command. No annotation list
+or backend JSON is decoded by the reader.
+
+Library `idle` and `networkRestored` hooks route remaining background jobs through the
+neutral binding. Home paint does not trigger sync. Consent/verification use the named
+budgets in `logic/budgets.lua`; commands and drains emit info-level timing spans.
+Migration journal details and crash guarantees are in
+[F12-Q notes](../../docs/design/booksync-home/F12-Q-NOTES.md).
 
 ### Owned cover acquisition (0.12 catalog prerequisite)
 

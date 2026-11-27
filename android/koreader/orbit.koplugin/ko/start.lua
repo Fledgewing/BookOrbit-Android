@@ -7,6 +7,7 @@
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onResume()
+    if ReadingSync then ReadingSync.resume(self.ui) end
     if not stats_acc.at then
         stats_acc.at = now_s()
         if readerContent() ~= "none" then Stats.send("resume") end
@@ -36,64 +37,23 @@ function OrbitAndroid:onResume()
 end
 
 function OrbitAndroid:wakeFlow(reason)
-    -- OrbiSmart: a short nap rarely follows reading elsewhere; its sleep sync already ran
-    -- (docs/design/position-sync.md §3.3, wake check after >= 5 min asleep).
-    if Server.positionOn() and reason == "wake" and state.paused_for and state.paused_for < Server.positionWakeMinimum() then
-        log("orbismart: woke after " .. fmt(state.paused_for) .. "; no wake check under " .. Server.positionWakeMinimum() .. " s")
-        return
-    end
-    if not S.sync_on_wake then
-        log(reason .. ": sync on wake is off")
-        return
-    end
-    local p = serverPlugin(self.ui)
-    if not p or not Server.signedIn(p) then
-        log(reason .. ": library plugin missing or signed out; nothing to do")
-        return
-    end
-    local t0 = now_s()
-    local lease = "wake"
-    Wifi.acquire(lease)
-    Net.up(p, { reason = reason, cap = 20, need_server = true }, function(ok, res)
-        if not ok then
-            Wifi.release(lease)
-            self:showWakeBanner(res)
-            return
-        end
-        -- OrbiSmart: pull and decide first, then the outbox under the behind-hold.
-        if Server.positionOn() and inBook() and can(p, "reading_sync") then
-            log(reason .. ": OrbiSmart pull, then the outbox; network ready in", fmt(now_s() - t0))
-            return Server.pullThenDrain(p, "wake", "orbit_" .. reason, function()
-                UIManager:scheduleIn(1, function() Server.waitOutbox(p, 20, function() Wifi.release(lease) end) end)
-            end)
-        end
-        if can(p, "outbox") then Server.drain(p, "orbit_" .. reason) end
-        -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
-        UIManager:scheduleIn(1, function()
-            Server.waitOutbox(p, 20, function() Wifi.release(lease) end)
+    if ReadingSync.on() and reason=="wake" and state.paused_for and state.paused_for<300 then return end
+    if not S.sync_on_wake then return end
+    Wifi.acquire("wake")
+    Net.up(nil,{reason=reason,cap=20},function(ok,res)
+        ReadingSync.run("wake",function(synced,why)
+            Wifi.release("wake")
+            Library.idle()
+            if not ok then self:showWakeBanner(res) end
         end)
-        if inBook() and can(p, "wake_pull") then
-            -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
-            -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
-            Server.clearPullDebounce(p, reason)
-            Server.pull(p, "orbit_" .. reason)
-            log(reason .. ": asked plugin to drain outbox and pull, network ready in", fmt(now_s() - t0))
-        else
-            log(reason .. ": asked plugin to drain outbox (no book open), network ready in", fmt(now_s() - t0))
-        end
     end)
 end
 
 function OrbitAndroid:showWakeBanner(res)
     local text = _("Can't reach library. Reading from this device's place.") .. "\n" .. (res.detail or "")
     local retry = function() self:wakeFlow("retry") end
-    local okt, Toast = pcall(Server.require, "toast")
     Gate.show("wake banner: " .. text, function()
-        if okt then
-            Toast.error(text, retry, { timeout = 6 }) -- gate: Gate.show
-        else
-            UIManager:show(InfoMessage:new{ text = text, timeout = 6 }) -- gate: Gate.show
-        end
+        UIManager:show(InfoMessage:new{ text=text,timeout=6 }) -- gate: Gate.show
     end, 60)
 end
 
