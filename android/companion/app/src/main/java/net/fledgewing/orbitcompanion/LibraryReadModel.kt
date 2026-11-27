@@ -6,16 +6,24 @@ class LibraryReadModel(
     private val store: ProjectionStore,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
     private val log: (String) -> Unit = { OLog.i(it) },
-    private val readingStats: () -> Map<String, Any?> = {
-        mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
-    },
+    private val readingStats: (() -> Map<String, Any?>)? = null,
     private val battery: () -> Map<String, Any?> = { BatteryEstimate.snapshot(emptyMap(), emptyList(), null, emptyList(), clock()*1000, java.time.ZoneOffset.UTC) },
     private val fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
-    private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
-    private val accountStats: (String) -> Map<*, *>? = { null },
+    private val accountState: () -> Map<String, Any?> = LibraryAccount::state,
+    private val accountStats: (String) -> Map<*, *>? = LibraryAccount::stats,
     private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
     private val adapter: ServerAdapter? = null,
     private val personalDevice: (() -> PersonalReadingSource)? = null,
+    // Device publication schedules draining on the existing runtime writer queue.
+    private val drainEvents: () -> Unit = { EventMailbox(store.root).publish(null) },
+    private val changedEvent: (Map<String, Any?>) -> Unit = { event ->
+        val file = java.io.File(store.root, "events/library-${java.util.UUID.randomUUID()}.lua")
+        file.parentFile?.mkdirs()
+        val temp = java.io.File(file.parentFile, file.name + ".part")
+        try { temp.writeBytes(LuaValue.encode(event)); check(temp.renameTo(file)) }
+        finally { temp.delete() }
+        drainEvents()
+    },
 ) {
     companion object {
         const val MAX_BYTES = 16384
@@ -24,25 +32,34 @@ class LibraryReadModel(
         fun initialize(db: Sql) = db.exec("CREATE TABLE IF NOT EXISTS library_views (owner TEXT, request TEXT, body BLOB, at INTEGER, PRIMARY KEY(owner,request)) WITHOUT ROWID")
     }
     /** Each request is its exact Lua literal: no hash collision or backend URL in the UI key. */
-    fun publish(owner: String, requests: List<*>): Boolean {
+    fun publish(owner: String, requests: List<*>): Boolean = publishBatch(owner, requests).also {
+        if (it) notifyChanged(owner)
+    }
+
+    private fun notifyChanged(owner: String) {
+        if (owner != DeviceLibrary.OWNER && store.meta("owner") != owner) return
+        changedEvent(mapOf("kind" to "library", "owner" to owner))
+    }
+
+    private fun publishBatch(owner: String, requests: List<*>): Boolean {
         var changed = false
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (owner != DeviceLibrary.OWNER && store.meta("owner") != owner) return false
         val local = owner == DeviceLibrary.OWNER
-        val projection = if (local) DeviceLibrary(DeviceStorage.folders.map {
-            java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it)
-        } + DeviceStorage.downloadRoot(store.root)) else adapter ?: ServerAdapters.forStore(store, clock = clock,
+        val projection = if (local) DeviceLibrary(roots()) else adapter ?: ServerAdapters.forStore(store, clock = clock,
             fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
         val personal by lazy {
-            val roots = DeviceStorage.folders.map { java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it) } + DeviceStorage.downloadRoot(store.root)
+            val roots = roots()
             PersonalReading(listOf(personalDevice?.invoke() ?: DevicePersonalReading(roots, java.io.File(store.root.parentFile,"statistics.sqlite3"))) +
                 if (local) emptyList() else listOf(CatalogPersonalReading { projection.personalCatalog(owner) }) + projection.personalReadingSources(owner))
         }
-        val localStats by lazy { readingStats() }
+        val account by lazy { if (local) null else accountStats(owner) }
+        val localStats by lazy { readingStats?.invoke() ?: ReadingStats.read(
+            java.io.File(store.root.parentFile, "statistics.sqlite3"), clock(),
+            if (local) java.time.ZoneId.systemDefault() else AccountStats.zone(account)) }
         val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
-        val account by lazy { if (local) null else accountStats(owner) }
         val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
@@ -107,16 +124,37 @@ class LibraryReadModel(
         }
         return changed
     }
-    /** Local removal changes every cached file join, including grouped/Series previews.
-     * Keep unrelated account, reading and battery materializations intact. */
-    fun refreshLocalFiles(owner: String): Boolean {
-        val operations=setOf("storage.summary","library.summary","window","book","reader","cover","cover.reference",
-            "groups","series","counts","facets","sources","personal.reading")
-        val requests=store.db().query("SELECT request FROM library_views WHERE owner=?",LuaValue.utf8(owner)) { it.text(0)!! }
-            .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in operations }
-        var changed=false
-        requests.chunked(MAX_BATCH).forEach { if(publish(owner,it)) changed=true }
+    /** Rebuild only retained windows affected by this lifecycle, then signal once after writes. */
+    private fun refresh(owner: String, operations: Set<String>): Boolean {
+        if (owner != DeviceLibrary.OWNER && store.meta("owner") != owner) return false
+        val requests = store.db().query("SELECT request FROM library_views WHERE owner=? LIMIT 64", LuaValue.utf8(owner)) { LuaValue.str(it.text(0)!!) }
+            .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *>)?.get("op") in operations }
+        var changed = false
+        requests.chunked(MAX_BATCH).forEach { if (publishBatch(owner, it)) changed = true }
+        // Commands can change state outside retained windows; preserve their invalidation event.
+        notifyChanged(owner)
         return changed
     }
 
+    fun refreshReadingIntents(owner: String): Boolean = refresh(owner, setOf("reader.finish", "copies.state"))
+
+    /** Removal changes file joins for both catalog and device windows; battery stays retained. */
+    fun refreshLocalFiles(owner: String): Boolean = refresh(owner, setOf(
+        "storage.summary", "library.summary", "window", "book", "reader", "cover", "cover.reference",
+        "groups", "series", "counts", "facets", "sources", "personal.reading"))
+
+    fun storageCommand(owner: String, op: String, args: Map<*, *>): Map<String, Any?> {
+        val projection = if (owner == DeviceLibrary.OWNER) DeviceLibrary(roots()) else adapter ?: ServerAdapters.forStore(
+            store, clock = clock, fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
+        val result = DeviceStorage(store, projection).command(owner, op, args)
+        // Local files are shared, but each owner is projected independently with fresh batch context.
+        refreshLocalFiles(owner)
+        val other = if (owner == DeviceLibrary.OWNER) store.meta("owner") else DeviceLibrary.OWNER
+        if (other != null && other != owner) refreshLocalFiles(other)
+        return result
+    }
+
+    private fun roots() = DeviceStorage.folders.map {
+        java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root, it)
+    } + DeviceStorage.downloadRoot(store.root)
 }

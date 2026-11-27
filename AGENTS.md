@@ -353,3 +353,7 @@ projects cover paths, series labels and personal pace. Card paints decode no ima
 start cover jobs: the interface defers preparation, bounds bitmap input to 512 KiB,
 and cancels delivery after removal, account change or return to reading. The static
 book-actions sheet has five rows, zero decoded data and no companion round-trip.
+
+Bounded read-model publication owns enrichment, retained-window invalidation and changed events
+for both device and account owners. Lifecycle callers use LibraryReadModel; refreshes inherit
+the same per-screen/widget budgets and lazy per-batch aggregation as first publication.

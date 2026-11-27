@@ -44,6 +44,7 @@ class CacheWorker(
     private val cpuMs: () -> Long = { 0L },
     private val threadFactory: (String, Runnable) -> Thread = { name, task -> Thread(task, name).apply { isDaemon = true; priority = Thread.MIN_PRIORITY } },
     private val bookRoots: List<File> = places,
+    private val batterySnapshot: () -> Map<String, Any?> = { BatteryEstimate.snapshot(emptyMap(), emptyList(), null, emptyList(), now()*1000, java.time.ZoneOffset.UTC) },
 ) {
     private val parallel = parallel.coerceIn(1, PARALLEL)
 
@@ -108,7 +109,8 @@ class CacheWorker(
     }
 
     /** Publication retains this worker's timing logger (including host test injection). */
-    internal fun publishLibrary(owner: String,requests: List<String>) = LibraryReadModel(store,log=log).publish(owner,requests)
+    internal fun libraryReadModel() = LibraryReadModel(store, clock=now, log=log, battery=batterySnapshot, changedEvent=::event)
+    internal fun publishLibrary(owner: String,requests: List<String>) = libraryReadModel().publish(owner,requests)
 
     /** The detail template saved with the last plan (what a check of a detail path needs). */
     private fun detailTemplate(): String? = store.meta("detail_template")
@@ -924,7 +926,7 @@ class CacheWorker(
     fun publishCatalogState() {
         val owner=store.meta("owner") ?: return
         val request=String(LuaValue.encode(mapOf("op" to "catalog.state","limit" to 1L,"bytes" to 16384L)),Charsets.ISO_8859_1)
-        LibraryReadModel(store,log=log).publish(owner,listOf(request))
+        publishLibrary(owner,listOf(request))
     }
 
     /** The run's counts, from the jobs table; the % never goes down and is 100 only at the end. */
