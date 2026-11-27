@@ -5995,6 +5995,61 @@
           ]
         }
       }
+    },
+    {
+      "id": "finish-series-entry",
+      "feature": "End-of-book sheet opens the owned Series page (0.12 implementation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Implemented on feature/0.12: View series from saved finish membership, next-book card retained, Back restores the finish sheet",
+          "reason": "deliberately deferred: device visual and timing acceptance pending; not yet released",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endsheet.lua",
+              "line": 115
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/FinishLogic.kt",
+              "line": 60
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "End-sheet Series entry follows Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "End-sheet Series entry follows Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "End-sheet Series entry follows Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; owned firmware Series routing and device acceptance remain later work",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

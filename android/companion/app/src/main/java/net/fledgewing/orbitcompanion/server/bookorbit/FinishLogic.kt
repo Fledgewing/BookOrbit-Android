@@ -55,6 +55,7 @@ internal object FinishLogic {
         }
         val title=d["title"] ?: path?.substringAfterLast('/') ?: ""
         return mapOf("key" to id?.let { BookOrbitLibrary.key(owner,"book",it) },"title" to LuaValue.boundedText(LuaValue.utf8(title.toString()),256),"author" to author?.let { LuaValue.boundedText(LuaValue.utf8(it),80) },
+            "series_key" to (d["seriesId"] as? Number)?.toLong()?.takeIf { it > 0 }?.let { BookOrbitLibrary.key(owner,"series",it) },
             "stars" to (job?.get("rating") ?: args["rating"]).takeIf { it!="clear" },"undo" to (job!=null),"can_mark" to (job==null),
             "status" to LuaValue.str(if(job!=null) "✓ Marked as finished" else "Not marked as finished"),
             "next" to next,"suggestion" to suggestion,"row_count" to (1+(if(next?.get("book_id")!=null) 1 else 0)+(if(suggestion!=null) 1 else 0)),

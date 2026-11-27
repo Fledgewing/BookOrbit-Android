@@ -70,6 +70,17 @@ function FinishUI.actions.review(ui) FinishUI.closeSheet();if ui.status then ui.
 function FinishUI.actions.author(ui,b,name)
     FinishUI.closeSheet();Library.openGrouped(name,{kind="author",key=name},{group="series"})
 end
+function FinishUI.actions.series(ui,b,key)
+    if not key then return false end
+    local document=ui and ui.document
+    FinishUI.closeSheet()
+    local function restore()
+        if ui and ui.document==document and not FinishUI.sheet then FinishUI.showSheet(ui,b) end
+    end
+    local opened=SeriesUI.show(key,restore)
+    if not opened then restore() end
+    return opened
+end
 function FinishUI.actions.back() FinishUI.closeSheet() end
 function FinishUI.actions.home(ui) FinishUI.leaveForHome(ui);if Library.controller() then Library.controller():onOrbitGoHome() end end
 function FinishUI.actions.book(ui,b,key,title,local_path)
