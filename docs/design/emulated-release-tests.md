@@ -468,6 +468,15 @@ Where it differs from §4-§6:
 - **X10** (OTA check UI) is not a simulator scenario: upstream's simulator build leaves
   `OtaUpdater.cpp` out. It stays on the device checklist.
 
+The Full refresh network regressions enable `ORBIFY_SIM_SDFAT_MKDIR`: creating
+an existing final directory fails, as on the reader's SdFat storage. PR #190's
+host stub and simulator both returned success, hiding the marker failure that
+was misclassified as a crash. The same assumption also blocked the bulk SD
+writer. These tests assert real setup routing for catalog (35), Home refresh
+(36), Home settings (37), and sleep sync (33), as well as durable completion;
+queueing a request or observing a 0% badge is insufficient. The existing crash
+injections still require two genuinely unfinished attempts to quarantine.
+
 Scenarios (`run.py --list --profile P`), covering the sleep-sync and device fixes on main; X3 has no mirror, no
 series-card cover fetch and no lent connection, so it runs the three that apply to it:
 
@@ -478,6 +487,11 @@ series-card cover fetch and no lent connection, so it runs the three that apply 
 | `full_refresh_crash_breaker` | two unclean worker boots, durable quarantine, retained books/settings | X4s |
 | `full_refresh_sd_card_recovery` | remove the single persisted request, boot without retrying | X4s |
 | `full_refresh_early_boot_breaker` | two setup crashes, disable suspect catalog before cache reads | X4s |
+| `full_refresh_quarantine_sync_network` | quarantined state → sync tile hold → real Home refresh boot, visible progress and published catalog | X4s |
+| `full_refresh_quarantine_catalog_network` | quarantined state → catalog network boot → ⟳ hold, visible progress and published catalog | X4s |
+| `full_refresh_quarantine_settings_network` | quarantined state → Home settings network boot → Full refresh row → Home refresh boot | X4s |
+| `full_refresh_network_restart_and_sleep` | active worker drained on ordinary restart; request survives a sleep-sync boot and completes | X4s |
+| `full_refresh_marker_io_is_not_crash` | repeated marker I/O failures keep the request/catalog; restored storage resumes | X4s |
 | `full_refresh_large_catalog` | 3,000-book full catalog with modeled flash-stack constraint | X4 Pro |
 | `copy_refresh_sleep_sync` | X6 | all |
 | `copy_refresh_tight_heap` | X6, shared-session heap floors | X4s |

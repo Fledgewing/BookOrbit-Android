@@ -96,7 +96,15 @@ void runTask() {
   const unsigned long began = millis();
   // Survives power loss and panics, unlike an in-memory running flag. An ordinary
   // return (including offline, low heap or cancellation) is never a crash.
-  if (!attempt.begin()) { quarantine(); return; }
+  const auto start = attempt.begin();
+  if (start == ResumedWork::Start::Exhausted) { quarantine(); return; }
+  if (start == ResumedWork::Start::StorageError) {
+    retryAt.store(millis() + 60000);
+    std::lock_guard<std::mutex> lock(stateMutex);
+    state.active = requested(); state.paused = true;
+    LOG_ERR("ORB", "Full refresh: cannot save worker marker; request retained, retrying later");
+    return;
+  }
   struct Completed { ~Completed() { attempt.complete(); } } completed;
 #ifdef SIMULATOR
   if (std::getenv("ORBIFY_SIM_CRASH_REFRESH")) { std::fflush(nullptr); std::_Exit(86); }
@@ -190,7 +198,12 @@ void bootBegin() {
   // service() has a chance to see the worker's in-flight marker.
   if (!requested() && !Storage.exists(CRASHED) && !attempt.exhausted() &&
       !Storage.exists("/.crosspoint/orbify/refresh.inflight")) return;
-  if (bootAttempt.exhausted() || !bootAttempt.begin()) {
+  const auto start = bootAttempt.begin();
+  if (start == ResumedWork::Start::StorageError) {
+    LOG_ERR("ORB", "Full refresh: cannot save boot marker; request and saved catalog kept");
+    return;
+  }
+  if (start == ResumedWork::Start::Exhausted) {
     // An old warning is already quarantined; do not repeat that transition.
     // Still protect setup if the retained catalog itself later fails to load.
     if (!Storage.exists(CRASHED) || requested()) quarantine();
@@ -336,6 +349,13 @@ void credentialsChanging() {
   std::lock_guard<std::mutex> lock(stateMutex);
   state = Snapshot{};
 }
+void beforeRestart() {
+  // Orderly software transitions are not crashes. Drain before the restart's
+  // render lock or filesystem flush; let the scheduler resume if it is cancelled.
+  stopForSleep();
+  stopping.store(false);
+  sleeping.store(false);
+}
 void stopForSleep() {
   sleeping.store(true);
   stopping.store(true);
@@ -348,6 +368,7 @@ void stopForSleep() {
     if (taskHandle) delay(1);
   }
 #endif
+  bootComplete();
 }
 }  // namespace OrbifyMirror
 #endif

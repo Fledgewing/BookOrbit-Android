@@ -14,6 +14,7 @@ import shutil
 import struct
 import subprocess
 import zlib
+from enum import IntEnum
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,6 +37,18 @@ PROFILES = {  # profile -> PlatformIO env (xteink/overlay/platformio.local.ini)
     "x4-classic": "x4-classic-simulator",
     "x3": "simulator-X3",
 }
+
+
+# SilentRestart.h and main.cpp at tools/upstreams.lock's CrossInk pin. These
+# tokens go through setup()'s real restore/validate/route path, never a UI stub.
+class NetworkBootTarget(IntEnum):
+    SLEEP_SYNC = 33
+    CATALOG = 35
+    HOME_REFRESH = 36
+    HOME_SHELVES = 37
+
+
+SILENT_REBOOT_MAGIC = 0xC1EAB007
 
 
 def obfuscate(plaintext: str) -> str:
@@ -138,11 +151,18 @@ class Simulator:
 
     def run(self, card: SdCard, name: str, script: str = "", timeout_s: float = 30, after_reboot: str | None = None,
             wake: bool = False, screenshots: dict[int, str] | None = None, env: dict[str, str] | None = None,
-            choice: str = "none", quit_after_sync: bool = True, input_from_poll: bool = False) -> Run:
+            choice: str = "none", quit_after_sync: bool = True, input_from_poll: bool = False,
+            boot_target: NetworkBootTarget | None = None) -> Run:
         """One simulator chain on `card`. Screenshots {ms: name} land in artifacts as PNG.
         Scenario hooks of upstream's sync activity: CROSSINK_SIM_BOOKORBIT_CHOICE answers its
         choice screens, ..._QUIT_AFTER_SYNC ends the process once the sync settles."""
         e = os.environ.copy()
+        for key in ("MAGIC", "TARGET", "PAYLOAD"):
+            e.pop("CROSSPOINT_SIM_SILENT_REBOOT_" + key, None)
+        if boot_target is not None:
+            e.update(CROSSPOINT_SIM_SILENT_REBOOT_MAGIC=str(SILENT_REBOOT_MAGIC),
+                     CROSSPOINT_SIM_SILENT_REBOOT_TARGET=str(int(boot_target)),
+                     CROSSPOINT_SIM_SILENT_REBOOT_PAYLOAD="0")
         # The software renderer: SDL's dummy video driver has no accelerated one on Linux (CI), where the
         # simulator then had no renderer and silently saved no screenshots.
         e.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)

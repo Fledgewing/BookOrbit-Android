@@ -32,6 +32,19 @@ gpio.write_text('#include "SimulatorInput.h"\nvoid processSyntheticEvents() {\n 
 assert module.patch_input(out)
 assert not module.patch_input(out), "input patch must be idempotent"
 assert gpio.read_text().count("orbify_sim_input::now(millis())") == 1
+storage = out / "HalStorage.cpp"
+storage.write_text('  return ::mkdir(full.c_str(), 0777) == 0 || errno == EEXIST;\n'
+                   '  file = open(path, O_RDWR | O_CREAT | O_TRUNC);\n')
+assert module.patch_storage(out)
+assert not module.patch_storage(out), "storage patch must be idempotent"
+assert storage.read_text().count("ORBIFY_SIM_SDFAT_MKDIR") == 1
+storage.write_text("// changed upstream storage anchor\n")
+try:
+    module.patch_storage(out)
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("a changed storage anchor must stop the build")
 gpio.write_text("// changed upstream anchor\n")
 try:
     module.patch_input(out)
