@@ -27,11 +27,11 @@ class CatalogPersonalReading(private val catalog: () -> Map<String, Any?>) : Per
             else unread.sortedWith(compareByDescending<Map<String, Any?>> { it["key"] in next }
                 .thenByDescending { authors(it).sumOf { author -> affinity[author] ?: 0 } }.thenBy { it["key"].toString() })
         return ordered.map { b ->
-            val reason = if (kind == "discover") "Unread · saved on this reader" else if (b["key"] in next) "Next in your series"
-                else if (authors(b).any { it in affinity }) "An author you've read" else "Unread · saved on this reader"
+            val reason = if (kind == "discover") "Unread · saved library" else if (b["key"] in next) "Next in your series"
+                else if (authors(b).any { it in affinity }) "An author you've read" else "Unread · saved library"
             val display = b.filterKeys { it in setOf("key", "title", "authors", "local_path", "on_device", "status", "progress") }
             // A tracked file in a mirror and a device row share the file identity; device wins.
-            PersonalReadingRecord((b["local_path"] ?: b["key"]).toString(), mapOf("book" to display, "source" to reason))
+            PersonalReadingRecord((b["local_path"] ?: b["key"]).toString(), mapOf("book" to display, "source" to LuaValue.str(reason)))
         }
     }
 }

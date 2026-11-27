@@ -38,6 +38,10 @@ class CatalogPersonalReadingTest {
     @Test fun dailyPickRestartAnotherCycleAndToyFutureSource() {
         fun registry()=PersonalReading(listOf(source(book("a"),book("b"),book("c"))))
         val now=1800000000L
+        val unicode=PersonalReading(listOf(source(book("a")+mapOf("title" to LuaValue.str("月"))))).window("discover",now)
+        val wire=LuaValue.parse(LuaValue.encode(unicode)) as Map<*,*>
+        assertEquals("Unread · saved library",LuaValue.utf8(wire["source"] as String))
+        assertEquals("月",LuaValue.utf8((wire["book"] as Map<*,*>)["title"] as String))
         assertEquals(registry().window("discover",now),registry().window("discover",now+1))
         val picks=(0L..3L).map { registry().window("discover",now,it)["book"] }
         assertEquals(3,picks.take(3).toSet().size); assertEquals(picks[0],picks[3])
