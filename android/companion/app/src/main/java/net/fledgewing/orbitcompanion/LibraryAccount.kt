@@ -11,7 +11,8 @@ object LibraryAccount {
     const val OPEN = "${Contract.PACKAGE}.call.ACCOUNT_OPEN"
     const val STATE = "${Contract.PACKAGE}.call.SERVER_STATE"
     private val queue = Executors.newSingleThreadExecutor { r -> Thread(r, "booksync-server").apply { isDaemon = true } }
-    private val main = Handler(Looper.getMainLooper())
+    // Cached publication context is readable on the writer without constructing UI dispatch.
+    private val main by lazy { Handler(Looper.getMainLooper()) }
     private var adapter: ServerAdapter? = null
     @Volatile private var syncOwner: SyncOwner? = null
     private var syncRetryScheduled=false

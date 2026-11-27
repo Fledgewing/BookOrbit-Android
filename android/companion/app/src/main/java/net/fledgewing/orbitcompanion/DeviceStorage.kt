@@ -90,7 +90,7 @@ class DeviceStorage(private val store: ProjectionStore, private val adapter: Ser
             "folders" to folders.map { mapOf("id" to it,"label" to "/$it") },"local_coverage" to if(books==null) "not-saved" else "tracked-files")
     }
     fun command(owner: String, op: String, args: Map<*,*>): Map<String,Any?> {
-        require(store.meta("owner")==owner)
+        require(owner == DeviceLibrary.OWNER || store.meta("owner")==owner)
         val excludePath=(args["exclude_path"] as? String)?.let(LuaValue::utf8)?.let { File(it).canonicalPath }
         when(op) {
             "storage.folder" -> {

@@ -18,12 +18,12 @@ import net.fledgewing.orbitcompanion.server.bookorbit.SleepChoicesProjection
 /** The only production composition root allowed to import an implementation. */
 object ServerAdapters {
     private val registry = AdapterRegistry(listOf(
-        "bookorbit" to { store, clock -> BookOrbitProjection(store as CacheStore, clock.clock, clock.fallbackReadingStats ?: { BookOrbitLibrary.readingStats(store) }, clock.accountState, clock.accountStats) },
+        "bookorbit" to { store, clock -> BookOrbitProjection(store as CacheStore, clock.clock, clock.fallbackReadingStats ?: { owner -> LibraryAccount.fallbackReadingStats(owner) ?: BookOrbitLibrary.readingStats(store) }, clock.accountState, clock.accountStats) },
     ))
     fun forStore(store: ProjectionStore, id: String = "bookorbit", clock: () -> Long = { System.currentTimeMillis()/1000 },
         fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
-        accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
-        accountStats: (String) -> Map<*, *>? = { null }): ServerAdapter =
+        accountState: () -> Map<String, Any?> = LibraryAccount::state,
+        accountStats: (String) -> Map<*, *>? = LibraryAccount::stats): ServerAdapter =
         registry.create(id, store, ProjectionContext(clock, fallbackReadingStats, accountState, accountStats))
     fun session(ctx: Context, id: String = "bookorbit"): ServerAdapter {
         require(id == "bookorbit") { "unknown adapter" }

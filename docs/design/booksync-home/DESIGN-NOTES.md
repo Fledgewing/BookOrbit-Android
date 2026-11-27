@@ -1124,3 +1124,26 @@ no extra cover lookup is added to paint. Bitmap preparation is deferred, encoded
 input is capped at 512 KiB, and stale deliveries are canceled. Overflow declares a
 five-row static budget with zero decoded bytes/round-trips. Info timing spans cover
 paint, read-model publication and deferred decode. Device targets remain unverified.
+
+## F12 architecture: bounded publication lifecycle (2026-11-27)
+
+The maintainer-selected architecture slice deepens the existing LibraryReadModel, not the
+Library UI or ServerAdapter protocol. It owns local/account context, bounded publication,
+retained-window selection and changed-event ordering. Storage removal republishes affected
+windows for the reserved device owner and current account; unrelated stats and battery
+snapshots stay retained. Aggregation stays lazy per batch and never survives an owner change.
+Adapter-specific projection construction remains in ServerAdapters.
+
+Reuse evidence at review commit `6a49570d` (companion source package):
+`LibraryReadModel.kt:33` already composes projections and lazy aggregates, `:72` enriches
+bounded cards and `:112` refreshes file joins; `server/bookorbit/CacheWorker.kt:364` owns the sole
+cache writer and event spool. The slice removes the inconsistent caller-owned context and
+notification choreography described in the selected review. Lifecycle tests use the existing
+SQLite/JDBC store and neutral fake adapter, publishing a batch, removing a download and
+reading the retained windows again for both owners. Pace, finish forecast and provenance
+survive for remaining books; removed file references disappear.
+
+Every screen/widget still inherits its existing row/byte budget: at most 24 display rows,
+16 KiB per snapshot, zero render-path network/subprocesses and at most one Home batch.
+The existing publication timing span remains. No firmware implementation, new feature,
+release or physical-device timing acceptance is claimed; X4 Pro/X4/X3 follow Android.

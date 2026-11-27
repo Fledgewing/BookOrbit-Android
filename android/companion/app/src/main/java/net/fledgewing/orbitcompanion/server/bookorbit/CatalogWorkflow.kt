@@ -187,10 +187,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
             "initialize" -> ledger()
             else -> throw ServerFailure("unsupported")
         }
-        val retained=store.db().query("SELECT request FROM library_views WHERE owner=? LIMIT 64",LuaValue.utf8(owner)) { it.text(0)?.let(LuaValue::str) }.filterNotNull()
-            .filter { (LuaValue.parse(it.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in setOf("reader.finish","copies.state") }
-        for(batch in retained.chunked(16)) worker.publishLibrary(owner,batch)
-        worker.event(mapOf("kind" to "library","owner" to owner))
+        worker.libraryReadModel().refreshReadingIntents(owner)
         return mapOf("ok" to true)
     }
     private fun checkCopies(open:String?) {

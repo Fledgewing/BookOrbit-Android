@@ -37,19 +37,12 @@ object Worker {
                 runCatching {
                     val requests=LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@runCatching
                     ServerAdapters.projectionStore(root()).use { store ->
-                        val model=LibraryReadModel(store,readingStats={
-                            ReadingStats.read(File(root().parentFile,"statistics.sqlite3"),System.currentTimeMillis()/1000)
-                        },battery={ StatsStore.get(app).batterySnapshot(System.currentTimeMillis(),java.time.ZoneId.systemDefault()) })
-                        if(model.publish(DeviceLibrary.OWNER,requests)) {
-                            val spool=File(root(),"events").apply { mkdirs() }
-                            val file=File(spool,"device-${java.util.UUID.randomUUID()}.lua")
-                            android.util.AtomicFile(file).let { atomic ->
-                                val out=atomic.startWrite()
-                                try { out.write(LuaValue.encode(mapOf("kind" to "library","owner" to DeviceLibrary.OWNER))); atomic.finishWrite(out) }
-                                catch(e: Exception) { atomic.failWrite(out); throw e }
-                            }
+                        val model=LibraryReadModel(store, battery={
+                            StatsStore.get(app).batterySnapshot(System.currentTimeMillis(),java.time.ZoneId.systemDefault())
+                        }, drainEvents={
                             ServerAdapters.runtime.onIntent(app,Intent(ACTION_PATCH).putExtra("drain_events","1"))
-                        }
+                        })
+                        model.publish(DeviceLibrary.OWNER,requests)
                     }
                 }.onFailure { OLog.w("library.device publication unavailable") }
             }

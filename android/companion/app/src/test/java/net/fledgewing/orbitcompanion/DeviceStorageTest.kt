@@ -130,8 +130,8 @@ class DeviceStorageTest {
         model.publish("fixture",operations.map(::request))
         assertNotNull((((result("groups")["items"] as List<*>).single()) as Map<*,*>)["local_path"])
         val action=actions(storage.summary("fixture")).single()
-        storage.command("fixture","storage.free",mapOf("action" to "finished","token" to action["token"]))
-        level=0; model.refreshLocalFiles("fixture")
+        level=0
+        model.storageCommand("fixture","storage.free",mapOf("action" to "finished","token" to action["token"]))
         for(op in operations.filter { it!="battery" }) assertNull(op,(((result(op)["items"] as List<*>).single()) as Map<*,*>)["local_path"])
         assertEquals(78L,result("battery")["level"])
     }

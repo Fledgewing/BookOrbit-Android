@@ -110,6 +110,13 @@ class ServerAdapterTest {
             assertEquals(1, reads)
             assertTrue(fake.requests.isEmpty())
             assertEquals(2, store.db().query("SELECT body FROM library_views") { it.bytes(0) }.size)
+            val delivered = LuaValue.parse(File(root, "events-batch.lua").readBytes()) as Map<*, *>
+            assertEquals(listOf(mapOf("kind" to "library", "owner" to "fixture")), delivered["events"])
+            store.db().exec("UPDATE meta SET v='next-owner' WHERE k='owner'")
+            assertFalse(model.publish("fixture", requests))
+            assertEquals(1, reads)
+            assertTrue(model.publish("next-owner", requests))
+            assertEquals(2, reads)
         } } finally { root.deleteRecursively() }
     }
     @Test fun publisherEnforcesCallerBudgetAgainstAnOversizedAdapter() {
@@ -121,11 +128,15 @@ class ServerAdapterTest {
                 override fun project(owner: String, request: Map<*, *>) = mapOf<String, Any?>("items" to payload)
             }
             val request = String(LuaValue.encode(mapOf("op" to "window", "limit" to 1, "bytes" to 512)), Charsets.ISO_8859_1)
-            // Separate failures: too many bytes in one row; too many rows within the byte cap.
+            val events = mutableListOf<Map<String, Any?>>()
+            val model = LibraryReadModel(store, log = {}, adapter = adapter, changedEvent = events::add)
+            assertTrue(model.publish("fixture", listOf(request)))
+            // Separate failures on retained-window refresh: bytes, then rows within the byte cap.
             for (items in listOf(listOf(mapOf("key" to "one", "title" to "x".repeat(1000))),
                     listOf(mapOf("key" to "one"), mapOf("key" to "two")))) {
                 payload = items
-                LibraryReadModel(store, log = {}, adapter = adapter).publish("fixture", listOf(request))
+                model.refreshLocalFiles("fixture")
+                assertEquals(mapOf("kind" to "library", "owner" to "fixture"), events.last())
                 val bytes = store.db().query("SELECT body FROM library_views") { it.bytes(0)!! }.single()
                 assertEquals("budget", (LuaValue.parse(bytes) as Map<*, *>)["error"])
                 assertTrue(bytes.size <= 512)

@@ -61,7 +61,7 @@ object AdapterWorker : ServerRuntime {
         return MirrorLogic.runningProgressLine(progress, BulkWork.paused)
     }
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), bookRoots = listOf(Environment.getExternalStorageDirectory()), resizeThumbnail = { f, w, h ->
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), bookRoots = listOf(Environment.getExternalStorageDirectory()), batterySnapshot = { StatsStore.get(requireNotNull(app)).batterySnapshot(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) }, resizeThumbnail = { f, w, h ->
         val dm = app?.resources?.displayMetrics
         BulkWork.phase("cover") { ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
             if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
@@ -77,11 +77,8 @@ object AdapterWorker : ServerRuntime {
         synchronized(lock) { patches.addLast {
             try {
                 val store = worker().store
-                val owner = store.meta("owner") ?: throw IllegalArgumentException("owner")
-                val storage = DeviceStorage(store, ServerAdapters.forStore(store))
-                val result = storage.command(owner,op,args)
-                LibraryReadModel(store).refreshLocalFiles(owner)
-                worker().event(mapOf("kind" to "library", "owner" to owner))
+                val owner = store.meta("owner") ?: DeviceLibrary.OWNER
+                val result = worker().libraryReadModel().storageCommand(owner,op,args)
                 done(result,null)
             } catch (_: Exception) { done(null,"unavailable") }
         }; lock.notifyAll() }
@@ -154,8 +151,7 @@ object AdapterWorker : ServerRuntime {
                     }
                     // Publish the bounded local reference on the same sole writer.
                     val request=mapOf("op" to "cover.reference","reference" to LuaValue.str(reference),"limit" to 1L,"bytes" to 16384L)
-                    LibraryReadModel(worker().store).publish(account,listOf(String(LuaValue.encode(request),Charsets.ISO_8859_1)))
-                    worker().event(mapOf("kind" to "library","owner" to account))
+                    worker().publishLibrary(account,listOf(String(LuaValue.encode(request),Charsets.ISO_8859_1)))
                     value
                 }
                 OLog.i("library.cover.reference ms=${(System.nanoTime()-start)/1_000_000}")
@@ -275,11 +271,8 @@ object AdapterWorker : ServerRuntime {
             val owner = i.getStringExtra("owner") ?: return
             synchronized(lock) { patches.addLast {
                 val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
-                val model = LibraryReadModel(worker().store, fallbackReadingStats = { scope -> LibraryAccount.fallbackReadingStats(scope) ?: BookOrbitLibrary.readingStats(worker().store) }, accountState = LibraryAccount::state, accountStats = LibraryAccount::stats, readingStats = {
-                    ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000, AccountStats.zone(LibraryAccount.stats(LuaValue.str(owner))))
-                }, battery = { StatsStore.get(ctx).batterySnapshot(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) })
-                if (requests.size <= LibraryReadModel.MAX_BATCH && model.publish(LuaValue.str(owner), requests))
-                    worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))
+                if (requests.size <= LibraryReadModel.MAX_BATCH)
+                    worker().libraryReadModel().publish(LuaValue.str(owner), requests)
             }; lock.notifyAll() }
             return start()
         }
