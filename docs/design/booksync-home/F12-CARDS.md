@@ -9,7 +9,7 @@ an immutable snapshot to the existing card renderer (`ko/home_widgets.lua:33`).
 `LibraryReadModel.kt:72` enriches only returned display rows with saved cover paths,
 series text, local progress, time-left and finish-date strings. It reuses adapter
 `cover` projections and the ordered `PersonalReading.kt:16` source registry;
-`DevicePersonalReading.kt:17` starts with the device's bounded, read-only sidecar
+`DevicePersonalReading.kt:19` starts with the device's bounded, read-only sidecar
 parser (`DeviceLibrary.kt:13`). No catalog scan, source selection or stats join
 moves into UI code. Later providers can supply personal fields behind that registry.
 
@@ -33,8 +33,16 @@ companion command, plus cached adapter references. `Library.prepareCardCover`
 (`ko/library.lua:452`) defers work until after first paint, coalesces misses and
 rejects canceled, hidden, account-switched and reading-foreground callbacks.
 The placeholder is replaced by a fitted native bitmap when available; freeing the
-card cancels delivery and releases its bitmap. Invalid/oversized images keep the
+card (including native CloseWidget) cancels delivery and releases its bitmap.
+The callback invalidates its initiating Home window so the prepared bitmap is
+actually repainted; replacing or covering Home rejects delivery. Shelf covers use a
+transparent native input container whose gesture rectangle follows its painted
+position, so the bitmap remains visible and its tap target remains live. Invalid/oversized images keep the
 placeholder. No network or decoding occurs in the initial paint.
+At the same pinned KOReader commit, `frontend/ui/uimanager.lua:225` sends
+CloseWidget and `:454` documents window-level repaint;
+`frontend/ui/widget/container/inputcontainer.lua:66` updates gesture coordinates;
+`frontend/ui/widget/imagewidget.lua:600` and `:614` release native bitmaps on close.
 
 Continue reading keeps percentage, one plain progress bar and Resume/Details.
 Larger cards add author/series and finish date; smaller ones prioritize title,

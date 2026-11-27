@@ -16,8 +16,8 @@ CrossInk 2.x only; 1.6 is retired).
 ## Next release (0.12): BookSync Home
 
 | Outcome | Platforms | Status |
-| Finish the server-free catalog cutover: companion-owned copies, grouping, settings recommendations and end-of-book snapshots/outboxes. | Android (Xteink deferred under Android-first ruling) | implemented on feature/0.12 (F12-Q2 step 5; device acceptance pending) |
 |---|---|---|
+| Finish the server-free catalog cutover: companion-owned copies, grouping, settings recommendations and end-of-book snapshots/outboxes. | Android (Xteink deferred under Android-first ruling) | implemented on feature/0.12 (F12-Q2 step 5; device acceptance pending) |
 | Open the owned Series page from the end-of-book sheet, including the last book and saved offline membership. | Android; X4 Pro, X4, X3 deferred to firmware | building (F12-endsheet implemented; device acceptance pending) |
 | Recommended and Discover Home widgets select unread saved books through personal-reading providers; daily random pick and Another. | Android; X4 Pro/X4/X3 deferred to firmware | building (implemented; device acceptance and release pending) |
 | Continue reading and Book list show cached covers, series, measured local time left/finish forecast and capability-aware book actions. | Android; X4 Pro/X4/X3 deferred by Android-first ruling | building (F12 cards; device acceptance and arbitrary-book status/removal commands pending) |

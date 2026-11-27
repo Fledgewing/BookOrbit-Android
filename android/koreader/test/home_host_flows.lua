@@ -655,7 +655,10 @@ return function(test,eq,ok,E,W,Widget)
             dialog.buttons[3][1].callback(); eq(h.series_key,"series-key")
             eq(dialog.buttons[4][1].enabled,false,"no alternate status sync writer")
             eq(dialog.buttons[5][1].enabled,false,"no unsafe file delete fallback")
-            local prepare=E.Library.prepareCardCover
+            W.shown={h}
+            local prepare,dirty=E.Library.prepareCardCover,E.UIManager.setDirty
+            local dirtied
+            E.UIManager.setDirty=function(_,window) dirtied=window end
             local calls,canceled,deliver=0,0
             E.Library.prepareCardCover=function(row,done)
                 eq(row,b); calls=calls+1; deliver=done
@@ -663,10 +666,16 @@ return function(test,eq,ok,E,W,Widget)
             end
             local success,err=pcall(function()
                 local c=E.HomeWidgets.canvas(80,120)
+                local taps=0
+                local tap=E.HomeWidgets.coverTap(c,function() taps=taps+1 end,10,20,80,100)
+                tap:paintTo({},110,220)
+                eq(tap.dimen.x,110);eq(tap.dimen.y,220)
+                eq(tap.ges_events.TapCardCover[1].range,tap.dimen)
+                ok(tap:onTapCardCover());eq(taps,1,"transparent cover input keeps a live native hit region")
                 local cover=E.HomeWidgets.cover(c,b,0,0,80,120)
                 eq(calls,0,"construction never decodes or acquires")
                 cover:paintTo({},0,0); cover:paintTo({},0,0); eq(calls,1)
-                cover:free(); eq(canceled,1)
+                cover:onCloseWidget(); cover:free(); eq(canceled,1,"native close cancels exactly once")
                 deliver("/unused-after-free"); eq(calls,1,"late delivery ignored")
                 local nativeRequire=E.require
                 local decoded=0
@@ -676,12 +685,18 @@ return function(test,eq,ok,E,W,Widget)
                 end
                 local imageCover=E.HomeWidgets.cover(c,b,0,0,80,120)
                 imageCover:paintTo({},0,0); eq(decoded,0)
+                local replacement={}
+                E.HomeHost.active=replacement;W.shown={replacement}
+                deliver("/other-home.jpg");eq(decoded,0,"another Home cannot receive this delivery")
+                E.HomeHost.active=h;W.shown={h}
                 deliver("/saved-cover.jpg"); eq(decoded,1)
+                eq(dirtied,h,"prepared cover flags its initiating window for paint")
                 ok(imageCover[1]._render,"placeholder replaced by prepared bitmap")
                 imageCover:free()
                 E.require=nativeRequire
             end)
-            E.Library.prepareCardCover=prepare
+            E.HomeHost.active=h;W.shown={h}
+            E.Library.prepareCardCover,E.UIManager.setDirty=prepare,dirty
             ok(success,err)
         end)
     end)

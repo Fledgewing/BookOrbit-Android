@@ -39,8 +39,9 @@ function HomeWidgets.cover(canvas,book,x,y,w,h,ink)
     function node:paintTo(bb,px,py)
         if not self.started then
             self.started=true
+            local host=HomeHost.active
             self.cancel=Library.prepareCardCover(book,function(path)
-                if self.released then return end
+                if self.released or HomeHost.active~=host or UIManager:getTopmostVisibleWidget()~=host then return end
                 local finish=Budgets.span("card.cover.decode",now_s,log)
                 local image
                 local ok=pcall(function()
@@ -49,19 +50,30 @@ function HomeWidgets.cover(canvas,book,x,y,w,h,ink)
                 end)
                 if ok then
                     self[1]:free(); self[1]=image
-                    UIManager:setDirty(nil,"ui",self.dimen)
+                    UIManager:setDirty(host,"ui",self.dimen)
                 elseif image then image:free() end
                 finish()
-            end,function() return not self.released and HomeHost.active and UIManager:getTopmostVisibleWidget()==HomeHost.active end)
+            end,function() return not self.released and host and HomeHost.active==host and UIManager:getTopmostVisibleWidget()==host end)
         end
         return basePaint(self,bb,px,py)
     end
     function node:free()
+        if self.released then return end
         self.released=true
         if self.cancel then self.cancel(); self.cancel=nil end
         if baseFree then baseFree(self) end
     end
+    function node:onCloseWidget() self:free() end
     return HomeWidgets.put(canvas,node,x,y)
+end
+-- Transparent input surface: keep gesture coordinates without painting over a cover.
+function HomeWidgets.coverTap(canvas,callback,x,y,w,h)
+    local range=require("ui/geometry"):new{x=0,y=0,w=w,h=h}
+    local Tap=require("ui/widget/container/inputcontainer"):extend{}
+    function Tap:paintTo(_bb,px,py) self.dimen.x,self.dimen.y=px,py end
+    function Tap:onTapCardCover() self.callback(); return true end
+    return HomeWidgets.put(canvas,Tap:new{dimen=range,width=w,height=h,text=_("Book"),callback=callback,
+        ges_events={TapCardCover={require("ui/gesturerange"):new{ges="tap",range=range}}}},x,y)
 end
 function HomeWidgets.more(canvas,b,dispatch,x,y,w,h)
     HomeWidgets.button(canvas,"⋯",x,y,w,h,function() dispatch("more",b) end)
@@ -131,9 +143,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             local b=snapshot.items[i]; local x=pad+(i-1)*cw
             local bw=cw-scale(8)
             HomeWidgets.cover(canvas,b,x,pad+scale(56),bw,coverH)
-            -- A blank button preserves the cover underneath; title opens the book.
-            local tap=HomeWidgets.button(canvas,"",x,pad+scale(56),bw,math.max(scale(50),coverH),function() dispatch("book",b) end)
-            tap.paintTo=function() end
+            HomeWidgets.coverTap(canvas,function() dispatch("book",b) end,x,pad+scale(56),bw,math.max(scale(50),coverH))
             HomeWidgets.more(canvas,b,dispatch,x+math.max(0,bw-scale(50)),h-pad-scale(50),scale(50),scale(50))
             HomeWidgets.text(canvas,b.title or _("Untitled"),x,h-pad-scale(rich and 74 or 30),math.max(1,cw-scale(60)),14,false,true)
             HomeWidgets.text(canvas,HomeWidgets.caption(p.settings,b),x,h-pad-scale(rich and 56 or 12),math.max(1,cw-scale(60)),11)
