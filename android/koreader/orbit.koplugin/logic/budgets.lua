@@ -139,3 +139,8 @@ Budgets.screens["settings-recommendations"] = budget(8,16384,50)
 Budgets.widgets["recommendations"] = budget(8,16384,50)
 Budgets.screens["copies-state"] = budget(1,16384,30)
 Budgets.screens["copies-state"].roundTrips = 0
+
+-- Card overflow is a static five-row sheet; bitmap input is separate from snapshot bytes.
+Budgets.screens["book-actions"] = budget(5,0,50)
+Budgets.screens["book-actions"].roundTrips = 0
+Budgets.CARD_COVER_BYTES = 524288

@@ -28,6 +28,44 @@ function HomeWidgets.button(canvas,text,x,y,w,h,callback,enabled)
     return HomeWidgets.put(canvas,HomeWidgets.ui().Button:new{text=text,width=w,height=h,padding=0,bordersize=0,
         text_font_size=16,avoid_text_truncation=false,callback=callback,enabled=enabled~=false},x,y)
 end
+-- First paint is a placeholder. Native bitmap decoding is deferred and its resource
+-- belongs to this node: freeing/rebuilding the host cancels late delivery.
+function HomeWidgets.cover(canvas,book,x,y,w,h,ink)
+    local u=HomeWidgets.ui()
+    local placeholder=HomeWidgets.canvas(w,h)
+    HomeWidgets.text(placeholder,"BOOK",4,8,w-8,12,ink,true)
+    local node=u.Frame:new{padding=0,margin=0,bordersize=1,placeholder}
+    local basePaint,baseFree=node.paintTo,node.free
+    function node:paintTo(bb,px,py)
+        if not self.started then
+            self.started=true
+            self.cancel=Library.prepareCardCover(book,function(path)
+                if self.released then return end
+                local finish=Budgets.span("card.cover.decode",now_s,log)
+                local image
+                local ok=pcall(function()
+                    image=require("ui/widget/imagewidget"):new{file=path,width=w,height=h,scale_factor=0}
+                    image:_render()
+                end)
+                if ok then
+                    self[1]:free(); self[1]=image
+                    UIManager:setDirty(nil,"ui",self.dimen)
+                elseif image then image:free() end
+                finish()
+            end,function() return not self.released and HomeHost.active and UIManager:getTopmostVisibleWidget()==HomeHost.active end)
+        end
+        return basePaint(self,bb,px,py)
+    end
+    function node:free()
+        self.released=true
+        if self.cancel then self.cancel(); self.cancel=nil end
+        if baseFree then baseFree(self) end
+    end
+    return HomeWidgets.put(canvas,node,x,y)
+end
+function HomeWidgets.more(canvas,b,dispatch,x,y,w,h)
+    HomeWidgets.button(canvas,"⋯",x,y,w,h,function() dispatch("more",b) end)
+end
 function HomeWidgets.caption(settings, book)
     local cap=settings.cap or 0
     if cap==1 then return book.added and tostring(book.added):sub(1,10) or "—" end
@@ -47,7 +85,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     if compact then
         -- One horizontal band keeps both actions large in a one-row tile.
         HomeWidgets.button(canvas,_(title).." ›",pad,math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch("all") end)
-    elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
+    elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad-(hero and scale(50) or 0),18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
     if not ready then
         local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or p.widget == "lists" and "No lists yet" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
@@ -64,38 +102,48 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         end
     elseif compact then
         local b=snapshot.items[1]
-        HomeWidgets.button(canvas,b.title or _("Untitled"),math.floor((w+pad)/2),math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch(p.widget == "lists" and "list" or "book",b) end)
+        local more=p.widget~="lists" and scale(50) or 0
+        HomeWidgets.button(canvas,b.title or _("Untitled"),math.floor((w+pad)/2),math.floor((h-scale(50))/2),math.floor((w-3*pad)/2)-more,scale(50),function() dispatch(p.widget == "lists" and "list" or "book",b) end)
+        if more>0 then HomeWidgets.more(canvas,b,dispatch,w-pad-more,math.floor((h-scale(50))/2),more,scale(50)) end
     elseif hero then
         local b=snapshot.items[1]; local coverW=math.min(scale(110),math.floor(w*.23))
         local tx=pad+coverW+scale(18); local tw=w-tx-pad
-        -- A typographic cover placeholder until the adapter advertises cached covers.
         local coverH=math.min(h-2*pad-scale(32),math.floor(coverW*1.5))
-        local cover=HomeWidgets.canvas(coverW,coverH)
-        HomeWidgets.text(cover,"BOOK",scale(8),scale(12),coverW-scale(16),14,true,true)
-        HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,color=u.BB.COLOR_WHITE,cover},pad,math.floor((h-coverH)/2))
+        HomeWidgets.cover(canvas,b,pad,math.floor((h-coverH)/2),coverW,coverH,true)
+        HomeWidgets.more(canvas,b,dispatch,w-pad-scale(50),0,scale(50),scale(50))
         local short=h<scale(220)
         HomeWidgets.text(canvas,b.title or _("Untitled"),tx,pad+scale(35),tw,short and 18 or 25,true,true)
         if not short then HomeWidgets.text(canvas,b.authors and b.authors[1] or "",tx,pad+scale(73),tw,16,true) end
+        if h>=scale(290) and b.series_line then HomeWidgets.text(canvas,b.series_line,tx,pad+scale(98),tw,14,true) end
+        HomeWidgets.text(canvas,b.time_left or _("Not enough reading yet"),tx,h-scale(short and 88 or 103),tw,12,true)
+        if h>=scale(290) then HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),tx,h-scale(146),tw,13,true) end
         local pct=math.max(0,math.min(100,tonumber(b.progress) or 0))
         HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(short and 105 or 128),tw,short and 16 or 26,true,true)
         HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=pct/100,radius=0,margin_h=0,margin_v=0,
             bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
         HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
-    elseif p.widget == "booklist" and (p.settings.style or 0) == 0 then
-        local count=math.min(snapshot.count,p.w >= 4 and 4 or 3)
+    elseif p.widget == "booklist" and (p.settings.style or 0) == 0 and h>=scale(190) then
+        local count=math.min(snapshot.count,p.w >= 4 and 4 or 2)
         local cw=math.floor((w-2*pad)/math.max(1,count))
-        local coverH=math.max(scale(30),h-2*pad-scale(94))
+        local rich=h>=scale(260)
+        local coverH=math.max(scale(30),h-2*pad-scale(rich and 144 or 112))
         for i=1,count do
             local b=snapshot.items[i]; local x=pad+(i-1)*cw
-            local cover=HomeWidgets.canvas(cw-scale(8),coverH)
-            HomeWidgets.text(cover,"BOOK",scale(6),scale(8),cw-scale(20),12)
-            HomeWidgets.button(cover,_("Open"),0,0,cw-scale(8),math.max(scale(50),coverH),function() dispatch("book",b) end)
-            HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,cover},x,pad+scale(56))
-            HomeWidgets.text(canvas,b.title or _("Untitled"),x,h-pad-scale(30),cw-scale(8),14,false,true)
-            HomeWidgets.text(canvas,HomeWidgets.caption(p.settings,b),x,h-pad-scale(12),cw-scale(8),11)
+            local bw=cw-scale(8)
+            HomeWidgets.cover(canvas,b,x,pad+scale(56),bw,coverH)
+            -- A blank button preserves the cover underneath; title opens the book.
+            local tap=HomeWidgets.button(canvas,"",x,pad+scale(56),bw,math.max(scale(50),coverH),function() dispatch("book",b) end)
+            tap.paintTo=function() end
+            HomeWidgets.more(canvas,b,dispatch,x+math.max(0,bw-scale(50)),h-pad-scale(50),scale(50),scale(50))
+            HomeWidgets.text(canvas,b.title or _("Untitled"),x,h-pad-scale(rich and 74 or 30),math.max(1,cw-scale(60)),14,false,true)
+            HomeWidgets.text(canvas,HomeWidgets.caption(p.settings,b),x,h-pad-scale(rich and 56 or 12),math.max(1,cw-scale(60)),11)
+            if rich then
+                HomeWidgets.text(canvas,b.time_left or _("Not enough reading yet"),x,h-pad-scale(38),math.max(1,cw-scale(60)),11)
+                HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),x,h-pad-scale(20),math.max(1,cw-scale(60)),11)
+            end
         end
     else
-        local rowH=scale(52); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(52))/rowH)))
+        local rowH=scale(p.widget=="booklist" and 96 or 52); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(52))/rowH)))
         for i=1,count do
             local b=snapshot.items[i]
             local label=b.title or b.name or _("Untitled")
@@ -106,9 +154,19 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             if progress then label=label.."  ·  "..string.format("%d%%",math.max(0,math.min(100,progress))) end
             local caption=p.widget=="booklist" and HomeWidgets.caption(p.settings,b) or ""
             if caption~="" and (p.settings.cap~=2 or not progress) then label=label.." · "..caption end
-            HomeWidgets.button(canvas,label,pad,y,w-2*pad,rowH,function()
+            local books=p.widget=="booklist"
+            local bx=books and pad+scale(42) or pad
+            if books then HomeWidgets.cover(canvas,b,pad,y+scale(4),scale(34),scale(51)) end
+            HomeWidgets.button(canvas,books and "" or label,bx,y,w-pad-bx-(books and scale(50) or 0),rowH,function()
                 dispatch(p.widget == "lists" and "list" or "book",b)
             end)
+            if books then
+                HomeWidgets.text(canvas,b.title or _("Untitled"),bx,y+scale(4),w-bx-pad-scale(50),14,false,true)
+                HomeWidgets.text(canvas,caption~="" and caption or b.series_line or (b.authors and b.authors[1]) or "",bx,y+scale(25),w-bx-pad-scale(50),11)
+                HomeWidgets.text(canvas,(progress and string.format("%d%% · ",progress) or "")..(b.time_left or _("Not enough reading yet")),bx,y+scale(44),w-bx-pad-scale(50),11)
+                HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),bx,y+scale(63),w-bx-pad-scale(50),11)
+                HomeWidgets.more(canvas,b,dispatch,w-pad-scale(50),y,scale(50),rowH)
+            end
             if progress then HomeWidgets.put(canvas,u.Progress:new{width=w-2*pad,height=scale(3),radius=0,margin_h=0,margin_v=0,
                 percentage=math.max(0,math.min(100,progress))/100},pad,y+rowH-scale(3)) end
         end

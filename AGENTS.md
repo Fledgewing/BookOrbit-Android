@@ -347,3 +347,9 @@ HTTP clients or vendor identifiers. Legacy class retirement uses one bounded loc
 bootstrap descriptor (one row, 16 KiB, one round-trip, zero network/subprocesses) before instances
 start; a missing, late or mismatched companion never claims sync ownership. Retirement metadata
 and native setting/gesture identifiers are supplied by the companion adapter, never encoded in Lua.
+
+Home book cards inherit their widget window's row/16 KiB snapshot budget; the companion
+projects cover paths, series labels and personal pace. Card paints decode no images or
+start cover jobs: the interface defers preparation, bounds bitmap input to 512 KiB,
+and cancels delivery after removal, account change or return to reading. The static
+book-actions sheet has five rows, zero decoded data and no companion round-trip.

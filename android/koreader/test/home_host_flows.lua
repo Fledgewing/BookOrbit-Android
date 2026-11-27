@@ -591,6 +591,81 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Home cards: projected labels, overflow routes and deferred cover lifetime",function()
+        withHost(function(_,_,U)
+            local b={key="opaque",title="The Moon",progress=25,local_path="book.epub",series_key="series-key",
+                series_line="Moon · Book 2",time_left="50 m left",finish_forecast="Done by Tuesday"}
+            local snap=E.HomeHostPlan.snapshot({items={b},freshness={saved=true}})
+            local actions={}
+            local card=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,
+                function(action) actions[#actions+1]=action end,{w=678,h=374})
+            local labels={}
+            for _,child in ipairs(card[1]) do
+                if child.text then labels[child.text]=true end
+                if child.text=="⋯" then child.callback() end
+            end
+            for _,label in ipairs({b.series_line,b.time_left,b.finish_forecast}) do ok(labels[label],label) end
+            eq(actions[1],"more")
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            h:dispatch("more",b)
+            local dialog=W.shown[#W.shown]
+            eq(dialog.buttons[1][1].text,"Details"); eq(dialog.buttons[2][1].text,"Open")
+            dialog.buttons[3][1].callback(); eq(h.series_key,"series-key")
+            eq(dialog.buttons[4][1].enabled,false,"no alternate status sync writer")
+            eq(dialog.buttons[5][1].enabled,false,"no unsafe file delete fallback")
+            local prepare=E.Library.prepareCardCover
+            local calls,canceled,deliver=0,0
+            E.Library.prepareCardCover=function(row,done)
+                eq(row,b); calls=calls+1; deliver=done
+                return function() canceled=canceled+1 end
+            end
+            local success,err=pcall(function()
+                local c=E.HomeWidgets.canvas(80,120)
+                local cover=E.HomeWidgets.cover(c,b,0,0,80,120)
+                eq(calls,0,"construction never decodes or acquires")
+                cover:paintTo({},0,0); cover:paintTo({},0,0); eq(calls,1)
+                cover:free(); eq(canceled,1)
+                deliver("/unused-after-free"); eq(calls,1,"late delivery ignored")
+            end)
+            E.Library.prepareCardCover=prepare
+            ok(success,err)
+        end)
+    end)
+
+    test("Home card covers: off-paint, bounded, coalesced and owner/cancel safe",function()
+        withHost(function()
+            local originalRequire,acquire=E.require,E.Library.acquireCover
+            local owner,size="fixture",100
+            local paths,requests,callback={},0
+            E.LibraryAdapter.owner=function() return owner end
+            E.LibraryAdapter.sent,E.LibraryAdapter.order={},{}
+            E.require=function(name)
+                if name=="lfs" then return {attributes=function() return {mode="file",size=size} end} end
+                return originalRequire(name)
+            end
+            E.Library.acquireCover=function(key,done) requests=requests+1; callback=done end
+            local function schedule(row)
+                local cancel=E.Library.prepareCardCover(row,function(path) paths[#paths+1]=path end,function() return true end)
+                return cancel,W.queue[#W.queue].fn
+            end
+            local success,err=pcall(function()
+                local cancel,task=schedule({cover_path="saved.jpg"})
+                eq(#paths,0);eq(requests,0,"paint schedules no command")
+                task();cancel();eq(paths[1],"saved.jpg")
+                size=E.Budgets.CARD_COVER_BYTES+1
+                cancel,task=schedule({cover_path="oversized.jpg"});task();cancel();eq(#paths,1)
+                size=100
+                cancel,task=schedule({cover_path="canceled.jpg"});cancel();task();eq(#paths,1)
+                cancel,task=schedule({key="remote"});task();cancel();eq(requests,1)
+                local cancelAgain,again=schedule({key="remote"});again();cancelAgain();eq(requests,1,"misses coalesce")
+                local cancelLate,late=schedule({key="other"});late();eq(requests,2)
+                owner="replacement";callback({local_path="wrong-owner.jpg"});cancelLate();eq(#paths,1)
+            end)
+            E.require,E.Library.acquireCover=originalRequire,acquire
+            ok(success,err)
+        end)
+    end)
+
     test("Home host: account setup actions use the right form and invalidate the subtitle region",function()
         withHost(function()
             local read,open=E.LibraryAdapter.read,E.AccountView.open

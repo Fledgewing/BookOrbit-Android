@@ -16,6 +16,17 @@ class DevicePersonalReading(private val roots: List<File>, private val statistic
         "yearago" -> if (!statistics.isFile) emptyList() else open(statistics).use { yearago(it, now) }
         else -> emptyList()
     }
+    override fun card(book: Map<String, Any?>, now: Long, dailySeconds: Long): Map<String, Any?> {
+        val path = (book["local_path"] as? String)?.let(LuaValue::utf8) ?: return emptyMap()
+        val file = Places.inside(File(path), roots)?.takeIf { it.isFile } ?: return emptyMap()
+        val data = DeviceLibrary.metadata(file, roots) ?: return emptyMap()
+        val fraction = (data["percent_finished"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+        val position = fraction?.let { mapOf("progress" to it*100) }.orEmpty()
+        val md5 = (data["partial_md5_checksum"] as? String)?.takeIf { Regex("[0-9a-f]{32}").matches(it) } ?: return position
+        return position + if (!statistics.isFile) emptyMap() else runCatching {
+            open(statistics).use { ReadingStats.forecast(it, md5, fraction, now, dailySeconds) }
+        }.getOrElse { if (it is InterruptedException) throw it; emptyMap() }
+    }
     private fun highlights(): List<PersonalReadingRecord> {
         val out = linkedMapOf<String, PersonalReadingRecord>()
         for (book in DeviceLibrary.files(roots).sortedBy { it.canonicalPath }) {

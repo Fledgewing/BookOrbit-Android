@@ -4,6 +4,7 @@ package net.fledgewing.orbitcompanion
 /** Worker-only providers return neutral records. Registration order wins duplicate identities.
  * Providers may read saved data only: acquisition is a separate worker operation. */
 interface PersonalReadingSource {
+    fun card(book: Map<String, Any?>, now: Long, dailySeconds: Long): Map<String, Any?> = emptyMap()
     val capabilities: Set<String>
     fun read(kind: String, now: Long): List<PersonalReadingRecord>
 }
@@ -11,6 +12,14 @@ data class PersonalReadingRecord(val identity: String, val fields: Map<String, A
 
 class PersonalReading(private val sources: List<PersonalReadingSource>) {
     companion object { val KINDS = setOf("highlight", "yearago", "recommended", "discover") }
+    /** Source precedence belongs here; card callers never select a provider. */
+    fun card(book: Map<String, Any?>, now: Long, dailySeconds: Long): Map<String, Any?> {
+        val fields = linkedMapOf<String, Any?>()
+        for (source in sources) try {
+            source.card(book, now, dailySeconds).forEach { (key, value) -> if (value != null) fields.putIfAbsent(key, value) }
+        } catch (e: Exception) { if (e is InterruptedException) throw e }
+        return book + fields
+    }
     fun window(kind: String, now: Long, pick: Long = 0): Map<String, Any?> {
         require(kind in KINDS)
         val merged = linkedMapOf<String, PersonalReadingRecord>()

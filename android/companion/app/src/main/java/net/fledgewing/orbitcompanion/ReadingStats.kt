@@ -27,6 +27,30 @@ object ReadingStats {
             AndroidSql(file, readOnly = true).use { db -> aggregate(db, now, zone, includedThrough) }
         }.getOrElse { if (it is InterruptedException) throw it; unavailable("error") }
     }
+    /** Measured fractional-page pace survives layout changes (page_stat_data.total_pages).
+     * Five sane visits are required; missing identity/locator/pace never becomes a guess. */
+    fun forecast(db: Sql, md5: String, fraction: Double?, now: Long, dailySeconds: Long,
+                 zone: ZoneId = ZoneId.systemDefault()): Map<String, Any?> {
+        if (fraction == null || !fraction.isFinite() || fraction !in 0.0..1.0) return emptyMap()
+        if (fraction == 1.0) return mapOf("time_left" to "Finished", "finish_forecast" to "Finished")
+        val pace = db.query("""SELECT COUNT(*),SUM(p.duration),SUM(1.0/p.total_pages)
+            FROM page_stat_data p JOIN book b ON b.id=p.id_book
+            WHERE b.md5=? AND p.total_pages>0 AND p.page BETWEEN 1 AND p.total_pages
+            AND p.duration BETWEEN 1 AND 600 AND p.start_time>0 AND p.start_time<?""", md5, now) {
+            Triple(it.long(0) ?: 0, it.long(1) ?: 0, it.text(2)?.toDoubleOrNull() ?: 0.0)
+        }.single()
+        if (pace.first < 5 || pace.third <= 0) return emptyMap()
+        val estimate = (1-fraction)*pace.second/pace.third
+        if (!estimate.isFinite() || estimate !in 0.0..3153600000.0) return emptyMap()
+        val remaining = kotlin.math.ceil(estimate).toLong()
+        val minutes = (remaining+59)/60
+        val duration = if (minutes>=60) "${minutes/60} h ${minutes%60} m left" else "$minutes m left"
+        val days = if (dailySeconds>0) kotlin.math.ceil(remaining.toDouble()/dailySeconds).toLong() else null
+        val date = days?.takeIf { it<=36500 }?.let { Instant.ofEpochSecond(now).atZone(zone).toLocalDate().plusDays(it) }
+        return mapOf("time_left" to LuaValue.str(duration), "finish_forecast" to date?.let {
+            LuaValue.str("Done by " + it.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM"))) },
+            "forecast_source" to "this reader")
+    }
     private fun unavailable(state: String) = mapOf<String, Any?>("state" to state, "freshness" to mapOf("saved" to false, "origin" to "local-reader"))
 
     /** Keyset chunks bound cursor memory. Dates/hours use the device zone, including DST.

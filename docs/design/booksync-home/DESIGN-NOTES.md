@@ -1109,3 +1109,18 @@ offline; loading, empty, missing offline data and errors have explicit cards.
 Device font metrics and latency remain acceptance work. X4 Pro, X4 and X3 follow
 the Android-first authorization; no firmware implementation is claimed.
 See [implementation evidence](F12-RECDISC.md).
+
+## F12-cards: Android book cards (2026-11-26)
+
+Continue reading and Book list reuse the existing host/window and personal-reading
+source registry for saved covers, series labels and ready-to-draw local time-left
+and finish forecasts. Source choice and cover acquisition remain behind Library;
+book actions reflect available adapter operations. No alternate status sync writer
+or generic file-delete fallback is introduced. See [implementation and remaining
+acceptance](F12-CARDS.md).
+
+The existing per-widget row/16 KiB limits and one Home batch remain authoritative;
+no extra cover lookup is added to paint. Bitmap preparation is deferred, encoded
+input is capped at 512 KiB, and stale deliveries are canceled. Overflow declares a
+five-row static budget with zero decoded bytes/round-trips. Info timing spans cover
+paint, read-model publication and deferred decode. Device targets remain unverified.

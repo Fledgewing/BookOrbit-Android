@@ -423,6 +423,57 @@ function Library.acquireCover(key,done)
     end)
 end
 
+-- Adapter capabilities determine the overflow model, never server names in a widget.
+function Library.cardActions(row,caps)
+    caps=caps or {}
+    local items={{id="details",label="Details",enabled=row.key~=nil},
+        {id=row.local_path and "book" or "download",label=row.local_path and "Open" or "Download",enabled=row.local_path~=nil or caps.download==true}}
+    if row.series_key and not (caps.series and caps.series.read==false) then
+        items[#items+1]={id="series",label="View series",enabled=true}
+    end
+    -- No alternate sync writer: these remain unavailable until the adapter exposes writes.
+    items[#items+1]={id="status",label=row.status=="finished" and "Mark unread" or "Mark read",enabled=false}
+    if row.local_path then items[#items+1]={id="remove",label="Remove download",enabled=false} end
+    assert(#items<=Budgets.get("screens","book-actions").rows,"Card action row budget exceeded")
+    return items
+end
+
+-- Explicit download reuses the catalog's validated atomic-file/ledger workflow.
+function Library.downloadCard(row,done)
+    local owner=LibraryAdapter.owner()
+    return Library.catalogAction("finish.download",{key=row.key},function(result)
+        if owner~=LibraryAdapter.owner() then return done({error="canceled"}) end
+        done(result)
+    end)
+end
+
+-- Card cover preparation runs after the first paint. The interface owns cache misses,
+-- account/generation cancellation and retries; widgets see only a bounded local path.
+function Library.prepareCardCover(row,done,visible)
+    local owner=LibraryAdapter.owner()
+    local canceled=false
+    local function valid() return not canceled and owner==LibraryAdapter.owner() and not reading() and (not visible or visible()) end
+    local function deliver(path)
+        if not valid() or type(path)~="string" then return end
+        local attr=require("lfs").attributes(path)
+        if attr and attr.mode=="file" and attr.size<=Budgets.CARD_COVER_BYTES then done(path); return true end
+    end
+    local task=function()
+        if not valid() then return end
+        if row.cover_path and deliver(row.cover_path) then return end
+        if not row.key or row.local_path and row.key:match("^device:") then return end
+        local key="card-cover:"..owner..row.key
+        local last=LibraryAdapter.sent[key]
+        if last and now_s()-last<30 then return end
+        LibraryAdapter.sent[key]=now_s()
+        table.insert(LibraryAdapter.order,key)
+        if #LibraryAdapter.order>64 then LibraryAdapter.sent[table.remove(LibraryAdapter.order,1)]=nil end
+        Library.acquireCover(row.key,function(result) if valid() then deliver(result.local_path) end end)
+    end
+    UIManager:nextTick(task)
+    return function() canceled=true; UIManager:unschedule(task) end
+end
+
 -- Cover lookup never schedules work on a paint. The thumbnail host explicitly acquires misses
 -- after paint; the companion publishes the exact one-row reference on its existing writer.
 function Library.cachedCover(reference)
