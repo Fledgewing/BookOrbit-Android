@@ -19,7 +19,7 @@ end
 function FinishUI.onLeave(ui)
     local b=book(ui);if not b then return end
     if Library.noteReaderLeave then Library.noteReaderLeave(b) end
-    dispatch("finish.leave",b)
+    if b.summary.status=="complete" or FinishUI.jobs[b.digest] or FinishUI.sheet then dispatch("finish.leave",b) end
 end
 function FinishUI.leaveForHome(ui)
     local had=FinishUI.sheet~=nil;FinishUI.closeSheet()

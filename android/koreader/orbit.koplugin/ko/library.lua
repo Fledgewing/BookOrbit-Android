@@ -492,6 +492,8 @@ function Library.catalogSnapshot()
 end
 function Library.refreshCatalog(action,manual)
     local owner=LibraryAdapter.owner()
+    local catalog=(LibraryAdapter.account_snapshot or {}).catalog or {}
+    if not manual and catalog.canRefresh~=true then return false end
     local problem=Companion.workerProblem()
     if not owner or problem then
         if manual and not reading() then

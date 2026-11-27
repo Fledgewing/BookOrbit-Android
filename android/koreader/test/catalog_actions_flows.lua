@@ -29,6 +29,23 @@ test("catalog actions: mark, rate, undo and leave dispatch neutral commands",fun
     E.FinishUI.onLeave(ui);eq(calls[4][1],"finish.leave")
     b.summary.status="reading";E.FinishUI.onMarked(ui);eq(calls[5][2].complete,false)
 end) end)
+test("catalog actions: automatic refresh requires the neutral capability",function()
+    local snapshot,command=E.LibraryAdapter.account_snapshot,E.LibraryAdapter.command
+    local success,why=pcall(function()
+        E.LibraryAdapter.account_snapshot={catalog={canRefresh=false}}
+        E.LibraryAdapter.command=function() error("refresh without capability") end
+        eq(E.Library.refreshCatalog("resume",false),false)
+        E.LibraryAdapter.account_snapshot={catalog={}}
+        eq(E.Library.refreshCatalog("incremental",false),false)
+    end)
+    E.LibraryAdapter.account_snapshot,E.LibraryAdapter.command=snapshot,command
+    if not success then error(why) end
+end)
+test("catalog actions: unmarked reader leave needs no companion command",function() isolated(function()
+    local ui,m,b=fixture();E.FinishUI.jobs[b.digest]=nil
+    E.Library.catalogAction=function() error("unnecessary leave command") end
+    E.FinishUI.onLeave(ui)
+end) end)
 test("catalog actions: finish snapshot paint is bounded and contains no catalog algorithms",function() isolated(function()
     local ui,m,b=fixture();local adapter=E.LibraryAdapter;local requests={}
     E.LibraryAdapter={read=function(raw)
