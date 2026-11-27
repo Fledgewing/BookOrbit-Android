@@ -278,7 +278,8 @@ function ReaderSheet:build()
         local current=self.focus_controls[self.focus_index or 1]
         if current and current.onFocus then current:onFocus() end
     end
-    assert(self.plan.h<=self.screen_h,"Reader panel controls exceed display")
+    self.too_small=self.plan.h>self.screen_h
+    if self.too_small then finish();return end
     -- Native scale follows physical display dimensions. EndSheet retains measured
     -- geometry; never silently crop controls to its default 90% sheet cap.
     self.sheet_h=self.plan.h
@@ -297,6 +298,7 @@ end
 local function button(text, action) return {kind="button", text=text, action=action} end
 
 function ReaderPanel.show(ui, screen, key, reuse, attempt)
+    if not Library.closeNativeReaderMenus(ui) then return false end
     if not (ui and ui.document) and screen ~= "details" then return false end
     local paint = Library.paint(screen)
     local book = paint:widget("reader-progress")
@@ -453,10 +455,18 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         sheet = reuse
         sheet.model, sheet.display_rows = m, rows
         sheet:build()
+        if sheet.too_small then
+            ReaderPanel.close()
+            if bottom then return ReaderPanel.stockConfig(ui.config) else return ReaderPanel.stockMenu(ui.menu) end
+        end
         UIManager:setDirty(sheet, "ui")
     else
         ReaderPanel.close()
         sheet = ReaderSheet:new{ui=ui, screen=screen, model=m, display_rows=rows}
+        if sheet.too_small then
+            if sheet.free then sheet:free() end
+            if bottom then return ReaderPanel.stockConfig(ui.config) else return ReaderPanel.stockMenu(ui.menu) end
+        end
         ReaderPanel.sheet = sheet
         UIManager:show(sheet) -- gate: user action (reader top panel, Book info or Details)
     end
@@ -474,53 +484,41 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
 end
 function ReaderPanel.details(key, ui) return ReaderPanel.show(ui, "details", key) end
 
--- Replace only the visible reader menu. Menu-search construction keeps its native seam.
-local okMenu, ReaderMenu = pcall(require, "apps/reader/modules/readermenu")
-if okMenu and type(ReaderMenu.onShowMenu) == "function" then
-    ReaderPanel.stockMenu = ReaderMenu.onShowMenu
-    wrap(ReaderMenu, "onShowMenu", function(stock) return function(self, tab, hidden)
-        if hidden or not (self.ui and self.ui.document) then return stock(self, tab, hidden) end
-        if self.menu_container then self:onCloseReaderMenu() end
-        return ReaderPanel.show(self.ui, "reader-top-panel")
-    end end, "reader-panel")
+-- Native builders remain live, including third-party items and invisible search.
+function ReaderPanel.stockMenu(menu,...)
+    if not (menu and menu.onShowMenu) then return false end
+    local args=UIUtil.pack(...)
+    return Library.withNativeMenus(menu.ui,function() return menu:onShowMenu(unpack(args,1,args.n)) end)
 end
-
-local okConfig,ReaderConfig=pcall(require,"apps/reader/modules/readerconfig")
-if okConfig and type(ReaderConfig.onShowConfigMenu)=="function" then
-    ReaderPanel.stockConfig=ReaderConfig.onShowConfigMenu
-    wrap(ReaderConfig,"onShowConfigMenu",function(stock) return function(self)
-        if not (self.ui and self.ui.document) then return stock(self) end
-        if self.config_dialog then self:onCloseConfigMenu() end
-        return ReaderPanel.show(self.ui,"reader-bottom-panel")
-    end end,"reader-bottom-panel")
+function ReaderPanel.stockConfig(config,...)
+    if not (config and config.onShowConfigMenu) then return false end
+    local args=UIUtil.pack(...)
+    return Library.withNativeMenus(config.ui,function() return config:onShowConfigMenu(unpack(args,1,args.n)) end)
 end
--- Native tap handlers normally open both menus. Select exactly one owned panel.
-if okMenu and type(ReaderMenu.onTapShowMenu)=="function" then
-    wrap(ReaderMenu,"onTapShowMenu",function(stock) return function(self,ges)
-        if not (self.ui and self.ui.document) then return stock(self,ges) end
-        if self.activation_menu~="swipe" then return ReaderPanel.show(self.ui,"reader-top-panel") end
-    end end,"reader-top-tap")
+local nativeReady=OrbitAndroid.onReaderReady
+function OrbitAndroid:onReaderReady(...)
+    local result=nativeReady and nativeReady(self,...)
+    Library.installReaderMenus(self.ui)
+    return result
 end
-
-if okMenu and type(ReaderMenu.onSwipeShowMenu)=="function" then
-    wrap(ReaderMenu,"onSwipeShowMenu",function(stock) return function(self,ges)
-        if not (self.ui and self.ui.document) then return stock(self,ges) end
-        if self.activation_menu~="tap" and ges.direction=="south" then
-            return ReaderPanel.show(self.ui,"reader-top-panel")
-        end
-    end end,"reader-top-swipe")
+local nativeCloseDocument=OrbitAndroid.onCloseDocument
+function OrbitAndroid:onCloseDocument(...)
+    Library.restoreReaderMenus(self.ui)
+    if nativeCloseDocument then return nativeCloseDocument(self,...) end
 end
 -- Also reachable from the plugin's existing Tools entry when a native menu is open.
 local baseMenu = OrbitAndroid.menuItems
 function OrbitAndroid:menuItems(...)
     local rows = baseMenu(self, ...)
     if self.ui and self.ui.document then
-        table.insert(rows, 1, {text="Book info", callback=function() ReaderPanel.show(self.ui, "book-info") end})
+        table.insert(rows,1,{text="BookSync reading menu",callback=function() ReaderPanel.show(self.ui,"reader-top-panel") end})
+        table.insert(rows, 2, {text="Book info", callback=function() ReaderPanel.show(self.ui, "book-info") end})
     end
     return rows
 end
 local baseClose = OrbitAndroid.onCloseWidget
 function OrbitAndroid:onCloseWidget(...)
+    Library.restoreReaderMenus(self.ui)
     if CustomReading and CustomReading.editor then
         CustomReading.editor.return_to=nil
         CustomReading.close()
@@ -531,4 +529,114 @@ function OrbitAndroid:onCloseWidget(...)
     end
     ReaderPanel.close()
     return baseClose(self, ...)
+end
+
+-- Reader-only shells reuse the measured Home/end-sheet language. Native document
+-- data and navigation stay behind Library; specialist editing remains reachable.
+local function navigationButton(text,action)
+    return {kind="button",text=text,action=action}
+end
+local function navigationLimit(kind)
+    local device=require("device")
+    local mt=SheetLayout.metrics(device.screen:getWidth(),function(n) return device.screen:scaleBySize(n) end)
+    mt.button=math.max(mt.button,device.screen:scaleBySize(50))
+    -- Native ButtonTable adds vertical padding outside its requested content
+    -- height. Reserve it (plus separators) before choosing the visible window.
+    local nativeSize=require("ui/size")
+    local padding=type(nativeSize.padding)=="table" and nativeSize.padding.buttontable or device.screen:scaleBySize(4)
+    mt.button=mt.button+2*padding+device.screen:scaleBySize(8)
+    for count=8,1,-1 do
+        local rows={{kind="title"},{kind="label"}}
+        if kind=="search" then rows[#rows+1]={kind="label"} end
+        for _=1,count do rows[#rows+1]={kind="button"} end
+        rows[#rows+1]={kind="reading-choices"}
+        if kind=="search" then rows[#rows+1]={kind="button"} end
+        rows[#rows+1]={kind="button"};rows[#rows+1]={kind="footer"}
+        if SheetLayout.plan(SheetLayout.blocks(rows),mt).h+device.screen:scaleBySize(8)<=device.screen:getHeight() then return count end
+    end
+end
+function ReaderPanel.navigation(ui,kind,offset)
+    if not (ui and ui.document) or not Library.closeNativeReaderMenus(ui) then return false end
+    local document=ui.document
+    local limit=navigationLimit(kind)
+    if not limit then return Library.readerNativeAction(ui,kind) end
+    local result=Library.readerWindow(ui,kind,offset or 0,limit)
+    local title=kind=="contents" and "Contents" or kind=="annotations" and "Bookmarks & highlights" or "Search results"
+    local rows={{kind="title",text=title}}
+    rows[#rows+1]={kind="label",text=result.error and "Search unavailable · Native options remain available" or result.unavailable and "Native data not available here" or result.total==0 and (kind=="search" and "No matches" or kind=="contents" and "No chapters" or "No saved items") or
+        (kind=="search" and result.total==128 and "First 128 matches" or tostring(result.total)..(kind=="search" and " matches" or " items"))}
+    if result.query then rows[#rows+1]={kind="label",text=result.query} end
+    for index,item in ipairs(result.items or {}) do
+        local row=index
+        rows[#rows+1]=navigationButton(string.rep("  ",item.depth)..item.title..(item.location~="" and " · "..item.location or ""),function()
+            if ui.document~=document then ReaderPanel.close();return end
+            if Library.readerNavigate(ui,result.token,row) then ReaderPanel.close() else ReaderPanel.navigation(ui,kind,result.offset) end
+        end)
+    end
+    if (result.offset or 0)>0 or result.next then
+        local choices={kind="reading-choices",choices={}}
+        if (result.offset or 0)>0 then choices.choices[#choices.choices+1]={text="Previous",callback=function() if ui.document==document then ReaderPanel.navigation(ui,kind,math.max(0,result.offset-limit)) end end} end
+        if result.next then choices.choices[#choices.choices+1]={text="Next",callback=function() if ui.document==document then ReaderPanel.navigation(ui,kind,result.next) end end} end
+        rows[#rows+1]=choices
+    end
+    if kind=="search" then rows[#rows+1]=navigationButton("New search",function() ReaderPanel.close();if ui.document==document then ReaderPanel.searchDialog(ui) end end) end
+    rows[#rows+1]=navigationButton(kind=="annotations" and "Edit saved items in KOReader…" or kind=="search" and "Native search options…" or "Native Contents options…",function()
+        ReaderPanel.close();if ui.document==document then Library.readerNativeAction(ui,kind) end
+    end)
+    rows[#rows+1]={kind="footer",text="Back to book",action=ReaderPanel.close}
+    ReaderPanel.close()
+    local finish=Budgets.span("reader-navigation.paint",now_s,log)
+    local sheet=ReaderSheet:new{ui=ui,screen="reader-navigation",display_rows=rows,model={}}
+    if sheet.too_small then
+        if sheet.free then sheet:free() end
+        finish();return Library.readerNativeAction(ui,kind)
+    end
+    ReaderPanel.sheet=sheet
+    UIManager:show(sheet) -- gate: user action (owned Contents, saved items or search results)
+    finish();return true
+end
+function ReaderPanel.goDialog(ui)
+    if not (ui and ui.document) then return false end
+    local document=ui.document
+    local dialog
+    local function go(percent)
+        if ui.document~=document then UIManager:close(dialog);return end
+        if Library.readerGo(ui,dialog:getInputText(),percent) then UIManager:close(dialog) end
+    end
+    dialog=require("ui/widget/inputdialog"):new{title="Go to page or percent",input="",buttons={
+        {{text="Go to page",callback=function() go(false) end},{text="Go to %",callback=function() go(true) end}},
+        {{text="Native page/flow options…",callback=function() UIManager:close(dialog);if ui.document==document then Library.readerNativeAction(ui,"goto") end end},
+         {text="Back",callback=function() UIManager:close(dialog) end}},
+    }}
+    UIManager:show(dialog) -- gate: user action (approved basic Go to form)
+    dialog:onShowKeyboard();return true
+end
+function ReaderPanel.searchDialog(ui)
+    if not (ui and ui.document) then return false end
+    local document=ui.document
+    local dialog
+    local function search()
+        local query=dialog:getInputText()
+        if #query==0 or #query>512 then return end
+        UIManager:close(dialog)
+        if ui.document~=document then return end
+        local info=require("ui/widget/infomessage"):new{text="Searching… (tap to cancel)"}
+        UIManager:show(info) -- gate: user action (native cancelable search worker)
+        UIManager:forceRePaint()
+        local accepted=Library.readerSearch(ui,query,info,function(completed)
+            local visible=UIManager:getTopmostVisibleWidget()==info
+            -- Trapper resumes this callback from InfoMessage dismissal too.
+            -- Retire the callback before closing, avoiding a nested resume.
+            info.dismiss_callback=nil
+            UIManager:close(info)
+            if completed and visible and ui.document==document then ReaderPanel.navigation(ui,"search") end
+        end)
+        if not accepted then UIManager:close(info);Library.readerNativeAction(ui,"search") end
+    end
+    dialog=require("ui/widget/inputdialog"):new{title="Search this book",input="",buttons={
+        {{text="Search",callback=search},{text="Native search options…",callback=function() UIManager:close(dialog);if ui.document==document then Library.readerNativeAction(ui,"search") end end}},
+        {{text="Back",callback=function() UIManager:close(dialog) end}},
+    }}
+    UIManager:show(dialog) -- gate: user action (approved owned query, native keyboard)
+    dialog:onShowKeyboard();return true
 end

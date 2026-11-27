@@ -318,6 +318,9 @@ function OrbitAndroid:menuItems()
         end),
         group("reading", "Reading", function()
             local out = CustomReading.settingsRows(self.ui)
+            out[#out+1]={text="BookSync reading menus",checked_func=Library.readerMenusEnabled,callback=function()
+                Library.setReaderMenus(self.ui,not Library.readerMenusEnabled())
+            end}
             for _, row in ipairs(rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})) do out[#out+1] = row end
             return out
         end),
