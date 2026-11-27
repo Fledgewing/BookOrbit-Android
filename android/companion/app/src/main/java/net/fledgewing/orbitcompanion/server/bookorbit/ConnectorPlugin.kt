@@ -9,6 +9,8 @@ object ConnectorPlugin : ConnectorInstaller {
     override fun retirementPlan(): Map<String,Any?> = mapOf(
         "plugins" to listOf("bookorbit"), "modules" to listOf("bookorbit_api"),
         "settings_key" to "bookorbit", "home_key" to "bookorbit", "row_count" to 1,
+        "preference_overlay" to mapOf("record" to "osm_saved_plugin","guard" to mapOf("sync_forward" to 3,"sync_backward" to 3),
+            "keys" to listOf("sync_forward","sync_backward","auto_sync")),
         "actions" to listOf(mapOf("id" to "bookorbit_sync_now","event" to "LibrarySyncAll","title" to "BookSync: Sync all books"),
             mapOf("id" to "bookorbit_this_book","event" to "LibraryThisBook","title" to "BookSync: This book")))
     override val minimumVersion = PluginRelease.MIN_VERSION

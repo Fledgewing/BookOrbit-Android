@@ -622,21 +622,30 @@ local function connectorSettings()
     local key=NativeRetirement and NativeRetirement.plan and NativeRetirement.plan.settings_key
     return key and G_reader_settings:readSetting(key)
 end
+local function preferenceSource(settings,key)
+    local rule=NativeRetirement and NativeRetirement.plan and NativeRetirement.plan.preference_overlay
+    local record=rule and S[rule.record]
+    if type(record)=="table" and next(record) and type(rule.guard)=="table" and type(rule.keys)=="table" then
+        local n=0
+        for name,value in pairs(rule.guard) do
+            n=n+1;if n>8 or settings[name]~=value then return settings,false end
+        end
+        for i,name in ipairs(rule.keys) do if i>8 then break end;if name==key then return record,true end end
+    end
+    return settings,false
+end
 function Library.observeSetting(item)
     local settings=connectorSettings();local defaults=NativeRetirement and NativeRetirement.defaults
     if type(settings)~="table" or type(defaults)~="table" then return {available=false,reason="Connector defaults unavailable"} end
-    local source=settings
-    if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and settings.sync_forward==3 and settings.sync_backward==3 and
-        (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then source=S.osm_saved_plugin end
+    local source=preferenceSource(settings,item.key)
     return {available=true,current=source[item.key],default=defaults[item.key]}
 end
 function Library.writeSetting(item,value)
     local settings=connectorSettings();if type(settings)~="table" then return false end
-    if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and settings.sync_forward==3 and settings.sync_backward==3 and
-        (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then
-        S.osm_saved_plugin[item.key]=value;saveSettings();return true
-    end
-    settings[item.key]=value;G_reader_settings:flush();return true
+    local source,overlay=preferenceSource(settings,item.key)
+    source[item.key]=value
+    if overlay then saveSettings() else G_reader_settings:flush() end
+    return true
 end
 function Library.sleepRefresh(extras)
     Companion.send(Companion.ACTION.SLEEP_REFRESH,extras);Library.watchEvents()

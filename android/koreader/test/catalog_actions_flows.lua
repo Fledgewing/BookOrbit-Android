@@ -83,7 +83,7 @@ test("catalog actions: recommendation observation unwraps the saved native value
     local saved,mode=E.S.osm_saved_plugin,E.S.sync_mode
     p.default_settings={sync_forward=1}
     local retirement=E.NativeRetirement
-    E.NativeRetirement={plan={settings_key="fixture-connector"},defaults=p.default_settings}
+    E.NativeRetirement={plan={settings_key="fixture-connector",preference_overlay={record="osm_saved_plugin",guard={sync_forward=3,sync_backward=3},keys={"sync_forward","sync_backward","auto_sync"}}},defaults=p.default_settings}
     E.G_reader_settings:saveSetting("fixture-connector",p.settings)
     E.S.osm_saved_plugin={sync_forward=3};E.S.sync_mode="balanced"
     p.settings.sync_forward,p.settings.sync_backward=3,3
