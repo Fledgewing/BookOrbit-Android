@@ -145,13 +145,10 @@
         "open_id",
         "every",
         "storage_limit_mb",
-        "scopes_only",
-        "server",
-        "user",
-        "userkey"
+        "scopes_only"
       ],
-      "does": "refresh the sleep screen's pool, or only the pickers' lists",
-      "login": true
+      "does": "refresh the sleep pool or pickers through the companion-owned login; no plugin credentials",
+      "login": false
     },
     {
       "name": "SQLITE_STRESS",
@@ -167,12 +164,9 @@
       "extras": [
         "reason",
         "drain_events",
-        "events_ack",
-        "board_year",
-        "board_key",
-        "board_now"
+        "events_ack"
       ],
-      "does": "a write the plugin made, patched into orbit.db (or a wipe)"
+      "does": "publish bounded read-model requests and acknowledge durable event batches"
     },
     {
       "name": "UPDATE",
@@ -282,6 +276,18 @@
         "body"
       ],
       "does": "one cached neutral device-settings record"
+    },
+    {
+      "name": "LIBRARY_BOOTSTRAP",
+      "method": "net.fledgewing.orbitcompanion.call.LIBRARY_BOOTSTRAP",
+      "caller": "koreader",
+      "extras": [
+        "patch_version"
+      ],
+      "answer": [
+        "body"
+      ],
+      "does": "one bounded local legacy retirement descriptor before plugin instances start"
     }
   ],
   "activities": [
@@ -476,7 +482,7 @@
       "path": "koreader/cache/bookorbit/",
       "pattern": "<id>_<version>.jpg and matching .etag",
       "writer": "plugin, companion",
-      "reader": "plugin, companion",
+      "reader": "companion",
       "format": "jpeg, etag",
       "what": "BookOrbit thumbnails and mirror covers"
     },

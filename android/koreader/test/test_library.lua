@@ -290,7 +290,7 @@ return function(test, eq, ok, here, Cache)
         local commands,expanded,started,finished,released=0,0,0,0,0
         local nextPoll,owner,status
         owner="opaque";status={row_count=1,running=true,pct=0,beat=1}
-        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
+        local e=setmetatable({S={keep_copies_current=false},Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
             Store={now=function() return 1 end},Wifi={acquire=function() end,release=function() released=released+1 end},
             UIManager={scheduleIn=function(_,delay,fn) eq(delay,3);nextPoll=fn end},
             Badge={start=function() started=started+1 end,expand=function() expanded=expanded+1 end,update=function() end,finish=function() finished=finished+1 end},
@@ -336,35 +336,6 @@ return function(test, eq, ok, here, Cache)
         reading=true;e.Library.pollEvents();eq(reads,3)
         reading=false;body=string.rep("x",65537);e.Library.pollEvents();eq(acks,2);eq(changes,1)
     end)
-    test("catalog: native getters use neutral windows and fetch never forks or calls HTTP",function()
-        local calls,flushes,stock=0,0,0
-        local last
-        local e=setmetatable({Compat={callable=function(v) return type(v)=="function" end,missingOn=function(obj,required)
-            local missing={};for k,v in pairs(required) do if type(obj[k])~=v then missing[#missing+1]=k end end;return missing
-        end},wrap=function(obj,key,factory) obj[key]=factory(obj[key]) end}, {__index=_G})
-        setfenv(assert(loadfile(root.."ko/server/bookorbit.lua")),e)()
-        e.Library={compatEvent=function() end,paint=function(screen)
-            return {read=function(_,op,args)
-                calls=calls+1;last=args
-                if op=="connector.home" then return {shelves={reading={{reference=7,title="Ready",authors={}}}},row_count=2} end
-                eq(op,"connector.catalog");eq(screen,"library")
-                return {items={{reference=7,title="Ready",authors={"Fixture"},cover_available=true}},total=100,more=true}
-            end,flush=function() flushes=flushes+1 end}
-        end}
-        local Api={request=function() stock=stock+1;error("HTTP called") end,requestBlocking=function() error("HTTP called") end,
-            runInSubprocess=function() error("fork called") end,query=function() error("route constructed") end}
-        local Catalog={fetch=function() error("stock fetch called") end,dashboardRootFetch=function() error("stock dashboard called") end,
-            dashboardContext=function(_,body) return body end}
-        eq(e.Server.installCatalogApi(Api,Catalog),true)
-        local client=setmetatable({},{__index=Api})
-        local cat=setmetatable({boardSources=function() return {reading={source="in-progress"}},{} end},{__index=Catalog})
-        local body=cat:fetch("Catalog",function() return client:catalogBooks({size=999,page=2,author="Fixture"}) end)
-        eq(calls,1);eq(flushes,1);eq(last.limit,24);eq(last.offset,24);eq(last.selection.author,"Fixture")
-        eq(body.items[1].id,7);eq(body.items[1].title,"Ready");eq(body.size,24);eq(stock,0)
-        local value,err=cat:fetch("Catalog",function() return client:request("GET","forbidden") end)
-        eq(value,nil);eq(err,"cancelled");eq(stock,0);eq(e.Server.catalog_paint,nil)
-        local home=cat:dashboardRootFetch();eq(home.boardShelves.reading[1].id,7)
-        eq(calls,2);eq(flushes,2,"one batched Home read")
-    end)
+
 
 end

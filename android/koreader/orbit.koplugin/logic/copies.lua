@@ -3,7 +3,6 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- Keep book copies current (v0.11.1, docs/design/keep-copies-current.md). BookOrbit writes
 -- metadata into the library file (tags, series), so its partial MD5 moves and every copy on a
 -- reader stops matching it: the server marks those copies position-incompatible and progress,
 -- highlights and bookmarks stop syncing. These are the pure rules: which copies changed, which

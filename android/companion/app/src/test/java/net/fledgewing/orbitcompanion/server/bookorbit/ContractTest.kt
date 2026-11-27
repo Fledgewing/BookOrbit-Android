@@ -49,7 +49,7 @@ class ContractTest {
             "RESTART_KOREADER" to CommandProvider.RESTART_KOREADER,
             "SERVER_STATE" to LibraryAccount.STATE, "SERVER_COMMAND" to ServerCommands.START,
             "SERVER_RESULT" to ServerCommands.RESULT, "ACCOUNT_OPEN" to LibraryAccount.OPEN,
-            "DEVICE_SETTINGS" to CommandProvider.DEVICE_SETTINGS), calls.mapValues { it.value.getString("method") })
+            "DEVICE_SETTINGS" to CommandProvider.DEVICE_SETTINGS,"LIBRARY_BOOTSTRAP" to CommandProvider.LIBRARY_BOOTSTRAP), calls.mapValues { it.value.getString("method") })
         assertEquals("shell", calls.getValue("RESTART_KOREADER").getString("caller"))
         calls.values.forEach { o -> (o.getJSONArray("extras").strings() + o.getJSONArray("answer").strings()).forEach { used(it, "call field") } }
         c.getJSONArray("answer").strings().forEach { used(it, "answer field") }

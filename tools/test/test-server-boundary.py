@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Android adapter boundary. No baselines, annotations, environment switches or per-file skips.
-Only composition roots may name implementations; protocol belongs to adapter directories.
+Only the companion composition root may name implementations; no Android Lua adapter exemption.
 """
 from pathlib import Path
 import re
@@ -26,14 +26,8 @@ WIRE_PROTOCOL = re.compile(
     r'/api/v1|/?koreader/plugin\b|\bcatalog/(?:books|sections|dashboard)|\b(?:' + '|'.join(FIELDS) +
     r')\b|smart[ _-]?scopes?|x-auth-user|x-auth-key|/koreader/(?:users|syncs|credentials)|'
     r'/auth/(?:login|refresh|logout)|/opds(?:-users\b|[/?\"\']|$)', re.I)
-PROTOCOL = re.compile(WIRE_PROTOCOL.pattern + r'|bookorbit', re.I)
+PROTOCOL = re.compile(WIRE_PROTOCOL.pattern + r'|bookorbit|grimmory', re.I)
 IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)[/.]server[/.]|[\"\']bookorbit_|\bServerCache\b)')
-# Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
-# main.lua is the only implementation loader; owned Home/Details/widget modules are absent.
-LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
-    'home.lua', 'notices.lua', 'sleepscreen.lua',
-    'endsheet.lua',
-))
 
 LEGACY_GLOBALS = r'OC|Mirror|OSM|Copies|LF|Grouping|Rec|EOB|Sync'
 LUA_STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\[(=*)\[.*?\]\1\]', re.S)
@@ -66,7 +60,6 @@ def violations(path, source):
     relative = path.relative_to(COMPANION) if path.is_relative_to(COMPANION) else None
     source_root = COMPANION / relative.parts[0] / relative.parts[1] if relative and len(relative.parts) > 2 and relative.parts[1] in ('java', 'kotlin') else None
     kotlin_adapter = source_root is not None and path.is_relative_to(source_root / 'net/fledgewing/orbitcompanion/server')
-    lua_adapter = any(path.is_relative_to(LUA / family / 'server') for family in ('ko', 'logic'))
     cover_errors = []
     if path.is_relative_to(LUA) and path.suffix == '.lua':
         code = code_only(source, True)
@@ -76,7 +69,7 @@ def violations(path, source):
             cover_errors.append(f'{path}: catalog interpretation/transport is companion-owned; consume a bounded library snapshot')
         if re.search(r'\bCompanion\.ACTION\.COPIES\b|[:.]catalogSet(?:ReadStatus|Rating)\s*\(|[:.]downloadCatalogFile\s*\(|[\"\']/koreader/plugin/catalog/(?:files|books)/', code):
             cover_errors.append(f'{path}: catalog copy/finish transport is companion-owned; use Library commands/snapshots')
-    if kotlin_adapter or lua_adapter:
+    if kotlin_adapter:
         if kotlin_adapter and path.suffix in ('.kt', '.java'):
             expected = '.'.join(path.relative_to(source_root).parent.parts)
             if not re.search(r'^package ' + re.escape(expected) + r'\s*$', source, re.M):
@@ -86,13 +79,15 @@ def violations(path, source):
     if path.suffix in ('.xml', '.html'):
         source = re.sub(r'<!--.*?-->', lambda m: re.sub(r'[^\n]', ' ', m[0]), source, flags=re.S)
     code = code_only(source, lua)
-    wiring = path in (REGISTRY, LUA_REGISTRY)
+    wiring = path == REGISTRY
     errors = list(cover_errors)
+    if lua and re.search(r'\b(?:https?|socket|ssl)[.:]\s*(?:request|connect)\s*[(\{]|\b(?:requestBlocking|downloadBlocking|runInSubprocess|httpGet|httpPost)\s*\(|[\"\'](?:socket[./]http|ssl[./]https|socket[./]url|https?|httpclient|requests|curl)[\"\']',code):
+        errors.append(f'{path}: HTTP client/subprocess in plugin; use Library companion commands')
     if lua and re.search(r'(?:require\s*\(?|pcall\s*\(\s*require\s*,)\s*["\'](?:socket\.http|bookorbit)["\']|\bhttp\.request\s*[({]', code):
         errors.append(f'{path}: direct server transport/import outside the adapter')
     if lua and re.search(r'\bLibraryAdapter[.:]', code) and path != LUA / 'ko/library.lua':
         errors.append(f'{path}: only the library interface may call its adapter binding')
-    if lua and re.search(r'\bServer[.:]|\b(?:serverPlugin|serverOverBook|serverScreen)\s*\(', code) and path not in LUA_COMPAT_CONSUMERS:
+    if lua and re.search(r'\bServer[.:]|\b(?:serverPlugin|serverOverBook|serverScreen)\s*\(', code):
         errors.append(f'{path}: unreviewed legacy adapter facade consumer; owned UI must use Library')
     if lua:
         # These are implementation objects exported by old shared-environment modules,
@@ -110,7 +105,7 @@ def violations(path, source):
     for n, line in enumerate(code.splitlines(), 1):
         # About's shared credits are data, not a protocol call. The literal credit is the sole
         # permitted brand use, not an exception for the About source file.
-        line = line.replace('"bookorbit-credit"', '"credit"')
+        if not lua: line = line.replace('"bookorbit-credit"', '"credit"')
         protocol_line = line
         if wiring:
             # Remove only implementation identifiers/imports and quoted module paths. Endpoint
@@ -139,11 +134,11 @@ class GuardTests(unittest.TestCase):
                 self.assertTrue(violations(path, '// skip boundary\n-- allow-server\n' + value), value)
         self.assertTrue(violations(KOTLIN / 'Widget.kt', 'import net.fledgewing.orbitcompanion.server.bookorbit.Hidden'))
         self.assertTrue(violations(COMPANION / 'debug/kotlin/Widget.kt', 'val path="/api/v1"'))
-    def test_only_reviewed_legacy_modules_can_call_the_lua_facade(self):
+    def test_no_ui_module_can_call_a_legacy_lua_facade(self):
         self.assertTrue(violations(LUA / 'ko/home_widgets.lua', 'Server.loaded("api")'))
         self.assertTrue(violations(LUA / 'ko/home_widgets.lua', 'LibraryAdapter.read("x")'))
         self.assertTrue(violations(LUA / 'ko/home_widgets.lua', 'serverPlugin()'))
-        self.assertFalse(violations(LUA / 'ko/home.lua', 'Server.loaded("toast")'))
+        self.assertTrue(violations(LUA / 'ko/home.lua', 'Server.loaded("toast")'))
         # Reviewed facade consumers still cannot contain protocol data or direct imports.
         self.assertTrue(violations(LUA / 'ko/home.lua', 'local field="readStatus"'))
         self.assertTrue(violations(LUA / 'ko/home.lua', 'require("bookorbit_api")'))
@@ -212,6 +207,18 @@ class GuardTests(unittest.TestCase):
             self.assertNotIn(str(retired.relative_to(LUA)),(ROOT / LUA_REGISTRY).read_text())
         for name in ('finish','recommendations'):
             self.assertFalse(violations(LUA / 'ko' / (name+'.lua'),(ROOT / LUA / 'ko' / (name+'.lua')).read_text()))
+
+    def test_every_lua_path_has_the_same_boundary(self):
+        # Invented nested adapters and composition roots receive exactly the UI rules.
+        for name in ('main.lua','ko/server/bookorbit.lua','ko/server/other/deep.lua',
+                     'logic/server/other.lua','ko/sync.lua','ko/reading_sync.lua',
+                     'ko/lifecycle.lua','ko/orbismart.lua','ko/localfirst.lua'):
+            for source in ('local x="BookOrbit"','local x="bookorbit-credit"','local x="Grimmory"','local x="/api/v1/books"',
+                           'require("socket.http")','require("ssl.https")','require("http")','require("curl")','http.request{}',
+                           'client:requestBlocking("GET",path)','client:runInSubprocess(fn)'):
+                self.assertTrue(violations(LUA/name,source),(name,source))
+        self.assertFalse(violations(LUA/'ko/retirement.lua','target[name]=retired'))
+        self.assertFalse(violations(LUA/'ko/library.lua','Library.catalogAction("copies.check",{})'))
 
     def test_entire_production_tree(self):
         errors = []

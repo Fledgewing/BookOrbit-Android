@@ -4,7 +4,6 @@
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
 -- Generic literal serialization, hashing, URL utilities, display counts and local quota/image
--- helpers. Legacy server cache policy lives only in logic/server/bookorbit/cache.lua.
 ---------------------------------------------------------------------------------------------
 
 Cache = {}

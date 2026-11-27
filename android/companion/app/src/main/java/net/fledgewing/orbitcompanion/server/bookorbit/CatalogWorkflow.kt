@@ -86,7 +86,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         for(row in previous) {
             if(row["awaiting_native"]!=true && row["owned_sync"]!=true) continue
             val path=row["path"] as? String ?: continue
-            if(books.any { it["path"]==path && it["md5"]==row["md5"] && it["book_id"]==row["book_id"] && it["awaiting_native"]!=true }) continue
+            if(row["owned_sync"]!=true && books.any { it["path"]==path && it["md5"]==row["md5"] && it["book_id"]==row["book_id"] && it["awaiting_native"]!=true }) continue
             if(!File(LuaValue.utf8(path)).isFile) continue
             books.removeAll { it["path"]==path };books.add(row)
             if(row["awaiting_native"]==true) worker.event(mapOf("kind" to "download.saved","owner" to owner,"path" to path,"document" to row["md5"],"reference" to row["book_id"],"file_reference" to row["file_id"]))
@@ -157,6 +157,8 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                         "final_pos" to mapOf("percentage" to args["percentage"]),"status_seen" to status,"rating" to jobs[hash]?.get("rating"))
                 } else jobs.remove(hash)
                 save()
+                id(args)?.let { book -> worker.patch(book,mapOf("readStatus" to if(args["complete"]==true) "read" else "reading",
+                    "progressPercentage" to ((args["percentage"] as? Number)?.toDouble()?.times(100))),true,false) }
             }
             "finish.rate" -> { jobs[hash]?.set("rating", args["rating"] ?: "clear"); save() }
             "finish.leave" -> { jobs[hash]?.set("ready",true); save() }
@@ -279,7 +281,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         require(Places.inside(file,listOf(worker.root.parentFile!!.parentFile!!.parentFile!!))!=null)
         return file
     }
-    private fun recordLocal(book:Long,fileReference:Any?,path:String,hash:String,ownedSync:Boolean=false) {
+    private fun recordLocal(book:Long,fileReference:Any?,path:String,hash:String,ownedSync:Boolean=true) {
         check()
         val ask=load(File(worker.root,"copies/ask.lua"))
         val rows=if(ask["owner"]==owner) (ask["books"] as? List<*>).orEmpty().mapNotNull { it as? Map<*,*> } else emptyList()

@@ -29,7 +29,6 @@ function OrbitAndroid:checkCommand(source)
         self:reopenAfterRestart(source)
         return true
     end
-    -- The companion's Setup rows (docs/design/addon-mode.md §4.2): BookOrbit's sign-in, and the
     -- recommended settings' review page.
     if cmd == "signin" then
         UIManager:scheduleIn(0.5, function() self:openSignIn(source) end)
@@ -42,7 +41,7 @@ function OrbitAndroid:checkCommand(source)
     -- The companion's Settings buttons (docs/design/companion-settings.md §3.2, A2, A4, A5): the work
     -- happens here in KOReader, which the command brought to the front.
     if cmd == "full_refresh" then
-        UIManager:scheduleIn(0.5, function() Server.refreshLibrary() end)
+        UIManager:scheduleIn(0.5, function() Library.fullRefresh() end)
         return true
     end
     if cmd == "sync_sleep" then
@@ -57,21 +56,8 @@ function OrbitAndroid:checkCommand(source)
     return false
 end
 
--- BookOrbit's own sign-in page (promptLogin opens it, main.lua:967-974).
 function OrbitAndroid:openSignIn(source)
-    local p = serverPlugin(self.ui)
-    if not p then
-        UIManager:show(InfoMessage:new{ text = _("The library plugin isn't loaded."), timeout = 3 }) -- gate: user action (Setup's sign-in)
-        return
-    end
-    if Server.signedIn(p) then
-        log("sign in (" .. tostring(source) .. "): already signed in")
-        UIManager:show(InfoMessage:new{ text = _("Signed in to library."), timeout = 2 }) -- gate: user action (Setup's sign-in)
-        pcall(Server.reportRecommended, "signin", true, self.ui)
-        return
-    end
-    local okc, err = pcall(function() Server.openLogin(p) end)
-    log("sign in (" .. tostring(source) .. "): library's sign-in", okc and "opened" or ("FAILED: " .. tostring(err)))
+    return AccountView.open("account")
 end
 
 -- COMMAND=restart (android/docs/INTERFACE.md): the companion installed a newer patch file; a restart
@@ -93,8 +79,7 @@ function OrbitAndroid:restartForCompanion(source, quit_only)
     -- The quit closes the reader (which clears open_book_at_exit): remember the book apart, so
     -- the next start reopens it where it was (v0.5.5).
     S.restart_book = ui and ui.document and ui.document.file or nil
-    -- The screen the reader was on comes back too: BookOrbit Home over the book.
-    S.restart_screen = catalogOnTop(serverPlugin(ui)) and HomePlan.SERVER_HOME or nil
+    S.restart_screen = HomeHost.foreground() and HomePlan.SERVER_HOME or nil
     saveSettings()
     pcall(function() G_reader_settings:flush() end)
     Stats.send("restart", nil, false)
@@ -169,9 +154,7 @@ function OrbitAndroid:maybeRestart(event)
     return act
 end
 
--- The plugin's BookOrbit home is the top widget: its catalog widget (main.lua:1207-1230) is
 -- topmost (the plugin's own test, main.lua:1384) and shows its dashboard context
--- (BookOrbitCatalog:dashboardMode, bookorbit_catalog.lua:1875-1877). Its other views
 -- (book details, lists, sheets over it) don't count.
 -- The topmost screen: notes (KOReader's toasts, Orbit's own notes) float over it and never count.
 function topWidget()
@@ -190,7 +173,6 @@ end
 -- Nothing interrupts reading (docs/design/reading-gate.md): while a book is open in front,
 -- nothing from BookSync shows, restarts or takes focus. reading() is the one gate; every note and
 -- message goes through Gate.show, which holds it until the next moment nobody is reading
--- (BookOrbit Home or a list over the book, the book closed, KOReader back after another app)
 -- and drops it when it has gone stale. Exceptions are only what the reader does in the book:
 -- menus they open, the end-of-book sheet.
 function reading()
@@ -200,16 +182,16 @@ function reading()
     local ui = liveUI()
     if not (ui and ui.document) then return false end
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
-    if serverOverBook(serverPlugin(ui)) then return false end
+
     if ui.menu and ui.menu.menu_container then return false end -- a menu the reader opened
-    if Server.endSheetOpen() then return false end                -- the reader reached the end
+    if (FinishUI and FinishUI.sheet~=nil) then return false end                -- the reader reached the end
     return true
 end
 
 Gate = { queue = {}, MAX_AGE_S = 600 }
 
 function Gate.refreshNotice(what)
-    local full = Server.fullRefreshNotice()
+    local full = Library.catalog_active
     log((full and "Full refresh" or "background") .. ": suppressed notice: " .. tostring(what))
     if full and Badge and Badge.notice then Badge.notice(what) end
 end
@@ -232,7 +214,7 @@ function Gate.show(what, fn, max_age_s)
 end
 
 function Gate.drain(why)
-    if Gate.inBackground() and not (Server.fullRefreshNotice()) then return end
+    if Gate.inBackground() and not (Library.catalog_active) then return end
     if Gate.silent() then
         for _, q in ipairs(Gate.queue) do Gate.refreshNotice(q.what) end
         Gate.queue = {}
@@ -251,12 +233,11 @@ function Gate.drain(why)
     end
 end
 
--- BookOrbit's own toasts (sync results and the like) wait too: bookorbit_toast.show/error.
 function Gate.installToast()
     -- The final boundary also catches direct KOReader and Trapper messages.
     -- Dialogs (including position-sync choices) are unaffected.
     wrap(UIManager, "show", function(stock) return function(self, w, ...)
-        local notice = w and (Server.notice(w) or w.is_infomessage or w.orbit_note)
+        local notice = w and (false or w.is_infomessage or w.orbit_note)
         local m = w and getmetatable(w)
         while m and not notice do
             notice = m == InfoMessage or m == package.loaded["ui/widget/notification"]
@@ -285,27 +266,8 @@ function Gate.installToast()
     end end, "refresh_notices")
     Gate.installCatalog()
     Gate.installTrapper()
-    Gate.installPlugin(serverPlugin(liveUI()))
-    local okt, Toast = pcall(Server.require, "toast")
-    if not okt or type(Toast) ~= "table" then return end
-    for _, name in ipairs({ "show", "error", "loading" }) do
-        if type(Toast[name]) == "function" then
-            wrap(Toast, name, function(stock) return function(...)
-                local args = { n = select("#", ...), ... }
-                if Gate.silent() then
-                    Gate.refreshNotice("library " .. name .. ": " .. tostring(args[1]))
-                    -- Loading callers close the returned handle, including withLoading.
-                    if name == "loading" then return { close = function() end, closed = false } end
-                    return
-                end
-                if name == "loading" then
-                    log("notice: shown: library loading: " .. tostring(args[1]))
-                    return stock(unpack(args, 1, args.n))
-                end
-                return Gate.show("library " .. name .. ": " .. tostring(args[1]), function() return stock(unpack(args, 1, args.n)) end, 120)
-            end end, "gate")
-        end
-    end
+
+
 end
 
 -- A short note that never sits in the way: KOReader's Notification is a toast (it lets every
@@ -328,60 +290,9 @@ function orbitNote(text, timeout, refresh_popup)
     return Gate.show("note: " .. tostring(text), show)
 end
 
--- BookOrbit is in front of the open book: its catalog (Home or any list), or one of its own
--- views, menus or dialogs (widgets named bookorbit_*, e.g. bookorbit_book_sheet,
--- bookorbit_menu_sheet, bookorbit_confirm), anywhere above the ReaderUI in the window stack.
--- Not just the topmost widget: BookOrbit's loading and error pills (bookorbit_toast, not marked
 -- as toasts) and KOReader's widgets float over Home while the reader browses it (v0.11.1 on the
 -- M8C held Full refresh's progress "while reading" with Home on screen). The pills alone, over
 -- the book, don't count. Shared by reading() and the Wi-Fi plan's "browsing".
-function serverOverBook(p)
-    local cb = p and p.catalog_browser
-    local okr, RUI = pcall(require, "apps/reader/readerui")
-    local reader = okr and type(RUI) == "table" and RUI.instance or nil
-    for _, w in ipairs(visibleStack()) do
-        if reader ~= nil and w == reader then return false end
-        if cb ~= nil and w == cb then return true end
-        local name = type(w) == "table" and rawget(w, "name") or nil
-        if name == nil and type(w) == "table" then
-            local okn, n = pcall(function() return w.name end)
-            name = okn and n or nil
-        end
-        if Server.ownsView(name) and not Server.notice(w) then return true end
-    end
-    return false
-end
-
--- What is really showing, by identity with the plugin's catalog widget (never its flag alone:
--- plugin.catalog_browser stays set while the file browser or a book covers it).
-function catalogOnTop(p)
-    local cb = p and p.catalog_browser
-    return cb ~= nil and topWidget() == cb
-end
-
--- The topmost widget, named for the log: KOReader's own screens by identity, else its name,
--- title or (for a class instance) its class's name.
-function widgetName(w, p)
-    if w == nil then return "nothing" end
-    if p and w == p.catalog_browser then return "library catalog" end
-    local okr, RUI = pcall(require, "apps/reader/readerui")
-    if okr and type(RUI) == "table" and w == RUI.instance then return "ReaderUI (book)" end
-    local okf, FM = pcall(require, "apps/filemanager/filemanager")
-    if okf and type(FM) == "table" and w == FM.instance then return "FileManager (file browser)" end
-    local okn, n = pcall(function()
-        local v = w.name or w.title
-        if v == nil then
-            local mt = getmetatable(w)
-            local cls = mt and (rawget(mt, "__index") or mt)
-            v = type(cls) == "table" and (rawget(cls, "name") or rawget(cls, "title")) or nil
-        end
-        return v
-    end)
-    if okn and n ~= nil and (type(n) == "string" or type(n) == "number") then return tostring(n) end
-    return "unnamed widget"
-end
-
--- Visible widgets, topmost first (uimanager.lua:858-866 skips invisible ones the same way).
 function visibleStack()
     local out = {}
     local okw, stack = pcall(function() return UIManager._window_stack end)
@@ -397,92 +308,10 @@ function visibleStack()
     return out
 end
 
--- Which BookOrbit screen is showing (plugin 2.3.0), from the real window stack:
 --   "main": the catalog (main.lua:1207-1229) is the topmost widget, in dashboard mode
---     (bookorbit_catalog.lua:1875-1877: current_context.kind == "dashboard").
---   "sub": BookOrbit, but not its main page: the catalog in another mode (books, detail, lists,
---     search, board, ... switched in place, bookorbit_catalog.lua:1350 showBookPage, :1288
 --     showRecentSearches; detail_sheet/list_sheet live in that context, :2451-2462), or
---     widgets over the catalog: its dialogs (bookorbit_catalog.lua:1439, :1534, :1559, :1598,
---     :1792), the book sheet (bookorbit_book_sheet.lua:385, :410), settings
---     (bookorbit_settings_page.lua:952), menu pages and dialogs (bookorbit_dialog_ui.lua:91),
---     the main menu sheet (bookorbit_main_menu.lua:380 openMenuSheet).
 --   nil: no catalog showing (none, or KOReader's file browser or a book over it).
 -- Returns kind, the widgets over the catalog (topmost first), and a description for the log.
-function serverScreen(p)
-    local cb = p and p.catalog_browser
-    if cb == nil then return nil, {}, "no library view" end
-    -- Without dashboardMode the main page can't be told apart: the pre-0.4.9 behaviour.
-    if not Compat.callable(cb.dashboardMode) then return nil, {}, "library catalog without dashboardMode" end
-    local above, found = {}, false
-    local okr, RUI = pcall(require, "apps/reader/readerui")
-    local okf, FM = pcall(require, "apps/filemanager/filemanager")
-    for _, w in ipairs(visibleStack()) do
-        if w == cb then found = true break end
-        if (okr and type(RUI) == "table" and w == RUI.instance) or (okf and type(FM) == "table" and w == FM.instance) then
-            return nil, {}, "library covered by " .. widgetName(w, p)
-        end
-        table.insert(above, w)
-    end
-    if not found then return nil, {}, "library view not in the window stack" end
-    local okk, kind = pcall(function() return cb.current_context and cb.current_context.kind end)
-    kind = okk and kind or nil
-    local dash = Compat.callable(cb.dashboardMode) and select(2, pcall(function() return cb:dashboardMode() end)) == true
-    if #above == 0 and dash then return "main", above, "library main page" end
-    local names = {}
-    for _, w in ipairs(above) do table.insert(names, widgetName(w, p)) end
-    local desc = "library " .. tostring(kind or "?") .. " view"
-    if #names > 0 then desc = desc .. " under " .. table.concat(names, ", ") end
-    return "sub", above, desc
-end
-
--- The catalog's page past the first, with nothing over it: page, how to go to page 1, what.
--- nil on page 1, with something over the catalog, or a plugin without the paging hooks.
-function catalogPage(cb)
-    if cb == nil then return nil end
-    local missing = Compat.missingOn(cb, Compat.PAGING)
-    if #missing > 0 then
-        if not compat_logged.paging then
-            compat_logged.paging = true
-            log("compat: paging unavailable: missing " .. table.concat(missing, ", ") .. " -> Home leaves any page")
-        end
-        return nil
-    end
-    local okp, page, go, what = pcall(function()
-        if cb:dashboardMode() then
-            local n = tonumber(cb:boardPage())
-            return n, function() cb:boardFlip(1 - n) end, "dashboard"
-        end
-        if cb:listMode() then
-            local pg = cb:listPaging()
-            return tonumber(type(pg) == "table" and pg.page), function() cb:listGoPage(1) end, "list"
-        end
-    end)
-    if not okp then log("home: paging check failed:", tostring(page)); return nil end
-    if page and page > 1 then return page, go, what end
-    return nil
-end
-
-function onDashboard(p)
-    local cb = p and p.catalog_browser
-    if cb == nil then return false end
-    if topWidget() ~= cb then return false end
-    if not Compat.callable(cb.dashboardMode) then
-        if not compat_logged.catalog then
-            compat_logged.catalog = true
-            log("compat: catalog unavailable (plugin " .. pluginVersion(p) .. "): missing dashboardMode -> Home on library home goes back to the book")
-        end
-        return false
-    end
-    if not Compat.callable(cb.dashboardMode) then return false end
-    local okd, dash = pcall(function() return cb:dashboardMode() end)
-    return okd and dash == true
-end
-
--- Home keeps the rotation the device is held in (HomePlan.rotation): KOReader's own file browser
--- may have turned it (its start, a book close). Through the file browser's own handler
--- (FileManager:onSetRotationMode, filemanager.lua:71-79, as KOReader's rotation menu does by
--- event, screen_rotation_menu_table.lua:18), which also lays it out again.
 function keepHeldRotation(action, held, in_reader, source)
     if held == nil then return end
     -- KOReader's start already kept the held rotation (patches/1-orbit-start-rotation.lua).
@@ -509,8 +338,6 @@ function keepHeldRotation(action, held, in_reader, source)
 end
 
 -- A book closing opens a new file browser, which turns the device to the file browser's rotation
--- (filemanager.lua:63-69 via :1321; readerui.lua:594), and BookOrbit Home then shows in it. Keep
--- the book's rotation instead: the file browser here is only ever under BookOrbit Home. KOReader's
 -- start sets it before plugins load (reader.lua:291); the companion's ROTATION corrects that one.
 function keepRotationOnFileBrowser(why)
     local okf, FM = pcall(require, "apps/filemanager/filemanager")
@@ -561,150 +388,18 @@ end
 
 -- Home (android/docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
 -- HomePlan.SERVER_HOME (home).
-function OrbitAndroid:smartHome(source, from_extra, mode, held)
-    if S.home_screen == "booksync" then
-        if (mode == nil or mode == "smart") and HomeHost.active and topWidget() == HomeHost.active and liveUI() and liveUI().document then
-            return HomeHost.active:onClose()
-        end
-        return HomeHost.show()
+function OrbitAndroid:smartHome(source,from_extra,mode,held)
+    local host=HomeHost.active
+    local ui=liveUI()
+    if host and HomeHost.foreground() and (mode==nil or mode=="smart") then
+        if from_extra=="other_app" and ui and ui.document then UIManager:close(host);return true end
+        if host.list_layout or host.series_key then return host:onClose() end
+        return self:openCompanionHome()
     end
-    mode = mode or "smart"
-    -- Orbit's own sheets close first: they are not BookOrbit, and they'd cover whatever Home opens.
-    if Server.leaveEndSheet(liveUI()) then log("home: closed the end-of-book sheet") end
-    local ui = liveUI()
-    local in_reader = ui ~= nil and ui.document ~= nil
-    local p = serverPlugin(ui)
-    local menu_open = in_reader and ui.menu ~= nil and ui.menu.menu_container ~= nil
-    local view_open = p ~= nil and p.catalog_browser ~= nil
-    local screen, over, screen_desc = serverScreen(p)
-    local on_dash = screen == "main" or (screen == nil and onDashboard(p))
-    local page, first_page, page_what
-    if screen == "main" or (screen == "sub" and #over == 0) then
-        page, first_page, page_what = catalogPage(p.catalog_browser)
-    end
-    -- Reopen only the current book: one Home closed, or one KOReader was killed with (first
-    -- command of this process). Never history.
-    local last = nil
-    if not in_reader then
-        last = S.home_book or (source == "start" and killed_with_book) or nil
-    end
-    local reopen = false
-    if type(last) == "string" then
-        local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-        reopen = okl and lfs.attributes(last, "mode") == "file"
-        if not reopen and last == S.home_book then S.home_book = nil; saveSettings() end
-    end
-    if source == "start" then killed_with_book = nil end
-    local paused = source == "start" and nil or state.paused_for
-    local from_other = HomePlan.cameFromOtherApp(from_extra, paused)
-    local action = HomePlan.decide{
-        mode = mode, in_reader = in_reader, covered = menu_open or view_open, on_dashboard = on_dash,
-        library_sub = screen == "sub", page_above_1 = page ~= nil,
-        from_other = from_other, reopen = reopen,
-    }
-    log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "library view",
-        tostring(view_open), "dashboard on top", tostring(on_dash), "(top: " .. widgetName(topWidget(), p) .. ")",
-        "from other app", tostring(from_other),
-        "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
-    log("home: screen:", screen_desc)
-    keepHeldRotation(action, held, in_reader, source)
-    if action == "first_page" then
-        log("home: library " .. page_what .. " page " .. page .. " -> page 1")
-        local okg, err = pcall(first_page)
-        if not okg then log("home: going to page 1 failed:", tostring(err)) end
-        return true
-    end
-    if action == "library_main" then return self:serverMain(p, over, screen_desc) end
-    if action == "companion" then return self:openCompanionHome() end
-    if action == "dashboard" then return self:onOrbitGoHome() end
-    -- Back to the book: close what covers it, or open the last one.
-    if menu_open then pcall(function() ui.menu:onCloseReaderMenu() end) end
-    if view_open then
-        -- The plugin's own close (close_callback, main.lua:1225-1228; used by the catalog itself,
-        -- bookorbit_catalog_download.lua:359-362) also clears plugin.catalog_browser, without
-        -- which openCatalogBrowser (main.lua:1207) never opens it again.
-        local cb = p.catalog_browser
-        local okc, err = pcall(function()
-            if cb.close_callback then cb.close_callback() else UIManager:close(cb); p.catalog_browser = nil end
-        end)
-        log("home (smart): closed the library view", okc and "" or tostring(err))
-    end
-    if not in_reader then
-        log("home (smart): reopening the current book", tostring(last))
-        UIManager:nextTick(function()
-            local ReaderUI = require("apps/reader/readerui")
-            if ReaderUI.instance then log("orbit: closing reader because Smart Home is reopening the current book") end
-            ReaderUI:showReader(last)
-        end)
-    end
-    return true
+    if from_extra=="other_app" and ui and ui.document and (mode==nil or mode=="smart") then return true end
+    return HomeHost.show()
 end
 
--- BookOrbit home. With a book open, the plugin's dashboard opens on top of the reader without
--- closing it (onBookOrbitOpenDashboard, main.lua:1381-1389 -> browseCatalog, main.lua:1235-1241
--- -> openCatalogBrowser, main.lua:1206-1230: UIManager:show of its catalog widget; its own menu
--- does the same from a book, bookorbit_main_menu.lua:307). Fallback (no plugin, signed out):
--- close the book (the reader saves it; the plugin syncs it as on any close, main.lua:1292-1312)
--- and remember it as the current book (home_book), so Home elsewhere goes back to it.
--- The plugin has some BookOrbitOpenDashboard handler. Advisory: anything there counts (a
--- KOReader HandlerSandbox or a future wrapper); only a plugin without it is "missing".
-function hasHandler(p, event)
-    if p == nil then return false end
-    local okv, v = pcall(function() return p["on" .. event] end)
-    return okv and v ~= nil
-end
-
--- Send a plugin event the way KOReader's dispatcher does (the plugin's public actions, e.g.
--- bookorbit_open_dashboard -> BookOrbitOpenDashboard, main.lua:987-988): through the live UI,
--- which passes it to its plugin modules. Without a UI that takes it, call the handler.
-function pluginEvent(host, p, event, ...)
-    if not can(p, PLUGIN_EVENT_FEATURE[event] or "core") then
-        log("compat: the method check doesn't see on" .. event .. "; sending the event anyway")
-    end
-    host = host or liveUI()
-    if host and host.handleEvent then
-        local okh, err = pcall(host.handleEvent, host, Event:new(event, ...))
-        if okh then return true end
-        log("plugin event", event, "failed:", tostring(err))
-    end
-    local okv, h = pcall(function() return p and p["on" .. event] end)
-    if okv and Compat.callable(h) then
-        local okc, err = pcall(h, p, ...)
-        if not okc then log("plugin handler on" .. event, "failed:", tostring(err)) end
-        return okc
-    end
-    local okb = pcall(UIManager.broadcastEvent, UIManager, Event:new(event, ...))
-    return okb
-end
-
--- After opening BookOrbit home: say so if it isn't on top a second later.
-function checkDashboardOpened(p, why)
-    UIManager:scheduleIn(1, function()
-        local q = serverPlugin(liveUI()) or p
-        if catalogOnTop(q) then
-            log("home: library home is on top (" .. why .. ")")
-            Gate.drain("library Home")
-            Server.resumeCache("Home")
-        else
-            log("home: library home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
-        end
-    end)
-end
-
--- Close one widget the plugin's way: its close_callback (the catalog, main.lua:1225-1228),
--- else UIManager:close, which runs its onCloseWidget / on_close (MenuPage sheets).
-function closeWidget(w)
-    local okc, err = pcall(function()
-        if Compat.callable(w.close_callback) then w.close_callback() else UIManager:close(w) end
-    end)
-    if not okc then log("home: closing", widgetName(w), "failed:", tostring(err)) end
-end
-
--- After a restart that quit with a book open: that book again, at its saved place (the reader
--- saved it before the quit; showReader opens at the last position). The book: the one this
--- patch remembered (restart_book), else KOReader's last file (a restart by an older patch,
--- which the companion follows with COMMAND=reopen_book). BookOrbit home opened by the start
--- (the plugin's open mode) is closed so the book is on top.
 function OrbitAndroid:reopenAfterRestart(source)
     local file = S.restart_book
     if file ~= nil then S.restart_book = nil; saveSettings() end
@@ -717,8 +412,7 @@ function OrbitAndroid:reopenAfterRestart(source)
     if ui and ui.document then log("restart: a book is already open; not reopening", file); return end
     local okl, lfs = pcall(require, "libs/libkoreader-lfs")
     if not (okl and lfs.attributes(file, "mode") == "file") then log("restart: the book is gone:", file); return end
-    local p = serverPlugin(ui)
-    if p and p.catalog_browser then closeWidget(p.catalog_browser) end
+    if HomeHost.active then UIManager:close(HomeHost.active) end
     log("restart: reopening the book at its place (" .. source .. "):", file)
     local screen = S.restart_screen
     if screen then S.restart_screen = nil; saveSettings() end
@@ -735,121 +429,15 @@ function OrbitAndroid:reopenAfterRestart(source)
     end)
 end
 
--- Home on a BookOrbit screen that isn't its main page: close what is over the catalog, then
--- the catalog's own Home (goDashboard, bookorbit_catalog.lua:530-537; also its hold-Return,
 -- :2521-2525). If anything is left over it, or the plugin lacks goDashboard: close the catalog
--- and open BookOrbit home fresh (the plugin's event), so no half-closed stack is left.
-function OrbitAndroid:serverMain(p, over, desc)
-    log("home: on", desc, "-> library main page")
-    for _, w in ipairs(over or {}) do
-        log("home: closing", widgetName(w, p))
-        closeWidget(w)
-    end
-    local cb = p.catalog_browser
-    local screen = serverScreen(p)
-    if cb and screen ~= nil and topWidget() == cb and Compat.callable(cb.goDashboard) then
-        if screen ~= "main" then
-            local okg, err = pcall(function() cb:goDashboard() end)
-            if okg then
-                log("home: library catalog back to its main page (goDashboard)")
-                checkDashboardOpened(p, "back to main")
-                return true
-            end
-            log("home: goDashboard failed:", tostring(err))
-        else
-            log("home: library main page showing")
-            return true
-        end
-    end
-    log("home: reopening library home fresh (top:", widgetName(topWidget(), p) .. ")")
-    if p.catalog_browser then closeWidget(p.catalog_browser) end
-    p.catalog_browser = nil
-    pluginEvent(liveUI(), p, Server.events.home)
-    checkDashboardOpened(p, "reopened")
-    return true
-end
-
-function OrbitAndroid:onOrbitGoHome()
-    if S.home_screen == "booksync" then return HomeHost.show() end
-    if Server.leaveEndSheet(liveUI()) then log("home: closed the end-of-book sheet") end
-    local ui = liveUI()
-    local p = serverPlugin(ui)
-    -- BookOrbit home already open: bring it up ourselves. The plugin's open action on an open
-    -- catalog opens its menu sheet instead (main.lua:1381-1385).
-    if p and p.catalog_browser then
-        local screen, over, desc = serverScreen(p)
-        if screen ~= nil then return self:serverMain(p, over, desc) end
-        log("home: library home is open but not showing (" .. tostring(desc) .. "); reopening it")
-        closeWidget(p.catalog_browser)
-        p.catalog_browser = nil
-    end
-    if ui and ui.document and hasHandler(p, Server.events.home) and Server.signedIn(p) then
-        log("home: library home over the open book")
-        -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,
-        -- main.lua:987-988).
-        UIManager:nextTick(function()
-            pluginEvent(ui, p, Server.events.home)
-            checkDashboardOpened(p, "over the book")
-        end)
-        UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
-        return true
-    end
-    state.pending_home = os.time()
-    if ui and ui.document then
-        log("home: closing book, then library home (it stays the current book)")
-        state.closing_for_home = ui.document.file
-        UIManager:nextTick(function()
-            log("orbit: closing reader because Home requested the file browser")
-            ui:onHome()
-        end)
-    else
-        self:finishHome()
-    end
-    -- Also when finishHome stays put (BookOrbit home already open, no plugin): once off the book.
-    UIManager:scheduleIn(2.5, function() self:maybeSetupPrompt("home") end)
-    return true
-end
-
+function OrbitAndroid:onOrbitGoHome() return HomeHost.show() end
 function OrbitAndroid:finishHome()
-    if not state.pending_home then return end
-    if os.time() - state.pending_home > 15 then state.pending_home = nil return end
-    state.pending_home = nil
-    local p = serverPlugin(self.ui)
-    if not p then
-        log("home: library plugin missing; staying in the file browser")
-        return
-    end
-    -- With "Make BookOrbit home" the plugin opens itself when the book closes (main.lua:1404-1412).
-    if p.catalog_browser and catalogOnTop(p) then
-        log("home: library home already showing")
-        return
-    end
-    if not hasHandler(p, Server.events.home) then
-        -- Advisory: the live UI may still route the event to a plugin module we can't see.
-        log("home: this plugin instance shows no library home handler; sending the event anyway")
-    end
-    if p.catalog_browser then
-        -- Open but covered (the file browser on top): the plugin's open action does nothing while
-        -- catalog_browser is set (main.lua:1381-1385), so close it the plugin's way, then reopen.
-        log("home: library home is open but not showing (top: " .. widgetName(topWidget(), p) .. "); bringing it to the top")
-        local cb = p.catalog_browser
-        local okc, err = pcall(function()
-            if cb.close_callback then cb.close_callback() else UIManager:close(cb); p.catalog_browser = nil end
-        end)
-        if not okc then log("home: closing the covered library view failed:", tostring(err)) end
-        p.catalog_browser = nil
-    end
-    log("home: opening library home")
-    pluginEvent(liveUI() or self.ui, p, Server.events.home)
-    checkDashboardOpened(p, "from the file browser")
-    UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
+    if state.pending_home then state.pending_home=nil;return HomeHost.show() end
 end
 
--- Where the reader is now, for the setup box: a book on screen, BookOrbit home, the file browser.
 function OrbitAndroid:whereNow()
     local ui = liveUI() or self.ui
-    local p = serverPlugin(ui)
-    if catalogOnTop(p) then return HomePlan.SERVER_HOME end
+    if HomeHost.foreground() then return HomePlan.SERVER_HOME end
     if ui and ui.document then return "reader" end
     return "browser"
 end
@@ -883,21 +471,3 @@ function OrbitAndroid:maybeSetupPrompt(why, where)
 end
 
 ---------------------------------------------------------------------------------------------
-
--- Catalog fetches use their subprocess path only inside a Trapper context. Home
--- actions (including scheduled opens) must enter it before invoking upstream UI.
-local function homeJob(fn)
-    local okt, Trapper = pcall(require, "ui/trapper")
-    if okt and Trapper.wrap then return Trapper:wrap(fn) end
-    return fn()
-end
-local directPluginEvent = pluginEvent
-function pluginEvent(...)
-    local args = pack(...)
-    return homeJob(function() return directPluginEvent(unpack(args, 1, args.n)) end)
-end
-local directServerMain = OrbitAndroid.serverMain
-function OrbitAndroid:serverMain(...)
-    local args = pack(...)
-    return homeJob(function() return directServerMain(self, unpack(args, 1, args.n)) end)
-end

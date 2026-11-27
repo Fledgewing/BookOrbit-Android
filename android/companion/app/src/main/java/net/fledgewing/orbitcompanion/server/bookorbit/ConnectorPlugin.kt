@@ -6,6 +6,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object ConnectorPlugin : ConnectorInstaller {
+    override fun retirementPlan(): Map<String,Any?> = mapOf(
+        "plugins" to listOf("bookorbit"), "modules" to listOf("bookorbit_api"),
+        "settings_key" to "bookorbit", "home_key" to "bookorbit", "row_count" to 1,
+        "actions" to listOf(mapOf("id" to "bookorbit_sync_now","event" to "LibrarySyncAll","title" to "BookSync: Sync all books"),
+            mapOf("id" to "bookorbit_this_book","event" to "LibraryThisBook","title" to "BookSync: This book")))
     override val minimumVersion = PluginRelease.MIN_VERSION
     override val homeModeKey = "bookorbit"
     override fun coverCacheDir(root: File) = File(root, "koreader/cache/bookorbit")

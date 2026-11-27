@@ -141,20 +141,6 @@ end
 -- http.request at call time (all of KOReader's) are covered.
 function pack(...) return { n = select("#", ...), ... } end
 
-function wrapRequests(modname)
-    local okm, mod = pcall(require, modname)
-    if not okm or type(mod) ~= "table" or type(mod.request) ~= "function" or mod._orbit_wrapped then return end
-    local orig = mod.request
-    mod._orbit_wrapped = true
-    mod.request = function(...)
-        Wifi.inflight_http = Wifi.inflight_http + 1
-        if Wifi.plan then WifiPlan.activity(Wifi.plan, now_s()) end
-        local r = pack(pcall(orig, ...))
-        Wifi.inflight_http = Wifi.inflight_http - 1
-        if Wifi.plan then WifiPlan.activity(Wifi.plan, now_s()) end
-        if not r[1] then error(r[2], 0) end
-        return unpack(r, 2, r.n)
-    end
-end
+
 
 ---------------------------------------------------------------------------------------------

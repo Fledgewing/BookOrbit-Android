@@ -51,3 +51,8 @@ function wrap(Cls,name,make,feature)
     if stock[key] then return end
     stock[key]=Cls[name];Cls[name]=make(stock[key])
 end
+
+function liveUI()
+    return require("apps/reader/readerui").instance or require("apps/filemanager/filemanager").instance
+end
+function inBook() local ui=liveUI();return ui~=nil and ui.document~=nil end

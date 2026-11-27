@@ -5,7 +5,6 @@
 
 -- "Setup needs you" box (companion 0.4.1+): /status carries setup_prompt = { key, rows } only
 -- while rows need the user and they didn't say Later (the companion's snooze). Shown once per
--- key, never with a book on screen: the file browser, BookOrbit home or a menu.
 ---------------------------------------------------------------------------------------------
 
 SetupPrompt = {}
@@ -66,7 +65,6 @@ end
 -- An update the reader asked for restarts at once: the book is saved through KOReader's own close
 -- and reopens where it was (v0.11.1). An automatic one only when KOReader is out of the way: the
 -- screen off (restart), or another app in front ("quit": save and quit, the new plugin loads at
--- the next start). A closed book or BookOrbit Home is not enough: the reader is still using it.
 function RestartPlan.decide(want, running, tried, reading, event)
     if not want then return "none" end
     if Update.compare(want, running) ~= 1 then return tried and "done" or "none" end

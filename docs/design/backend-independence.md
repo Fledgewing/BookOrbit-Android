@@ -179,12 +179,9 @@ bounded local references. The former cover downloader and thumbnail child scanne
 are removed. Mirror planning and catalog refresh now run in the companion; the neutral library reads
 bounded snapshots and dispatches `catalog.control`. The Lua mirror, catalog interpreter
 and old library binding are deleted. The F12-Q2 catalog slice now owns grouping,
-copies, recommendations and end-of-book commands as well. Its cached catalog display helpers are extracted into
-`ko/server/bookorbit/local_view.lua`; existing non-sync jobs receive neutral lifecycle
-signals through the library binding. The named middleware (`wifi`, `sleep`, `module`,
-`net`, `shared`, `main_loop`) no longer accesses the server facade for sync. The remaining
-reviewed compatibility facade consumers are Home, notices, sleepscreen and endsheet;
-only `main.lua` loads implementation files. No new Lua transport is permitted.
+copies, recommendations and end-of-book commands as well. The native catalog display bridge is now retired, and the
+owned Home/Library surfaces consume the bounded read model. Neutral lifecycle signals route
+non-sync jobs through Library. No Lua facade consumer or adapter-directory exemption remains.
 
 Catalog-side copies, grouping, recommendations and end-of-book are also companion-owned
 (F12-Q2 step 4). The four legacy Lua modules are deleted; `ko/library.lua` dispatches neutral
@@ -192,10 +189,22 @@ Catalog-side copies, grouping, recommendations and end-of-book are also companio
 `CopiesLogic`, `CacheWorker`, `BookOrbitProjection` and the existing read model own catalog
 work. Account-scoped copy/finish queues checkpoint legacy sources and acknowledge identity
 and writeback phases. Finishes follow SyncOwner delivery; no retired native writer is called.
-Temporary catalog display/native-setting bindings remain in the private Lua compatibility root.
+Native scalar settings and gesture aliases use bounded companion-supplied metadata; the private Lua compatibility root is deleted.
 
 Every screen/widget keeps its budget. Consent and bounded native verification add named
 one-row / 16 KiB budgets; finish has three rows and recommendation review has eight.
 Commands, drains and paints log timing spans. No sync is added to Home paint. Heavy capture,
 sidecar processing and statistics stay on the companion. Device targets remain pending
 maintainer confirmation. Firmware enforcement is deferred under the Android-first ruling.
+
+### Final Android Lua guard (F12-Q2 step 5)
+
+The catalog compatibility root and local native catalog display bridge are retired. All
+plugin Lua paths now receive the same protocol/vendor/transport guard, including adapter
+directories and composition roots; there are no Lua exemptions. Owned Home/Library surfaces
+consume neutral windows. The companion owns protocol and sends one bounded local retirement
+descriptor before legacy classes instantiate; the native bridge only disables methods.
+Signer/version mismatch, late loading or an unknown startup seam never authorizes the owned
+sync writer. Settings/gesture bindings are opaque native metadata, not server JSON. Sleep
+requests carry no credentials. See [Q2 notes](booksync-home/F12-Q2-NOTES.md#step-5-enforce-every-lua-path)
+for migration boundaries, reuse evidence and deterministic startup/render budgets.

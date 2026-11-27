@@ -242,10 +242,12 @@ object AdapterWorker : ServerRuntime {
     }
 
     private fun creds(i: Intent): CacheWorker.Creds? {
-        val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
-        val user = i.getStringExtra("user") ?: return null
-        val key = i.getStringExtra("userkey") ?: return null
-        return CacheWorker.Creds(server, user, key)
+        val ctx=app ?: return null
+        val credentials=ServerCredentials(EncryptedAccountVault.android(ctx))
+        val login=credentials.login("sync")
+        if(login!=null) return CacheWorker.Creds(login.server,login.user,login.secret)
+        if(credentials.legacyImported()) return null
+        return LegacyCoverSource.read(File(Environment.getExternalStorageDirectory(),"koreader/settings.reader.lua"))?.credentials
     }
 
     override fun onIntent(ctx: Context, i: Intent) {

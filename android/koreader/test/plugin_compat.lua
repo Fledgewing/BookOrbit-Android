@@ -1,160 +1,23 @@
--- Checks that every BookOrbit plugin internal Orbit uses (Compat, orbit.koplugin/logic/compat.lua)
--- is still defined in a plugin checkout. Static: looks for each definition in the source.
---   luajit plugin_compat.lua <path to bookorbit.koplugin>
--- Prints the plugin version and any missing symbols; exits 1 when something is missing.
-local here = arg[0]:match("^(.*)/[^/]*$") or "."
-local dir = arg[1] or error("usage: plugin_compat.lua <bookorbit.koplugin dir>")
-_G.ORBIT_ANDROID_TEST = true
-local M = dofile(here .. "/../orbit.koplugin/main.lua")
-
-local function list(d)
-    local p = io.popen('ls "' .. d .. '"')
-    local out = {}
-    for f in p:lines() do if f:match("%.lua$") then table.insert(out, d .. "/" .. f) end end
-    p:close()
-    return out
+-- BookSync retires the legacy plugin instead of calling its UI or transport methods.
+-- Check only the pinned metadata/settings that the companion migration still consumes.
+-- Run: luajit plugin_compat.lua <bookorbit.koplugin directory>
+local dir=assert(arg[1],"plugin directory required")
+local function read(name)
+    local f=assert(io.open(dir.."/"..name,"rb"),name);local s=f:read("*a");f:close();return s
 end
-local src = {}
-for _, f in ipairs(list(dir)) do
-    local h = io.open(f, "rb"); src[f] = h:read("*a"); h:close()
+local main=read("main.lua")
+assert(main:match('name%s*=%s*["\']bookorbit["\']'),"legacy class identity changed: update the companion retirement descriptor")
+assert(main:find("default_settings",1,true),"native setting defaults no longer available")
+for _,key in ipairs({"auto_sync","sync_forward","sync_backward","catalog_auto_open"}) do
+    assert(main:find(key,1,true),"native setting changed: "..key)
 end
-local function any(pattern)
-    for _, text in pairs(src) do if text:find(pattern) then return true end end
-    return false
+for _,entry in ipairs({{"PROMPT",1},{"SILENT",2},{"DISABLE",3}}) do
+    assert(main:match(entry[1].."%s*=%s*"..entry[2]),"native direction value changed: "..entry[1])
 end
-local function esc(s) return (s:gsub("[%-%.%+%[%]%(%)%$%^%%%?%*]", "%%%0")) end
-
-local version = (src[dir .. "/main.lua"] or ""):match('local PLUGIN_VERSION = "([^"]+)"') or "unknown"
-local missing, seen = {}, {}
-local function need(name, kind)
-    if seen[name] then return end
-    seen[name] = true
-    local ok
-    if kind == "function" then
-        -- function X:name( / function X.name( / name = function
-        ok = any("function%s+[%w_%.]+[:%.]" .. esc(name) .. "%s*%(") or any("[%.%s]" .. esc(name) .. "%s*=%s*function")
-    else
-        ok = any("[%.%s]" .. esc(name) .. "%s*=")
-    end
-    if not ok then table.insert(missing, name) end
-end
-for _, f in ipairs(M.Compat.FEATURES) do
-    for name, kind in pairs(f.needs) do need(name, kind) end
-end
-for name, kind in pairs(M.Compat.CATALOG) do need(name, kind) end
-need("submitSyncJob", "function") -- background notice scope follows native queued jobs
-need("preference", "function") -- cached delivery variant for companion copy preparation
-need("effectiveGridDimensions", "function") -- Mirror thumbnail bounds
--- Recommended settings (ko/recommended.lua): the plugin's own defaults, read at run time.
-need("default_settings", "field")
-for name, kind in pairs(M.Compat.PAGING) do need(name, kind) end
--- Lists by series and by author (Grouping): the class methods it wraps or calls.
-for name, kind in pairs(M.Compat.CATALOG_CLASS) do need(name, kind) end
-for name, kind in pairs(M.Compat.API_CLASS) do need(name, kind) end
-local lists = src[dir .. "/bookorbit_catalog_lists.lua"] or ""
-local catalog = src[dir .. "/bookorbit_catalog.lua"] or ""
-local function has(text, plain, what) if not text:find(plain, 1, true) then table.insert(missing, what) end end
--- The list methods are copied onto the catalog class (so the patch wraps that class).
-has(lists, "function CatalogLists.install(Catalog)", "CatalogLists.install")
-has(catalog, "CatalogLists.install(BookOrbitCatalog)", "CatalogLists.install(BookOrbitCatalog)")
--- The row actions it takes over inside a grouped view, and the sheet rows it adds to.
-has(lists, 'kind == "open-series"', 'action kind "open-series"')
-has(lists, 'kind == "open-author"', 'action kind "open-author"')
-local sheet = lists:match("function CatalogLists:listSortSheetModel%(sheet%)(.-)\nend\n") or ""
-has(sheet, "rows = {", "rows = { in listSortSheetModel")
--- The section body and context fields its answer and wrappers rely on.
-for _, f in ipairs({ "body.items", "body.total", "body.size", "body.buckets", "body.hasNext", "body.offset", "body.sort", "body.filter" }) do
-    has(catalog, f, "loadSection reads " .. f)
-end
-for _, f in ipairs({ "list_sheet", "dashboard_source_index", "series_summary" }) do need(f, "field") end
-has(lists, "params.q = opts.q", "listSectionParams sends q")
--- End of book (ko/endofbook.lua EOB.COMPAT, EOB.CATALOG) and local-first Home (ko/localfirst.lua
--- LF.*): the plugin functions they wrap or call.
-for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enqueueLifecycleSnapshot",
-    "updateProgress", "pushProgressAfterBookSync", "catalogBook", "catalogSetReadStatus", "catalogSetRating", "getBook", "mutate",
-    "onDeviceMaps", "rememberServerState", "applyServerStateLive", "applyServerStateSidecar", "sidecarMtime",
-    "downloadDefaultFile", "downloadFile", "checkDownloadFile", "loadBooks", "switchTo", "refreshOnDevice",
-    "updateItems", "refreshCurrent", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
-    "boardRefreshClock", "listRun", "listHeader", "build", "statusCluster", "hit", "icon", "hstack",
-    "header", "listMetadata", "isBlocked", "getLifecycleOutbox", "evictCachedCovers",
-    "scheduleThumbnailDownloads", "dashboardBooks", "thumbnailDisplay",
-    -- v0.11.1: first paint from the cache, the on-device seed, the offline mirror's list paths,
-    -- cover logging, Remove without a file browser, the suspend snapshot skip.
-    "initialDashboardContext", "hydrateOnDeviceMaps", "paramsForEntry", "effectiveOrder",
-    "listDecorateBookQuery", "listSectionParams", "loadOnDevice", "fetchBookPage", "cancelThumbnailJobs",
-    "downloadThumbnailBatch", "boardDustRemove", "detailRemoveFromDevice", "_onSuspend",
-    -- Keep book copies current: the state's own repair for a file whose bytes changed.
-    "repairFileIdentity", "linkDownloadedFile",
-    -- v0.11.2: the first paint's on-device marks; mirrored covers outside the plugin's cover cap.
-    "hasOnDeviceMaps", "pruneThumbnailCache" }) do need(name, "function") end
--- OrbiSmart sync (ko/orbismart.lua): every pull and push goes through the API client it wraps; the
--- This book sheet's row it adds and the action it handles; the reader moves it makes.
-for name, kind in pairs(M.Compat.ORBISMART_API or {}) do need(name, kind) end
-for _, name in ipairs({ "syncToProgress", "noteProgressCompared", "fetchRemoteProgress", "requestProgressPush",
-    "row", "divider", "runAction", "vstack" }) do need(name, "function") end
-need("last_page_turn_timestamp", "field")
-has(src[dir .. "/bookorbit_api.lua"] or "", "function BookOrbitApi:getProgress(digest)", "BookOrbitApi:getProgress")
-has(src[dir .. "/bookorbit_api.lua"] or "", "function BookOrbitApi:updateProgress(digest, percentage, progress, timestamp)", "BookOrbitApi:updateProgress")
-has(src[dir .. "/bookorbit_book_sync.lua"] or "", "ctx.client:updateProgress(", "the outbox pushes through the API client")
-has(src[dir .. "/bookorbit_book_sheet.lua"] or "", 'action = { kind = "auto" }', "This book sheet's Auto-sync row")
--- The cover pruner removes files with the global os.remove (Mirror.guardPrune skips mirrored ones).
-has(src[dir .. "/bookorbit_catalog_thumbnails.lua"] or "", "os.remove(removed.path)", "pruneThumbnailCache removes with os.remove")
--- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
--- Wi-Fi holds count only drainable outbox entries.
-has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")
-has(src[dir .. "/bookorbit_lifecycle_outbox.lua"] or "", "drainable =", "outbox diagnostics() drainable")
--- The cache (ko/cache.lua): the catalog request paths test_flows.lua's PLUGIN_PATHS copies, and the
--- calls it wraps or uses; end of book downloads through the detail page's delivery path.
-local api = src[dir .. "/bookorbit_api.lua"] or ""
-for _, p in ipairs({ '"/koreader/plugin/catalog/root"', '"/koreader/plugin/catalog/dashboard"',
-    '"/koreader/plugin/catalog/dashboard/discover"', '"/koreader/plugin/catalog/dashboard/sections/"',
-    '"/koreader/plugin/catalog/sections/"', '"/koreader/plugin/catalog/books"', '"/koreader/plugin/catalog/manifest"',
-    '"/koreader/plugin/catalog/books/" .. tostring(book_id), { deviceId = self.device_id, variant = variant }' }) do
-    has(api, p, "catalog path " .. p)
-end
-for _, name in ipairs({ "thumbnailEntry", "runThumbnailWorker", "stopThumbnailWorker", "runConnected", "download", "fetchDeliveryBook", "supportedFiles", "requestBlocking", "runInSubprocess" }) do
-    need(name, "function")
-end
-has(api, '"subprocess_no_result"', "runInSubprocess reports a child without a result")
-local board = src[dir .. "/bookorbit_catalog_board.lua"] or ""
-local list_view = src[dir .. "/bookorbit_list_view.lua"] or ""
--- Upvalues local-first swaps or calls: the header's status cluster and the list view's region.
-has(board, "local statusCluster = BoardUI.statusCluster", "boardHeader's statusCluster upvalue")
-has(list_view, "local function region(", "ListView region upvalue")
--- Snapshot and detail fields they read.
-for _, f in ipairs({ "percentage =", "seriesMembers", "relatedSections", "readStatus" }) do
-    if not any(esc(f)) then table.insert(missing, "field " .. f) end
-end
--- Fields and events the patch reads or writes directly.
-for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "pages_before_update",
-    "last_remote_progress", "PLUGIN_VERSION", "last_error", "sync_forward", "sync_backward",
-    "catalog_auto_open", "auto_sync", "current_context" }) do need(name, "field") end
--- Public actions the patch sends as events.
-local main = src[dir .. "/main.lua"] or ""
-if not main:find('registerAction%("bookorbit_open_dashboard"') then table.insert(missing, "action bookorbit_open_dashboard") end
--- Setting values the patch writes (Compat.SETTINGS): the plugin still offers each one.
-for key, values in pairs(M.Compat.SETTINGS) do
-    for v in pairs(values) do
-        if v ~= "off" and not any('"' .. esc(v) .. '"') then table.insert(missing, key .. " = " .. v) end
-    end
-end
-
-table.sort(missing)
-print("BookOrbit plugin " .. version)
--- The companion's cache worker (docs/design/companion-worker.md) asks with the client's login and
--- saves covers under the plugin's own cover names (CacheWorker.coverName).
-local api = src[dir .. "/bookorbit_api.lua"] or ""
-has(api, '["x-auth-user"] = self.username', "client.username as x-auth-user")
-has(api, '["x-auth-key"] = self.userkey', "client.userkey as x-auth-key")
-has(api, "server_url = forkSafeServerUrl(opts.server_url)", "client.server_url")
-local thumbs = src[dir .. "/bookorbit_catalog_thumbnails.lua"] or ""
-has(thumbs, 'local token = tostring(value):gsub("%D", "")', "coverToken: updatedAt's digits")
-has(thumbs, 'token = token:sub(1, 16) .. token:sub(-16)', "coverToken: 16 + 16 digits")
-has(thumbs, 'return (book.author_photo and "a" or "") .. id .. "_" .. coverToken(book)', "memoKey")
-has(src[dir .. "/bookorbit_toast.lua"] or "", "function Toast.dismiss()", "Toast.dismiss")
-if #missing == 0 then
-    print("all hooked symbols present")
-    os.exit(0)
-end
-print("missing: " .. table.concat(missing, ", "))
-os.exit(1)
+read("bookorbit_api.lua") -- the companion retirement descriptor disables this complete module
+local state=read("bookorbit_state.lua")
+assert(state:find("bookorbit_sync_state",1,true),"native import source filename changed")
+local outbox=read("bookorbit_lifecycle_outbox.lua")
+assert(outbox:find("payload_generation",1,true),"native lifecycle generation format changed")
+assert(outbox:find("acknowledged",1,true),"native lifecycle checkpoint format changed")
+print("legacy retirement metadata and migration formats match the pinned plugin; no UI/transport dependency")

@@ -459,7 +459,7 @@ function Library.pollEvents()
     UIManager:unschedule(Library.pollEvents)
     UIManager:scheduleIn(.5,Library.pollEvents)
     if Companion.workerProblem() or reading() then return end
-    if Library.compatTick then Library.compatTick(Store.now()) end
+    if Library.compatTick then Library.compatTick(now_s()) end
     local encoded=Store.readFile(Store.dir().."/events-batch.lua",65537)
     if not encoded or #encoded>65536 then return end
     local batch=Cache.decode(encoded)
@@ -606,4 +606,89 @@ end
 -- Native catalog compatibility uses neutral references and companion-owned transfer only.
 function Library.catalogDownload(reference,destination,file_reference,done)
     return Library.catalogAction("finish.download",{reference=reference,destination=destination,file_reference=file_reference},done)
+end
+
+-- Local reader/settings bindings; protocol objects never enter the plugin.
+function Library.nativeReader(ui)
+    if not (ui and ui.document and ui.doc_settings) then return end
+    local digest=ui.doc_settings:readSetting("partial_md5_checksum")
+    if type(digest)~="string" then return end
+    local prepared=FinishUI.reader_key
+    if not prepared or prepared.path~=ui.document.file or prepared.document~=digest or prepared.owner~=LibraryAdapter.owner() then prepared=nil end
+    return {digest=digest,file=ui.document.file,key=prepared and prepared.key,book_id=prepared and prepared.reference,
+        percentage=LibraryAdapter.readerPosition(ui.document.file),summary=ui.doc_settings:readSetting("summary") or {},doc_settings=ui.doc_settings}
+end
+local function connectorSettings()
+    local key=NativeRetirement and NativeRetirement.plan and NativeRetirement.plan.settings_key
+    return key and G_reader_settings:readSetting(key)
+end
+function Library.observeSetting(item)
+    local settings=connectorSettings();local defaults=NativeRetirement and NativeRetirement.defaults
+    if type(settings)~="table" or type(defaults)~="table" then return {available=false,reason="Connector defaults unavailable"} end
+    local source=settings
+    if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and settings.sync_forward==3 and settings.sync_backward==3 and
+        (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then source=S.osm_saved_plugin end
+    return {available=true,current=source[item.key],default=defaults[item.key]}
+end
+function Library.writeSetting(item,value)
+    local settings=connectorSettings();if type(settings)~="table" then return false end
+    if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and settings.sync_forward==3 and settings.sync_backward==3 and
+        (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then
+        S.osm_saved_plugin[item.key]=value;saveSettings();return true
+    end
+    settings[item.key]=value;G_reader_settings:flush();return true
+end
+function Library.sleepRefresh(extras)
+    Companion.send(Companion.ACTION.SLEEP_REFRESH,extras);Library.watchEvents()
+end
+function Library.localBookReference(path)
+    local row=FinishUI and FinishUI.reader_key
+    return row and row.owner==LibraryAdapter.owner() and row.path==path and row.reference or nil
+end
+function Library.storageRecount(why)
+    Companion.send(Companion.ACTION.STORAGE,{reason=tostring(why),limit=tostring((tonumber(S.storage_limit_mb) or 512)*1048576),mirror_covers=S.mirror_covers and "1" or "0"})
+    Library.watchEvents()
+end
+LibraryAdapter.idle=function()
+    Library.copiesTick("book closed")
+    if FinishUI and not reading() and not FinishUI.sending then
+        FinishUI.sending=true;Library.finishCurrent(function() FinishUI.sending=nil end)
+    end
+end
+LibraryAdapter.networkRestored=function() return Library.refreshCatalog("resume",false) end
+LibraryAdapter.backgroundBusy=function() return Library.catalog_active and "saving the catalog for offline" or nil end
+LibraryAdapter.backgroundCommand=function(op,...)
+    local hooks={ ["views.install"]=function() end,["cache.resume"]=LibraryAdapter.networkRestored,
+        ["storage.recount"]=Library.storageRecount,["covers.refresh"]=function() return Library.refreshCatalog("covers",false) end,
+        ["preferences.report"]=function(...) return Recommendations.report(...) end,["preferences.apply"]=function(...) return Recommendations.applyChoices(...) end,
+        ["capabilities.lost"]=function() return Recommendations.pass("caps lost",nil,true) end,["capabilities.gained"]=function() return Recommendations.pass("capabilities gained") end }
+    return assert(hooks[op],"Unknown lifecycle operation")(...)
+end
+Library.connectorReady=function() Library.watchEvents() end
+Library.compatTick=Library.compatTick or function(t) if Sleep and Sleep.waited then Sleep.waited(t) end end
+Library.catalogFinished=Library.catalogFinished or function() Library.copiesTick("catalog refresh") end
+Library.compatEvent=function(ev)
+    if ev.kind=="sleep_pool" and Sleep then Sleep.landed(ev)
+    elseif ev.kind=="native_footer_repair" and type(ev.token)=="string" and S.native_footer_repair~=ev.token then
+        local before=tonumber(ev.before);local after=tonumber(ev.after)
+        if (before or ev.before=="nil") and (after or ev.after=="nil") then
+            if G_reader_settings:readSetting("reader_footer_mode")==before then G_reader_settings:saveSetting("reader_footer_mode",after) end
+            S.native_footer_repair=ev.token;saveSettings()
+        end
+    elseif (ev.kind=="copy.identity" or ev.kind=="finish.applied" or ev.kind=="download.saved") and ev.owner==LibraryAdapter.owner() then
+        if ev.kind=="copy.identity" then
+            -- The companion already repaired sidecars/statistics and its owned file ledger.
+            Library.catalogAction("copies.ack",{token=ev.token})
+        elseif ev.kind=="finish.applied" then
+            local epoch=FinishUI.intent[ev.document] or 0
+            Library.catalogAction("finish.validate",{document=ev.document,token=ev.token},function(result)
+                if result.apply and ev.owner==LibraryAdapter.owner() and epoch==(FinishUI.intent[ev.document] or 0) then
+                    FinishUI.jobs[ev.document]=nil
+                    Library.catalogAction("finish.ack",{document=ev.document,token=ev.token})
+                end
+            end)
+        elseif ev.kind=="download.saved" and ev.deferred then Gate.show("downloaded book",function()
+            UIManager:show(InfoMessage:new{text="Downloaded: "..tostring(ev.title or "Book"),timeout=3}) -- gate: Gate.show
+        end) end
+    end
 end

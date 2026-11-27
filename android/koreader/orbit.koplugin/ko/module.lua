@@ -47,7 +47,6 @@ function OrbitAndroid:init()
             self:maybeRestart("check")
         end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
-        -- Recommended settings: after the BookOrbit plugin's init (and its next-tick fallback).
         UIManager:scheduleIn(1.2, function() self:recommendedPass("start") end)
         UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
@@ -56,6 +55,9 @@ function OrbitAndroid:init()
 end
 
 function OrbitAndroid:onDispatcherRegisterActions()
+    for i,action in ipairs((NativeRetirement.plan or {}).actions or {}) do
+        if i<=8 then Dispatcher:registerAction(action.id,{category="none",event=action.event,title=_(action.title),general=true}) end
+    end
     Dispatcher:registerAction("orbit_sync_and_sleep",
         { category = "none", event = "OrbitSyncAndSleep", title = _("BookSync: sync and sleep"), general = true })
     Dispatcher:registerAction("orbit_go_home",
@@ -65,3 +67,6 @@ function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_open_apps",
         { category = "none", event = "OrbitOpenApps", title = _("BookSync Companion: apps"), general = true, separator = true })
 end
+
+function OrbitAndroid:onLibrarySyncAll() return Library.syncCurrent(function() end) end
+function OrbitAndroid:onLibraryThisBook() return ReaderPanel.show(self.ui,"reader-top-panel") end

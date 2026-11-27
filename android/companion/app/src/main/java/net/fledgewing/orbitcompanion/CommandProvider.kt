@@ -33,6 +33,7 @@ class CommandProvider : ContentProvider() {
 
         /** The plugin's key and the companion's proof for one `GET /clicks` (ClickChannel). */
         const val CLICKS = "${Contract.PACKAGE}.call.CLICKS"
+        const val LIBRARY_BOOTSTRAP = "${Contract.PACKAGE}.call.LIBRARY_BOOTSTRAP"
         const val DEVICE_SETTINGS = "${Contract.PACKAGE}.call.DEVICE_SETTINGS"
 
         /** USB only: the shell (adb, tools/sideload-android.sh) asks for KOReader's restart. */
@@ -79,6 +80,14 @@ class CommandProvider : ContentProvider() {
                 OLog.i("sync.preview ms=${(System.nanoTime()-start)/1_000_000}")
                 if(body.size>16384) return answer(false,"budget")
                 return answer(true).apply { putString("body",String(body,Charsets.UTF_8)) }
+            }
+            if (method == LIBRARY_BOOTSTRAP) {
+                if(extras?.getString("patch_version")!=BuildConfig.VERSION_NAME) return answer(false,"version")
+                val start=System.nanoTime()
+                val body=LuaValue.transportText(ServerAdapters.connector.retirementPlan())
+                OLog.i("library.bootstrap ms=${(System.nanoTime()-start)/1_000_000}")
+                if(body.toByteArray().size>16384) return answer(false,"budget")
+                return answer(true).apply { putString("body",body) }
             }
             if (method == DEVICE_SETTINGS) {
                 DeviceSettings.refreshAsync()
