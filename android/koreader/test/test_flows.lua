@@ -3670,9 +3670,8 @@ test("library command results: catalog and sync state never replace account iden
             pending()
             eq(RE.LibraryAdapter.account_snapshot,original);eq(RE.LibraryAdapter.managed_owner,"fixture")
         end
-        result={state={signedIn=false}}
-        RE.LibraryAdapter.command("account.signOut",{},function() end);pending()
-        eq(RE.LibraryAdapter.account_snapshot.signedIn,false);eq(RE.LibraryAdapter.managed_owner,nil)
+        -- Account commands now refresh current state through their named delivery
+        -- policy (test_delivery.lua); historical command snapshots are ignored.
     end)
     RE.Jni.call,RE.UIManager.scheduleIn,RE.Companion.workerProblem,RE.LibraryAdapter.reset=call,schedule,problem,reset
     RE.LibraryAdapter.account_snapshot,RE.LibraryAdapter.managed_owner=account,owner
