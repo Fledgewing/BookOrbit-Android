@@ -19,6 +19,7 @@ def review(device,out):
             time.sleep(.2)
     def dialog(prefix):
         wait('return top().title and top().title:find('+json.dumps(prefix,ensure_ascii=False)+',1,true)==1 and "ready" or "pending"')
+    wait('return LibraryAdapter.owner()=="emulator-fixture" and "ready" or "pending"')
     try:
         device.command('Library.companion.setupLater();HomeHost.show();local h=HomeHost.active;for i=#UI._window_stack,1,-1 do local w=UI._window_stack[i] and UI._window_stack[i].widget;if w==h then break end;if w then UI:close(w) end end;h:showSeries("The Glass Orchard");SeriesUI.download(h);return true')
         # A previous failed run may have left a retained queue: cancel explicitly,
@@ -26,6 +27,7 @@ def review(device,out):
         wait('return top()~=HomeHost.active and "ready" or "pending"')
         title=device.command('return top().title or ""')
         if not title.startswith("Download next"):
+            assert "requested" in title, "expected preview or retained queue, got "+title
             device.command('click("Cancel remaining");return true')
             wait('return top().title and top().title:find("0 failed",1,true) and "ready" or "pending"')
             device.command('click("Back");SeriesUI.download(HomeHost.active);return true')
