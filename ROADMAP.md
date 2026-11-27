@@ -76,7 +76,7 @@ design and mockup approval still apply.
 | **Persistent crash summary**: retain a deduplicated crash summary across restarts, never uploaded automatically ([parity gap 4](docs/FEATURES.md#prioritised-parity-bugs)). | Android | designing (0.12; [crash summary proposal](docs/design/crash-summary.md), visible controls NEEDS APPROVAL) |
 | **Add-on mode and setup checklist** (Next 10, 10a). | Android | building (checklist and permission-free install/download fallbacks, reader update-ready text and helper navigation implemented; menu recommendation integration and device acceptance remain) |
 | **Unified in-book menus** (Later 8b): BookSync reader screens and quick settings match Home, with stock KOReader/plugin escape; TOC, annotations, go to, search, book info, End of book and cached sleep presentation. No KOReader core patches; capability and flash gates per screen. | Android, X4 Pro, X4, X3 | building on Android (top/bottom panels and native action dispatch; Xteink later; [audit and increments](docs/design/booksync-home/DESIGN.md#13-in-book-experience-revision-4-continued)) |
-| **No visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
+| **No visible app switches** (Later 9) where the new Home makes them small. | Android | designing (ordinary status/helper surfaces [NEEDS APPROVAL](docs/design/booksync-home/READER-COMPANION-SURFACES.md); background work and transparent restart already implemented) |
 
 ## Planned: backend independence
 
@@ -124,7 +124,7 @@ and any UI mockups still need approval before implementation.
 |---|---|---|---|---|
 | 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking BookSync downloads. | Android | idea | |
 | 8b | **BookSync plugin hooks the BookOrbit board** (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. 8a (the plugin replaces the user patch) shipped in 0.8.0. | Android | idea (board hooks superseded by W36 owned Home; menu cleanup remains separate) | [orbit-plugin](docs/design/orbit-plugin.md), [owned Home](docs/design/booksync-home/DESIGN.md) |
-| 9 | **No visible app switches**: KOReader stays in front and the companion runs as a background service. | Android | idea | |
+| 9 | **No visible app switches**: ordinary BookSync status/helper actions stay in the reader; system/security and explicit other-app actions remain visible. | Android | designing (reader-inline surfaces NEEDS APPROVAL) | [proposal and mockups](docs/design/booksync-home/READER-COMPANION-SURFACES.md) |
 
 ## Ideas
 
