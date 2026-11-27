@@ -53,7 +53,9 @@ allows a user-requested normal refresh to rebuild the catalog. The request and b
 Published catalog generations, books, reading state and settings remain. An explicit Full refresh or credential change clears both worker and boot
 attempt markers and the warning; explicit refresh starts a fresh staging generation.
 A normal refresh also works after quarantine, including when no active pointer
-remains, and clears the durable warning and in-memory banner only on success. A storage failure that prevents recording an
+remains, and clears the durable warning only on success. Home and catalog taps
+queue that repair through the worker; its request survives Home's normal restart.
+While it runs, progress replaces the in-memory stopped banner. A storage failure that prevents recording an
 attempt prevents starting the job.
 
 A second marker, `refresh-boot.inflight`, brackets setup while refresh state is

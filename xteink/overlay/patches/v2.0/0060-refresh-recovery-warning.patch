@@ -1,4 +1,4 @@
-Subject: [PATCH] BookSync: recognize refresh failures independently of warning text
+Subject: [PATCH] BookSync: actionable refresh warning and normal-tap recovery
 
 diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index d8489e5e..63935ea5 100644
@@ -23,10 +23,20 @@ index d8489e5e..63935ea5 100644
    if (mirrorPopupUntil == 0) return;
    OrbifyRefreshBadge::drawStartPopup(renderer, mirrorShown.percent);
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index 31a2dfcd..6dfbbc55 100644
+index 31a2dfcd..4ebc04bd 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-@@ -281,7 +281,7 @@ void BookOrbitHomeRefreshActivity::tickMirror() {
+@@ -145,6 +145,9 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
+   // catalog's ⟳ hold that a reset cut short) saves the catalog for offline here. Patch 0041: one
+   // start popup, then the walk runs from loop() with its % in the corner; a press goes back to Home.
+   // Automatic ones (7 days, a new library version) wait for the sleep sync instead.
++  // A normal tap can repair a stopped catalog too. Queue it durably before
++  // this foreground refresh has a chance to restart back into Home.
++  if (OrbifyMirror::recoveryPending()) OrbifyMirror::requestIncremental();
+   if (OrbifyMirror::requested()) {
+     // The global refresh worker owns its connection.
+     mirrorWalk.begin();
+@@ -281,7 +284,7 @@ void BookOrbitHomeRefreshActivity::tickMirror() {
    const bool done = mirrorFinished || mirrorWalk.finished();
    const auto snapshot = OrbifyMirror::snapshot();
    mirrorPaused = snapshot.paused;
@@ -35,7 +45,7 @@ index 31a2dfcd..6dfbbc55 100644
      if (!done) {
        LOG_INF("BookOrbit", "Home refresh: Full refresh continues in background at %u%% (%s)", mirrorPercent,
                input ? "a press" : "no network");
-@@ -458,7 +458,7 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
+@@ -458,7 +461,7 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
                                       3);
      // The one %: the content's top-right corner, under the header band.
      char badge[40];

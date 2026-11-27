@@ -193,7 +193,7 @@ void bootBegin() {
   if (bootAttempt.exhausted() || !bootAttempt.begin()) {
     // An old warning is already quarantined; do not repeat that transition.
     // Still protect setup if the retained catalog itself later fails to load.
-    if (!Storage.exists(CRASHED)) quarantine();
+    if (!Storage.exists(CRASHED) || requested()) quarantine();
     // Disable the suspect cache by moving only its pointer, never the books or
     // the catalog generation itself. Do not decode any of it during recovery.
     constexpr const char* active = "/.crosspoint/orbify-catalog/bulk/active";
@@ -230,13 +230,22 @@ void catalogProgress(size_t done, size_t total, size_t books) {
 bool catalogTask() { return xTaskGetCurrentTaskHandle() == workerTask.load(); }
 bool cancelCatalogRequest() { return xTaskGetCurrentTaskHandle() == workerTask.load() && stop(); }
 
+bool recoveryPending() { return Storage.exists(CRASHED); }
 bool requestIncremental() {
   // Own normal refresh after quarantine even when boot recovery disabled the
   // active pointer. The bulk catalog starts a new generation when none exists.
   const bool recovering = Storage.exists(CRASHED);
   if (!recovering && !OrbifyBulk::active()) return false;
   if (running.load() || requested() || WiFi.status()!=WL_CONNECTED) return true;
-  if (recovering) attempt.complete();
+  if (recovering) {
+    // Home refresh restarts when its foreground work ends. Persist the repair
+    // so it can finish after that restart, retaining the warning until success.
+    if (!write(REQUEST, "1\n")) return true;
+    attempt.complete();
+    std::lock_guard<std::mutex> lock(stateMutex);
+    state = Snapshot{};
+    state.active = true;
+  }
   incrementalRequested.store(true);terminalThisBoot.store(false);retryAt.store(0);sleeping.store(false);
   return true;
 }
@@ -261,8 +270,8 @@ void service() {
   if (!recoveryChecked && Storage.ready()) {
     recoveryChecked = true;
     if (Storage.exists(CRASHED)) {
-      showCrash();
-      if (!incrementalRequested.load() && !fresh.load()) {
+      if (!requested() && !incrementalRequested.load() && !fresh.load()) {
+        showCrash();
         terminalThisBoot.store(true);
         return;
       }

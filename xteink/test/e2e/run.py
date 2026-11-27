@@ -271,7 +271,8 @@ def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
         assert (bulk / "active").exists()
         (folder / "mirror.request").write_text("1\n")
         (folder / ("refresh-boot.inflight" if disable_pointer else "refresh.inflight")).write_text("2")
-        recovered = ctx.sim.run(card, f"quarantine-{disable_pointer}", script="6000:QUIT", timeout_s=15)
+        recovered = ctx.sim.run(card, f"quarantine-{disable_pointer}", script="6000:QUIT", timeout_s=15,
+                                screenshots={5000: f"warning-{disable_pointer}"})
         assert recovered.returncode == 0
         assert (folder / "mirror.request.crashed").read_text() == (
             "Refresh stopped after a crash. Run Full refresh to rebuild.")
@@ -288,7 +289,8 @@ def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
         assert not (folder / "mirror.request.crashed").exists()
         assert not (folder / "refresh.inflight").exists()
         settled = ctx.sim.run(card, f"repaired-boot-{disable_pointer}", script="6000:QUIT", timeout_s=15,
-                              env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+                              env={"ORBIFY_SIM_CRASH_REFRESH": "1"},
+                              screenshots={5000: f"repaired-{disable_pointer}"})
         assert settled.returncode == 0
         assert "crash breaker stopped automatic resume" not in settled.output
         assert "BookOrbit Home: refresh stopped:" not in settled.output
@@ -346,6 +348,9 @@ def full_refresh_early_boot_breaker(ctx: Context, tmp: Path) -> None:
     assert pointer.read_text() == "a"
     pointer_stat = pointer.stat()
     logs = [run.output]
+    # Upgrade from the old firmware's settled warning plus exhausted markers.
+    (folder / "refresh-boot.inflight").write_text("2")
+    (folder / "refresh.inflight").write_text("2")
     for boot in range(3):
         settled = ctx.sim.run(card, f"settled-{boot}", script="6000:QUIT", timeout_s=15,
                               env={"ORBIFY_SIM_CRASH_REFRESH": "1"})

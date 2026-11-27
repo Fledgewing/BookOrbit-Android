@@ -219,6 +219,7 @@ void Walk::end() {
 
 void Walk::step() {
   if (!viewOnly || !started || connectionFailed || plan.next() == nullptr) return;
+  if (recoveryPending()) requestIncremental();
   OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
   const bool ok = runView(*plan.next(), viewPage);
   plan.advance(!ok);

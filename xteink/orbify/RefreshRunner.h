@@ -20,6 +20,7 @@ Snapshot snapshot();
 void freshRequest();
 // Returns true when the bulk worker owns this normal refresh (including recovery).
 bool requestIncremental();
+bool recoveryPending();
 // Main-loop scheduling only: no network, parsing, scans, or waiting on the UI
 // task.
 void service();
