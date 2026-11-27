@@ -27,7 +27,6 @@ Companion.ACTION = {
     -- The storage limit: the companion counts and removes (OC.storageCount).
     STORAGE = Companion.PACKAGE .. ".action.STORAGE",
     -- Keep copies current: the companion finds the changed copies (Copies.ask).
-    COPIES = Companion.PACKAGE .. ".action.COPIES",
     -- The sleep screen's pool: the companion lists, checks and fetches the covers (Sleep.refresh).
     SLEEP_REFRESH = Companion.PACKAGE .. ".action.SLEEP_REFRESH",
     -- Debug: the shared-storage SQLite stress test's writer (ko/sqlite_stress.lua).

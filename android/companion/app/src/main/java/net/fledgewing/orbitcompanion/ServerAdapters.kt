@@ -35,6 +35,7 @@ object ServerAdapters {
         return BookOrbitServerAdapter(credentials, account, ConnectorHttp,
             legacyAccount = { net.fledgewing.orbitcompanion.server.bookorbit.LegacyCoverSource.read(
                 java.io.File(android.os.Environment.getExternalStorageDirectory(),"koreader/settings.reader.lua")) },
+            actionJob = { creds,owner,action,args,done -> AdapterWorker.catalogAction(ctx,creds,owner,action,args,done) },
             catalogJob = { creds,owner,action,manual,done -> AdapterWorker.catalogControl(ctx,creds,owner,action,manual,done) },
             coverReferenceJob = { creds, owner, reference, refresh, done ->
                 AdapterWorker.acquireCoverReference(ctx,creds,owner,reference,refresh,done)

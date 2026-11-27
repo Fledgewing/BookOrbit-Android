@@ -8,6 +8,15 @@ import net.fledgewing.orbitcompanion.*
  * CopiesPlan.candidates; the replacement download stays in the plugin).
  */
 object CopiesLogic {
+    fun pick(files: List<*>, id: Any?): Map<*,*>? {
+        val rows=files.mapNotNull { it as? Map<*,*> }.filter { (it["format"] as? String)?.lowercase() in setOf("epub","pdf","cbz","fb2","mobi","azw3","djvu","txt","html","rtf","doc") }
+        return rows.firstOrNull { id!=null && it["id"]==id } ?: rows.firstOrNull { it["role"]=="primary" } ?: rows.firstOrNull()
+    }
+    fun decide(local: String, file: Map<*,*>): String {
+        val hash=file["fileHash"] as? String
+        return if(hash.isNullOrBlank()) "unknown" else if(hash.equals(local,true)) "same" else "replace"
+    }
+
     /** A saved book detail's files, and when it was saved (os.time seconds). */
     data class Detail(val files: List<*>?, val at: Long)
 

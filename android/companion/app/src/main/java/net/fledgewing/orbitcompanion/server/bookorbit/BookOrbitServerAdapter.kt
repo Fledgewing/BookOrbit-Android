@@ -11,9 +11,11 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     private val coverReferenceJob: (CacheWorker.Creds?, String, String, Boolean, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, _, done -> done(null,"unsupported") },
     private val legacyAccount: () -> LegacyCoverSource.Account? = { null },
+    private val actionJob: (CacheWorker.Creds, String, String, Map<*,*>, (Map<String,Any?>?,String?) -> Unit) -> Unit = { _,_,_,_,done -> done(null,"unsupported") },
     private val catalogJob: (CacheWorker.Creds, String, String, Boolean, (Map<String,Any?>?,String?) -> Unit) -> Unit = { _,_,_,_,done -> done(null,"unsupported") },
     private val coverJob: (CacheWorker.Creds, String, Long, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, done -> done(null,"unsupported") }) : ServerAdapter {
+    override fun recommendedSettings()=RecommendedSettings.items
     override val id = "bookorbit"
     internal interface ConnectorTransport {
         fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply
@@ -56,7 +58,12 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
                 val current=credentials.login("sync")
                 if(current==null) {
                     val key=(old["userkey"] as? String)?.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }
-                    if(key!=null) credentials.set("sync",ServerCredentials.Login(server,user,key,"user"))
+                    if(key!=null) {
+                        // Preserve the proven native catalog namespace when adopting its login.
+                        // Existing managed logins are untouched; their queue provenance stays intact.
+                        val native=legacyAccount()?.takeIf { it.credentials.server.trimEnd('/').equals(server.trimEnd('/'),true) && it.credentials.user==user }
+                        credentials.set("sync",ServerCredentials.Login(server,user,key,"user",native?.owner))
+                    }
                 }
                 val selected=credentials.login("sync")
                 val fallback=if(selected?.server==server && selected.user==user) selected.owner()
@@ -124,8 +131,20 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         return CapturedPosition((raw["percentage"] as? Number)?.toDouble(),raw["progress"] as? String,
             (raw["ts"] as? Number)?.toLong() ?: 0L,raw["status"]=="complete")
     }
-    override fun lifecyclePhase(entry: LifecycleQueue.Entry, phase: String, checkpoint: ByteArray, openPath: String?) =
-        (sync ?: throw ServerFailure("writer-active")).phase(entry,phase,checkpoint,openPath)
+    override fun lifecyclePhase(entry: LifecycleQueue.Entry, phase: String, checkpoint: ByteArray, openPath: String?): SyncPhaseResult {
+        val result=(sync ?: throw ServerFailure("writer-active")).phase(entry,phase,checkpoint,openPath)
+        // Match owns identity; catalog observes its completed result without another writer.
+        if(phase=="match" && result.complete && entry.owner==owner()) {
+            val match=(LuaValue.parse(result.checkpoint) as? Map<*,*>)?.get("match") as? Map<*,*>
+            val snapshot=LuaValue.parse(entry.payload) as? Map<*,*>
+            val c=credentials.login("sync")
+            if(c!=null && match?.get("bookId")!=null && snapshot?.get("file") is String) {
+                actionJob(CacheWorker.Creds(c.server,c.user,c.secret),entry.owner,"local.observe",mapOf(
+                    "reference" to match["bookId"],"file_reference" to match["bookFileId"],"document" to entry.document,"path" to snapshot["file"])) { _,_ -> }
+            }
+        }
+        return result
+    }
     override fun lifecycleComplete(checkpoint: ByteArray): Boolean =
         ((LuaValue.parse(checkpoint) as? Map<*, *>)?.get("remote_pending") as? Map<*, *>).isNullOrEmpty()
     override fun nextSyncVerification(owner: String, document: String) =
@@ -139,8 +158,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     }
     override fun state(): Map<String,Any?> {
         val accountState = account.state()
-        val legacy=if(credentials.login("sync")==null && credentials.login("opds")==null) legacyAccount() else null
         val sourceOwner=owner()
+        val legacy=legacyAccount()?.takeIf { it.owner==sourceOwner }
         fun status(kind: String): Map<String,Any?> {
             val c = credentials.login(kind)
             return credentials.status(kind) + mapOf("server" to c?.server, "username" to c?.user?.let(LuaValue::str),
@@ -252,6 +271,13 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val result = mapOf("items" to rows, "next" to (page + 1).takeIf { parsed.hasNext }, "freshness" to mapOf("saved" to true, "origin" to "cached-remote"))
         require(LuaValue.encode(result).size <= 16384)
         return result
+    }
+    override fun catalogAction(owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) {
+        require(owner == owner())
+        val c=credentials.login("sync")?.takeIf { it.owner()==owner }?.let { login("sync") }
+        val legacy=legacyAccount()?.takeIf { it.owner==owner }
+        val creds=c?.let { CacheWorker.Creds(it.server,it.user,it.secret) } ?: legacy?.credentials ?: throw ServerFailure("unauthorized")
+        actionJob(creds,owner,action,args,done)
     }
     override fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {
         require(owner.length in 1..4096)

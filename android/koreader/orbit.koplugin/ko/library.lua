@@ -7,6 +7,9 @@ LibraryAdapter={sent={},order={},ready={}}
 LibraryAdapter.LOCAL_OWNER="device-local"
 function LibraryAdapter.owner() return LibraryAdapter.managed_owner or LibraryAdapter.LOCAL_OWNER end
 function LibraryAdapter.read(request,op)
+    if op=="settings.recommendations" and LibraryAdapter.recommendations then
+        return LibraryAdapter.recommendations,#Cache.encode(LibraryAdapter.recommendations)
+    end
     if op=="account.state" and LibraryAdapter.account_snapshot then
         return LibraryAdapter.account_snapshot, LibraryAdapter.account_bytes
     end
@@ -67,6 +70,14 @@ function LibraryAdapter.fullRefresh() return Library.refreshCatalog("full",true)
 function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end
 function LibraryAdapter.syncCurrent(done)
     return ReadingSync.run("manual",function(ok,why) done(ok,why or (ok and "Synced" or "Saved · delivery pending")) end)
+end
+-- A successful transport drain may retain closed-sidecar applications. Those do not
+-- delay the finish; transport errors do. SyncOwner remains the sole position writer.
+function LibraryAdapter.finishCurrent(done)
+    return ReadingSync.run("manual",function(ok,why)
+        if why then return done(false,why) end
+        return Library.catalogAction("finish.drain",{manual=true},function(result) done(not result.error,result.error) end)
+    end)
 end
 -- KOReader already computes this on page/position updates, even with its footer hidden.
 -- No document scan, sidecar read or second progress writer on a panel paint.
@@ -268,6 +279,9 @@ function Library.subscribe(callback)
     end
 end
 function Library.changed(event)
+    if FinishUI and FinishUI.sheet and event.kind=="library" then
+        local sheet=FinishUI.sheet;FinishUI.refreshSheet(sheet.ui,sheet.book)
+    end
     if Library.listener then Library.listener(event) end
 end
 function Library.open(row)
@@ -478,6 +492,8 @@ function Library.catalogSnapshot()
 end
 function Library.refreshCatalog(action,manual)
     local owner=LibraryAdapter.owner()
+    local catalog=(LibraryAdapter.account_snapshot or {}).catalog or {}
+    if not manual and catalog.canRefresh~=true then return false end
     local problem=Companion.workerProblem()
     if not owner or problem then
         if manual and not reading() then
@@ -548,7 +564,46 @@ if OrbitAndroid then
         local result=init(self,...)
         if Library.connectorReady then Library.connectorReady() end
         Library.accountReturned()
+        Library.catalogAction("initialize",{},function() end)
         Library.watchEvents()
         return result
     end
+end
+
+function Library.catalogAction(action,args,done)
+    args=args or {};args.action=action;args.owner=LibraryAdapter.owner()
+    if not args.owner then if done then done({error="unavailable"}) end;return false end
+    return command(action,function() return LibraryAdapter.command("catalog.action",args,done or function() end) end)
+end
+function Library.recommendations(args,done)
+    return command("recommendations",function() return LibraryAdapter.command("settings.recommendations",args,function(result)
+        if not result.error and not args.definitions then LibraryAdapter.recommendations=result end
+        done(result)
+    end) end)
+end
+function Library.endAction(name,...) return FinishUI.actions[name](...) end
+function Library.openGrouped(title,source,query)
+    if HomeHost.show() and HomeHost.active then HomeHost.active:showList(title,source,query) end
+end
+function Library.copiesTick(why)
+    if S.keep_copies_current==false or reading() or Library.copies_pending then return end
+    if Library.copies_at and now_s()-Library.copies_at<600 and why~="full refresh" then return end
+    Library.copies_at=now_s();Library.copies_pending=true
+    local ui=liveUI()
+    return Library.catalogAction("copies.check",{enabled=true,open_path=ui and ui.document and ui.document.file},function()
+        Library.copies_pending=nil
+    end)
+end
+
+function Library.cachedAccountState() return LibraryAdapter.account_snapshot or {} end
+
+-- Finish follows the existing sole position writer and its outbox; no replacement writer.
+function Library.finishCurrent(done)
+    if not LibraryAdapter.finishCurrent then done(false,"Sync unavailable");return false end
+    return command("finish-current",function() return LibraryAdapter.finishCurrent(done) end)
+end
+
+-- Native catalog compatibility uses neutral references and companion-owned transfer only.
+function Library.catalogDownload(reference,destination,file_reference,done)
+    return Library.catalogAction("finish.download",{reference=reference,destination=destination,file_reference=file_reference},done)
 end

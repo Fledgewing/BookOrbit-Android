@@ -35,9 +35,9 @@ local KO = {
     "ko/server/bookorbit/quiesce.lua", "ko/server/bookorbit.lua", "ko/net.lua", "ko/wifi.lua", "ko/updater.lua",
     "ko/background.lua", "ko/runtime.lua", "ko/clicks_channel.lua", "ko/keys.lua",
     "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
-    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
-    "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
-    "ko/server/bookorbit/local_view.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
+    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommendations.lua", "ko/menu.lua",
+    "ko/wifi_backend.lua", "ko/endsheet.lua", "ko/finish.lua",
+    "ko/server/bookorbit/local_view.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/sleepscreen.lua",
     "ko/sqlite_stress.lua", "ko/library.lua", "ko/position_sync.lua", "ko/covers.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/storage.lua", "ko/clock.lua", "ko/local_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/series.lua", "ko/home_editor.lua", "ko/booklist_config.lua", "ko/settings_view.lua",
     "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }

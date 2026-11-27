@@ -178,17 +178,24 @@ Cover acquisition and refresh now use neutral companion commands; the plugin rea
 bounded local references. The former cover downloader and thumbnail child scanner
 are removed. Mirror planning and catalog refresh now run in the companion; the neutral library reads
 bounded snapshots and dispatches `catalog.control`. The Lua mirror, catalog interpreter
-and old library binding are deleted. The parallel F12-Q2 slice owns remaining grouping,
-copies, recommendations and end-of-book transport. Until that slice lands, the **whole
-plugin** is not yet server-free. Its cached catalog display helpers are extracted into
+and old library binding are deleted. The F12-Q2 catalog slice now owns grouping,
+copies, recommendations and end-of-book commands as well. Its cached catalog display helpers are extracted into
 `ko/server/bookorbit/local_view.lua`; existing non-sync jobs receive neutral lifecycle
 signals through the library binding. The named middleware (`wifi`, `sleep`, `module`,
 `net`, `shared`, `main_loop`) no longer accesses the server facade for sync. The remaining
 reviewed compatibility facade consumers are Home, notices, sleepscreen and endsheet;
 only `main.lua` loads implementation files. No new Lua transport is permitted.
 
+Catalog-side copies, grouping, recommendations and end-of-book are also companion-owned
+(F12-Q2 step 4). The four legacy Lua modules are deleted; `ko/library.lua` dispatches neutral
+`catalog.action` and `settings.recommendations` commands and reads bounded snapshots.
+`CopiesLogic`, `CacheWorker`, `BookOrbitProjection` and the existing read model own catalog
+work. Account-scoped copy/finish queues checkpoint legacy sources and acknowledge identity
+and writeback phases. Finishes follow SyncOwner delivery; no retired native writer is called.
+Temporary catalog display/native-setting bindings remain in the private Lua compatibility root.
+
 Every screen/widget keeps its budget. Consent and bounded native verification add named
-one-row / 16 KiB budgets; commands, drains and paints log timing spans. No sync is added
-to Home paint. Heavy capture, sidecar processing and statistics stay on the companion.
-Device acceptance targets remain pending maintainer confirmation. Firmware adapter
-enforcement is deferred under the Android-first instruction.
+one-row / 16 KiB budgets; finish has three rows and recommendation review has eight.
+Commands, drains and paints log timing spans. No sync is added to Home paint. Heavy capture,
+sidecar processing and statistics stay on the companion. Device targets remain pending
+maintainer confirmation. Firmware enforcement is deferred under the Android-first ruling.

@@ -91,7 +91,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/grouping.lua",
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitProjection.kt",
               "line": 40
             }
           ],
@@ -563,7 +563,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CatalogWorkflow.kt",
               "line": 18
             }
           ],
@@ -630,7 +630,7 @@
               "line": 10
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CatalogWorkflow.kt",
               "line": 18
             }
           ],
@@ -1047,7 +1047,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/endofbook.lua",
+              "path": "android/koreader/orbit.koplugin/ko/finish.lua",
               "line": 39
             },
             {
@@ -2731,7 +2731,7 @@
               "line": 25
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/recommended.lua",
+              "path": "android/koreader/orbit.koplugin/ko/recommendations.lua",
               "line": 14
             }
           ],

@@ -6,6 +6,7 @@ import java.io.File
  * normalize protocol data before returning it; unsupported operations are explicit. Renderers
  * use LibraryReadModel, never this transport-facing interface. */
 interface ServerAdapter {
+    fun recommendedSettings(): List<Map<String,Any?>> = emptyList()
     val id: String
     fun project(owner: String, request: Map<*, *>): Map<String, Any?> = unsupported()
     fun capabilities(owner: String) = project(owner, mapOf("op" to "capabilities"))
@@ -17,6 +18,7 @@ interface ServerAdapter {
     fun lists(owner: String, limit: Int, offset: Int = 0) = project(owner, mapOf("op" to "lists", "limit" to limit, "offset" to offset))
     fun sources(owner: String, category: String, limit: Int = 6, offset: Int = 0) =
         project(owner, mapOf("op" to "sources", "category" to category, "limit" to limit, "offset" to offset))
+    fun catalogAction(owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) = done(null,"unsupported")
     fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) = done(null,"unsupported")
     fun manifest(owner: String): Map<String, Any?> = unsupported()
     fun cover(owner: String, key: String): Map<String, Any?> = unsupported()

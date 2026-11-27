@@ -16,6 +16,7 @@ CrossInk 2.x only; 1.6 is retired).
 ## Next release (0.12): BookSync Home
 
 | Outcome | Platforms | Status |
+| Finish the server-free catalog cutover: companion-owned copies, grouping, settings recommendations and end-of-book snapshots/outboxes. | Android (Xteink deferred under Android-first ruling) | building on feature/0.12 (F12-Q2 step 4) |
 |---|---|---|
 | Word of the day, local Reading buddy and hardware Light picker widgets; Highlight and A year ago await authorized server snapshots. | Android; X4 Pro/X4/X3 deferred to firmware | building (device acceptance pending) |
 | Server-free Android catalog operations: companion-owned covers, refresh, copies, recommendations and end-of-book snapshots and commands. | Android; X4 Pro, X4, X3 later under Android-first ruling | building: covers, mirror planning and query/store reads migrated; copies, grouping, recommendations and finish pending |

@@ -342,6 +342,7 @@ function HomeHost.show()
         UIManager:show(InfoMessage:new{text=problem}) -- gate: user action (Home)
         return false
     end
+    if FinishUI then FinishUI.leaveForHome(liveUI()) end
     if HomeHost.active then UIManager:close(HomeHost.active) end
     -- The explicit Home action is leaving the reading foreground. Permit its bounded
     -- cached reads during construction, before UIManager has pushed the new screen.

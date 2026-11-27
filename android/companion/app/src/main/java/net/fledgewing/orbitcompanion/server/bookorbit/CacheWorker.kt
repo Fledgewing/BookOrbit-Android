@@ -107,6 +107,9 @@ class CacheWorker(
         if (n > 0) log("store: removed $n files of the cache before the database")
     }
 
+    /** Publication retains this worker's timing logger (including host test injection). */
+    internal fun publishLibrary(owner: String,requests: List<String>) = LibraryReadModel(store,log=log).publish(owner,requests)
+
     /** The detail template saved with the last plan (what a check of a detail path needs). */
     private fun detailTemplate(): String? = store.meta("detail_template")
 
@@ -157,12 +160,6 @@ class CacheWorker(
         ev["changed"] = true
         ev["at"] = t
         event(ev)
-    }
-
-    fun savePluginState(encoded: String) {
-        val bytes = encoded.toByteArray(Charsets.ISO_8859_1)
-        require(LuaValue.parse(bytes) is Map<*, *>)
-        check(write(File(root, "plugin-state.lua"), bytes))
     }
 
     fun rememberDetail(id: Long) {
@@ -318,38 +315,27 @@ class CacheWorker(
             ((b?.let { LuaValue.parse(it) } as? Map<*, *>)?.get("tags") as? List<*>)?.mapNotNull { it as? String }
         }
 
-    /**
-     * The plugin's COPIES: which copies on this reader changed in the library. The ask
-     * (copies/ask.lua, written by the plugin; no login in it): `books` ({ md5, path, book_id,
-     * file_id, incompatible }), `eob` (book id -> { files, saved_at }: the end-of-book cache).
-     * The details come from the newer of the end-of-book cache and the database (CopiesLogic).
-     * Answers with { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
-     */
-    fun copies(why: String) {
+    /** Reuse the existing saved-detail lookup for neutral copy commands. The worker owns
+     * catalog joins, freshness precedence, file existence and ordering; Lua gets one count row. */
+    data class CopyCheck(val checked: Int,val found: List<Map<String,Any?>>,val gone: Int)
+    fun changedCopies(books: List<Map<*,*>>,eob: Map<*,*> = emptyMap<Any,Any>()): CopyCheck {
         checkpoint()
-        val ask = read(File(root, "copies/ask.lua")) as? Map<*, *>
-        if (ask == null) {
-            event(sortedMapOf("kind" to "copies", "why" to why, "err" to "no ask"))
-            return
+        val want=books.mapNotNull { (it["book_id"] as? Number)?.toLong()?.toString() }.toHashSet()
+        val details=HashMap<String,CopiesLogic.Detail>()
+        for((key,value) in eob) {
+            val d=value as? Map<*,*> ?: continue
+            details[key.toString()]=CopiesLogic.Detail(d["files"] as? List<*>,(d["saved_at"] as? Number)?.toLong() ?: 0L)
         }
-        val books = (ask["books"] as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()
-        val want = books.mapNotNull { (it["book_id"] as? Long)?.toString() }.toHashSet()
-        val details = HashMap<String, CopiesLogic.Detail>()
-        for ((k, v) in ask["eob"] as? Map<*, *> ?: emptyMap<Any?, Any?>()) {
-            val d = v as? Map<*, *> ?: continue
-            details[k.toString()] = CopiesLogic.Detail(d["files"] as? List<*>, (d["saved_at"] as? Number)?.toLong() ?: 0L)
-        }
-        for (id in want) {
+        for(id in want) {
             checkpoint()
-            val saved = store.detail(id.toLong()) ?: store.bookItem(id.toLong())?.let { it to (store.db().query("SELECT item_at FROM books WHERE id=?", id.toLong()) { row -> row.long(0) ?: 0L }.firstOrNull() ?: 0L) } ?: continue
-            val (body, at) = saved
-            val files = (body as? Map<*, *>)?.get("files") as? List<*> ?: continue
-            if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
+            val saved=store.detail(id.toLong()) ?: store.bookItem(id.toLong())?.let { it to
+                (store.db().query("SELECT item_at FROM books WHERE id=?",id.toLong()) { row -> row.long(0) ?: 0L }.firstOrNull() ?: 0L) } ?: continue
+            val files=(saved.first as? Map<*,*>)?.get("files") as? List<*> ?: continue
+            if(CopiesLogic.newer(details[id],saved.second)) details[id]=CopiesLogic.Detail(files,saved.second)
         }
-        val found = CopiesLogic.candidates(books, details)
-        val present = found.filter { File(LuaValue.utf8(it["path"] as String)).isFile }
-        event(sortedMapOf("kind" to "copies", "why" to why, "checked" to books.size.toLong(), "found" to present,
-            "gone" to (found.size - present.size).toLong()))
+        val found=CopiesLogic.candidates(books,details)
+        val present=found.filter { File(LuaValue.utf8(it["path"] as String)).isFile }
+        return CopyCheck(books.size,present,found.size-present.size)
     }
 
     fun carryCopySettings(path: String, old: String, new: String) {
@@ -366,38 +352,6 @@ class CacheWorker(
         val stats = File(root.parentFile, "statistics.sqlite3")
         // KOReader Android statistics use WAL; do not reconfigure its live connection.
         if (stats.isFile) AndroidSql(stats, wal = true).use { db -> db.exec("UPDATE OR IGNORE book SET md5=? WHERE md5=?", new, old) }
-    }
-
-    /** A bounded preparation result: all network, file sampling and JSON work stays here. */
-    fun prepareCopy(job: Map<*, *>, template: String, creds: Creds) {
-        val path = job["path"] as? String ?: return
-        val ev = sortedMapOf<String, Any?>("kind" to "copy_prepared", "path" to path)
-        try {
-            checkpoint()
-            val file = File(LuaValue.utf8(path)).canonicalFile
-            require(bookRoots.any { file.path.startsWith(it.canonicalPath + File.separator) })
-            val id = (job["book_id"] as? Number)?.toLong() ?: error("book missing")
-            val request = template.replace(MirrorLogic.SENTINEL, id.toString())
-            val reply = http.get(url(creds, request), headers(creds), null, MAX_BODY)
-            require(reply.code == 200 && reply.body != null)
-            val body = decodeJson(String(reply.body!!, Charsets.UTF_8)) as? Map<*, *> ?: error("detail missing")
-            val fields = setOf("id", "title", "authors", "seriesId", "seriesName", "seriesIndex", "files", "readStatus")
-            ev["detail"] = body.filterKeys { it in fields }
-            val digest = java.security.MessageDigest.getInstance("MD5")
-            java.io.RandomAccessFile(file, "r").use { input ->
-                val bytes = ByteArray(1024)
-                for (offset in listOf(0L) + (0..10).map { 1024L shl (2 * it) }) {
-                    checkpoint()
-                    input.seek(offset)
-                    val n = input.read(bytes)
-                    if (n < 0) break
-                    digest.update(bytes, 0, n)
-                }
-            }
-            ev["md5"] = digest.digest().joinToString("") { "%02x".format(it) }
-            require(LuaValue.encode(ev).size <= 48000)
-        } catch (_: Exception) { ev.remove("detail"); ev["err"] = "preparation failed" }
-        event(ev)
     }
 
     /** Acknowledged mailbox; listing/parsing event files belongs to this worker only. */

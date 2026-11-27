@@ -41,6 +41,19 @@ class LibraryTest {
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,
         "pages" to 200, "rating" to 4, "added" to "2026-11-01", "rank" to 0, "last_read" to "2026-11-03")
 
+    @Test fun connectorSelectionGroupingKeepsTheOriginalSubsetAndBoundsNestedRows() {
+        store().use { st ->
+            seed(st)
+            // The same saved query windows used by the native list, not a Lua-held catalog.
+            for(i in 1L..5L) st.putItem(mapOf("id" to i,"title" to "Book $i","authors" to listOf(if(i<4) "A" else "B")),100)
+            val source=mapOf("kind" to "selection","selection" to mapOf("ids" to "2,4"))
+            val result=read(st,mapOf("op" to "groups","source" to source,"query" to mapOf("group" to "author"),"limit" to 8))
+            assertEquals(2L,(result["total"] as Number).toLong())
+            assertTrue(LuaValue.encode(result).size<=16384)
+            assertTrue((result["row_count"] as Number).toInt()<=8)
+            val text=result.toString();assertTrue(text.contains("Book 2"));assertTrue(text.contains("Book 4"));assertFalse(text.contains("Book 1"))
+        }
+    }
     @Test fun nestedRowsCannotUnderreportTheInheritedCallerBudget() {
         store().use { st ->
             val adapter=object : ServerAdapter {

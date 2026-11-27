@@ -136,20 +136,6 @@
       "does": "count what BookSync stores and remove the oldest over the limit"
     },
     {
-      "name": "COPIES",
-      "method": "net.fledgewing.orbitcompanion.action.COPIES",
-      "extras": [
-        "reason",
-        "ask",
-        "prepare",
-        "template",
-        "server",
-        "user",
-        "userkey"
-      ],
-      "does": "find changed copies from an in-memory ask, or prepare one replacement in the companion"
-    },
-    {
       "name": "SLEEP_REFRESH",
       "method": "net.fledgewing.orbitcompanion.action.SLEEP_REFRESH",
       "extras": [
@@ -182,14 +168,9 @@
         "reason",
         "drain_events",
         "events_ack",
-        "old_hash",
-        "new_hash",
         "board_year",
         "board_key",
-        "board_now",
-        "remember_id",
-        "copy_path",
-        "plugin_state"
+        "board_now"
       ],
       "does": "a write the plugin made, patched into orbit.db (or a wipe)"
     },
@@ -401,7 +382,7 @@
     },
     {
       "path": "koreader/settings/orbit-recommended.json",
-      "writer": "plugin",
+      "writer": "companion",
       "reader": "companion",
       "format": "json",
       "what": "the recommended settings' rows"
@@ -524,9 +505,9 @@
     {
       "path": "koreader/settings/orbit-cache/plugin-state.lua",
       "writer": "companion",
-      "reader": "plugin",
+      "reader": "companion",
       "format": "lua",
-      "what": "detail variant and copies queue snapshot"
+      "what": "legacy snapshot retained intact until account-scoped catalog workflow migration checkpoints its copies queue"
     }
   ],
   "db": {

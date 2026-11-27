@@ -74,6 +74,8 @@ def violations(path, source):
             cover_errors.append(f'{path}: plugin cover transport is companion-owned; use the neutral library command')
         if re.search(r'\b(?:Store[.:](?:read|search)|Server[.:]bulkList)\s*\(|\bCompanion\.ACTION\.(?:MIRROR|CHECK)\b|\b(?:FROM|JOIN)\s+(?:bulk_\w+|list_items|books)\b', code, re.I):
             cover_errors.append(f'{path}: catalog interpretation/transport is companion-owned; consume a bounded library snapshot')
+        if re.search(r'\bCompanion\.ACTION\.COPIES\b|[:.]catalogSet(?:ReadStatus|Rating)\s*\(|[:.]downloadCatalogFile\s*\(|[\"\']/koreader/plugin/catalog/(?:files|books)/', code):
+            cover_errors.append(f'{path}: catalog copy/finish transport is companion-owned; use Library commands/snapshots')
     if kotlin_adapter or lua_adapter:
         if kotlin_adapter and path.suffix in ('.kt', '.java'):
             expected = '.'.join(path.relative_to(source_root).parent.parts)
@@ -197,6 +199,19 @@ class GuardTests(unittest.TestCase):
             self.assertNotIn(str(retired.relative_to(LUA)),(ROOT / LUA_REGISTRY).read_text())
         self.assertFalse(violations(LUA / 'ko/library.lua','Store.library(owner,request)'))
         self.assertTrue(violations(LUA / 'ko/library.lua','Store.rows(conn,sql)'))
+
+    def test_copy_and_finish_transport_cannot_hide_in_any_lua_adapter(self):
+        for path in (LUA / 'ko/library.lua',LUA / 'ko/server/bookorbit/other.lua'):
+            for source in ('Companion.send(Companion.ACTION.COPIES,{})','client:catalogSetReadStatus(id,status)',
+                           'client:catalogSetRating(id,rating)','client:downloadCatalogFile(id,path)',
+                           'local route="/koreader/plugin/catalog/files/7/download"'):
+                self.assertTrue(violations(path,source),(path,source))
+        for name in ('copies','grouping','recommended','endofbook'):
+            retired=LUA / 'ko/server/bookorbit' / (name+'.lua')
+            self.assertFalse((ROOT / retired).exists())
+            self.assertNotIn(str(retired.relative_to(LUA)),(ROOT / LUA_REGISTRY).read_text())
+        for name in ('finish','recommendations'):
+            self.assertFalse(violations(LUA / 'ko' / (name+'.lua'),(ROOT / LUA / 'ko' / (name+'.lua')).read_text()))
 
     def test_entire_production_tree(self):
         errors = []

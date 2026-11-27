@@ -17,7 +17,6 @@ import java.net.URL
  */
 object AdapterWorker : ServerRuntime {
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
-    const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
     /** The shared-storage stress test's writer (docs/design/sqlite-cache.md "Stress test"); no login. */
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
@@ -45,7 +44,7 @@ object AdapterWorker : ServerRuntime {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
+    override fun busy(): Boolean = mirrorRunning || catalogActionRunning || synchronized(lock) { patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
 
     private var worker: CacheWorker? = null
 
@@ -167,6 +166,30 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    @Volatile private var catalogActionRunning=false
+    /** Auto Wi-Fi off must include an executing command after it leaves the pending queue. */
+    internal fun <T> catalogActionWork(work: () -> T): T {
+        catalogActionRunning=true
+        return try { work() } finally { catalogActionRunning=false }
+    }
+
+    fun catalogAction(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, args: Map<*,*>,
+        done: (Map<String,Any?>?,String?) -> Unit) {
+        app=ctx.applicationContext
+        BulkWork.attach(ctx)
+        synchronized(lock) { patches.addLast { catalogActionWork {
+            val start=System.nanoTime()
+            val result=runCatching {
+                if(owner!=LibraryAccount.owner() || worker().store.meta("owner")!=owner) throw ServerFailure("canceled")
+                CatalogWorkflow(worker(),credentials,owner,ConnectorHttp,reading={ Reading.now(ctx) },
+                    current={ owner==LibraryAccount.owner() },checkpoint=BulkWork::checkpoint).command(action,args)
+            }
+            OLog.i("library.catalog.action ms=${(System.nanoTime()-start)/1_000_000}")
+            result.fold({ done(it,null) },{ done(null,(it as? ServerFailure)?.kind ?: "unavailable") })
+        } }; lock.notifyAll() }
+        start()
+    }
+
     /** One sole-writer command. The plugin sends an action and opaque owner, never a plan/login. */
     fun catalogControl(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, manual: Boolean,
         done: (Map<String,Any?>?,String?) -> Unit) {
@@ -245,11 +268,6 @@ object AdapterWorker : ServerRuntime {
             synchronized(lock) { storage = a; lock.notifyAll() }
             return start()
         }
-        if (i.action == ACTION_PATCH && i.hasExtra("plugin_state")) {
-            val state = i.getStringExtra("plugin_state") ?: return
-            synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
-            return start()
-        }
         if (i.action == ACTION_PATCH && i.hasExtra("library_batch")) {
             val encoded = i.getStringExtra("library_batch")?.takeIf { it.length <= 131072 } ?: return
             val owner = i.getStringExtra("owner") ?: return
@@ -261,11 +279,6 @@ object AdapterWorker : ServerRuntime {
                 if (requests.size <= LibraryReadModel.MAX_BATCH && model.publish(LuaValue.str(owner), requests))
                     worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))
             }; lock.notifyAll() }
-            return start()
-        }
-        if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
-            val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
-            synchronized(lock) { patches.addLast { worker().rememberDetail(id) }; lock.notifyAll() }
             return start()
         }
         if (i.action == ACTION_PATCH && i.hasExtra("board_year")) {
@@ -290,46 +303,12 @@ object AdapterWorker : ServerRuntime {
             }
             return start()
         }
-        if (i.action == ACTION_PATCH && i.hasExtra("old_hash")) {
-            val old = i.getStringExtra("old_hash") ?: return
-            val new = i.getStringExtra("new_hash") ?: return
-            val path = i.getStringExtra("copy_path")
-            synchronized(lock) { patches.addLast {
-                HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new, BulkWork::checkpoint)
-                if (path != null) worker().carryCopySettings(path, old, new)
-            }; lock.notifyAll() }
-            return start()
-        }
         if (i.action == ACTION_PATCH && i.getStringExtra("drain_events") == "1") {
             val ack = i.getStringExtra("events_ack")
             synchronized(lock) { patches.addLast { worker().drainEvents(ack) }; lock.notifyAll() }
             return start()
         }
         if (i.action == ACTION_PATCH) return
-        if (i.action == ACTION_COPIES) {
-            val prepare = i.getStringExtra("prepare")
-            val ask = i.getStringExtra("ask")
-            val reason = i.getStringExtra("reason") ?: "plugin"
-            val credentials = creds(i)
-            val template = i.getStringExtra("template")
-            synchronized(lock) {
-                patches.addLast {
-                    if (prepare != null && credentials != null && template != null) {
-                        val job = LuaValue.parse(LuaValue.str(prepare).toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return@addLast
-                        worker().prepareCopy(job, template, credentials)
-                    } else {
-                        if (ask != null) {
-                            val file = File(root(), "copies/ask.lua")
-                            file.parentFile?.mkdirs()
-                            file.writeBytes(LuaValue.str(ask).toByteArray(Charsets.ISO_8859_1))
-                        }
-                        worker().copies(reason)
-                    }
-                }
-                lock.notifyAll()
-            }
-            return start()
-        }
 
         app = ctx.applicationContext
         val creds = creds(i)
