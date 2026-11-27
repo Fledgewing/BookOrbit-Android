@@ -54,15 +54,11 @@ function Wifi.busy()
     if Wifi.inflight_http > 0 then return true, "download in progress" end
     -- The cache's background checks and the offline mirror run in child processes, which this
     -- process's request counter never sees.
-    if Server.cacheBusy then
-        local okc, why = pcall(Server.cacheBusy)
+    if Library and Library.backgroundBusy then
+        local okc, why = pcall(Library.backgroundBusy)
         if okc and why then return true, why end
     end
-    local p = serverPlugin()
-    if p and can(p, "outbox") then
-        local okb, busy = pcall(Server.syncBusy, p)
-        if okb and busy then return true, "library plugin syncing" end
-    end
+    if ReadingSync and ReadingSync.busy then return true,"companion sync" end
     return false
 end
 
@@ -107,7 +103,7 @@ function Wifi.evaluate(why)
     Wifi.tx = tx
     local busy, busy_why = Wifi.busy()
     local screen_off = Jni.isInteractive() == false
-    local okb, browsing = pcall(function() return serverOverBook(serverPlugin()) end) -- the reading gate's own test
+    local okb, browsing = pcall(function() return not reading() end)
     local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy,
         screen_off = screen_off, browsing = okb and browsing == true })
     if action == "off" then

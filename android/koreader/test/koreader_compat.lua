@@ -90,12 +90,14 @@ local NEEDS = {
     { "frontend/ui/widget/progresswidget.lua", { {"percentage", F}, {"ticks", F}, {"bordersize", F}, {"margin_h", F}, {"margin_v", F}, {"radius", F} } },
     { "frontend/ui/widget/container/rightcontainer.lua", { {"RightContainer", T} } },
     { "frontend/ui/widget/container/topcontainer.lua", { {"TopContainer", T} } },
+    { "frontend/apps/reader/modules/readerpaging.lua", { "getLastPercent", "getLastProgress" } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "getLastPercent", "getLastProgress" } },
     { "frontend/apps/reader/modules/readertoc.lua", { "isChapterStart", "getPreviousChapter" } },
     { "frontend/apps/reader/modules/readerstatus.lua", { "onEndOfBook", "markBook", "onShowBookStatus",
         { "end_document_action", T } } },
     { "frontend/dispatcher.lua", { "registerAction" } },
     -- Plugin handlers are HandlerSandbox tables with __call (compat.lua Compat.callable).
-    { "frontend/pluginloader.lua", { "loadPlugins", "genPluginManagerSubItem", "getPluginInstance",
+    { "frontend/pluginloader.lua", { "loadPlugins", "genPluginManagerSubItem", "getPluginInstance", "createPluginInstance",
         { "HandlerSandbox", T }, { "__call", T } } },
     -- Recommended settings (ko/recommended.lua): the stock gesture defaults, Gestures.default_settings.
     { "plugins/gestures.koplugin/main.lua", { "onFlushSettings", { "data", F }, { "updated", F }, { "default_settings", F } } },
