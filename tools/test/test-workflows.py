@@ -176,7 +176,7 @@ with tempfile.TemporaryDirectory() as temp:
         env = dict(os.environ, PATH=str(temp) + os.pathsep + os.environ['PATH'],
                    GITHUB_EVENT_NAME=event, PROMOTE_STABLE=promote, TEST_BUILD=test_build,
                    FORCE='', GITHUB_RUN_NUMBER='900', RUN_BASE='100',
-                   GITHUB_REPOSITORY='Fledgewing/Orbify', GITHUB_OUTPUT=str(output))
+                   GITHUB_REPOSITORY='example/booksync', GITHUB_OUTPUT=str(output))
         result = subprocess.run(['bash', '-c', script], cwd=root, env=env,
                                 capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
