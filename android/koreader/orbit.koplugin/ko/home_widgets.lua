@@ -115,10 +115,11 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         HomeWidgets.text(canvas,b.title or _("Untitled"),tx,pad+scale(35),tw,short and 18 or 25,true,true)
         if not short then HomeWidgets.text(canvas,b.authors and b.authors[1] or "",tx,pad+scale(73),tw,16,true) end
         if h>=scale(290) and b.series_line then HomeWidgets.text(canvas,b.series_line,tx,pad+scale(98),tw,14,true) end
-        HomeWidgets.text(canvas,b.time_left or _("Not enough reading yet"),tx,h-scale(short and 88 or 103),tw,12,true)
+        local percentW=scale(short and 48 or 70)
+        HomeWidgets.text(canvas,b.time_left or _("Not enough reading yet"),tx+percentW,h-scale(short and 102 or 121),tw-percentW,12,true)
         if h>=scale(290) then HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),tx,h-scale(146),tw,13,true) end
         local pct=math.max(0,math.min(100,tonumber(b.progress) or 0))
-        HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(short and 105 or 128),tw,short and 16 or 26,true,true)
+        HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(short and 105 or 128),percentW,short and 16 or 26,true,true)
         HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=pct/100,radius=0,margin_h=0,margin_v=0,
             bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
         HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)

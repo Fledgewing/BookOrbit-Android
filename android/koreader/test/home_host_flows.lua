@@ -606,6 +606,17 @@ return function(test,eq,ok,E,W,Widget)
             end
             for _,label in ipairs({b.series_line,b.time_left,b.finish_forecast}) do ok(labels[label],label) end
             eq(actions[1],"more")
+            for _,height in ipairs({178,374}) do
+                local c=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,function() end,{w=678,h=height})
+                local percent,left,bar
+                for _,child in ipairs(c[1]) do
+                    if child.text=="25%" then percent=child end
+                    if child.text==b.time_left then left=child end
+                    if child.percentage then bar=child end
+                end
+                ok(left.overlap_offset[1]>=percent.overlap_offset[1]+percent.max_width,"pace and percentage occupy separate columns")
+                ok(left.overlap_offset[2]+16<=bar.overlap_offset[2],"pace text clears the progress bar")
+            end
             local h=E.HomeHost.create(); E.HomeHost.active=h
             h:dispatch("more",b)
             local dialog=W.shown[#W.shown]
@@ -674,6 +685,27 @@ return function(test,eq,ok,E,W,Widget)
                 owner="replacement";callback({local_path="wrong-owner.jpg"});cancelLate();eq(#paths,1)
             end)
             E.require,E.Library.acquireCover=originalRequire,acquire
+            ok(success,err)
+        end)
+    end)
+
+    test("Home card download: one explicit job and no late reader focus",function()
+        withHost(function()
+            local download,open=E.Library.downloadCard,E.Library.open
+            local calls,opened,deliver=0,0
+            E.Library.downloadCard=function(row,done) eq(row.key,"remote");calls=calls+1;deliver=done end
+            E.Library.open=function(row) eq(row.local_path,"saved.epub");opened=opened+1;return true end
+            local success,err=pcall(function()
+                local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+                h:dispatch("download",{key="remote"});eq(calls,1);eq(h.cardDownload,"remote")
+                h:dispatch("download",{key="remote"});eq(calls,1,"pending download coalesces taps")
+                deliver({local_path="saved.epub"});eq(opened,1);eq(W.shown[#W.shown],nil)
+                deliver({local_path="saved.epub"});eq(opened,1,"leaving Home rejects late focus")
+                local available=E.Library.cardActions({key="remote"},{download=true})
+                eq(available[2].id,"download");eq(available[2].enabled,true)
+                eq(E.Library.cardActions({key="remote"},{download=false})[2].enabled,false)
+            end)
+            E.Library.downloadCard,E.Library.open=download,open
             ok(success,err)
         end)
     end)

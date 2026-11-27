@@ -87,6 +87,7 @@ class ReadingCardTest {
             val result=LuaValue.parse(bytes) as Map<*,*>
             val row=(result["items"] as List<*>).single() as Map<*,*>
             assertEquals(cover.path,row["cover_path"])
+            assertEquals(true,(row["available"] as Map<*,*>)["cover"])
             assertEquals("Moon · Book 2",LuaValue.utf8(row["series_line"] as String))
             assertEquals("50 m left",row["time_left"])
             assertTrue((row["finish_forecast"] as String).startsWith("Done by "))

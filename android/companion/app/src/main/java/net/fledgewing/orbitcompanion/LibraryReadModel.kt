@@ -75,10 +75,11 @@ class LibraryReadModel(
                     projected + mapOf("items" to (projected["items"] as? List<*>).orEmpty().map { raw ->
                         @Suppress("UNCHECKED_CAST") val row = raw as Map<String, Any?>
                         val key = row["key"] as? String
-                        val cover = if (key == null) null else projection.project(owner, mapOf("op" to "cover", "key" to key))["local_path"]
+                        val cover = (if (key == null) null else projection.project(owner, mapOf("op" to "cover", "key" to key))["local_path"]) ?: row["cover_path"]
                         val enriched = personal.card(row, clock(), daily)
                         val series = (row["series"] as? List<*>)?.firstOrNull() as? String
                         enriched + mapOf("cover_path" to cover,
+                            "available" to ((row["available"] as? Map<*, *>).orEmpty() + mapOf("cover" to (cover != null))),
                             "series_line" to series?.let { name -> LuaValue.str(LuaValue.utf8(name) + (row["series_position"]?.let { " · Book $it" } ?: "")) },
                             "time_left" to (enriched["time_left"] ?: "Not enough reading yet"),
                             "finish_forecast" to (enriched["finish_forecast"] ?: "Finish date unavailable"))
