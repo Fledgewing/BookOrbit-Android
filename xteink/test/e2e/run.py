@@ -381,7 +381,11 @@ def full_refresh_network_restart_and_sleep(ctx: Context, tmp: Path) -> None:
     assert (folder / "mirror.request").exists()
     assert not (folder / "mirror.request.crashed").exists()
     assert not (folder / "refresh-boot.inflight").exists()
-    slept = sleep_sync(ctx, card, "requested-sleep", env=tight)
+    # The resumed partial catalog can finish in under a second. Apply the
+    # floor from boot here so it stays pending until the sleep-sync target,
+    # rather than racing the worker against the scripted Power press.
+    slept = sleep_sync(ctx, card, "requested-sleep",
+                       env={**SDFAT, "ORBIFY_SIM_HEAP": "0:10000/6000"})
     after(slept.output, "Minimal network boot ready: target=33")
     assert slept.returncode == 0
     assert (folder / "mirror.request").exists()
