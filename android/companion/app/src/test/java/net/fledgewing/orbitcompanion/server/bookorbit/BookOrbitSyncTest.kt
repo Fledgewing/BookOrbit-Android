@@ -30,6 +30,27 @@ class BookOrbitSyncTest {
         val root=Files.createTempDirectory("sync-protocol").toFile()
         try { Kit(root).use(test) } finally { root.deleteRecursively() }
     }
+    @Test fun pendingManualStatusCannotOvertakePositionOrAcceptAnOlderStateReply() = fixture { k ->
+        val owner="fixture-account"
+        val digest=CatalogWorkflow.partial(k.book)
+        val pending=File(k.root,"orbit-cache/workflows/${BookOrbitLibrary.namespace(owner)}.lua")
+        pending.parentFile!!.mkdirs()
+        pending.writeBytes(LuaValue.encode(mapOf("finishes" to mapOf(digest to mapOf("hash" to digest,"manual_status" to "read",
+            "ready" to true,"native_summary" to mapOf("status" to "complete"),"native_token" to "current")))))
+        k.sidecar.writeBytes(LuaValue.encode(mapOf("summary" to mapOf("status" to "complete","rating" to 4L),"booksync_status_token" to "current")))
+        val capture=k.sync.capture(mapOf("path" to k.book.path,"percentage" to .4,"position" to "/p40","catalog_owner" to owner))
+        val snapshot=LuaValue.parse(capture.second) as Map<*,*>
+        assertEquals(true,snapshot["manual_status_pending"]);assertEquals(.4,snapshot["percentage"])
+        k.response={_,body ->
+            val sent=(body["books"] as List<*>).single() as Map<*,*>
+            assertFalse(sent.containsKey("status"))
+            mapOf("results" to listOf(mapOf("statusSet" to true,"status" to "reading")))
+        }
+        k.document=digest
+        val job=k.job(snapshot.entries.associate { it.key.toString() to it.value })
+        k.sync.phase(job,"state",job.checkpoint,null)
+        assertEquals("complete",(LegacyLifecycleImport.literal(k.sidecar)!!["summary"] as Map<*,*>)["status"])
+    }
     @Test fun phaseRequestsAreAdapterOwnedAndStatsCursorDoesNotLoseEqualTimestampRows() = fixture { k ->
         JdbcSql(File(k.root,"statistics.sqlite3")).use { db ->
             db.exec("CREATE TABLE book (id INTEGER PRIMARY KEY,md5 TEXT)")

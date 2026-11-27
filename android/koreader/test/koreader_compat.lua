@@ -94,6 +94,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readerpaging.lua", { "getLastPercent", "getLastProgress" } },
     { "frontend/apps/reader/modules/readerrolling.lua", { "getLastPercent", "getLastProgress" } },
     { "frontend/apps/reader/modules/readertoc.lua", { "isChapterStart", "getPreviousChapter" } },
+    { "frontend/ui/widget/booklist.lua", { "setBookInfoCacheProperty" } },
     { "frontend/apps/reader/modules/readerstatus.lua", { "onEndOfBook", "markBook", "onShowBookStatus",
         { "end_document_action", T } } },
     { "frontend/dispatcher.lua", { "registerAction" } },

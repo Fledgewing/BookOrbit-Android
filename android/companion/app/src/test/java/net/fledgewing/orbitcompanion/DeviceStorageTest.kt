@@ -42,6 +42,34 @@ class DeviceStorageTest {
         assertFalse(file.exists()); assertEquals("progress",sidecar.readText()); assertEquals("fixture",store.meta("owner"))
         assertTrue(actions(result).isEmpty()); assertEquals(0,result["on_device"])
     }
+    @Test fun individualRemovalRequiresExactPreviewAndKeepsSidecarAndOtherBooks()=fixture { volume,_,files,storage ->
+        val a=book(volume,"one",100);val b=book(volume,"two",200)
+        files+=LocalBook(a,false,null);files+=LocalBook(b,false,null)
+        val sidecar=File(a.parentFile,"one.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs();writeText("saved annotations") }
+        val preview=storage.removal("fixture",mapOf("path" to a.path))
+        assertEquals(1,preview["row_count"]);assertTrue(LuaValue.encode(preview).size<=16384)
+        val result=storage.command("fixture","storage.remove",mapOf("path" to a.path,"token" to preview["token"]))
+        assertEquals(true,result["ok"]);assertFalse(a.exists());assertTrue(b.exists())
+        assertEquals("saved annotations",sidecar.readText())
+    }
+    @Test fun individualRemovalRefusesChangedIdentityMissingConfirmationAndOpenBook()=fixture { volume,_,files,storage ->
+        val a=book(volume,"one",100);files+=LocalBook(a,false,null)
+        val preview=storage.removal("fixture",mapOf("path" to a.path))
+        assertEquals("changed",storage.command("fixture","storage.remove",mapOf("path" to a.path))["error"])
+        a.appendText("new revision")
+        assertEquals("changed",storage.command("fixture","storage.remove",mapOf("path" to a.path,"token" to preview["token"]))["error"])
+        assertThrows(IllegalArgumentException::class.java) { storage.removal("fixture",mapOf("path" to a.path,"exclude_path" to a.path)) }
+        assertTrue(a.exists())
+    }
+    @Test fun individualRemovalRejectsWrongOwnerUntrackedFileAndSymlink()=fixture { volume,_,files,storage ->
+        val a=book(volume,"one",100)
+        assertThrows(IllegalArgumentException::class.java) { storage.removal("fixture",mapOf("path" to a.path)) }
+        files+=LocalBook(a,false,null)
+        assertThrows(IllegalArgumentException::class.java) { storage.removal("other",mapOf("path" to a.path)) }
+        val link=File(a.parentFile,"alias.epub");Files.createSymbolicLink(link.toPath(),a.toPath())
+        assertThrows(IllegalArgumentException::class.java) { storage.removal("fixture",mapOf("path" to link.path)) }
+        assertTrue(a.exists())
+    }
     @Test fun newlyEligibleOrReplacedFilesRequireNewConfirmation()=fixture { volume,_,files,storage ->
         val file=book(volume,"done",200); files+=LocalBook(file,true,null)
         val action=actions(storage.summary("fixture")).single()

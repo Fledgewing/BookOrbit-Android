@@ -21,6 +21,9 @@ interface ServerAdapter {
     fun lists(owner: String, limit: Int, offset: Int = 0) = project(owner, mapOf("op" to "lists", "limit" to limit, "offset" to offset))
     fun sources(owner: String, category: String, limit: Int = 6, offset: Int = 0) =
         project(owner, mapOf("op" to "sources", "category" to category, "limit" to limit, "offset" to offset))
+    fun statusCapture(owner: String, openPath: String?, done: (Map<String,Any?>?,String?)->Unit) = done(emptyMap(),null)
+    fun statusPositioned(owner:String,token:String,done:(Map<String,Any?>?,String?)->Unit) = done(null,"unsupported")
+    fun statusCaptured(owner: String, token: String, done: (Map<String,Any?>?,String?)->Unit) = done(null,"unsupported")
     fun catalogAction(owner: String, action: String, args: Map<*,*>, done: (Map<String,Any?>?,String?) -> Unit) = done(null,"unsupported")
     fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) = done(null,"unsupported")
     fun manifest(owner: String): Map<String, Any?> = unsupported()

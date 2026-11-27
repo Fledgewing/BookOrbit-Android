@@ -12,6 +12,8 @@ class LifecycleQueue(val sql: Sql) {
         val payload: ByteArray, val acknowledged: Set<String>, val checkpoint: ByteArray,
         val source: String?, val retired: Boolean)
     init {
+        sql.exec("CREATE TABLE IF NOT EXISTS catalog_capture_tokens (adapter TEXT NOT NULL,owner TEXT NOT NULL,token TEXT NOT NULL,job TEXT NOT NULL,notified INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(adapter,owner,token))")
+        if("notified" !in sql.query("PRAGMA table_info(catalog_capture_tokens)") { it.text(1) }) sql.exec("ALTER TABLE catalog_capture_tokens ADD COLUMN notified INTEGER NOT NULL DEFAULT 0")
         sql.exec("CREATE TABLE IF NOT EXISTS lifecycle_jobs (sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,adapter TEXT NOT NULL,owner TEXT NOT NULL,document TEXT NOT NULL,payload BLOB NOT NULL,checkpoint BLOB NOT NULL,source TEXT,retired INTEGER NOT NULL DEFAULT 0,done INTEGER NOT NULL DEFAULT 0)")
         sql.exec("CREATE UNIQUE INDEX IF NOT EXISTS lifecycle_source ON lifecycle_jobs(adapter,source) WHERE source IS NOT NULL")
         sql.exec("CREATE INDEX IF NOT EXISTS lifecycle_owner ON lifecycle_jobs(adapter,owner,done,sequence)")
@@ -21,17 +23,25 @@ class LifecycleQueue(val sql: Sql) {
     }
     fun enqueue(adapter: String, owner: String, document: String, payload: ByteArray,
         acknowledged: Set<String> = emptySet(), checkpoint: ByteArray = LuaValue.encode(emptyMap<String,Any>()),
-        source: String? = null, proof: ByteArray = byteArrayOf()): String = sql.transaction {
+        source: String? = null, proof: ByteArray = byteArrayOf(), intentToken: String? = null): String = sql.transaction {
         require(adapter.isNotBlank() && owner.isNotBlank() && document.isNotBlank())
         require(acknowledged.all { it in PHASES } && payload.size <= MAX_BYTES && checkpoint.size <= MAX_BYTES)
         if (source != null) imported(adapter,source)?.let { return@transaction it }
+        if (intentToken != null) sql.query("SELECT job FROM catalog_capture_tokens WHERE adapter=? AND owner=? AND token=?",adapter,owner,intentToken) { it.text(0)!! }.firstOrNull()?.let { return@transaction it }
         check(sql.query("SELECT COUNT(*) FROM lifecycle_jobs WHERE done=0") { it.long(0)!! }.single()<1000) { "lifecycle queue full" }
         check(sql.query("SELECT COALESCE(SUM(length(payload)+length(checkpoint)),0) FROM lifecycle_jobs WHERE done=0") { it.long(0)!! }.single()+payload.size+checkpoint.size<=MAX_BYTES) { "lifecycle byte limit" }
         val id = java.util.UUID.randomUUID().toString()
         sql.exec("INSERT INTO lifecycle_jobs(id,adapter,owner,document,payload,checkpoint,source) VALUES (?,?,?,?,?,?,?)",id,adapter,owner,document,payload,checkpoint,source)
         for (phase in acknowledged) sql.exec("INSERT INTO lifecycle_acks VALUES (?,?)",id,phase)
         if (source != null) sql.exec("INSERT INTO sync_imports(adapter,source,job,proof) VALUES (?,?,?,?)",adapter,source,id,proof)
+        if(intentToken!=null) sql.exec("INSERT INTO catalog_capture_tokens(adapter,owner,token,job) VALUES (?,?,?,?)",adapter,owner,intentToken,id)
         id
+    }
+    fun completedCaptures(adapter:String,owner:String):List<String> = sql.query("SELECT t.token FROM catalog_capture_tokens t LEFT JOIN lifecycle_jobs j ON j.id=t.job WHERE t.adapter=? AND t.owner=? AND t.notified=0 AND (j.id IS NULL OR EXISTS(SELECT 1 FROM lifecycle_acks a WHERE a.id=t.job AND a.phase='progress')) LIMIT 24",adapter,owner) { it.text(0)!! }
+    fun notifyCapture(adapter:String,owner:String,token:String) { sql.exec("UPDATE catalog_capture_tokens SET notified=1 WHERE adapter=? AND owner=? AND token=?",adapter,owner,token) }
+    fun captureToken(adapter:String,owner:String,token:String):String? = sql.query("SELECT job FROM catalog_capture_tokens WHERE adapter=? AND owner=? AND token=?",adapter,owner,token) { it.text(0)!! }.firstOrNull()
+    fun acknowledgeCapture(adapter: String, owner: String, token: String) {
+        sql.exec("DELETE FROM catalog_capture_tokens WHERE adapter=? AND owner=? AND token=?",adapter,owner,token)
     }
     fun imported(adapter: String, source: String): String? = sql.query("SELECT job FROM sync_imports WHERE adapter=? AND source=?",adapter,source) { it.text(0) }.firstOrNull()
     fun importProof(adapter: String, source: String): ByteArray? = sql.query("SELECT proof FROM sync_imports WHERE adapter=? AND source=?",adapter,source) { it.bytes(0) }.firstOrNull()

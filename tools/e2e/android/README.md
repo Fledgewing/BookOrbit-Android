@@ -91,3 +91,10 @@ python3 tools/e2e/android/addon.py --serial emulator-5580 --out /tmp/booksync-ad
 It checks the native Download fallback, existing helper settings and the reader's
 helper deep-link/update summary. It restores the fixture's preferences even when
 an assertion fails; it never installs an update or opens a physical reader.
+
+
+Card actions: after setup, run `python3 tools/e2e/android/card_actions.py --serial
+emulator-N --out <evidence>`. This checks real native Undo/Done/confirmation widgets
+and companion-backed file removal/cancel with exact sidecar preservation. It saves
+and restores one synthetic EPUB. Status presentation uses a temporary test-only
+Library double; the real adapter/journal protocol and ordering are JVM tests.

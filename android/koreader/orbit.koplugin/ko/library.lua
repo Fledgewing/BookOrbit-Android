@@ -463,7 +463,7 @@ end
 function Library:storage() return self:read("storage.summary",{limit=1,exclude_path=storagePath(),current_folder=G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("home_dir")}) end
 function Library:collections(offset,limit) return self:read("collections",{offset=offset or 0,limit=limit or 6}) end
 function Library.storageCommand(op,args,done)
-    args.exclude_path=storagePath()
+    args.exclude_path=storagePath(); args.owner=LibraryAdapter.owner()
     return command(op,function() return deviceCommand(op,args,function(result)
         if op=="storage.folder" and result and not result.error and result.download_path then
             G_reader_settings:saveSetting("download_dir",result.download_path)
@@ -528,11 +528,69 @@ function Library.cardActions(row,caps)
     if row.series_key and not (caps.series and caps.series.read==false) then
         items[#items+1]={id="series",label="View series",enabled=true}
     end
-    -- No alternate sync writer: these remain unavailable until the adapter exposes writes.
-    items[#items+1]={id="status",label=row.status=="finished" and "Mark unread" or "Mark read",enabled=false}
-    if row.local_path then items[#items+1]={id="remove",label="Remove download",enabled=false} end
+    -- Status intents are capability-gated and checkpointed by the sole sync writer.
+    items[#items+1]={id="status",label=row.status=="finished" and "Mark unread" or "Mark read",enabled=(caps.status and caps.status.write)==true and row.status~="unknown"}
+    if row.local_path then items[#items+1]={id="remove",label="Remove download",enabled=caps.removeDownload==true} end
     assert(#items<=Budgets.get("screens","book-actions").rows,"Card action row budget exceeded")
     return items
+end
+
+Library.cardStatusEpoch={}
+Library.cardNativeContexts={}
+function Library.cardStatusLeave(result)
+    local context=Library.cardNativeContexts[result.token]
+    Library.cardNativeContexts[result.token]=nil
+    return Library.catalogAction("status.leave",{token=result.token},function(reply)
+        local ui=liveUI and liveUI()
+        if not reply.error and reply.native_token and context and (FinishUI.intent[context.digest] or 0)==context.epoch and ui and ui.document and ui.document.file==reply.path and ui.doc_settings then
+            ui.doc_settings:saveSetting("booksync_status_token",reply.native_token)
+        end
+        if not reading() and NetworkMgr:isConnected() then Library.catalogAction("finish.drain",{manual=false},function() end) end
+    end)
+end
+function Library.cardStatus(row,undo,done)
+    local key=row.key
+    if undo then Library.cardNativeContexts[undo]=nil end
+    Library.cardStatusSequence=(Library.cardStatusSequence or 0)+1
+    local epoch=Library.cardStatusSequence;Library.cardStatusEpoch[key]=epoch
+    local ui=liveUI and liveUI()
+    local current=ui and ui.document and ui.document.file==row.local_path and ui.doc_settings
+    local before=current and Cache.copy(ui.doc_settings:readSetting("summary") or {}) or nil
+    local digest=current and ui.doc_settings:readSetting("partial_md5_checksum")
+    local nativeEpoch=digest and FinishUI.intent[digest] or 0
+    local args={key=key,status=row.status=="finished" and "unread" or "finished",before_status=row.status,token=undo,
+        native_token=current and ui.doc_settings:readSetting("booksync_status_token"),
+        native_capture=current and ReadingSync.capture(ui,"manual"),before_native=before and {status=before.status,modified=before.modified}}
+    return Library.catalogAction(undo and "status.undo" or "status.mark",args,function(result)
+        if Library.cardStatusEpoch[key]~=epoch then
+            if not undo and result.token then Library.cardStatusLeave(result) end
+            return
+        end
+        Library.cardStatusEpoch[key]=nil
+        local bytes=#UIUtil.encode(result or {})
+        assert(Budgets.check(Budgets.get("screens","book-status"),{rows=1,bytes=bytes,snapshotBytes=bytes,network=0,spawns=0,roundTrips=1}))
+        if not result.error and current and ui.document and ui.document.file==row.local_path and (FinishUI.intent[digest] or 0)==nativeEpoch then
+            local summary=Cache.copy(ui.doc_settings:readSetting("summary") or {})
+            local desired=result.native_summary or {}
+            summary.status,summary.modified=desired.status,desired.modified
+            ui.doc_settings:saveSetting("summary",summary)
+            ui.doc_settings:saveSetting("booksync_status_token",result.native_token or result.token)
+            Library.cardNativeContexts[result.token]={digest=digest,epoch=nativeEpoch}
+            -- Same in-memory cache update as native ReaderStatus.markBook (pinned readerstatus.lua:216).
+            require("ui/widget/booklist").setBookInfoCacheProperty(ui.document.file,"status",summary.status)
+        end
+        local held=done and done(result)
+        if not result.error and result.token and (undo or held~=true) then Library.cardStatusLeave(result) end
+    end)
+end
+
+function Library.cardRemoval(row,token,done)
+    return Library.storageCommand(token and "storage.remove" or "storage.remove.preview",
+        {path=row.local_path,token=token},function(result)
+            local bytes=#UIUtil.encode(result or {})
+            assert(Budgets.check(Budgets.get("screens","book-removal"),{rows=1,bytes=bytes,snapshotBytes=bytes,network=0,spawns=0,roundTrips=1}))
+            if done then done(result) end
+        end)
 end
 
 -- Explicit download reuses the catalog's validated atomic-file/ledger workflow.
@@ -767,7 +825,7 @@ if OrbitAndroid then
 end
 
 function Library.catalogAction(action,args,done)
-    args=args or {};args.action=action;args.owner=LibraryAdapter.owner()
+    args=args or {};args.action=action;args.owner=LibraryAdapter.owner();args.open_path=storagePath()
     if not args.owner then if done then done({error="unavailable"}) end;return false end
     return command(action,function() return LibraryAdapter.command("catalog.action",args,done or function() end) end)
 end
@@ -889,6 +947,14 @@ Library.compatEvent=function(ev)
             Library.catalogAction("finish.validate",{document=ev.document,token=ev.token},function(result)
                 if result.apply and ev.owner==LibraryAdapter.owner() and epoch==(FinishUI.intent[ev.document] or 0) then
                     FinishUI.jobs[ev.document]=nil
+                    local ui=liveUI and liveUI()
+                    if ev.native_summary and ev.native_token and ui and ui.document and ui.document.file==ev.path and ui.doc_settings then
+                        local summary=Cache.copy(ui.doc_settings:readSetting("summary") or {})
+                        summary.status,summary.modified=ev.native_summary.status,ev.native_summary.modified
+                        ui.doc_settings:saveSetting("summary",summary)
+                        ui.doc_settings:saveSetting("booksync_status_token",ev.native_token)
+                        require("ui/widget/booklist").setBookInfoCacheProperty(ev.path,"status",summary.status)
+                    end
                     Library.catalogAction("finish.ack",{document=ev.document,token=ev.token})
                 end
             end)

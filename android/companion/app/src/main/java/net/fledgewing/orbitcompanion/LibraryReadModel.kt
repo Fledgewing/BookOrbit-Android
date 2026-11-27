@@ -82,7 +82,7 @@ class LibraryReadModel(
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
                     "sleep.choices" -> SleepChoiceWindow.project(sleepChoices(), args)
-                    "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true)
+                    "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true,"removeDownload" to true)
                     else -> projection.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 // Enrich only the bounded display window, never the full catalog. Saved covers
@@ -148,6 +148,7 @@ class LibraryReadModel(
         val projection = if (owner == DeviceLibrary.OWNER) DeviceLibrary(roots()) else adapter ?: ServerAdapters.forStore(
             store, clock = clock, fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
         val result = DeviceStorage(store, projection).command(owner, op, args)
+        if(op=="storage.remove.preview") return result
         // Local files are shared, but each owner is projected independently with fresh batch context.
         refreshLocalFiles(owner)
         val other = if (owner == DeviceLibrary.OWNER) store.meta("owner") else DeviceLibrary.OWNER

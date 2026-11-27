@@ -77,7 +77,11 @@ object AdapterWorker : ServerRuntime {
         synchronized(lock) { patches.addLast {
             try {
                 val store = worker().store
-                val owner = store.meta("owner") ?: DeviceLibrary.OWNER
+                val owner = if(op in setOf("storage.remove.preview","storage.remove")) {
+                    val requested=args["owner"] as? String ?: throw ServerFailure("unauthorized")
+                    if(requested!=(LibraryAccount.owner() ?: DeviceLibrary.OWNER)) throw ServerFailure("canceled")
+                    requested
+                } else store.meta("owner") ?: DeviceLibrary.OWNER
                 val result = worker().libraryReadModel().storageCommand(owner,op,args)
                 done(result,null)
             } catch (_: Exception) { done(null,"unavailable") }

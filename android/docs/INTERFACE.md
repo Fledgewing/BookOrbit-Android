@@ -614,3 +614,19 @@ selected HTTPS APK locator to the browser through the existing status page's
 **Download** action. Selection still observes the product channel, version ordering
 and persisted signed withdrawals. The companion creates no installer session for
 this path. Full mode retains the existing permission and verified installation path.
+
+
+### Card status and removal (0.12)
+
+`catalog.action` accepts neutral `status.mark` (`key`, canonical `status`, optional
+current native capture), `status.undo` (same key and exact intent `token`) and
+`status.leave` (token). The adapter returns a local-save token plus bounded native
+summary fields. `status.leave` releases delivery; it is idempotent. Internal adapter
+capture/checkpoint callbacks link to SyncOwner and never introduce another position
+sender. Pending status is projected as `status_note`, with capability `status.write`.
+
+`storage.remove.preview` takes `path`, `owner` and current `exclude_path`; its
+bounded reply contains `token`, bytes and a plain confirmation detail.
+`storage.remove` requires the same path/token and rechecks tracked-file/account and
+open-book exclusions. Only the book file is removed. Sidecars are retained. Both
+commands run on the existing companion worker, not the reader UI thread.

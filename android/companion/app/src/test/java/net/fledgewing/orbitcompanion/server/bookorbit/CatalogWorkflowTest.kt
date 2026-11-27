@@ -20,9 +20,11 @@ class CatalogWorkflowTest {
         var reading=false;var current=true;var code=200;var downloadOk=true;var readStatus="unread";var clock=100L
         var fileReference=70L
         val calls=mutableListOf<String>()
+        val writes=mutableListOf<Map<String,Any?>?>()
         val transport=object:BookOrbitServerAdapter.ConnectorTransport {
             override fun request(server:String,path:String,method:String,body:Map<String,Any?>?,headers:Map<String,String>):BookOrbitAccount.Reply {
                 calls.add("$method $path")
+                if(method=="PUT") writes.add(body)
                 assertEquals("synthetic-key",headers["x-auth-key"])
                 return BookOrbitAccount.Reply(code,if(method=="GET") detail() else emptyMap<Any,Any>())
             }
@@ -45,6 +47,113 @@ class CatalogWorkflowTest {
         fun events()=File(root,"events").listFiles().orEmpty().filter { it.extension=="lua" }.mapNotNull { LuaValue.parse(it.readBytes()) as? Map<*,*> }
         fun mark()=run("finish.mark",mapOf("path" to old.path,"document" to CatalogWorkflow.partial(old),"complete" to true,"percentage" to 1.0))
         override fun close() { worker.store.close();external.deleteRecursively() }
+    }
+    private fun sidecar(w:World):File = File(w.old.parentFile,"old.sdr/metadata.epub.lua").apply {
+        parentFile!!.mkdirs();writeBytes("return ".toByteArray()+LuaValue.encode(mapOf("summary" to mapOf("status" to "reading","modified" to "2026-01-01","rating" to 4L),
+            "percent_finished" to .4,"last_xpointer" to "locator:old","annotations" to listOf(mapOf("text" to "saved note")))))
+    }
+    @Test fun explicitStatusIsLocalDurableAndHeldForUndoWithoutAnyTransport()=World().use { w ->
+        val sidecar=sidecar(w)
+        val result=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished","before_status" to "reading"))
+        assertNotNull(result["token"]);assertEquals("read",(w.worker.store.detail(7)!!.first as Map<*,*>)["readStatus"])
+        assertEquals("complete",((LegacyLifecycleImport.literal(sidecar)!!["summary"] as Map<*,*>)["status"]))
+        w.run("finish.drain",mapOf("manual" to true))
+        assertTrue(w.calls.isEmpty());assertNull(w.run("status.capture")["capture"])
+        w.run("status.undo",mapOf("reference" to 7L,"token" to result["token"]))
+        val restored=LegacyLifecycleImport.literal(sidecar)!!
+        assertEquals("reading",(restored["summary"] as Map<*,*>)["status"])
+        assertEquals(4L,(restored["summary"] as Map<*,*>)["rating"])
+        assertEquals("2026-01-01",(restored["summary"] as Map<*,*>)["modified"])
+        assertEquals("saved note",((restored["annotations"] as List<*>).single() as Map<*,*>)["text"])
+        assertEquals(.4,restored["percent_finished"])
+    }
+    @Test fun statusDeliveryWaitsForCaptureCheckpointAndRejectsStaleAcknowledgements()=World().use { w ->
+        sidecar(w)
+        val first=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished"))
+        val release=w.run("status.leave",mapOf("token" to first["token"]))
+        assertNotEquals(first["native_token"],release["native_token"])
+        w.run("finish.drain",mapOf("manual" to true));assertTrue(w.calls.isEmpty())
+        val capture=w.run("status.capture")
+        assertEquals(first["token"],capture["token"])
+        assertEquals(.4,(capture["capture"] as Map<*,*>)["percentage"])
+        assertTrue(LuaValue.encode(capture).size<=16384)
+        w.run("status.captured",mapOf("token" to capture["token"]))
+        w.run("finish.drain",mapOf("manual" to true));assertTrue(w.calls.isEmpty())
+        w.run("status.positioned",mapOf("token" to capture["token"]))
+        w.run("finish.drain",mapOf("manual" to true))
+        assertEquals("read",w.writes.single()!!["status"])
+        val hash=CatalogWorkflow.partial(w.old)
+        w.run("finish.ack",mapOf("document" to hash,"token" to "obsolete"));assertEquals(1,w.jobs().size)
+        w.run("finish.ack",mapOf("document" to hash,"token" to first["token"]));assertTrue(w.jobs().isEmpty())
+        try { w.run("status.undo",mapOf("reference" to 7L,"token" to first["token"]));fail("closed Undo control") } catch(e:ServerFailure) { assertEquals("stale",e.kind) }
+    }
+    @Test fun readerRestartReleasesHeldIntentButOrdinarySleepDoesNot()=World().use { w ->
+        sidecar(w)
+        val mark=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished"))
+        val hash=CatalogWorkflow.partial(w.old)
+        w.run("finish.leave",mapOf("document" to hash))
+        assertNull(w.run("status.capture")["capture"])
+        w.run("initialize")
+        assertEquals(mark["token"],w.run("status.capture")["token"])
+    }
+    @Test fun manualStatusSurvivesStaleResponsesAndTheInFlightCatalogGeneration()=World().use { w ->
+        sidecar(w)
+        w.worker.store.putItem(w.detail(),100)
+        w.worker.store.setMeta("bulk_active","1");w.worker.store.setMeta("bulk_stage_g","2")
+        val mark=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished"))
+        w.worker.store.putDetail(7,w.detail(),101)
+        assertEquals("read",CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L]!!.status)
+        assertTrue(CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L]!!.pending)
+        w.run("status.leave",mapOf("token" to mark["token"]))
+        w.run("status.captured",mapOf("token" to mark["token"]))
+        w.run("status.positioned",mapOf("token" to mark["token"]))
+        w.run("finish.drain",mapOf("manual" to true))
+        w.run("finish.ack",mapOf("document" to CatalogWorkflow.partial(w.old),"token" to mark["token"]))
+        assertFalse(CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L]!!.pending)
+        w.worker.store.setMeta("bulk_active","2")
+        assertEquals("read",CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L]!!.status)
+        w.worker.store.setMeta("bulk_active","3")
+        assertNull(CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L])
+    }
+    @Test fun undoAfterReplacementCannotRewriteTheNewFilesReadingState()=World().use { w ->
+        val meta=sidecar(w)
+        val mark=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished"))
+        w.old.appendText("replacement bytes")
+        val before=meta.readBytes()
+        try { w.run("status.undo",mapOf("reference" to 7L,"token" to mark["token"]));fail("changed file") } catch(e:ServerFailure) { assertEquals("changed",e.kind) }
+        assertArrayEquals(before,meta.readBytes())
+    }
+    @Test fun rejectedManualStatusRemainsDurableAndCanBeRetriedExplicitly()=World().use { w ->
+        sidecar(w)
+        val mark=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished"))
+        w.run("status.leave",mapOf("token" to mark["token"]))
+        w.run("status.captured",mapOf("token" to mark["token"]))
+        w.run("status.positioned",mapOf("token" to mark["token"]))
+        w.code=403;w.run("finish.drain",mapOf("manual" to true))
+        assertEquals(1,w.jobs().size);assertTrue(CatalogWorkflow.statusOverrides(w.worker.store,w.owner)[7L]!!.pending)
+        val count=w.calls.size;w.run("finish.drain");assertEquals(count,w.calls.size)
+        w.code=200;w.run("finish.drain",mapOf("manual" to true))
+        assertEquals("writeback",(w.jobs().values.single() as Map<*,*>)["phase"])
+    }
+    @Test fun openBookNativeWritebackWaitsForCloseAndKeepsItsAnnotationAndLocator()=World().use { w ->
+        val meta=sidecar(w);val original=meta.readBytes()
+        val mark=w.run("status.mark",mapOf("reference" to 7L,"status" to "finished","open_path" to w.old.path,
+            "before_native" to mapOf("status" to "reading","modified" to "2026-01-01")))
+        assertArrayEquals(original,meta.readBytes())
+        w.run("status.leave",mapOf("token" to mark["token"],"open_path" to w.old.path))
+        assertNotNull(w.run("status.capture",mapOf("open_path" to w.old.path))["capture"])
+        w.run("status.captured",mapOf("token" to mark["token"]))
+        w.run("status.positioned",mapOf("token" to mark["token"]))
+        w.run("finish.drain",mapOf("manual" to true,"open_path" to w.old.path))
+        val args=mapOf("document" to CatalogWorkflow.partial(w.old),"token" to mark["token"])
+        assertEquals(true,w.run("finish.ack",args+mapOf("open_path" to w.old.path))["retained"])
+        assertArrayEquals(original,meta.readBytes());assertEquals(1,w.jobs().size)
+        w.run("finish.drain");w.run("finish.ack",args)
+        assertTrue(w.jobs().isEmpty())
+        val saved=LegacyLifecycleImport.literal(meta)!!
+        assertEquals("complete",(saved["summary"] as Map<*,*>)["status"])
+        assertEquals(.4,saved["percent_finished"]);assertEquals("locator:old",saved["last_xpointer"])
+        assertEquals("saved note",((saved["annotations"] as List<*>).single() as Map<*,*>)["text"])
     }
     @Test fun ownedSyncMatchSurvivesNativeLedgerRefreshAndPreparesOfflineFinish()=World().use { w ->
         val matched=File(w.external,"books/matched.epub").apply { writeText("matched bytes") }
