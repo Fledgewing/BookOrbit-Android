@@ -21,6 +21,7 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 tools/firmware/test_size_report.py
+      - run: python3 tools/firmware/test_prepare_simulator.py
 
   build:
     name: owned firmware ${{ matrix.environment }}
@@ -37,12 +38,20 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Verify firmware shares the BookSync size contract
+        run: python3 xteink/firmware/tools/ci/check_shared.py .
+
       - uses: ./.github/actions/pio-setup
         with:
           pio-core: '6.1.19'
           platformio-ini: xteink/firmware/platformio.ini
           cache-prefix: owned-${{ matrix.environment }}
-          extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
+
+      - name: Install native simulator dependencies
+        if: contains(matrix.environment, 'simulator')
+        run: |
+          sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+          sudo apt-get install -y --no-install-recommends libsdl2-dev libssl-dev libwolfssl-dev pkg-config
 
       - name: Pin the device SDK subprocess core
         if: matrix.environment == 'x4-pro' || matrix.environment == 'x4-classic' || matrix.environment == 'default'
