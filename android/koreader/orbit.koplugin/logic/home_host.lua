@@ -16,6 +16,19 @@ function HomeHostPlan.rect(p, grid, width, height, gap)
         w=math.floor((p.x+p.w)*cw)-math.floor(p.x*cw)-gap,
         h=math.floor((p.y+p.h)*ch)-math.floor(p.y*ch)-gap}
 end
+-- One display capacity for queries, pagination and drawing. Small tiles keep a
+-- two-line row; larger rows can include series and the finish forecast.
+function HomeHostPlan.cardGeometry(p,rect,scale)
+    local w,h=rect.w-2,rect.h-2
+    local compact=h<scale(132)
+    local pad=scale(compact and 8 or 14)
+    local shelf=p.widget=="booklist" and ((p.settings or {}).style or 0)==0 and h>=scale(190)
+    local available=h-2*pad-scale(52)
+    local rowH=scale(p.widget=="booklist" and available>=scale(96) and 96 or 52)
+    local capacity=compact and 1 or shelf and ((p.w or 2)>=4 and 4 or 2)
+        or math.max(0,math.floor(available/rowH))
+    return {w=w,h=h,compact=compact,pad=pad,shelf=shelf,rowH=rowH,capacity=capacity}
+end
 local sources = {recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
 function HomeHostPlan.need(p)
     local s=p.settings or {}

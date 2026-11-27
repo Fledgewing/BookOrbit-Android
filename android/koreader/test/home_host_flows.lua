@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,height=E.Device.screen.getHeight,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -73,6 +73,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Shared.pin_locked,E.Shared.refresh=saved.pin,saved.refresh
         E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
+        E.Device.screen.getHeight=saved.height
         ok(success,err)
     end
     test("owned Home: the default repeated Home returns to the open book",function() withHost(function()
@@ -276,9 +277,35 @@ return function(test,eq,ok,E,W,Widget)
             layout.pages={{id="shelf",tab="Home",placements={{instance="wide",widget="booklist",version=1,
                 x=0,y=0,w=4,h=2,settings={title="Recently added",src="recent",style=0}}}}}
             E.S.home_layout=layout
+            E.Device.screen.getHeight=function() return 1200 end
             local h=E.HomeHost.create(); E.HomeHost.active=h
             eq(reads[#reads].op,"window"); eq(reads[#reads].limit,4)
             eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
+            E.Device.screen.getHeight=function() return 800 end
+            h.dimen.h=800;h:rebuild()
+            eq(reads[#reads].limit,1,"short shelf requests only its visible compact row")
+        end)
+    end)
+    test("Home card rows: paging consumes exactly the visible books",function()
+        withHost(function()
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                local args=E.Cache.decode(raw)
+                if args.op~="window" then return read(raw) end
+                local items={}
+                for n=args.offset+1,args.offset+args.limit do
+                    items[#items+1]={key="book-"..n,title="Book "..n,progress=25}
+                end
+                local result={items=items,next=args.offset+args.limit,total=20,freshness={saved=true}}
+                return result,#E.Cache.encode(result)
+            end
+            local h=E.HomeHost.create();E.HomeHost.active=h
+            h:showList("Library","library/all")
+            eq(h.list_limit,5);eq(#h.list_result.items,5)
+            eq(h.list_result.items[1].title,"Book 1");eq(h.list_result.items[5].title,"Book 5")
+            h:listPage(1)
+            eq(h.list_result.items[1].title,"Book 6");eq(h.list_result.items[5].title,"Book 10")
+            h:listPage(-1);eq(h.list_result.items[1].title,"Book 1")
         end)
     end)
     test("Home host: immutable snapshots isolate query and renderer errors",function()
@@ -593,7 +620,7 @@ return function(test,eq,ok,E,W,Widget)
 
     test("Home cards: projected labels, overflow routes and deferred cover lifetime",function()
         withHost(function(_,_,U)
-            local b={key="opaque",title="The Moon",progress=25,local_path="book.epub",series_key="series-key",
+            local b={key="opaque",title="The Moon",authors={"A"},progress=25,local_path="book.epub",series_key="series-key",
                 series_line="Moon · Book 2",time_left="50 m left",finish_forecast="Done by Tuesday"}
             local snap=E.HomeHostPlan.snapshot({items={b},freshness={saved=true}})
             local actions={}
@@ -606,6 +633,10 @@ return function(test,eq,ok,E,W,Widget)
             end
             for _,label in ipairs({b.series_line,b.time_left,b.finish_forecast}) do ok(labels[label],label) end
             eq(actions[1],"more")
+            local dense=E.HomeWidgets.card({widget="booklist",w=4,h=2,settings={style=1,cap=3}},snap,function() end,{w=678,h=156})
+            local caption=false
+            for _,child in ipairs(dense[1]) do if child.text=="25% · 50 m left · A" then caption=true end end
+            ok(caption,"compact rows retain the configured caption alongside pace")
             for _,height in ipairs({178,374}) do
                 local c=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,function() end,{w=678,h=height})
                 local percent,left,bar

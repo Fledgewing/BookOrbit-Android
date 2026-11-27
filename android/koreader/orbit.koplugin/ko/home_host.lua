@@ -91,12 +91,9 @@ function HomeHost.create()
             local context=paint:widget(p.widget,p.instance)
             local ok,result=pcall(function()
                 local need=(HomeWidgets.needs[p.widget] or HomeHostPlan.need)(p)
-                if p.widget == "lists" or p.widget == "booklist" and (p.settings.style or 0) == 1 then
-                    local pad=scale(rect.h-2<scale(132) and 8 or 14)
-                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(52))/scale(52))))
-                elseif p.widget == "booklist" then
-                    -- Cover shelves are columns, so a row-height limit must not collapse them.
-                    need.limit=math.min(need.limit,rect.h-2<scale(132) and 1 or p.w>=4 and 4 or 3)
+                if p.widget == "lists" or p.widget == "booklist" then
+                    local geometry=HomeHostPlan.cardGeometry(p,rect,scale)
+                    need.limit=math.min(need.limit,math.max(1,geometry.capacity))
                 end
                 if HomeWidgets.stats[p.widget] then
                     if not sharedStats then sharedStats=context:read(need.op,need) end

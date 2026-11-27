@@ -75,9 +75,8 @@ function HomeWidgets.caption(settings, book)
 end
 function HomeWidgets.card(p, snapshot, dispatch, rect)
     local u=HomeWidgets.ui(); local scale=function(n) return Device.screen:scaleBySize(n) end
-    local w,h=rect.w-2,rect.h-2
-    local compact=h<scale(132)
-    local pad=scale(compact and 8 or 14)
+    local geometry=HomeHostPlan.cardGeometry(p,rect,scale)
+    local w,h,compact,pad=geometry.w,geometry.h,geometry.compact,geometry.pad
     local canvas=HomeWidgets.canvas(w,h)
     local ready=snapshot.state == "ready" or snapshot.state == "offline-with-data"
     local hero=p.widget == "continue-reading" and ready
@@ -123,8 +122,8 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=pct/100,radius=0,margin_h=0,margin_v=0,
             bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
         HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
-    elseif p.widget == "booklist" and (p.settings.style or 0) == 0 and h>=scale(190) then
-        local count=math.min(snapshot.count,p.w >= 4 and 4 or 2)
+    elseif geometry.shelf then
+        local count=math.min(snapshot.count,geometry.capacity)
         local cw=math.floor((w-2*pad)/math.max(1,count))
         local rich=h>=scale(260)
         local coverH=math.max(scale(30),h-2*pad-scale(rich and 144 or 112))
@@ -144,7 +143,8 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             end
         end
     else
-        local rowH=scale(p.widget=="booklist" and 96 or 52); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(52))/rowH)))
+        local rowH=geometry.rowH; local count=math.min(snapshot.count,geometry.capacity)
+        local dense=rowH<scale(96)
         for i=1,count do
             local b=snapshot.items[i]
             local label=b.title or b.name or _("Untitled")
@@ -157,15 +157,17 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             if caption~="" and (p.settings.cap~=2 or not progress) then label=label.." · "..caption end
             local books=p.widget=="booklist"
             local bx=books and pad+scale(42) or pad
-            if books then HomeWidgets.cover(canvas,b,pad,y+scale(4),scale(34),scale(51)) end
+            if books then HomeWidgets.cover(canvas,b,pad,y+scale(4),scale(34),math.min(scale(51),rowH-scale(8))) end
             HomeWidgets.button(canvas,books and "" or label,bx,y,w-pad-bx-(books and scale(50) or 0),rowH,function()
                 dispatch(p.widget == "lists" and "list" or "book",b)
             end)
             if books then
                 HomeWidgets.text(canvas,b.title or _("Untitled"),bx,y+scale(4),w-bx-pad-scale(50),14,false,true)
-                HomeWidgets.text(canvas,caption~="" and caption or b.series_line or (b.authors and b.authors[1]) or "",bx,y+scale(25),w-bx-pad-scale(50),11)
-                HomeWidgets.text(canvas,(progress and string.format("%d%% · ",progress) or "")..(b.time_left or _("Not enough reading yet")),bx,y+scale(44),w-bx-pad-scale(50),11)
-                HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),bx,y+scale(63),w-bx-pad-scale(50),11)
+                if not dense then HomeWidgets.text(canvas,caption~="" and caption or b.series_line or (b.authors and b.authors[1]) or "",bx,y+scale(25),w-bx-pad-scale(50),11) end
+                local pace=(progress and string.format("%d%% · ",progress) or "")..(b.time_left or _("Not enough reading yet"))
+                if dense and caption~="" and not (p.settings.cap==2 and progress and b.status~="finished") then pace=pace.." · "..caption end
+                HomeWidgets.text(canvas,pace,bx,y+scale(dense and 25 or 44),w-bx-pad-scale(50),11)
+                if not dense then HomeWidgets.text(canvas,b.finish_forecast or _("Finish date unavailable"),bx,y+scale(63),w-bx-pad-scale(50),11) end
                 HomeWidgets.more(canvas,b,dispatch,w-pad-scale(50),y,scale(50),rowH)
             end
             if progress then HomeWidgets.put(canvas,u.Progress:new{width=w-2*pad,height=scale(3),radius=0,margin_h=0,margin_v=0,

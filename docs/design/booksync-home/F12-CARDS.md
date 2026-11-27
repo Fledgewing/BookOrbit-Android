@@ -41,7 +41,9 @@ Larger cards add author/series and finish date; smaller ones prioritize title,
 percentage and time left. Book list retains caption settings, bounded source order
 and both styles, with covers, richer rows and a per-book overflow target. Short
 shelves use rows when there is insufficient room for cover and separate 50 px
-controls. Taller shelves/rows show time-left and forecast. All installed sizes and
+controls. Host queries, pagination and drawing share `HomeHostPlan.cardGeometry`;
+short rows retain title, percentage and time left while taller rows add series and
+finish forecast. Paging consumes exactly the visible rows, so no books are skipped. All installed sizes and
 six states plus setup run through the existing bounds/intersection flow sweep.
 
 Overflow decisions live in `Library.cardActions` (`ko/library.lua:427`): Details,
