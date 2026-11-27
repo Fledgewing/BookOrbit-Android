@@ -132,3 +132,59 @@ mismatched watermark merges, owner isolation and single-row/byte budgets. Lua
 harness tests cover source labels and server-only availability. The next Home
 slice can consume the same `reading.stats` operation; Goal/Streak widgets can use
 the newly available targets/counts without inspecting a backend payload.
+
+## Local completion and goal settings proposal
+
+Status: **NEEDS APPROVAL**. This section and
+[the settings mockup](stats-settings-mockups.html) propose the missing Android
+0.12 follow-up. They do not authorise new visible controls. X4 Pro/X4/X3 retain
+the Android-first deferral; no firmware changes accompany this proposal.
+
+Add “Reading statistics” under the existing Reading settings group, in both the
+reader and companion settings. Reuse their existing row/choice/input primitives:
+
+```text
+Reading statistics                             Back
+Local reading goal
+Off · This reader only                            ›
+
+Finished this year
+3 books · This reader only
+Only books explicitly marked finished count.
+Account totals remain separate when overlap is unknown.
+```
+
+“Local reading goal” opens the existing numeric-entry style with Off and a year
+plus target from 1 to 999. A saved goal is year-specific and device-local; it does
+not change an account/server goal. In the off state the local target is unavailable,
+not zero. Display “2026 · 12 books · This reader only” after saving. On year rollover,
+keep the old record and show Off for the new year until explicitly set. Show the
+current year using companion-formatted text; Lua does not calculate dates.
+
+The local completion ledger records explicit native mark-finished events and
+Undo, not page coverage or a server catalog's status. Use a stable document identity
+and event token; retries/restarts count once. Undo/re-finish replaces that document's
+active completion date. Preserve existing 0.11 native summary dates only when their
+provenance is explicit and valid; never infer a finish date from file modification
+or 100% progress. A missing historical date stays unknown. Imported events retain
+an additive migration checkpoint; never rewrite borrowed statistics or sidecars
+merely to produce a count. Store the ledger in the companion behind Library and
+checkpoint reader intent even while reading.
+
+When valid account finish/goal fields exist they still win for account widgets.
+Local goal and count are a separate, explicitly “This reader only” pair: never
+combine an account target with a local completed count and never add local finishes
+to an account count without an inclusion proof. The settings summary always shows
+local values. Keep overlap-safe Today/Week behavior unchanged. No account-goal
+write control is proposed.
+
+Budgets: one materialized local row, at most 16 KiB, one existing settings batch,
+zero render network/subprocess/scan. Input validation/aggregation/persistence runs
+in the companion service; UI calls only Library. The approved Stats renderers and
+reading gate remain unchanged until any newly visible presentation is approved.
+
+After approval, unit tests cover duplicate and reordered events, Undo/re-finish,
+restart, additive 0.11 import, invalid dates, local midnight/year/DST, target range,
+off/new-year state, source pairing and unknown overlap. Emulator flows set/reopen/
+disable a goal, finish/Undo/reopen, check labels offline and preserve existing
+0.11 state on upgrade. No real reader or publication is part of this follow-up.
