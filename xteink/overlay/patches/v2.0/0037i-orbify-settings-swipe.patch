@@ -3,10 +3,10 @@ Subject: [PATCH] BookSync: settings swipe
 Page BookOrbit settings with up and down swipes.
 
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 7253440..f3ca177 100644
+index b5962402..16e5ad78 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
-@@ -193,6 +193,18 @@ void BookOrbitSettingsActivity::loop() {
+@@ -192,6 +192,18 @@ void BookOrbitSettingsActivity::loop() {
    }
  
    const int count = rowCount();

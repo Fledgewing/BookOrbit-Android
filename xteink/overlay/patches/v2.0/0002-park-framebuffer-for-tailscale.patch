@@ -75,10 +75,10 @@ index 42e01e21..aa7bb0a1 100644
    // Replace for the same reason as the catalog: authentication is a TLS session, and the
    // settings screens it is reached through hold 15-20KB that the handshake needs. Nothing
    // is lost by dropping them — the activity ends in a silentRestart() to the home screen
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index fca17355..9381bfee 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -48,6 +48,9 @@
  #include "util/BookCacheUtils.h"
  #include "util/BookOrbitDevicePath.h"

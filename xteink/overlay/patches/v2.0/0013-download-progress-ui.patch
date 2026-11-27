@@ -26,10 +26,10 @@ index ee0bb49c..30fbae06 100644
  #if CROSSINK_TAILNET_NET_LOOP_STACK
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index 322bb714..e7617533 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -489,7 +489,14 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
      // C3 + Tailscale: the panel keeps this screen while the framebuffer is parked.
      showDownloadScreen(pendingDownload.title);
@@ -118,10 +118,10 @@ index 322bb714..e7617533 100644
    if (state == BrowserState::WIFI_SELECTION || state == BrowserState::SEARCH_INPUT) {
      return;
    }
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 index 353d6a81..8687d20a 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 @@ -191,6 +191,7 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    // boot; the listing it saved is reopened once Wi-Fi is up, with the download's failure
    // (BookOrbitDownloadResume::failure) shown over it.

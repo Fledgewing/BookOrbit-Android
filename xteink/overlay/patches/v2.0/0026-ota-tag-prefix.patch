@@ -102,7 +102,7 @@ index 00000000..db2297a4
 +}  // namespace ota_release_pick
 diff --git a/src/network/OtaReleasePick.h b/src/network/OtaReleasePick.h
 new file mode 100644
-index 00000000..0880b2c8
+index 00000000..b17e0d72
 --- /dev/null
 +++ b/src/network/OtaReleasePick.h
 @@ -0,0 +1,26 @@
@@ -133,7 +133,7 @@ index 00000000..0880b2c8
 +
 +}  // namespace ota_release_pick
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
-index b4739224..62a4ddfe 100644
+index b4739224..0de64e17 100644
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
 @@ -20,6 +20,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s

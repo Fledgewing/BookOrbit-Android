@@ -3,10 +3,10 @@ Subject: [PATCH] BookSync: simulator build
 Build the same overlay hooks in the desktop simulator for release tests.
 
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index c82786f..efda252 100644
+index f5f686b6..6b7a30ab 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-@@ -1084,11 +1084,43 @@ int BookOrbitSyncClient::orbifyRequest(const char* method, const std::string& pa
+@@ -1120,11 +1120,43 @@ int BookOrbitSyncClient::orbifyRequest(const char* method, const std::string& pa
    lastTransportError = 0;
    if (!BOOKORBIT_STORE.hasCredentials()) return -1;
  #ifdef SIMULATOR
@@ -55,11 +55,26 @@ index c82786f..efda252 100644
  #else
    const uint32_t freeHeap = ESP.getFreeHeap();
    const uint32_t heapFloor = requiredHeapFloor();
+diff --git a/src/main.cpp b/src/main.cpp
+index 7bceeb81..670756cd 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1782,6 +1782,10 @@ static void forceSleepSyncExit(const bool wake) {
+     setSleepNowRestartToken();
+   }
+   silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
++#ifdef SIMULATOR
++  // The simulator carries the restart token across its re-exec (BookSync's e2e tests).
++  SimulatorLifecycle::setSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
++#endif
+   ESP.restart();
+ }
+ 
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index a1669c0..cd021ea 100644
+index 53691795..01eadf28 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -295,7 +295,7 @@ class DownloadRateLog {
+@@ -298,7 +298,7 @@ class DownloadRateLog {
    size_t lastLogBytes_ = 0;
  };
  
@@ -68,7 +83,7 @@ index a1669c0..cd021ea 100644
  // DownloadOptions::wolfSslClient for the request in progress (downloads are synchronous).
  freeink::SecureHttpClient* keptWolfSslClient = nullptr;
  
-@@ -948,7 +948,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+@@ -960,7 +960,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
    if (options.transport != Transport::WOLFSSL && options.session) options.session->reset();
    WifiPowerSaveGuard wifiPowerSaveGuard;
    (void)wifiPowerSaveGuard;
@@ -78,10 +93,10 @@ index a1669c0..cd021ea 100644
    (void)keptWolfSslClientScope;
  #endif
 diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
-index 8aed509..27d04f9 100644
+index a90253b8..626df4d8 100644
 --- a/src/network/SavedWifiConnect.cpp
 +++ b/src/network/SavedWifiConnect.cpp
-@@ -85,11 +85,18 @@ void saveFastJoin(const std::string& ssid) {
+@@ -87,11 +87,18 @@ void saveFastJoin(const std::string& ssid) {
  #endif
  
  void begin(const WifiCredential& credential, const int32_t channel = 0, const uint8_t* bssid = nullptr) {
@@ -100,23 +115,8 @@ index 8aed509..27d04f9 100644
  }
  
  // Waits for the join begun just before.
-diff --git a/src/main.cpp b/src/main.cpp
-index 334d983..8c2f6a9 100644
---- a/src/main.cpp
-+++ b/src/main.cpp
-@@ -1694,6 +1694,10 @@ static void forceSleepSyncExit(const bool wake) {
-     setSleepNowRestartToken();
-   }
-   silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
-+#ifdef SIMULATOR
-+  // The simulator carries the restart token across its re-exec (BookSync's e2e tests).
-+  SimulatorLifecycle::setSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
-+#endif
-   ESP.restart();
- }
- 
 diff --git a/src/util/PowerButtonWakeWatcher.cpp b/src/util/PowerButtonWakeWatcher.cpp
-index 821f0d7..983c4d7 100644
+index 821f0d7c..983c4d78 100644
 --- a/src/util/PowerButtonWakeWatcher.cpp
 +++ b/src/util/PowerButtonWakeWatcher.cpp
 @@ -3,6 +3,49 @@
@@ -234,7 +234,7 @@ index 821f0d7..983c4d7 100644
 +}
 +#endif
 diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
-index 0753ec2..883c3f2 100644
+index a5a7b9f2..1486577a 100644
 --- a/src/util/PowerButtonWakeWatcher.h
 +++ b/src/util/PowerButtonWakeWatcher.h
 @@ -4,6 +4,9 @@
@@ -247,7 +247,7 @@ index 0753ec2..883c3f2 100644
  
  #include "SleepWakePolicy.h"
  #include "orbify/core/SleepSyncDeadline.h"
-@@ -55,4 +58,13 @@ class PowerButtonWakeWatcher {
+@@ -57,4 +60,13 @@ class PowerButtonWakeWatcher {
    std::atomic<unsigned long> budgetGraceMs{0};
    std::atomic<unsigned long> requestedAt{0};  // bit 0 set: 0 means no press yet
    orbify::sleepsync::Deadlines deadlines() const;
@@ -261,3 +261,16 @@ index 0753ec2..883c3f2 100644
 +  SleepWakePolicy::WakePressDetector keyDetector{0, false};
 +#endif
  };
+diff --git a/platformio.ini b/platformio.ini
+index 787048db..d248c815 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -365,7 +365,7 @@ extra_scripts =
+   pre:scripts/build_web.py
+   post:.pio/libdeps/$PIOENV/simulator/run_simulator_project.py
+ lib_deps =
+-  simulator=https://github.com/uxjulia/crossink-simulator
++  simulator=https://github.com/uxjulia/crossink-simulator#df519ac238f9695040d95a4fac9b4684ecabf0fe
+   ImageToneMapper=symlink://freeink-sdk/libs/assets/ImageToneMapper
+   SecureNet=symlink://freeink-sdk/libs/network/SecureNet
+   JsonSax=symlink://freeink-sdk/libs/network/JsonSax

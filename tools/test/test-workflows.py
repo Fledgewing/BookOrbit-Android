@@ -123,6 +123,34 @@ if not re.search(r"needs:\s*(?:tests\b|\[[^\]\n]*\btests\b)", release_jobs["buil
 if "needs.plan.outputs.android_release_tests == 'false'" not in release_jobs["build"]:
     errors.append("release: skipped tests require matching source evidence")
 xteink_jobs = jobs_of((root / ".github/workflows/xteink.yml").read_text())
+# The release must use the same checked-in upstream as PR CI, even if a newer tag
+# appears between runs. Execute the real lock step with a gh trap: no event may
+# resolve a tag online or write a replacement lock commit.
+lock_job = xteink_jobs["lock"]
+if "contents: write" in lock_job or "sha: ${{ steps.l.outputs.sha }}" not in lock_job:
+    errors.append("xteink: lock must be read-only and return the tested source commit")
+lock_script = textwrap.dedent(lock_job.split("        run: |\n", 1)[1])
+locked = next(line.split() for line in (root / "tools/upstreams.lock").read_text().splitlines()
+              if line.startswith("crossink-v2.0 "))
+with tempfile.TemporaryDirectory() as temp:
+    temp = pathlib.Path(temp)
+    trap = temp / "gh"
+    trap.write_text("#!/bin/sh\nexit 91\n")
+    trap.chmod(0o755)
+    for event in ["pull_request", "push", "schedule", "workflow_dispatch"]:
+        for requested in ["", locked[2], locked[3], "v2.99.0+untested"]:
+            output = temp / "output"
+            output.write_text("")
+            env = dict(os.environ, PATH=str(temp) + os.pathsep + os.environ["PATH"],
+                       GITHUB_EVENT_NAME=event, GITHUB_SHA="reviewed-source", INPUT_REF=requested,
+                       GITHUB_OUTPUT=str(output))
+            result = subprocess.run(["bash", "-c", lock_script], cwd=root, env=env,
+                                    capture_output=True, text=True)
+            rejected = requested == "v2.99.0+untested"
+            if (result.returncode != (1 if rejected else 0) or
+                    output.read_text() != ("" if rejected else "sha=reviewed-source\n")):
+                errors.append(f"xteink: {event} must build only the reviewed lock (input {requested!r})")
+
 if "needs.resolve.outputs.firmware_release_tests == 'false'" not in xteink_jobs["publish"]:
     errors.append("xteink: skipped emulated tests require matching source evidence")
 for name, job in [("Android sign", release_jobs["sign"]), ("firmware dispatch", release_jobs["firmware"]),

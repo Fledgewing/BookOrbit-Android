@@ -21,10 +21,10 @@ index 6ec7b3d3..6eabb941 100644
  #if CROSSINK_TAILNET_NET_LOOP_STACK
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index 80196a55..b690fda0 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -321,22 +321,36 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
    // A download boot comes back to the listing it left, whose pages are still in the
    // list cache; any other entry starts a fresh catalog session.
@@ -193,10 +193,10 @@ index 80196a55..b690fda0 100644
    // A download from Home goes back there once done or cancelled; a failure first shows
    // its message, which Back dismisses to Home as well.
    if (downloadFromHome && !downloadFailed) {
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 index 13187bc6..961b1b69 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 @@ -13,6 +13,8 @@
  #include "network/BookOrbitCatalogClient.h"
  #include "util/ButtonNavigator.h"
@@ -230,10 +230,10 @@ index 13187bc6..961b1b69 100644
    void runPendingDownload(bool wifiConnected);
    // The transfer itself, then the listing it freed is rebuilt.
    void transferBook(int64_t bookId, int64_t fileId, const std::string& finalPath);
-diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
 index 33a1e910..db0055df 100644
---- a/src/activities/browser/BookOrbitCatalogListCache.cpp
-+++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
 @@ -17,6 +17,8 @@ constexpr char BOOKORBIT_LIST_CACHE_SUFFIX[] = ".json";
  constexpr size_t BOOKORBIT_CACHE_PATH_CAP = 180;
  constexpr char BOOKORBIT_DOWNLOAD_RESUME_PATH[] = "/.crosspoint/bookorbit_download.json";
@@ -318,10 +318,10 @@ index 33a1e910..db0055df 100644
  void discardDownloadResume() { Storage.remove(BOOKORBIT_DOWNLOAD_RESUME_PATH); }
  
  bool saveEntryLink(const BookOrbitCatalogLink& link) {
-diff --git a/src/activities/browser/BookOrbitCatalogListCache.h b/src/activities/browser/BookOrbitCatalogListCache.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.h b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.h
 index 14c78a1f..f4f37b3c 100644
---- a/src/activities/browser/BookOrbitCatalogListCache.h
-+++ b/src/activities/browser/BookOrbitCatalogListCache.h
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.h
 @@ -34,6 +34,9 @@ struct BookOrbitDownloadResume {
    int facetTopIndex = 0;
    // Started from a BookOrbit Home shelf: the download ends on Home, not on a listing.

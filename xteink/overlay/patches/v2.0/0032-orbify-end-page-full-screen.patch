@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: end page full screen
 Render the End-of-Book page with the approved full-screen layout.
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 3a1b1265..5669bc1e 100644
+index cb345142..448be560 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -309,6 +309,15 @@ STR_ORBIFY_SERIES_DONE: "You've finished the series"
@@ -23,7 +23,7 @@ index 3a1b1265..5669bc1e 100644
  STR_EVERY_N_PAGES: "Every %d pages"
  STR_EVERY_CHAPTER: "Every chapter"
 diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
-index 2da4c55d..de997a7b 100644
+index 33d01f2b..96d59c05 100644
 --- a/src/activities/reader/EndOfBookOptions.cpp
 +++ b/src/activities/reader/EndOfBookOptions.cpp
 @@ -16,6 +16,8 @@
@@ -145,7 +145,7 @@ index 2da4c55d..de997a7b 100644
  
    // The list renders through the FreeInkApp so its rows register touch hit rects. The
 diff --git a/src/activities/reader/EndOfBookOptions.h b/src/activities/reader/EndOfBookOptions.h
-index ad8fbfc3..ee7e406b 100644
+index cf43bb45..3dbdf749 100644
 --- a/src/activities/reader/EndOfBookOptions.h
 +++ b/src/activities/reader/EndOfBookOptions.h
 @@ -25,7 +25,9 @@ class MappedInputManager;
@@ -181,10 +181,10 @@ index ad8fbfc3..ee7e406b 100644
    OrbifyEndPage::Result orbifyResult;
    Action orbifyAct(OrbifyEndPage::Result result);
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index 220af4fa..960e9d60 100644
+index 75efc56d..f8ddf6ed 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -3832,7 +3832,19 @@ void EpubReaderActivity::loop() {
+@@ -3889,7 +3889,19 @@ void EpubReaderActivity::loop() {
        }
  #if CROSSINK_TAILNET_ORBIFY_FINISH
        // BookSync (patch 0028): the End-of-Book page with the book's status, next and suggestions.
@@ -205,7 +205,7 @@ index 220af4fa..960e9d60 100644
  #endif
      }
      if (endOfBookOptions) {
-@@ -3915,6 +3927,7 @@ void EpubReaderActivity::loop() {
+@@ -3972,6 +3984,7 @@ void EpubReaderActivity::loop() {
          return;
        }
        case EndOfBookOptions::Action::GoHome:
@@ -213,7 +213,7 @@ index 220af4fa..960e9d60 100644
          onGoHome();
          return;
        case EndOfBookOptions::Action::LastPage:
-@@ -3926,6 +3939,8 @@ void EpubReaderActivity::loop() {
+@@ -3983,6 +3996,8 @@ void EpubReaderActivity::loop() {
        case EndOfBookOptions::Action::Redraw:
          requestUpdate();
          return;
@@ -223,10 +223,10 @@ index 220af4fa..960e9d60 100644
          break;
      }
 diff --git a/src/activities/reader/XtcReaderActivity.cpp b/src/activities/reader/XtcReaderActivity.cpp
-index ebb5bab6..571fb268 100644
+index 99c86a06..2dec18eb 100644
 --- a/src/activities/reader/XtcReaderActivity.cpp
 +++ b/src/activities/reader/XtcReaderActivity.cpp
-@@ -294,6 +294,8 @@ void XtcReaderActivity::loop() {
+@@ -295,6 +295,8 @@ void XtcReaderActivity::loop() {
          requestUpdate();
        }
        return;

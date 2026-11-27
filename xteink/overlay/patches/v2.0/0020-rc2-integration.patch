@@ -55,7 +55,7 @@ index bc2bc85b..d7e8c425 100644
    }
    return false;
 diff --git a/src/activities/network/StatsUploadActivity.cpp b/src/activities/network/StatsUploadActivity.cpp
-index b23acb2b..5b30f9b5 100644
+index 16598cc2..7f67e477 100644
 --- a/src/activities/network/StatsUploadActivity.cpp
 +++ b/src/activities/network/StatsUploadActivity.cpp
 @@ -1,5 +1,6 @@
@@ -146,7 +146,7 @@ index b23acb2b..5b30f9b5 100644
  void StatsUploadActivity::onEnter() {
    Activity::onEnter();
    sdFontSystem.releaseForNetwork(renderer);
-@@ -237,6 +310,7 @@ bool StatsUploadActivity::startTargeted(const bool stats) {
+@@ -222,6 +295,7 @@ bool StatsUploadActivity::startTargeted(const bool stats) {
  }
  
  void StatsUploadActivity::start() {
@@ -154,7 +154,7 @@ index b23acb2b..5b30f9b5 100644
    if (scope != Scope::Library && scope != Scope::Folder) {
      startTransfer();
      return;
-@@ -1540,6 +1614,12 @@ void StatsUploadActivity::syncEpub(std::string&& bookPath, const KOReaderProgres
+@@ -1536,6 +1610,12 @@ void StatsUploadActivity::syncEpub(std::string&& bookPath, const KOReaderProgres
  }
  
  void StatsUploadActivity::reviewNext() {
@@ -168,10 +168,10 @@ index b23acb2b..5b30f9b5 100644
    // parked position is gone) needs no choice.
    while (reviewIndex < deferredBooks.size()) {
 diff --git a/src/activities/network/StatsUploadActivity.h b/src/activities/network/StatsUploadActivity.h
-index 2b0bbde5..6180ca1d 100644
+index 65bec1a7..de3384ff 100644
 --- a/src/activities/network/StatsUploadActivity.h
 +++ b/src/activities/network/StatsUploadActivity.h
-@@ -62,6 +62,9 @@ class StatsUploadActivity final : public Activity {
+@@ -63,6 +63,9 @@ class StatsUploadActivity final : public Activity {
      fromFileTransfer = true;
      restartOnLeave = restart;
    }
@@ -181,7 +181,7 @@ index 2b0bbde5..6180ca1d 100644
    void onEnter() override;
    void onExit() override;
    void loop() override;
-@@ -179,6 +182,11 @@ class StatsUploadActivity final : public Activity {
+@@ -182,6 +185,11 @@ class StatsUploadActivity final : public Activity {
    bool clippingCancelled = false;
    static bool cancelClippings(void* context);
    bool singleBookTaken = false;
@@ -194,10 +194,10 @@ index 2b0bbde5..6180ca1d 100644
    bool initialConfirm = false;
    std::string message;
 diff --git a/src/main.cpp b/src/main.cpp
-index 0fe6ba6d..41b9128e 100644
+index ba991bb3..3bf4f5e5 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -111,6 +111,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -113,6 +113,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "SdCardFontSystem.h"
  #include "SilentRestart.h"
  #include "WifiCredentialStore.h"
@@ -205,7 +205,7 @@ index 0fe6ba6d..41b9128e 100644
  #include "activities/Activity.h"
  #include "activities/ActivityManager.h"
  #include "activities/boot_sleep/ImageFolderIndex.h"
-@@ -395,6 +396,16 @@ constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
+@@ -397,6 +398,16 @@ constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_MAGIC = 0xC1EAB017;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_AUTO_TURN = 1U << 0;
  
@@ -222,7 +222,7 @@ index 0fe6ba6d..41b9128e 100644
  #if CROSSINK_TAILNET_NET_LOOP_STACK && defined(ARDUINO_ARCH_ESP32) && !defined(SIMULATOR)
  // The loopTask stack this boot was given (getArduinoLoopTaskStackSize() below).
  static size_t loopTaskStackBytes = 0;
-@@ -406,7 +417,8 @@ static size_t loopTaskStackBytes = 0;
+@@ -408,7 +419,8 @@ static size_t loopTaskStackBytes = 0;
  size_t getArduinoLoopTaskStackSize(void) {
    const uint32_t target = silentRebootTarget & ~(SILENT_REBOOT_FRONTLIGHT_VALID | SILENT_REBOOT_FRONTLIGHT_ON);
    const bool networkBoot = silentRebootMagic == SILENT_REBOOT_MAGIC && isNetworkBootTargetValue(target) &&
@@ -232,7 +232,7 @@ index 0fe6ba6d..41b9128e 100644
    loopTaskStackBytes = networkBoot ? CROSSINK_TAILNET_NET_LOOP_STACK : 16 * 1024;
    return loopTaskStackBytes;
  }
-@@ -1723,7 +1735,9 @@ void setupDisplayAndFonts(const bool seamless, const bool loadReaderResources, c
+@@ -1725,7 +1737,9 @@ void setupDisplayAndFonts(const bool seamless, const bool loadReaderResources, c
    // parent screen before their deferred Wi-Fi child is promoted, so their
    // caller selects the reader-sized stack. Lightweight network targets use
    // 8 KB; reader rendering retains its 16 KB budget.
@@ -243,7 +243,7 @@ index 0fe6ba6d..41b9128e 100644
  
    // Initialize font decompressor for compressed reader fonts
    if (!fontDecompressor.init()) {
-@@ -1822,6 +1836,7 @@ void setup() {
+@@ -1828,6 +1842,7 @@ void setup() {
        silentRebootTarget <= SILENT_REBOOT_TARGET_READER || isNetworkBootTargetValue(silentRebootTarget);
    const uint32_t snapshotTarget = (isSilentReboot && isValidSilentTarget) ? silentRebootTarget : 0;
    const uint32_t snapshotPayload = (isSilentReboot && isValidSilentTarget) ? silentRebootPayload : 0;
@@ -251,7 +251,7 @@ index 0fe6ba6d..41b9128e 100644
    const bool cleanImageBaseOnEntry =
        snapshotTarget == SILENT_REBOOT_TARGET_READER && (snapshotPayload & SILENT_REBOOT_READER_CLEAN_IMAGE_BASE) != 0;
    const bool isNetworkResume = snapshotTarget >= static_cast<uint32_t>(NetworkBootTarget::OTA);
-@@ -2230,6 +2245,9 @@ void setup() {
+@@ -2257,6 +2272,9 @@ void setup() {
        case static_cast<NetworkBootTarget>(TAILNET_BOOKORBIT_AUTH_TARGET):
          launched = tailnet_bookorbit_auth_boot();
          break;
@@ -261,7 +261,7 @@ index 0fe6ba6d..41b9128e 100644
        case NetworkBootTarget::BOOKORBIT_HOME_SHELVES: {
          auto shelves = makeUniqueNoThrow<BookOrbitSettingsActivity>(
              renderer, mappedInputManager, BookOrbitSettingsActivity::Page::Home, /*networkBoot=*/true);
-@@ -2706,7 +2724,10 @@ void loop() {
+@@ -2736,7 +2754,10 @@ void loop() {
    // refresh after input was sampled: a stale touch-down can become a false hold.
    if (!activityManager.isReaderActivity() && !activityManager.hasActivityNamed("KeyboardEntry")) {
      RenderLock lock(RenderLock::Mode::Try);
@@ -274,10 +274,10 @@ index 0fe6ba6d..41b9128e 100644
    const unsigned long activityStartTime = millis();
    activityManager.loop();
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index 3c192cec..219541af 100644
+index b34fad05..be4f1d28 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -28,6 +28,7 @@
+@@ -30,6 +30,7 @@
  #include "util/CardSpace.h"
  #include "util/UrlUtils.h"
  #include "Tailnet.h"
@@ -285,7 +285,7 @@ index 3c192cec..219541af 100644
  
  struct HttpDownloader::Session::State {
  #if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
-@@ -450,7 +451,13 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+@@ -454,7 +455,13 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
      auto& http = retained ? *retained : localHttp;
      http.setReuse(retained != nullptr);
      http.setTimeout(HTTP_TIMEOUT_MS);

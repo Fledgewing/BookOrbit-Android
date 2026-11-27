@@ -3,10 +3,10 @@ Subject: [PATCH] BookSync: download rate log
 Record download throughput for diagnosis.
 
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index 42641b83..3c192cec 100644
+index 9b08c766..b34fad05 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -229,6 +229,71 @@ class ProgressNotifier {
+@@ -231,6 +231,71 @@ class ProgressNotifier {
    const HttpDownloader::ProgressCallback* progress_ = nullptr;
  };
  
@@ -78,14 +78,18 @@ index 42641b83..3c192cec 100644
  #if defined(FREEINK_NET_WOLFSSL)
  // DownloadOptions::wolfSslClient for the request in progress (downloads are synchronous).
  freeink::SecureHttpClient* keptWolfSslClient = nullptr;
-@@ -1006,7 +1071,13 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+@@ -1022,13 +1087,17 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
      return fileOpen;
    };
  
--  sink.write = [&](const uint8_t* data, size_t len) { return openOutputFile() && file.write(data, len) == len; };
+-  sink.write = [&](const uint8_t* data, size_t len) {
 +  const std::function<bool(const uint8_t*, size_t)> writeFile = [&](const uint8_t* data, size_t len) {
-+    return openOutputFile() && file.write(data, len) == len;
-+  };
+     if (!openOutputFile()) return false;
+     if (FsHelpers::writeAndCheckpoint(file, data, len)) return true;
+     checkpointFailed = true;
+     LOG_ERR("HTTP", "Failed to checkpoint downloaded bytes");
+     return false;
+   };
 +  DownloadRateLog rateLog;
 +  sink.write = [&](const uint8_t* data, size_t len) {
 +    return rateLog.write(writeFile, data, len, sink.downloaded, sink.total);
@@ -93,9 +97,9 @@ index 42641b83..3c192cec 100644
  
    DownloadError result = HTTP_ERROR;
    HttpDownloadResume::RetryBudget budget;
-@@ -1055,6 +1126,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
-     }
+@@ -1078,6 +1147,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
    } while (true);
+   if (options.resumeValidator) *options.resumeValidator = sink.validator;
    if (insufficientSpace) result = INSUFFICIENT_SPACE;
 +  rateLog.summary(result == OK);
  

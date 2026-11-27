@@ -60,10 +60,10 @@ index 26477bb6..afed8f32 100644
    uint8_t brightness() const { return lastBrightness; }
    uint8_t warmth() const { return manager.colorTemperature(); }
 diff --git a/src/main.cpp b/src/main.cpp
-index 7e1b83b2..4356642d 100644
+index aa6fde5f..0d864fb5 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -459,6 +459,13 @@ static bool deepSleepInProgress = false;
+@@ -461,6 +461,13 @@ static bool deepSleepInProgress = false;
  // The boot that runs the BookOrbit sleep sync (NetworkBootTarget::BOOKORBIT_SLEEP_SYNC).
  // It must end in sleep, so it never starts another sleep sync.
  static bool sleepSyncBoot = false;
@@ -77,7 +77,7 @@ index 7e1b83b2..4356642d 100644
  static PowerButtonWakeWatcher sleepSyncWakeWatcher;
  // Set from BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME.
  static bool sleepSyncAfterQuickResumeSleep = false;
-@@ -2378,6 +2385,9 @@ void setup() {
+@@ -2405,6 +2412,9 @@ void setup() {
    gpio.startButtonCapture();
  #endif
    allowSleepAt = millis() + 2000;
@@ -87,7 +87,7 @@ index 7e1b83b2..4356642d 100644
  }
  
  #if FREEINK_DEVICE_PICCO
-@@ -2420,6 +2430,31 @@ static void idleDisplayWhileAwake() {
+@@ -2447,6 +2457,31 @@ static void idleDisplayWhileAwake() {
  #endif
  }
  
@@ -119,7 +119,7 @@ index 7e1b83b2..4356642d 100644
  void loop() {
    static unsigned long maxLoopDuration = 0;
    const unsigned long loopStartTime = millis();
-@@ -2432,6 +2467,9 @@ void loop() {
+@@ -2459,6 +2494,9 @@ void loop() {
      activityManager.loop();
      return;
    }

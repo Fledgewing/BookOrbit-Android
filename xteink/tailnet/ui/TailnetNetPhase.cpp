@@ -32,8 +32,8 @@
 #include "Tailnet.h"
 #include "TailnetSysSwitches.h"
 #include "SilentRestart.h"
-#include "activities/browser/BookOrbitCatalogLink.h"
-#include "activities/browser/BookOrbitCatalogListCache.h"
+#include "activities/browser/bookorbit/BookOrbitCatalogLink.h"
+#include "activities/browser/bookorbit/BookOrbitCatalogListCache.h"
 #include <CrossInkTailnetCuts.h>
 #include "network/SavedWifiConnect.h"
 #include "orbify/Quiet.h"

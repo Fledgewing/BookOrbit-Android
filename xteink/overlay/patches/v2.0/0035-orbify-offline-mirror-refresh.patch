@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: offline mirror refresh
 Save a catalog mirror for offline browsing and explicit Full refresh.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index ecedf940..9ea55bd8 100644
+index dcac2610..a127f81b 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -201,3 +201,11 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -19,7 +19,7 @@ index ecedf940..9ea55bd8 100644
 +#error "CROSSINK_TAILNET_ORBIFY_MIRROR needs CROSSINK_TAILNET_ORBIFY_CACHE"
 +#endif
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 9c2565ed..5e89b07a 100644
+index cc44c5a3..eb7bde79 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -320,6 +320,13 @@ STR_ORBIFY_ON_SERVER_DOWNLOAD: "On BookOrbit · Download & open"
@@ -36,10 +36,10 @@ index 9c2565ed..5e89b07a 100644
  STR_EVERY_N_MINUTES: "Every %d min"
  STR_EVERY_N_PAGES: "Every %d pages"
  STR_EVERY_CHAPTER: "Every chapter"
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 0926e1a8..403cf673 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index 29d0145e..cac9c008 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -58,6 +58,14 @@
  #include "network/SavedWifiConnect.h"
  #include "TailnetNetPhase.h"
@@ -461,10 +461,10 @@ index 0926e1a8..403cf673 100644
 +  self->requestUpdate();
 +}
 +#endif
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index 8687d20a..a2a1136b 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
+index 8687d20a..707f4996 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 @@ -175,6 +175,19 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    // Set once a Confirm hold has opened the book action menu; input is swallowed
    // until Confirm is up again so its release does not also activate the row.
@@ -503,7 +503,7 @@ index 8687d20a..a2a1136b 100644
    // Row window over the current listing (see `entries`).
    int loadedEnd() const { return windowStart + static_cast<int>(entries.size()); }
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
-index 11a7622d..b992d368 100644
+index b51b678c..71dd6854 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
 @@ -15,6 +15,9 @@
@@ -562,7 +562,7 @@ index 11a7622d..b992d368 100644
        status = tr(STR_HOME_PREPARING_COVERS);
        showSummary = true;
 diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
-index 8dfc556b..d8b493c3 100644
+index 8dfc556b..abe828b1 100644
 --- a/src/activities/network/BookOrbitHomeRefreshActivity.h
 +++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
 @@ -25,7 +25,7 @@ class BookOrbitHomeRefreshActivity final : public Activity {
@@ -593,7 +593,7 @@ index 8dfc556b..d8b493c3 100644
    // recognised nothing.
    std::string summaryLines[2];
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index ad3743b5..316b80f9 100644
+index 3483a338..555300c3 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -24,6 +24,9 @@
@@ -606,7 +606,7 @@ index ad3743b5..316b80f9 100644
  #include "BookOrbitHomeStore.h"
  #include "BookOrbitRemotePosition.h"
  #include "BookOrbitStatsUpload.h"
-@@ -368,6 +371,18 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -367,6 +370,18 @@ void BookOrbitSyncActivity::runSleepSync() {
      OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
      if (!sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 180000UL);
    }
@@ -626,10 +626,10 @@ index ad3743b5..316b80f9 100644
    SavedWifiConnect::disconnect();
    if (refreshHome && !sleepSyncWakeRequested()) {
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 455d20b9..6c319c1c 100644
+index 66e879aa..b5962402 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
-@@ -29,6 +29,9 @@
+@@ -28,6 +28,9 @@
  #include "components/themes/bookorbit/BookOrbitHomeText.h"
  #include "fontIds.h"
  #include "network/SavedWifiConnect.h"
@@ -639,7 +639,7 @@ index 455d20b9..6c319c1c 100644
  
  namespace fui = freeink::ui;
  
-@@ -64,11 +67,17 @@ constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
+@@ -63,11 +66,17 @@ constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
  constexpr int ORBIFY_KEEP_ROW = 8 + ORBIFY_MARK_ROWS;
  constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
  constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
@@ -660,7 +660,7 @@ index 455d20b9..6c319c1c 100644
  constexpr unsigned long FAILURE_MESSAGE_MS = 2500;
  constexpr fui::ActionId ACTION_ROW = 1;
  
-@@ -314,6 +323,15 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -313,6 +322,15 @@ void BookOrbitSettingsActivity::handleSelection() {
  }
  
  void BookOrbitSettingsActivity::handleHomeSelection() {
@@ -676,7 +676,7 @@ index 455d20b9..6c319c1c 100644
    if (selectedIndex != REFRESH_ROW) {
      showShelfSources(static_cast<int>(selectedIndex));
      requestUpdate();
-@@ -414,6 +432,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+@@ -413,6 +431,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
    const bool hasCredentials = BOOKORBIT_STORE.hasCredentials();
    for (int i = 0; i < count; i++) {
      if (page == Page::Home) {

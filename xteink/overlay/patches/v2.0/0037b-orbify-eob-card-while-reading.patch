@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: eob card while reading
 Refresh the End-of-Book card while reading and support its Home swipe.
 
 diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
-index de997a7..85169e4 100644
+index 96d59c05..672b120f 100644
 --- a/src/activities/reader/EndOfBookOptions.cpp
 +++ b/src/activities/reader/EndOfBookOptions.cpp
 @@ -139,6 +139,18 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
@@ -26,7 +26,7 @@ index de997a7..85169e4 100644
      unsigned long heldMs = 0;
      if (input.wasScreenTapped(tx, ty, heldMs)) {
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index eec4045..8a8d02f 100644
+index 92200c91..d66d58db 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -170,6 +170,14 @@ void BookOrbitSyncActivity::endPhase() {
@@ -45,7 +45,7 @@ index eec4045..8a8d02f 100644
    syncSession.reset();  // applying remote progress is local work; free the TLS session first
    assert(epub);
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
-index 32693e5..e226a33 100644
+index e7da7f9f..2fc53ae2 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 @@ -229,6 +229,8 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport

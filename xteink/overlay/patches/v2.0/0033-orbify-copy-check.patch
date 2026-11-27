@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: copy check
 Detect when the library file differs from the copy on the reader.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index 98548aac..6b68f921 100644
+index e131946f..30ac7cba 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -178,6 +178,11 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -18,10 +18,10 @@ index 98548aac..6b68f921 100644
  // Patch 0028, the End-of-Book page: server suggestions shown (0..2) and the author row; the X3's
  // flash drop order lowers these first (docs/design/end-of-book/DESIGN.md §5).
  #ifndef CROSSINK_TAILNET_ORBIFY_SUGGESTIONS
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 63c79a80..0926e1a8 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index 148ce977..29d0145e 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -24,6 +24,10 @@
  #include "BookOrbitCredentialStore.h"
  #include "BookOrbitDownloadIndex.h"
@@ -59,10 +59,10 @@ index 63c79a80..0926e1a8 100644
    // template gives it is not in the download index, so its row was not marked. The details
    // name that path and the library file's size: a file there of that size is this book. It
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 6e6178b4..9be03e28 100644
+index 0f8f6fa5..6dc9cc2e 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -217,7 +217,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
+@@ -216,7 +216,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
          &bookId, libraryVersion);
    }
    updateBookId = bookId;
@@ -79,39 +79,37 @@ index 6e6178b4..9be03e28 100644
  
  bool BookOrbitSyncActivity::offerBookUpdate() {
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index fb6647e8..974ccd64 100644
+index 156af5d8..2261a6f7 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
-@@ -711,7 +711,7 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+@@ -752,7 +752,7 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
    const auto buildFilter = [&](JsonDocument& filter) {
-     bookOrbitSetFilter(filter,
-                        R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
--                       R"("devicePath":true}]})");
-+                       R"("devicePath":true,"fileHash":true,"contentVersion":true}]})");
+   bookOrbitSetFilter(filter,
+                      R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+-                     R"("devicePath":true,"downloadVariant":true}]})");
++                     R"("devicePath":true,"downloadVariant":true,"fileHash":true,"contentVersion":true}]})");
  #if CROSSINK_TAILNET_ORBIFY_FINISH
-     // BookSync (patch 0028): the series card's fields ride on the same reply (design §5).
      orbify::cardFilter(filter);
-@@ -737,6 +737,8 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+ #endif
+@@ -777,6 +777,8 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
      entry.format = std::string(file["format"] | "");
      entry.sizeBytes = file["sizeBytes"] | 0;
      entry.devicePath = std::string(file["devicePath"] | "");
 +    entry.fileHash = std::string(file["fileHash"] | "");
 +    entry.contentVersion = std::string(file["contentVersion"] | "");
-     outDetail.files.push_back(std::move(entry));
-   }
-   return true;
+     // The download request carries it as is: only the values the server's query accepts.
+     const std::string_view variant = file["downloadVariant"] | "";
+     if (variant == "original" || variant == "audioless_epub") entry.downloadVariant = variant;
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
-index a8e9d68e..add148b2 100644
+index 3217a963..055fa1ee 100644
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
-@@ -27,6 +27,10 @@ struct BookOrbitCatalogFile {
+@@ -27,6 +27,8 @@ struct BookOrbitCatalogFile {
    // account and device. Empty on servers that predate the field; the caller then
    // names the file itself.
    std::string devicePath;
-+  // BookSync (patch 0033): the library file's KOReader partial MD5 and when its bytes last
-+  // changed. Empty when the server leaves them out (a converted delivery variant).
 +  std::string fileHash;
 +  std::string contentVersion;
- };
- 
- /** One entry in a BookOrbit book listing. */
+   // What the server delivers for this file: "original", or "audioless_epub" for a read-along
+   // EPUB. Naming it in the download takes the server's delivery route, which serves byte
+   // ranges under a strong ETag (BookOrbit 3.4.0+). Empty on servers that predate the field.

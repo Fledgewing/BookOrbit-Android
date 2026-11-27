@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: catalog refresh and mirror urls
 Build valid mirror list URLs and show catalog refresh feedback.
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 7a873b5..8aa8d40 100644
+index 32e77ef6..8dd91e6f 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -320,6 +320,7 @@ STR_ORBIFY_ON_READER_OPEN: "On this reader · Open"
@@ -14,10 +14,10 @@ index 7a873b5..8aa8d40 100644
  STR_ORBIFY_FULL_REFRESH: "Full refresh"
  STR_ORBIFY_SAVING_OFFLINE: "Full refresh · saving for offline %u/%u"
  STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 403cf67..1fffb70 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index cac9c008..c8e9ceff 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -2614,6 +2614,14 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
      const OrbifyMirror::Progress progress{this, &BookOrbitCatalogBrowserActivity::onMirrorStep};
      OrbifyMirror::run(nullptr, 0, &progress);
@@ -56,10 +56,10 @@ index 403cf67..1fffb70 100644
    const int level = static_cast<int>(navLevel);
    char out[64];
    orbify::formatStamp(!offlineSession && WiFi.status() == WL_CONNECTED, viewLoadedAt[level], nowEpoch(),
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index a2a1136..ccdf546 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
+index 707f4996..15569c00 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.h
 @@ -187,6 +187,8 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    uint32_t viewLoadedAt[3] = {};
    bool viewNotUpdated[3] = {};
@@ -69,10 +69,10 @@ index a2a1136..ccdf546 100644
  #endif
    std::string errorMessage;
    std::string statusMessage;
-diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
-index 29bbf4a..aeb452c 100644
---- a/src/activities/browser/BookOrbitCatalogListCache.cpp
-+++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
+index 29bbf4a8..aeb452cd 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogListCache.cpp
 @@ -37,6 +37,8 @@ bool writeJsonStringFile(const std::string& path, const std::string& text) {
  
  bool readJsonStringFile(const std::string& path, std::string& out) {
@@ -83,7 +83,7 @@ index 29bbf4a..aeb452c 100644
    if (!Storage.openFileForRead("BookOrbit", path, file)) {
      return false;
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 686f681..5b4a274 100644
+index a0d0f718..d4f2c42e 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -29,6 +29,9 @@

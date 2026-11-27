@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: wake press timing
 Measure the wake press while the sleep sync watcher is running.
 
 diff --git a/lib/GfxRenderer/GfxRenderer.cpp b/lib/GfxRenderer/GfxRenderer.cpp
-index 9aeaf60..d40ddb6 100644
+index a13edf39..98f5a4fc 100644
 --- a/lib/GfxRenderer/GfxRenderer.cpp
 +++ b/lib/GfxRenderer/GfxRenderer.cpp
 @@ -1,4 +1,6 @@
@@ -13,7 +13,7 @@ index 9aeaf60..d40ddb6 100644
  #if CROSSINK_SCALABLE_FONTS
  #include <HalScalableFont.h>
  #endif
-@@ -2440,11 +2442,17 @@ void GfxRenderer::invertRect(const int x, const int y, const int width, const in
+@@ -2631,11 +2633,17 @@ void GfxRenderer::invertRect(const int x, const int y, const int width, const in
    }
  }
  
@@ -31,7 +31,7 @@ index 9aeaf60..d40ddb6 100644
  }
  
  size_t GfxRenderer::readFramebufferRegion(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t* dst,
-@@ -2498,6 +2506,7 @@ void GfxRenderer::waitRefreshComplete() const {
+@@ -2689,6 +2697,7 @@ void GfxRenderer::waitRefreshComplete() const {
    language_benchmark::DisplayScope timing;
  #endif
    display.waitRefreshComplete();
@@ -39,7 +39,7 @@ index 9aeaf60..d40ddb6 100644
  }
  
  bool GfxRenderer::supportsAsyncRefresh() const { return !fadingFix && display.supportsAsyncRefresh(); }
-@@ -3334,6 +3343,7 @@ void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
+@@ -3527,6 +3536,7 @@ void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
    language_benchmark::DisplayScope timing;
  #endif
    display.displayGrayBuffer(fadingFix || turnOffScreen);
@@ -48,10 +48,10 @@ index 9aeaf60..d40ddb6 100644
  }
  
 diff --git a/lib/GfxRenderer/GfxRenderer.h b/lib/GfxRenderer/GfxRenderer.h
-index c256298..4b5cf2a 100644
+index 360fc6c2..d04afca7 100644
 --- a/lib/GfxRenderer/GfxRenderer.h
 +++ b/lib/GfxRenderer/GfxRenderer.h
-@@ -221,6 +221,9 @@ class GfxRenderer {
+@@ -246,6 +246,9 @@ class GfxRenderer {
    int getScreenHeight() const;
    void tapToLogical(float nx, float ny, int& outX, int& outY) const;
    void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH, bool turnOffScreen = false) const;
@@ -62,18 +62,18 @@ index c256298..4b5cf2a 100644
    // grayscale strip rendering) can overlap the panel's refresh time. The
    // framebuffer must stay untouched until waitRefreshComplete(). Falls back to
 diff --git a/src/main.cpp b/src/main.cpp
-index 5991cb4..e15d766 100644
+index 54ce299c..74f41194 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -23,6 +23,7 @@
+@@ -24,6 +24,7 @@
  #include <SPI.h>
  #include <TrustedTime.h>
  
 +#include <chrono>
  #include <cstdlib>
  
- #include "util/PluginEvents.h"
-@@ -381,6 +382,10 @@ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildMagic;
+ #include "sync/ProgressBookIterator.h"
+@@ -383,6 +384,10 @@ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildMagic;
  RTC_NOINIT_ATTR uint32_t silentReaderPageBuildBookHash;
  RTC_NOINIT_ATTR uint32_t silentReaderPageBuildPackedTarget;
  RTC_NOINIT_ATTR uint32_t silentReaderPageBuildFlags;
@@ -84,7 +84,7 @@ index 5991cb4..e15d766 100644
  #if FREEINK_DEVICE_PICCO
  RTC_NOINIT_ATTR UsbSleepWakeToken piccoUsbWakeToken;
  static SlideSwitchToggle piccoSlideSwitch;
-@@ -1667,6 +1672,51 @@ constexpr unsigned long SLEEP_SYNC_BUDGET_MS = 240000;
+@@ -1669,6 +1674,51 @@ constexpr unsigned long SLEEP_SYNC_BUDGET_MS = 240000;
  constexpr unsigned long SLEEP_SYNC_WAKE_GRACE_MS = 2000;
  constexpr unsigned long SLEEP_SYNC_BUDGET_GRACE_MS = 20000;
  
@@ -136,7 +136,7 @@ index 5991cb4..e15d766 100644
  // The restart into a boot that completes the sleep straight away (no Wi-Fi, no sync).
  static void setSleepNowRestartToken() {
    clearSilentRestartReaderPageBuild();
-@@ -1684,6 +1734,7 @@ static void forceSleepSyncExit(const bool wake) {
+@@ -1686,6 +1736,7 @@ static void forceSleepSyncExit(const bool wake) {
    if (wake) {
      LOG_ERR("SLP", "Wake press not answered by the BookOrbit sleep sync within %lu ms; restarting now",
              SLEEP_SYNC_WAKE_GRACE_MS);
@@ -144,7 +144,7 @@ index 5991cb4..e15d766 100644
      clearSilentRestartReaderPageBuild();
      silentRebootTarget = 0;
      silentRebootPayload = 0;
-@@ -1730,6 +1781,7 @@ bool sleepSyncWokenByPress() { return sleepSyncWakeWatcher.wakeRequested(); }
+@@ -1732,6 +1783,7 @@ bool sleepSyncWokenByPress() { return sleepSyncWakeWatcher.wakeRequested(); }
  void wakeFromSleepSync() {
    sleepSyncWakeWatcher.stop();
    LOG_INF("SLP", "Woken during the BookOrbit sleep sync; restarting as a power-button wake");
@@ -152,7 +152,7 @@ index 5991cb4..e15d766 100644
    clearSilentRestartReaderPageBuild();
    silentRebootTarget = 0;
    silentRebootPayload = 0;
-@@ -2534,6 +2586,7 @@ void loop() {
+@@ -2561,6 +2613,7 @@ void loop() {
  #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
    reapplyFrontlightAfterFirstPaint();
  #endif
@@ -161,7 +161,7 @@ index 5991cb4..e15d766 100644
    // The main task owns calibration. Exclude render-task battery/clock reads
    // during each short SDK step without blocking input behind a busy renderer.
 diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
-index 0753ec2..a5a7b9f 100644
+index 0753ec28..a5a7b9f2 100644
 --- a/src/util/PowerButtonWakeWatcher.h
 +++ b/src/util/PowerButtonWakeWatcher.h
 @@ -41,6 +41,8 @@ class PowerButtonWakeWatcher {

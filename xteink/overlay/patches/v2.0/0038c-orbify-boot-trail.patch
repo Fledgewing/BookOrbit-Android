@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: boot trail
 Record boot milestones and identify stale crash records.
 
 diff --git a/lib/hal/HalPowerManager.cpp b/lib/hal/HalPowerManager.cpp
-index 07211d3..0322899 100644
+index 07211d31..03228998 100644
 --- a/lib/hal/HalPowerManager.cpp
 +++ b/lib/hal/HalPowerManager.cpp
 @@ -1,5 +1,9 @@
@@ -38,10 +38,10 @@ index 07211d3..0322899 100644
  }
  
 diff --git a/src/main.cpp b/src/main.cpp
-index e15d766..cd78f19 100644
+index 74f41194..40013211 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -111,6 +111,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -113,6 +113,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "RecentBooksStore.h"
  #include "SdCardFontSystem.h"
  #include "SilentRestart.h"
@@ -51,7 +51,7 @@ index e15d766..cd78f19 100644
  #include "WifiCredentialStore.h"
  #include "orbify/SettingsPin.h"
  #include "activities/network/StatsUploadActivity.h"
-@@ -374,6 +377,10 @@ void logMemoryStats(const char* phase) {
+@@ -376,6 +379,10 @@ void logMemoryStats(const char* phase) {
  // Consume the pair on every boot, including resets that preserve RTC memory.
  RTC_NOINIT_ATTR library::ScanSleepToken libraryScanSleepToken;
  
@@ -62,7 +62,7 @@ index e15d766..cd78f19 100644
  // Definitions for SilentRestart.h. RTC_NOINIT survives ESP.restart() but not power loss.
  RTC_NOINIT_ATTR uint32_t silentRebootMagic;
  RTC_NOINIT_ATTR uint32_t silentRebootTarget;
-@@ -1499,7 +1506,9 @@ void enterDeepSleep(bool fromTimeout) {
+@@ -1501,7 +1508,9 @@ void enterDeepSleep(bool fromTimeout) {
    // Commit to sleeping before goToSleep() runs the outgoing activity's onExit():
    // a WiFi activity would otherwise silentRestart() here and reboot instead.
    deepSleepInProgress = true;
@@ -72,7 +72,7 @@ index e15d766..cd78f19 100644
    trustedtime::note();
    // Reader exit may already have saved this state. Save after the sleep screen
    // appears, skipping an unchanged snapshot while still retrying failed saves.
-@@ -1585,8 +1594,10 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
+@@ -1587,8 +1596,10 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
    Frontlight.setOn(false);
    const bool usbWakeRequested = holdSleepWhileUsbPowered(monochromeSleepFrame);
  #endif
@@ -83,7 +83,7 @@ index e15d766..cd78f19 100644
    mirrorWakeShortPressToNvs();
    LOG_DBG("MAIN", "Entering deep sleep");
  
-@@ -1826,7 +1837,9 @@ void completeSleepAfterSleepSync() {
+@@ -1828,7 +1839,9 @@ void completeSleepAfterSleepSync() {
    // A press that landed during the last step still wakes the device, and so does one
    // made while the sleep screen is drawn again.
    if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
@@ -93,17 +93,17 @@ index e15d766..cd78f19 100644
    if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
    sleepSyncWakeWatcher.stop();
  
-@@ -1893,6 +1906,9 @@ void setup() {
+@@ -1895,6 +1908,9 @@ void setup() {
    SimulatorLifecycle::restoreSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
  #endif
    BoardConfig::holdPowerRails();
-+  // Where the last run stopped, read before this boot records its own first step.
++  // Read the previous run before recording this boot.
 +  const orbify::boottrail::Step lastRunStep = orbify::boottrail::unpack(orbifyBootTrailWord);
 +  orbifyBootStep(orbify::boottrail::Step::SetupStarted);
  
    const esp_reset_reason_t rawResetReason = esp_reset_reason();
-   const esp_sleep_wakeup_cause_t rawWakeupCause = esp_sleep_get_wakeup_cause();
-@@ -1942,12 +1958,27 @@ void setup() {
+   if (rawResetReason != ESP_RST_DEEPSLEEP &&
+@@ -1948,12 +1964,27 @@ void setup() {
  #endif
    LOG_INF("BOOT", "Reset diagnostic: reset=%d(%s) sleepWake=%d(%s) rtcUpMs=%llu", static_cast<int>(rawResetReason),
            resetReasonName(rawResetReason), static_cast<int>(rawWakeupCause), wakeupCauseName(rawWakeupCause), rtcUpMs);
@@ -131,7 +131,7 @@ index e15d766..cd78f19 100644
    const bool hasRestartFrontlight = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_VALID) != 0;
    const bool restartFrontlightOn = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_ON) != 0;
    silentRebootTarget &= ~(SILENT_REBOOT_FRONTLIGHT_VALID | SILENT_REBOOT_FRONTLIGHT_ON);
-@@ -1998,6 +2029,7 @@ void setup() {
+@@ -2004,6 +2035,7 @@ void setup() {
      powerManager.startDeepSleep(gpio, keepLatchInSleep);
    }
  #endif
@@ -139,7 +139,7 @@ index e15d766..cd78f19 100644
  
  #ifndef SIMULATOR
    // X4 Pro and X4 Classic both map Up to the GPIO0 boot strap. Use Down for
-@@ -2503,6 +2535,7 @@ void setup() {
+@@ -2530,6 +2562,7 @@ void setup() {
  #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
    frontlightReapplyFrom = millis() + FRONTLIGHT_REAPPLY_AFTER_SETUP_MS;
  #endif

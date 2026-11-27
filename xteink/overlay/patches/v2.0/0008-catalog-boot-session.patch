@@ -22,10 +22,10 @@ index 6eabb941..007b1e7d 100644
  #if CROSSINK_TAILNET_NET_LOOP_STACK
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
-diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 index b690fda0..229712c4 100644
---- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-+++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
 @@ -380,6 +380,7 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
  
  void BookOrbitCatalogBrowserActivity::onExit() {
@@ -53,7 +53,7 @@ index b690fda0..229712c4 100644
    // clean download boot in a field log. The version says which build wrote that log.
    LOG_INF("BookOrbit", "Downloading file %lld -> %s (free=%u maxAlloc=%u, firmware %s)", static_cast<long long>(fileId),
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 69f795ee..e84140b5 100644
+index 3ddc3177..925e1d65 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -89,6 +89,14 @@ struct FileJsonReader {
@@ -143,10 +143,10 @@ index 69f795ee..e84140b5 100644
    outSections.clear();
    if (!BOOKORBIT_STORE.hasCredentials()) return false;
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
-index 81a5969e..a8e9d68e 100644
+index 7d36b247..f9922c72 100644
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
-@@ -162,6 +162,14 @@ class BookOrbitCatalogClient {
+@@ -166,6 +166,14 @@ class BookOrbitCatalogClient {
      bool owner_ = false;
    };
  

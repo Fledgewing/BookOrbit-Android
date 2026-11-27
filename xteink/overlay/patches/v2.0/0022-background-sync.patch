@@ -83,7 +83,7 @@ index 55e8cb89..3d5d779a 100644
    // follows at its next sync.
    const BookOrbitHomeShelfSource& getHomeShelf(const int index) const {
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 02d05d49..87ff4924 100644
+index 6bbf53a9..31396754 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -289,6 +289,11 @@ STR_BOOKORBIT_ON_DEVICE: "On device"
@@ -99,10 +99,10 @@ index 02d05d49..87ff4924 100644
  STR_RENAME: "Rename"
  STR_AUTHOR_TITLE: "Author - Title"
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index 27a44ea9..12f7e393 100644
+index 75fd3449..464720b2 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -46,6 +46,7 @@
+@@ -47,6 +47,7 @@
  #include "BookOrbitBookmarkStore.h"
  #include "BookOrbitCredentialStore.h"
  #include "BookOrbitStatsQueue.h"
@@ -110,7 +110,7 @@ index 27a44ea9..12f7e393 100644
  #include "BookStatsActivity.h"
  #include "BookStatsTracking.h"
  #include "ChapterXPathResolver.h"
-@@ -2896,6 +2897,10 @@ void EpubReaderActivity::onEnter() {
+@@ -2926,6 +2927,10 @@ void EpubReaderActivity::onEnter() {
  }
  
  void EpubReaderActivity::onExit() {
@@ -121,7 +121,7 @@ index 27a44ea9..12f7e393 100644
    sdFontSystem.setContentSizeScales({512, 192});
    sdFontSystem.setSettingsPersistenceCallback(nullptr, nullptr);
    // Drop the scalable-family catalog retained during reading. The active font
-@@ -3536,9 +3541,44 @@ void EpubReaderActivity::flushPendingSyncMark() {
+@@ -3574,9 +3579,44 @@ void EpubReaderActivity::flushPendingSyncMark() {
                     SyncPending::PROGRESS_BIT | (statsTrackingActive ? SyncPending::STATS_BIT : uint8_t{0}));
  }
  
@@ -167,7 +167,7 @@ index 27a44ea9..12f7e393 100644
    if (keptOffer && !keptOfferShown && offerKeptPosition()) return;
    if (!hyphenationPackChecked && checkHyphenationPack()) return;
 diff --git a/src/activities/reader/EpubReaderActivity.h b/src/activities/reader/EpubReaderActivity.h
-index fed2ece3..8178ee04 100644
+index 666a59c6..51ea72bd 100644
 --- a/src/activities/reader/EpubReaderActivity.h
 +++ b/src/activities/reader/EpubReaderActivity.h
 @@ -1,4 +1,5 @@
@@ -176,7 +176,7 @@ index fed2ece3..8178ee04 100644
  #include <BookOrbitStatsQueue.h>
  #include <Epub.h>
  #include <Epub/FootnoteEntry.h>
-@@ -409,6 +410,10 @@ class EpubReaderActivity final : public Activity {
+@@ -413,6 +414,10 @@ class EpubReaderActivity final : public Activity {
    SyncPending::SessionMarker pendingSync;
    std::atomic<bool> pendingSyncDue{false};
    void flushPendingSyncMark();
@@ -188,7 +188,7 @@ index fed2ece3..8178ee04 100644
    // Adapted from Sichroteph/YACP commit 3f3c5fc42e794c021edb9832856ef98c2d2065b9
    // (MIT): retain one render-only strip instead of reallocating it on every
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 5f079310..f2dd8482 100644
+index 020b5c37..0879eeb3 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -184,8 +184,8 @@ void BookOrbitSyncActivity::saveProgressAndReturn(const CrossPointPosition& posi
@@ -202,7 +202,7 @@ index 5f079310..f2dd8482 100644
    if (offerBookUpdate()) return;
  #ifdef SIMULATOR
    endSimulatorScenarioIfRequested(static_cast<int>(state));
-@@ -333,6 +333,13 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -332,6 +332,13 @@ void BookOrbitSyncActivity::runSleepSync() {
  }
  
  bool BookOrbitSyncActivity::stopIfWoken() {
@@ -216,7 +216,7 @@ index 5f079310..f2dd8482 100644
    if (!wakeRequested()) return false;
    // Checked only between steps, where every file the sync touches is consistent: each
    // step is retried by the next sync, so the attempt can simply end here.
-@@ -419,12 +426,22 @@ void BookOrbitSyncActivity::performSync() {
+@@ -418,12 +425,22 @@ void BookOrbitSyncActivity::performSync() {
    const BookOrbitSyncClient::Error result = BookOrbitSyncClient::getProgress(documentHash, remoteProgress);
    LOG_INF("BookOrbit", "Progress fetch result=%d (http=%d)", static_cast<int>(result),
            BookOrbitSyncClient::lastHttpCode);
@@ -240,7 +240,7 @@ index 5f079310..f2dd8482 100644
    }
  
    if (preAnsweredUpload && (result == BookOrbitSyncClient::OK || result == BookOrbitSyncClient::NOT_FOUND)) {
-@@ -580,8 +597,25 @@ void BookOrbitSyncActivity::resolveRemoteProgress() {
+@@ -579,8 +596,25 @@ void BookOrbitSyncActivity::resolveRemoteProgress() {
      return;
    }
  
@@ -268,7 +268,7 @@ index 5f079310..f2dd8482 100644
    remoteLocalPercent = BookOrbitRemotePosition::localPercent(*epub, remotePosition);
    const BookOrbitSmartSync::Position local{currentSpineIndex, currentPage, totalPagesInSpine};
    const BookOrbitSmartSync::Position remote{remotePosition.spineIndex, remotePosition.pageNumber,
-@@ -589,6 +623,14 @@ void BookOrbitSyncActivity::resolveRemoteProgress() {
+@@ -588,6 +622,14 @@ void BookOrbitSyncActivity::resolveRemoteProgress() {
  
    if ((smartSyncEnabled() || sleepSync) && decideAutomatically(local, remote)) return;
  
@@ -283,7 +283,7 @@ index 5f079310..f2dd8482 100644
    if (sleepSync) {
      // Nobody is there to answer the choice screen; the next manual sync asks it.
      LOG_INF("BookOrbit", "Sleep sync: progress left for the next manual sync");
-@@ -622,6 +664,14 @@ bool BookOrbitSyncActivity::decideAutomatically(const BookOrbitSmartSync::Positi
+@@ -621,6 +663,14 @@ bool BookOrbitSyncActivity::decideAutomatically(const BookOrbitSmartSync::Positi
        completeAlreadySynced();
        return true;
      case BookOrbitSmartSync::Decision::ApplyRemote:
@@ -298,7 +298,7 @@ index 5f079310..f2dd8482 100644
        saveProgressAndReturn(remotePosition);
        return true;
      case BookOrbitSmartSync::Decision::UploadLocal:
-@@ -650,7 +700,7 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -649,7 +699,7 @@ void BookOrbitSyncActivity::performUpload() {
  #if CROSSINK_TAILNET_PROMPT_KEEPS_NETWORK
    // The overlay turned WiFi off to show the prompt (the framebuffer did not fit beside
    // Tailscale): the upload cannot run in this boot. Restart into the sync with the choice.
@@ -307,7 +307,7 @@ index 5f079310..f2dd8482 100644
      const uint32_t orientationPayload =
          readerOrientation < CrossPointSettings::ORIENTATION_COUNT
              ? (static_cast<uint32_t>(readerOrientation) + 1) << BOOKORBIT_SYNC_PAYLOAD_ORIENTATION_SHIFT
-@@ -694,7 +744,7 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -693,7 +743,7 @@ void BookOrbitSyncActivity::performUpload() {
  
    syncSession.reset();
    // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
@@ -316,7 +316,7 @@ index 5f079310..f2dd8482 100644
  
    if (result != BookOrbitSyncClient::OK) {
      {
-@@ -725,6 +775,35 @@ void BookOrbitSyncActivity::uploadFromNoRemotePrompt() {
+@@ -724,6 +774,35 @@ void BookOrbitSyncActivity::uploadFromNoRemotePrompt() {
    performUpload();
  }
  
@@ -352,7 +352,7 @@ index 5f079310..f2dd8482 100644
  void BookOrbitSyncActivity::onEnter() {
    Activity::onEnter();
    LOG_INF("BookOrbit", "BookOrbit sync starting");
-@@ -820,7 +899,7 @@ void BookOrbitSyncActivity::drawHints(const char* confirm, const char* up, const
+@@ -819,7 +898,7 @@ void BookOrbitSyncActivity::drawHints(const char* confirm, const char* up, const
    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
  }
  
@@ -362,7 +362,7 @@ index 5f079310..f2dd8482 100644
    if (sleepSync) return;
  
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
-index 998fcee5..adb09426 100644
+index eda7b3eb..47195584 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 @@ -1,4 +1,5 @@
@@ -403,7 +403,7 @@ index 998fcee5..adb09426 100644
 +#endif
 +
   private:
-   // The integration harness reads these values from the logs (run_scenarios.py): keep the order.
+   // The integration harness reads these values from the logs (test/integration/harness/sim.py): keep the order.
    enum State {
 @@ -107,6 +127,25 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
    // screen, progress follows smart sync's rules and is left alone when they cannot
@@ -432,7 +432,7 @@ index 998fcee5..adb09426 100644
    // True once the sync has been abandoned for a wake press; the device is rebooting.
    bool stopIfWoken();
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 0e9e0a18..1fe9ec2b 100644
+index 68a83c90..664fd40a 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
 @@ -12,6 +12,7 @@
@@ -443,7 +443,7 @@ index 0e9e0a18..1fe9ec2b 100644
  #include "BookOrbitHomeStore.h"
  #include "MappedInputManager.h"
  #include "SdCardFontSystem.h"
-@@ -32,7 +33,8 @@
+@@ -31,7 +32,8 @@
  namespace fui = freeink::ui;
  
  namespace {
@@ -453,7 +453,7 @@ index 0e9e0a18..1fe9ec2b 100644
  // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
  // generic and already translated in every language file.
  const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
-@@ -43,8 +45,13 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -42,8 +44,13 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
                                       StrId::STR_OPDS_DOWNLOAD_FOLDER,
                                       StrId::STR_SYNC_BEHAVIOR,
                                       StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
@@ -468,7 +468,7 @@ index 0e9e0a18..1fe9ec2b 100644
  // The Home page: the top shelf, the bottom shelf, then the refresh.
  constexpr int HOME_ITEMS = 3;
  constexpr int REFRESH_ROW = 2;
-@@ -73,7 +80,13 @@ BookOrbitSettingsActivity::BookOrbitSettingsActivity(GfxRenderer& renderer, Mapp
+@@ -72,7 +79,13 @@ BookOrbitSettingsActivity::BookOrbitSettingsActivity(GfxRenderer& renderer, Mapp
        page(page),
        networkBoot(networkBoot) {}
  
@@ -483,7 +483,7 @@ index 0e9e0a18..1fe9ec2b 100644
  
  void BookOrbitSettingsActivity::onRowEvent(const fui::ActionEvent& event, void* user) {
    auto* self = static_cast<BookOrbitSettingsActivity*>(user);
-@@ -254,6 +267,26 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -253,6 +266,26 @@ void BookOrbitSettingsActivity::handleSelection() {
      startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
                             [](const ActivityResult&) {});
    }
@@ -510,7 +510,7 @@ index 0e9e0a18..1fe9ec2b 100644
  }
  
  void BookOrbitSettingsActivity::handleHomeSelection() {
-@@ -390,6 +423,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+@@ -389,6 +422,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
                                                                                      : tr(STR_ASK_EVERY_TIME);
      } else if (i == 7) {
        values[i] = BOOKORBIT_STORE.getSyncOnSleep() ? tr(STR_ON) : tr(STR_OFF);

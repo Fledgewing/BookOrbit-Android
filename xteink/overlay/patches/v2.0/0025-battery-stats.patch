@@ -18,10 +18,10 @@ index 6b42be45..e598b8b3 100644
  // Frontlight re-applied after the first paint of every boot (overlay patch 0024, main.cpp
  // loop() and HalFrontlight::reapply()). An X4 Pro sometimes woke with the light dark while
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 0e67a99f..4dd9a0b7 100644
+index bf24188e..d788e847 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -723,6 +723,14 @@ STR_NO_SERVERS: "No OPDS servers configured"
+@@ -727,6 +727,14 @@ STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_OPDS_SERVERS: "OPDS Servers"
  STR_TAILSCALE: "Tailscale"
@@ -104,10 +104,10 @@ index e2fecddc..12767d46 100644
    void beginHardware();
    bool hardwareReady = false;
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 028cdcef..175499b1 100644
+index 5d18ee4a..bd17a3fe 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1176,6 +1176,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1165,6 +1165,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_SYSTEM_DEVICE, SettingAction::SystemDevice));
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_SYSTEM_FILES_CACHE, SettingAction::SystemFilesCache));
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_READING_STATS, SettingAction::SystemReadingStats));
@@ -118,7 +118,7 @@ index 028cdcef..175499b1 100644
    systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
  #if CROSSINK_APP_CAP_KOREADER_SYNC
 diff --git a/src/activities/network/UsbDriveActivity.cpp b/src/activities/network/UsbDriveActivity.cpp
-index 79b92c4d..46e780a5 100644
+index 9fb34b5f..9ee8abb8 100644
 --- a/src/activities/network/UsbDriveActivity.cpp
 +++ b/src/activities/network/UsbDriveActivity.cpp
 @@ -1,5 +1,7 @@
@@ -129,7 +129,7 @@ index 79b92c4d..46e780a5 100644
  #include <Arduino.h>
  #include <HalStorage.h>
  #include <I18n.h>
-@@ -41,6 +43,9 @@ void UsbDriveActivity::onEnter() {
+@@ -39,6 +41,9 @@ void UsbDriveActivity::onEnter() {
    // Invalidate while FAT is still mounted. USB writes bypass firmware hooks,
    // and endUsbDrive() leaves the filesystem detached until the reboot.
    ImageFolderIndex::invalidate();
@@ -140,7 +140,7 @@ index 79b92c4d..46e780a5 100644
      LOG_ERR("USB", "Unable to start USB Drive");
      preparing = false;
 diff --git a/src/activities/reader/PluginReaderEvents.h b/src/activities/reader/PluginReaderEvents.h
-index ed3f6d3b..c2b09b72 100644
+index ed3f6d3b..21005ca1 100644
 --- a/src/activities/reader/PluginReaderEvents.h
 +++ b/src/activities/reader/PluginReaderEvents.h
 @@ -2,12 +2,16 @@
@@ -162,7 +162,7 @@ index ed3f6d3b..c2b09b72 100644
    // Main-loop polling must never wait for a page render.
    void pollWhenIdle(const std::string& book);
 diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
-index ce2a1ea4..c69f3f4f 100644
+index e9a3a71d..0edaf1d9 100644
 --- a/src/activities/settings/SettingsActivity.cpp
 +++ b/src/activities/settings/SettingsActivity.cpp
 @@ -28,6 +28,9 @@
@@ -202,10 +202,10 @@ index 2766cf72..8207d00a 100644
  
  struct SettingInfo {
 diff --git a/src/main.cpp b/src/main.cpp
-index 4356642d..e57f815f 100644
+index 0d864fb5..a050b91b 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -146,6 +146,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -148,6 +148,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #endif
  #include "util/BatteryDiagnosticLog.h"
  #include "util/BookUpdateMigration.h"
@@ -213,7 +213,7 @@ index 4356642d..e57f815f 100644
  #include "util/ButtonNavigator.h"
  #include "util/ButtonShortcutController.h"
  #include "util/Dictionary.h"
-@@ -501,6 +502,7 @@ static bool syncStorageBeforeTransition() {
+@@ -503,6 +504,7 @@ static bool syncStorageBeforeTransition() {
  
  static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
    if (deepSleepInProgress) return false;
@@ -221,7 +221,7 @@ index 4356642d..e57f815f 100644
    // Tailnet overlay: the framebuffer may be parked while Tailscale runs; draw only once it is back.
    const bool displayReady = tailnet_display_ready(3000);
    std::optional<RenderLock> lock;
-@@ -1535,6 +1537,7 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
+@@ -1537,6 +1539,7 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
    // Last chance to sample: startDeepSleep() cuts the SD rail on X3, so nothing
    // can be written again until the next wake.
    BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Sleep, BoardConfig::ACTIVE.name);
@@ -229,7 +229,7 @@ index 4356642d..e57f815f 100644
    std::optional<RenderLock> storageSleepLock;
    if (!RenderLock::heldByCurrentTask()) storageSleepLock.emplace();
    libraryScanSleepToken.save(!library::libraryIndexNeedsRefresh());
-@@ -2024,6 +2027,13 @@ void setup() {
+@@ -2051,6 +2054,13 @@ void setup() {
    // Needs SETTINGS for the clock's UTC offset, so it cannot run any earlier.
    BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Wake, BoardConfig::ACTIVE.name,
                                 sleepSyncBoot ? "SleepSync" : wakeupRouteName(wakeupReason));
@@ -243,7 +243,7 @@ index 4356642d..e57f815f 100644
    const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
    I18N.begin(SETTINGS.languageCode, SETTINGS.languageCacheGeneration);
    HyphenationPackStore::begin();
-@@ -2456,6 +2466,7 @@ static void reapplyFrontlightAfterFirstPaint() {
+@@ -2483,6 +2493,7 @@ static void reapplyFrontlightAfterFirstPaint() {
  #endif
  
  void loop() {

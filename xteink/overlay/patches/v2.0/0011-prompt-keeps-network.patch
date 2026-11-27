@@ -37,7 +37,7 @@ index 346181dd..bc2bc85b 100644
  // long-press sleep), so that press belongs to the sleep gesture and must be released
  // before a press can wake the device out of the sync.
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index f2c3475c..5f079310 100644
+index ca7a29ec..020b5c37 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -8,6 +8,7 @@
@@ -48,7 +48,7 @@ index f2c3475c..5f079310 100644
  #include <Logging.h>
  #include <Memory.h>
  #include <WallClock.h>
-@@ -426,6 +427,14 @@ void BookOrbitSyncActivity::performSync() {
+@@ -425,6 +426,14 @@ void BookOrbitSyncActivity::performSync() {
      if (!exchangeReadingData()) return;
    }
  
@@ -63,7 +63,7 @@ index f2c3475c..5f079310 100644
    if (result == BookOrbitSyncClient::NOT_FOUND) {
      if (smartSyncEnabled() || sleepSync) {
        LOG_DBG("BookOrbit", "Smart sync: no remote progress, uploading local %.6f", localProgress.percentage);
-@@ -638,6 +647,23 @@ void BookOrbitSyncActivity::performUpload() {
+@@ -637,6 +646,23 @@ void BookOrbitSyncActivity::performUpload() {
      fail(tr(STR_SYNC_FAILED_MSG));
      return;
    }
@@ -88,7 +88,7 @@ index f2c3475c..5f079310 100644
      RenderLock lock(*this);
      state = UPLOADING;
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
-index eface758..998fcee5 100644
+index 1d4417a7..eda7b3eb 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 @@ -54,6 +54,9 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
@@ -110,10 +110,10 @@ index eface758..998fcee5 100644
    std::string documentHash;
  
 diff --git a/src/main.cpp b/src/main.cpp
-index 043533ce..0fe6ba6d 100644
+index a274b676..ba991bb3 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -725,6 +725,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
+@@ -727,6 +727,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
    auto syncActivity = makeUniqueNoThrow<BookOrbitSyncActivity>(
        renderer, mappedInputManager, epubPath, spineIndex, pageNumber, totalPagesInSpine, std::move(localKoPos),
        std::move(localChapterName), paragraphIndex, networkBootReady, readerOrientation, sleepSync);

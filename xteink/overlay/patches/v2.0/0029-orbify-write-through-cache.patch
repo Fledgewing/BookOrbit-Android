@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: write through cache
 Read saved catalog replies and patch them after successful writes.
 
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index 98548aac..637436d3 100644
+index 8b853ad5..e131946f 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -186,3 +186,7 @@ bool tlsArenaActive();                                // the arena is reserved (
@@ -15,7 +15,7 @@ index 98548aac..637436d3 100644
 +#define CROSSINK_TAILNET_ORBIFY_CACHE 0
 +#endif
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index c747f475..7be018c2 100644
+index 150f360c..a33c1b82 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -423,6 +423,14 @@ void configureClient(freeink::SecureHttpClient& http, const bool reuse) {
@@ -45,7 +45,7 @@ index c747f475..7be018c2 100644
    return code;
  }
 diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
-index b177e6d9..2fbe13bd 100644
+index b177e6d9..60316fa2 100644
 --- a/src/BookOrbitHomeStore.cpp
 +++ b/src/BookOrbitHomeStore.cpp
 @@ -18,6 +18,9 @@
@@ -102,7 +102,7 @@ index b177e6d9..2fbe13bd 100644
        LOG_ERR("BookOrbit", "Cover of book %ld not fetched (err=%d, http=%d)", static_cast<long>(book.id),
                static_cast<int>(result), HttpDownloader::lastHttpStatus);
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index fb6647e8..65192e77 100644
+index 8cc1926c..156af5d8 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -25,6 +25,9 @@
@@ -210,27 +210,25 @@ index fb6647e8..65192e77 100644
    options.wolfSslClient = catalogConnection();
    if (shouldStop != nullptr) options.shouldCancel = shouldStop;
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
-index a8e9d68e..1555db50 100644
+index f9922c72..3217a963 100644
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
-@@ -221,7 +221,11 @@ class BookOrbitCatalogClient {
+@@ -225,7 +225,9 @@ class BookOrbitCatalogClient {
    static bool fetchHomeDashboard(BookOrbitHomeSnapshot& out, HalFile& yearOut);
  
    /** Download one book's catalog thumbnail (always a JPEG) to the SD card. */
 -  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)());
-+  // ifNoneMatch: a kept cover's ETag; a 304 then fails with lastHttpStatus 304 and writes nothing.
-+  // etagOut receives the new cover's ETag (BookSync's cache, CROSSINK_TAILNET_ORBIFY_CACHE).
 +  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)(),
 +                                                         const std::string& ifNoneMatch = std::string(),
 +                                                         std::string* etagOut = nullptr);
  
-   /** Download a catalog file (by file id, not book id) to the SD card. */
-   static HttpDownloader::DownloadError downloadFile(
+   /**
+    * Download a catalog file (by file id, not book id) to the SD card. A non-empty variant
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index 219541af..a1669c0b 100644
+index be4f1d28..127498e5 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -622,6 +622,7 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+@@ -626,6 +626,7 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
      progressNotifier.notify(sink.downloaded, true);
      if (isCancelRequested(sink.cancelFlag, sink.shouldCancel)) return HttpDownloader::ABORTED;
      if (sink.options->finalUrl) *sink.options->finalUrl = currentUrl;
@@ -239,7 +237,7 @@ index 219541af..a1669c0b 100644
          !retainHttpSessionFraming(http.hasContentLength(), http.getHeader("transfer-encoding")))
        sink.options->session->reset();
 diff --git a/src/network/HttpDownloader.h b/src/network/HttpDownloader.h
-index ebe8ca5e..7f1386c2 100644
+index 3bda192a..cecdc120 100644
 --- a/src/network/HttpDownloader.h
 +++ b/src/network/HttpDownloader.h
 @@ -76,6 +76,9 @@ class HttpDownloader {

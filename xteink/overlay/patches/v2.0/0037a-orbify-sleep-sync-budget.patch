@@ -3,7 +3,7 @@ Subject: [PATCH] BookSync: sleep sync budget
 Bound sleep sync time and let the power watcher end a blocked sync.
 
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index d7e8c42..be42ab3 100644
+index d7e8c425..be42ab34 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
 @@ -67,6 +67,9 @@ constexpr uint32_t BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME = 1u << 1;
@@ -30,10 +30,10 @@ index d7e8c42..be42ab3 100644
  void wakeFromSleepSync();
  // Ends the sleep sync by entering the deep sleep it postponed (or waking, if Power
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index d48ecec..eec4045 100644
+index 6920a460..92200c91 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -416,6 +416,12 @@ bool BookOrbitSyncActivity::stopIfWoken() {
+@@ -415,6 +415,12 @@ bool BookOrbitSyncActivity::stopIfWoken() {
    if (!wakeRequested()) return false;
    // Checked only between steps, where every file the sync touches is consistent: each
    // step is retried by the next sync, so the attempt can simply end here.
@@ -47,10 +47,10 @@ index d48ecec..eec4045 100644
    wakeFromSleepSync();
    return true;
 diff --git a/src/main.cpp b/src/main.cpp
-index 30a101c..5991cb4 100644
+index a050b91b..54ce299c 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -470,6 +470,8 @@ constexpr unsigned long FRONTLIGHT_REAPPLY_GUARD_MS = 1000;
+@@ -472,6 +472,8 @@ constexpr unsigned long FRONTLIGHT_REAPPLY_GUARD_MS = 1000;
  static PowerButtonWakeWatcher sleepSyncWakeWatcher;
  // Set from BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME.
  static bool sleepSyncAfterQuickResumeSleep = false;
@@ -59,7 +59,7 @@ index 30a101c..5991cb4 100644
  // Defined after enterDeepSleep(), which upstream's sleep-overlay test expects right after
  // the Picco charge overlay (test/scripts/test_sleep_charge_overlay.py).
  static void powerDownForDeepSleep(bool monochromeSleepFrame);
-@@ -1656,7 +1658,47 @@ static void restartIntoSleepSync(const bool powerHeldAtSleep, const bool isQuick
+@@ -1658,7 +1660,47 @@ static void restartIntoSleepSync(const bool powerHeldAtSleep, const bool isQuick
    restartForSleepSync(true);
  }
  
@@ -107,7 +107,7 @@ index 30a101c..5991cb4 100644
    sleepSyncAfterQuickResumeSleep = (payload & BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME) != 0;
    // The sync leaves the books on the card alone, so a Library index that was current when
    // the device went to sleep is still current when it finishes going to sleep.
-@@ -1671,10 +1713,19 @@ static bool startBookOrbitSleepSync(const uint32_t payload) {
+@@ -1673,10 +1715,19 @@ static bool startBookOrbitSleepSync(const uint32_t payload) {
    // time, so the button handling there cannot see a press made meanwhile: this task
    // samples it and remembers the press until the sync reaches a step it can stop at.
    if (!sleepSyncWakeWatcher.start(holdMs, (payload & BOOKORBIT_SLEEP_SYNC_PAYLOAD_POWER_HELD) != 0)) return false;
@@ -128,7 +128,7 @@ index 30a101c..5991cb4 100644
  
  void wakeFromSleepSync() {
    sleepSyncWakeWatcher.stop();
-@@ -1718,6 +1769,8 @@ static bool redrawSleepScreenAfterSleepSync() {
+@@ -1720,6 +1771,8 @@ static bool redrawSleepScreenAfterSleepSync() {
  }
  
  void completeSleepAfterSleepSync() {
@@ -138,7 +138,7 @@ index 30a101c..5991cb4 100644
    // made while the sleep screen is drawn again.
    if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
 diff --git a/src/util/PowerButtonWakeWatcher.cpp b/src/util/PowerButtonWakeWatcher.cpp
-index 5528e09..821f0d7 100644
+index 5528e09c..821f0d7c 100644
 --- a/src/util/PowerButtonWakeWatcher.cpp
 +++ b/src/util/PowerButtonWakeWatcher.cpp
 @@ -5,8 +5,9 @@
@@ -214,7 +214,7 @@ index 5528e09..821f0d7 100644
    }
  }
 diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
-index b930bd9..0753ec2 100644
+index b930bd98..0753ec28 100644
 --- a/src/util/PowerButtonWakeWatcher.h
 +++ b/src/util/PowerButtonWakeWatcher.h
 @@ -6,13 +6,22 @@
