@@ -72,6 +72,7 @@ jobs:
         with:
           name: owned-firmware-${{ matrix.environment }}
           if-no-files-found: error
+          include-hidden-files: true
           path: |
             xteink/firmware/.pio/build/${{ matrix.environment }}/firmware.bin
             xteink/firmware/.pio/build/${{ matrix.environment }}/firmware.elf
