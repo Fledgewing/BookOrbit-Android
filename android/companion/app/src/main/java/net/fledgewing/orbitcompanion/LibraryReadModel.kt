@@ -15,6 +15,7 @@ class LibraryReadModel(
     private val accountStats: (String) -> Map<*, *>? = { null },
     private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
     private val adapter: ServerAdapter? = null,
+    private val personalDevice: (() -> PersonalReadingSource)? = null,
 ) {
     companion object {
         const val MAX_BYTES = 16384
@@ -33,6 +34,11 @@ class LibraryReadModel(
             java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it)
         } + DeviceStorage.downloadRoot(store.root)) else adapter ?: ServerAdapters.forStore(store, clock = clock,
             fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
+        val personal by lazy {
+            val roots = DeviceStorage.folders.map { java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it) } + DeviceStorage.downloadRoot(store.root)
+            PersonalReading(listOf(personalDevice?.invoke() ?: DevicePersonalReading(roots, java.io.File(store.root.parentFile,"statistics.sqlite3"))) +
+                if (local) emptyList() else projection.personalReadingSources(owner))
+        }
         val localStats by lazy { readingStats() }
         val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
@@ -49,6 +55,7 @@ class LibraryReadModel(
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
+                    "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock())
                     "reading.stats" -> stats
                     "local.word" -> LocalWidgets.word(vocabulary(), clock())
                     "local.buddy" -> LocalWidgets.buddy(localStats)

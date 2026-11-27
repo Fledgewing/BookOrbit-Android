@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Local native access stays behind Library; the host alone requests projections.
 function Library.localWidgetNeed(id)
+    if id=="highlight" or id=="yearago" then return {op="personal.reading",kind=id,limit=1} end
     local need={op="local."..id,limit=1}
     if id=="light" then
         local device=require("device")
@@ -34,7 +35,28 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     local pad=scale(10)
     local c=HomeWidgets.canvas(w,h)
     HomeWidgets.text(c,p.widget=="light" and plan.ready and plan.message or _(plan.title),pad,pad,w-2*pad,18,false,true)
-    if p.widget=="word" and plan.word then
+    if (p.widget=="highlight" or p.widget=="yearago") and plan.ready then
+        local content=p.widget=="highlight" and plan.passage or plan.book_title
+        if p.widget=="highlight" and p.h>1 then
+            local u=HomeWidgets.ui()
+            HomeWidgets.put(c,require("ui/widget/textboxwidget"):new{text=content or "",face=u.Font:getFace("cfont",16),
+                width=w-2*pad,height=math.max(scale(20),h-2*pad-scale(120)),height_adjust=false},pad,pad+scale(30))
+        else
+            HomeWidgets.text(c,content or "",pad,pad+scale(30),w-2*pad,p.h==1 and 13 or 16)
+        end
+        if p.h>1 then
+            HomeWidgets.text(c,plan.summary or plan.source or "On this reader",pad,p.widget=="highlight" and h-pad-scale(76) or pad+scale(65),w-2*pad,13)
+            if p.widget=="highlight" and plan.book then
+                HomeWidgets.button(c,_("Open book ›"),pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("book",plan.book) end)
+            end
+        elseif p.widget=="yearago" then
+            HomeWidgets.text(c,plan.summary or "",pad,pad+scale(53),w-2*pad,12)
+        elseif p.widget=="highlight" and plan.book then
+            table.remove(c)
+            HomeWidgets.text(c,plan.source or "On this reader",pad,pad+scale(22),w-2*pad,12)
+            HomeWidgets.button(c,content or _("Open book ›"),pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("book",plan.book) end)
+        end
+    elseif p.widget=="word" and plan.word then
         if p.h==1 then
             HomeWidgets.button(c,plan.word.." ›",pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("word-lookup",plan.word) end)
         else
@@ -59,7 +81,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"word","light","buddy"}) do
+for _,id in ipairs({"word","light","buddy","highlight","yearago"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}
