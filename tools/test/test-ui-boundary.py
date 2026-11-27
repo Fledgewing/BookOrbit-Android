@@ -118,7 +118,7 @@ class UIBoundaryTests(unittest.TestCase):
     def test_globals_aliases_callbacks_and_environment_access_fail(self):
         for value in ('Companion.state()', 'local c=Companion; c.send()', 'pcall(Store.readFile,path)',
                       'Cache.count(n)', 'SettingsSync.toWire(d,v)', 'Jni.startActivity{}', 'ReadingSync.run()',
-                      'Shared.set(key,value)', 'S[key]=value', 'saveSettings()', 'LibraryAdapter.read(request)',
+                      'Shared.set(key,value)', 'S[key]=value', 'saveSettings()', 'LibraryAdapter.read(request)', 'OrbiSmart.decide()', 'Schedule.new()', 'WifiPlan.decide()',
                       'env["Companion"].send()', '_G["Store"].readFile(path)', 'getfenv()[key]',
                       'rawget(_G,"Companion")', 'io.open(path)', 'os.rename(a,b)', 'loadfile(path)()'):
             self.assertTrue(violations('ko/home.lua', value), value)

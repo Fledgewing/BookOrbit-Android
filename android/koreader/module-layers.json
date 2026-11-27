@@ -324,8 +324,8 @@
   },
   "logic/caps.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/clicks.lua": {
     "layer": "internal",
@@ -334,8 +334,8 @@
   },
   "logic/copies.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/filter_sheet.lua": {
     "layer": "internal",
@@ -370,22 +370,22 @@
   "logic/native.lua": {
     "layer": "internal",
     "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "purpose": "Pure native compatibility inspection and neutral navigation identifiers."
   },
   "logic/orbismart.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/plan.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/prompts.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private setup/PIN and installed-version restart policy; UI receives a prepared setup notice."
   },
   "logic/reader_panel.lua": {
     "layer": "internal",
@@ -404,8 +404,8 @@
   },
   "logic/schedule.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/series.lua": {
     "layer": "internal",
@@ -454,8 +454,8 @@
   },
   "logic/update.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   },
   "logic/widget_registry.lua": {
     "layer": "internal",
@@ -464,7 +464,7 @@
   },
   "logic/wifi_plan.lua": {
     "layer": "internal",
-    "kind": "util",
-    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+    "kind": "service",
+    "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
   }
 }

@@ -66,7 +66,7 @@ function OrbitAndroid:statusText()
     else
         table.insert(parts, _("no companion"))
     end
-    table.insert(parts, _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Library.settings.mode())))
+    table.insert(parts, _("Wi-Fi: ") .. _(Library.settings.wifiLabel()))
     local last = Library.settings.read("last_sleep_sync")
     if last then
         table.insert(parts, string.format("%s %s %s", _("last sleep sync"), last.ok and fmt(last.seconds) or _("failed"),

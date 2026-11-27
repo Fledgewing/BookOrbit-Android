@@ -290,15 +290,10 @@ end
 -- The one-time "Setup needs you" box (SetupPrompt). where: given (the menu) or looked up.
 function OrbitAndroid:maybeSetupPrompt(why, where)
     pcall(self.maybeRecommendedLine, self, where)
-    if not Library.companion.has("setup") then return end
-    where = where or self:whereNow()
-    local prompt = Library.settings.status("setup_prompt")
-    local show, reason = SetupPrompt.decide(prompt, where, Library.settings.read("setup_prompt_shown"))
-    if prompt then log("setup box (" .. why .. "):", show and ("showing in " .. where) or ("not now, " .. reason)) end
-    if not show then return end
-    Library.settings.write("setup_prompt_shown",prompt.key)
+    local text=Library.setupPrompt(why,where or self:whereNow())
+    if not text then return end
     UIManager:show(ConfirmBox:new{ -- gate: SetupPrompt.decide never shows it in a book
-        text = _(SetupPrompt.text(prompt)),
+        text = _(text),
         ok_text = _("Fix now"),
         cancel_text = _("Later"),
         ok_callback = function()

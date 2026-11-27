@@ -178,3 +178,15 @@ function Library.actions() return (NativeRetirement.plan or {}).actions or {} en
 
 function Library.controller() return state.module end
 function Library.launch.startRotation() return rawget(_G,"ORBIT_START_ROTATION") end
+
+function Library.settings.wifiLabel() return WifiPlan.modeLabel(Shared.mode()) end
+function Library.setupPrompt(why,where)
+    if not Companion.has("setup") then return nil end
+    local prompt=Shared.setup_prompt
+    local show,reason=SetupPrompt.decide(prompt,where,S.setup_prompt_shown)
+    if prompt then log("setup box ("..why.."):",show and ("showing in "..where) or ("not now, "..reason)) end
+    if not show then return nil end
+    S.setup_prompt_shown=prompt.key
+    saveSettings()
+    return SetupPrompt.text(prompt)
+end

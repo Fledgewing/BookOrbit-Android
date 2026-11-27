@@ -7,7 +7,7 @@ return function(here,test,eq,ok)
             saves=0,log=function() end,now_s=function() return 42 end,
             state={},NativeRetirement={plan={actions={{id="fixture"}}}},
             SettingsUI={modeKeys={"wifi_mode","sync_on_sleep"}},
-            Shared={mode=function() return "jit" end},
+            Shared={mode=function() return "jit" end},WifiPlan={modeLabel=function(value) return value.." label" end},
             Companion={ACTION={SHOW_PIN="pin",SHOW_SETUP="setup",SHOW_STATUS="status",SETUP_LATER="later",REPORT="report"},
                 EXTRA_COMMAND="command",EXTRA_FROM="from",EXTRA_ROTATION="rotation"},
             Jni={},Recommendations={snapshot={items={}},line_pending=false}}, {__index=_G})
@@ -30,7 +30,7 @@ return function(here,test,eq,ok)
         local pair={1,2};L.settings.writePair("font",pair);eq(e.S.reading_pairs.font,pair);eq(e.saves,2)
         L.settings.set("wifi_mode","jit");eq(e.S.settings_at.wifi_mode,42);eq(pushes,1)
         L.settings.onChange("wifi_mode","menu");eq(L.settings.refresh("menu"),true)
-        eq(L.settings.mode(),"jit");eq(L.settings.setupNeededText(),"setup needed");eq(L.settings.status("pin_locked"),true)
+        eq(L.settings.mode(),"jit");eq(L.settings.wifiLabel(),"jit label");eq(L.settings.setupNeededText(),"setup needed");eq(L.settings.status("pin_locked"),true)
         eq(L.settings.read().wifi_mode,"jit");eq(L.settings.read().settings_at,nil,"presentation gets no private timestamp map")
         local d={type="bool"};eq(L.settings.fromWire(d,L.settings.toWire(d,true)),true)
     end)
@@ -89,6 +89,15 @@ return function(here,test,eq,ok)
         eq(L.preferences.menuLine(),"new");e.S.recommended={unseen=3};L.preferences.seen()
         eq(e.S.recommended.unseen,0);eq(L.preferences.menuLine(),"seen");eq(e.saves,2)
         local fn=function() end;L.preferences.subscribe(fn);eq(e.Recommendations.onSnapshot,fn)
+    end)
+    test("UI interface: setup prompt policy persists once and stays silent in a book",function()
+        local e,L=world()
+        setfenv(assert(loadfile(root.."logic/prompts.lua")),e)()
+        e.Companion.has=function(cap) return cap=="setup" end
+        e.Shared.setup_prompt={key="fixture",rows={"Permission"}}
+        eq(L.setupPrompt("test","reader"),nil);eq(e.saves,0)
+        ok(L.setupPrompt("test","menu"):find("Permission",1,true));eq(e.saves,1)
+        eq(L.setupPrompt("test","menu"),nil);eq(e.saves,1)
     end)
     test("UI interface: resources load the same bundled data and fail when absent",function()
         local e,L=world();e.SOURCE_DIR=root:gsub('/$','');e.SettingsSync.decodeJson=dofile(here.."/json_mini.lua").decode
