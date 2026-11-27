@@ -3290,3 +3290,1377 @@ index 5e543d1b..14c78a1f 100644
 -
  }  // namespace BookOrbitCatalogListCache
 \ No newline at end of file
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogDownload.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogDownload.cpp
+deleted file mode 100644
+index baf5ed9d..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogDownload.cpp
++++ /dev/null
+@@ -1,336 +0,0 @@
+-#include "BookOrbitCatalogDownload.h"
+-
+-#include <Arduino.h>
+-#include <FilePublication.h>
+-#include <HalStorage.h>
+-#include <LibraryBuilder.h>
+-#include <Logging.h>
+-#include <Memory.h>
+-#include <ZipFile.h>
+-
+-#include <algorithm>
+-#include <cctype>
+-#include <utility>
+-
+-#include "AppVersion.h"
+-#include "BookOrbitCatalogListCache.h"
+-#include "BookOrbitCredentialStore.h"
+-#include "BookOrbitDownloadIndex.h"
+-#include "util/BookCacheUtils.h"
+-#include "util/BookOrbitDevicePath.h"
+-#include "util/BookUpdateMigration.h"
+-
+-namespace BookOrbitCatalogDownload {
+-namespace {
+-constexpr size_t BOOKORBIT_DOWNLOAD_BUFFER_SIZE = 2048;
+-constexpr char READ_FOLDER_PREFIX[] = "/Read";
+-constexpr int DOWNLOAD_PROGRESS_STEP_PERCENT = 5;
+-constexpr unsigned long DOWNLOAD_PROGRESS_MIN_UPDATE_MS = 1000;
+-constexpr unsigned long DOWNLOAD_PROGRESS_MAX_UPDATE_MS = 5000;
+-// Attempts in a row that may end without the download getting further before it fails.
+-constexpr uint8_t MAX_ATTEMPTS_WITHOUT_PROGRESS = 3;
+-// The pause before an attempt that follows one without progress, times the attempts in a
+-// row so far: a Wi-Fi drop of a few seconds is ridden out rather than failed in a burst.
+-constexpr unsigned long STALLED_RETRY_DELAY_MS = 1000;
+-// HttpDownloader's FilePublication staging kind: a download waits below
+-// /.crosspoint/xfer/<kind>/ until it is complete and checked.
+-constexpr char STAGED_DOWNLOAD_KIND[] = "http-download";
+-
+-// Counts the attempts that end without the download getting further than it ever got. The
+-// furthest point, not the previous attempt's: a server that drops the connection and then
+-// ignores the resume restarts every other attempt from zero, which must not count as progress
+-// for ever.
+-class ProgressBudget {
+- public:
+-  // resumedBytes: what an earlier download left for this one; only more counts as progress.
+-  explicit ProgressBudget(const size_t resumedBytes) : furthest_(resumedBytes) {}
+-  // keptBytes: what the staged file holds after a failed attempt. False once it should stop.
+-  bool again(const size_t keptBytes) {
+-    if (keptBytes > furthest_) {
+-      furthest_ = keptBytes;
+-      withoutProgress_ = 0;
+-    } else {
+-      ++withoutProgress_;
+-    }
+-    return withoutProgress_ < MAX_ATTEMPTS_WITHOUT_PROGRESS;
+-  }
+-  uint8_t withoutProgress() const { return withoutProgress_; }
+-
+- private:
+-  size_t furthest_ = 0;
+-  uint8_t withoutProgress_ = 0;
+-};
+-
+-// What a failed attempt left in the staged file for the next one to resume (0 when none).
+-size_t stagedBytes(const std::string& stagedPath) {
+-  FsFile staged = Storage.open(stagedPath.c_str());  // quiet when the attempt removed it
+-  const size_t size = staged && !staged.isDirectory() ? staged.fileSize() : 0;
+-  staged.close();
+-  return size;
+-}
+-
+-// The SD filename (leading slash, no folder) this firmware falls back to when the
+-// server does not say where the file belongs.
+-std::string catalogBookFilename(const std::string& title, const std::string& author) {
+-  return BookOrbitDevicePath::catalogFilename("", title, author);
+-}
+-
+-// The filename heuristic behind the download index (see findOnDevice()).
+-bool findByFilename(const std::string& title, const std::string& author, std::string& outPath) {
+-  const std::string filename = catalogBookFilename(title, author);
+-  const std::string& folder = BOOKORBIT_STORE.getDownloadFolder();
+-  // Candidates are built aside: outPath is a listed row's own path, and most catalog
+-  // books are not on the device, so a miss must not leave a path buffer in the row.
+-  const auto found = [&outPath](std::string candidate) {
+-    if (!Storage.exists(candidate.c_str())) return false;
+-    outPath = std::move(candidate);
+-    return true;
+-  };
+-  if (!folder.empty() && found(folder + filename)) return true;
+-  if (found(filename) || found(READ_FOLDER_PREFIX + filename)) return true;
+-  std::string().swap(outPath);  // re-checked after a delete: release the old path too
+-  return false;
+-}
+-}  // namespace
+-
+-bool findOnDevice(const int64_t bookId, const std::string& title, const std::string& author, std::string& outPath) {
+-  return BookOrbitDownloadIndex::lookup(bookId, outPath) || findByFilename(title, author, outPath);
+-}
+-
+-void findOnDevice(const std::vector<BookOrbitCatalogBook>& books, std::string* outPaths) {
+-  const size_t count = books.size();
+-  if (count == 0 || outPaths == nullptr) return;
+-  // A page of ids: runtime-sized, so neither stack nor static storage fits.
+-  auto ids = makeUniqueNoThrow<int64_t[]>(count);
+-  if (ids) {
+-    for (size_t i = 0; i < count; i++) ids[i] = books[i].id;
+-    BookOrbitDownloadIndex::lookupAll(
+-        ids.get(), count,
+-        [](const size_t i, const std::string& path, void* context) { static_cast<std::string*>(context)[i] = path; },
+-        outPaths);
+-  } else {
+-    LOG_ERR("BookOrbit", "Out of memory marking %u books on the device", static_cast<unsigned>(count));
+-  }
+-  for (size_t i = 0; i < count; i++) {
+-    if (outPaths[i].empty()) findByFilename(books[i].title, books[i].author, outPaths[i]);
+-  }
+-}
+-
+-bool findEpubFile(const BookOrbitBookDetail& detail, BookOrbitCatalogFile& outFile) {
+-  for (const auto& file : detail.files) {
+-    std::string format = file.format;
+-    std::transform(format.begin(), format.end(), format.begin(), [](unsigned char c) { return std::tolower(c); });
+-    if (format == "epub") {
+-      outFile = file;
+-      return true;
+-    }
+-  }
+-  return false;
+-}
+-
+-std::string destination(const BookOrbitBookDetail& detail, const BookOrbitCatalogFile& file) {
+-  return BOOKORBIT_STORE.getDownloadFolder() +
+-         BookOrbitDevicePath::catalogFilename(file.devicePath, detail.title, detail.author);
+-}
+-
+-bool isAlreadyAt(const std::string& path, const BookOrbitCatalogFile& file) {
+-  if (file.sizeBytes == 0) return false;
+-  FsFile existing = Storage.open(path.c_str());  // quiet when there is none, the usual case
+-  const bool same = existing && !existing.isDirectory() && existing.fileSize64() == file.sizeBytes;
+-  existing.close();
+-  return same;
+-}
+-
+-bool makeFolders(const std::string& path) {
+-  // mkdir's pFlag creates the missing parents in one call, so this covers both at once.
+-  const size_t lastSlash = path.find_last_of('/');
+-  if (lastSlash == 0 || lastSlash == std::string::npos) return true;
+-  const std::string folder = path.substr(0, lastSlash);
+-  if (Storage.exists(folder.c_str()) || Storage.mkdir(folder.c_str())) return true;
+-  LOG_ERR("BookOrbit", "Could not create download folder %s", folder.c_str());
+-  return false;
+-}
+-
+-HttpDownloader::DownloadError transfer(const int64_t bookId, const int64_t fileId, const std::string& variant,
+-                                       const std::string& finalPath, Reporter& reporter) {
+-  // The heap the TLS session starts from: what tells a fragmented session from a
+-  // clean download boot in a field log. The version says which build wrote that log.
+-  LOG_INF("BookOrbit", "Downloading file %lld -> %s (free=%u maxAlloc=%u, firmware %s)", static_cast<long long>(fileId),
+-          finalPath.c_str(), ESP.getFreeHeap(), ESP.getMaxAllocHeap(), AppVersion::version());
+-
+-  bool cancelRequested = false;
+-  auto pollCancel = [&reporter, &cancelRequested] {
+-    if (cancelRequested) return true;
+-    cancelRequested = reporter.cancelRequested();
+-    return cancelRequested;
+-  };
+-
+-  // A replacement a reset interrupted: this download would drop its old copy
+-  // (DownloadFileSwap::recover, keepReplaced below), so the state that copy holds moves first.
+-  if (BookUpdateMigration::pending(finalPath)) BookUpdateMigration::begin(finalPath, /*renderCacheIsOld=*/false);
+-
+-  HttpDownloader::DownloadOptions downloadOptions;
+-  downloadOptions.shouldCancel = pollCancel;
+-  downloadOptions.bufferSize = BOOKORBIT_DOWNLOAD_BUFFER_SIZE;
+-  // TLS runs with a few KB of headroom on the C3 and reads can drop mid-transfer;
+-  // keep the partial file and resume instead of restarting a multi-MB download.
+-  downloadOptions.preservePartial = true;
+-  // One request per attempt: the loop below owns the retries, so every attempt counts toward
+-  // its rule, whether the connection dropped or the server answered with an error.
+-  downloadOptions.maxAttempts = 1;
+-  // The validator (the server's ETag) the staged bytes came under. The next attempt resumes
+-  // them with Range and If-Range, so a book updated on the server in between starts over
+-  // instead of splicing two versions. Empty: nothing to resume, the next attempt starts over.
+-  std::string validator;
+-  downloadOptions.resumeValidator = &validator;
+-  // A book spans many TLS records: once the request is out, the SDK grows the
+-  // connection's input buffer to a full record while the heap still has the block
+-  // (skipped when the server agreed to small records, issue #96).
+-  downloadOptions.reserveFullRecord = true;
+-  // CrossInk's download safeguards, as its OPDS browser uses them: stage the file in the
+-  // private transfer directory, refuse a book the card cannot hold before writing any of it, and
+-  // only put the file in place once it opens as an EPUB. A body cut short without a
+-  // Content-Length, or an error page served as the file, used to land as the book.
+-  downloadOptions.stageAsPart = true;
+-  // A re-download's highlights, bookmarks and sync state are keyed by the old copy's content;
+-  // it stays beside the new one until they have moved (see the OK branch below).
+-  downloadOptions.keepReplaced = true;
+-  downloadOptions.checkFreeSpace = true;
+-  downloadOptions.validate = [](const std::string& path) {
+-    ZipFile zip(path);
+-    size_t size = 0;
+-    return zip.getInflatedFileSize("META-INF/container.xml", &size) && size > 0;
+-  };
+-
+-  std::string stagedPath;
+-  if (!FilePublication::stagePath(finalPath, STAGED_DOWNLOAD_KIND, stagedPath)) stagedPath.clear();
+-  // Cleared once the server's delivery route refuses the file (400 when busy, 409 when it
+-  // changed on disk before a rescan): the plain route still serves it, only without resuming.
+-  bool useVariant = !variant.empty();
+-  const std::string noVariant;
+-  size_t keptBytes = 0;
+-
+-  // The bytes an earlier download left (BookOrbitKeptDownload, written before the first byte
+-  // of each): resumed when they are this book's, in the version it asks for, and dropped when
+-  // they are another book's, so the card keeps one at most. Its validator, once set, is the
+-  // version of every staged byte: a resume only appends bytes the server confirmed under it,
+-  // and an attempt that starts over clears it first.
+-  BookOrbitKeptDownload onCard;
+-  const bool hasRecord = BookOrbitCatalogListCache::loadKeptDownload(onCard);
+-  if (hasRecord && onCard.path != finalPath) {
+-    std::string otherStaged;
+-    if (FilePublication::stagePath(onCard.path, STAGED_DOWNLOAD_KIND, otherStaged)) Storage.remove(otherStaged.c_str());
+-    LOG_INF("BookOrbit", "Dropped the bytes an unfinished download of %s kept", onCard.path.c_str());
+-  } else if (hasRecord && onCard.fileId == fileId && onCard.variant == variant && !onCard.validator.empty() &&
+-             !stagedPath.empty()) {
+-    keptBytes = stagedBytes(stagedPath);
+-    if (keptBytes > 0) {
+-      validator = onCard.validator;
+-      LOG_INF("BookOrbit", "Resuming the %zu bytes an earlier download of this book kept", keptBytes);
+-    }
+-  }
+-  ProgressBudget budget(keptBytes);
+-  // What the card says about the staged bytes, rewritten only when that changes.
+-  bool recorded = hasRecord && keptBytes > 0;
+-  std::string recordedValidator = recorded ? validator : std::string();
+-  const auto recordStaged = [&](const std::string& forValidator) {
+-    if (recorded && recordedValidator == forValidator) return;
+-    recorded = BookOrbitCatalogListCache::saveKeptDownload(
+-        {fileId, finalPath, useVariant ? variant : noVariant, forValidator});
+-    recordedValidator = forValidator;
+-  };
+-
+-  reporter.releaseForTransfer();
+-
+-  HttpDownloader::DownloadError result = HttpDownloader::HTTP_ERROR;
+-  bool gaveUp = false;  // ended by the attempts in a row without progress
+-  int lastRenderedPercent = -1;
+-  unsigned long lastProgressUpdateMs = 0;
+-  unsigned long now = 0;
+-  int percent = 0;
+-  for (unsigned attempt = 1;; attempt++) {
+-    // Honor a Back press between attempts too: a failing download otherwise runs
+-    // all its retries (TLS handshake included) with the cancel request ignored.
+-    if (pollCancel()) {
+-      result = HttpDownloader::ABORTED;
+-      break;
+-    }
+-    // Without a validator nothing says which version staged bytes belong to: the attempt
+-    // drops them and starts over, and the card stops vouching for any version first.
+-    downloadOptions.resumePartial = keptBytes > 0 && !validator.empty();
+-    if (!downloadOptions.resumePartial) recordStaged(std::string());
+-    result = BookOrbitCatalogClient::downloadFile(
+-        fileId, useVariant ? variant : noVariant, finalPath,
+-        [&reporter, &lastRenderedPercent, &lastProgressUpdateMs, &percent, &now, &validator, &recordStaged](
+-            const size_t downloaded, const size_t total) {
+-          // The first bytes of a new answer: once the card names their version, a reset or a
+-          // flat battery from here on leaves them for the next download of this book.
+-          if (!validator.empty()) recordStaged(validator);
+-          percent = total > 0 ? static_cast<int>(static_cast<uint64_t>(downloaded) * 100 / total) : 0;
+-          now = millis();
+-          // Throttle e-ink refreshes to meaningful progress steps: partial
+-          // refreshes still wear the panel, and a raw byte-count callback fires
+-          // far more often than the screen needs to redraw.
+-          const bool redraw = percent >= 100 || lastRenderedPercent < 0 ||
+-                              (percent >= lastRenderedPercent + DOWNLOAD_PROGRESS_STEP_PERCENT &&
+-                               now > DOWNLOAD_PROGRESS_MIN_UPDATE_MS) ||
+-                              now - lastProgressUpdateMs > DOWNLOAD_PROGRESS_MAX_UPDATE_MS;
+-          if (redraw) {
+-            lastRenderedPercent = percent;
+-            lastProgressUpdateMs = now;
+-          }
+-          reporter.reportProgress(downloaded, total, redraw);
+-        },
+-        &cancelRequested, downloadOptions);
+-    // A full card will not have more room on the next attempt.
+-    if (result == HttpDownloader::OK || result == HttpDownloader::ABORTED ||
+-        result == HttpDownloader::INSUFFICIENT_SPACE) {
+-      break;
+-    }
+-    const int status = HttpDownloader::lastHttpStatus;
+-    keptBytes = stagedPath.empty() ? 0 : stagedBytes(stagedPath);
+-    const bool retry = budget.again(keptBytes);
+-    LOG_ERR("BookOrbit", "Download attempt %u failed (err=%d, http=%d, %zu bytes kept, %u in a row without progress)%s",
+-            attempt, static_cast<int>(result), status, keptBytes, static_cast<unsigned>(budget.withoutProgress()),
+-            retry ? ", retrying" : "");
+-    if (keptBytes > 0 && !validator.empty()) recordStaged(validator);
+-    if (!retry) {
+-      gaveUp = true;
+-      break;
+-    }
+-    // The server answered the resume itself, yet the staged bytes got no further (416, or a
+-    // 206 for another range or version): they cannot be resumed, the next attempt starts over.
+-    if ((status == 206 || status == 416) && budget.withoutProgress() > 0) validator.clear();
+-    if (useVariant && (status == 400 || status == 409)) {
+-      useVariant = false;
+-      validator.clear();
+-    }
+-    const unsigned long pauseMs = STALLED_RETRY_DELAY_MS * budget.withoutProgress();
+-    for (const unsigned long start = millis(); millis() - start < pauseMs && !pollCancel();) delay(20);
+-  }
+-
+-  // Giving up keeps what was received under a known version for the next download of this
+-  // book. Otherwise the staged file goes (a cancel, or a full card, included), and its record.
+-  const bool keep = gaveUp && keptBytes > 0 && !validator.empty() && recorded && recordedValidator == validator;
+-  if (keep) {
+-    LOG_INF("BookOrbit", "Keeping the %zu bytes received for a later download of this book", keptBytes);
+-  } else {
+-    if (result != HttpDownloader::OK && !stagedPath.empty()) Storage.remove(stagedPath.c_str());
+-    BookOrbitCatalogListCache::discardKeptDownload();
+-  }
+-
+-  if (result == HttpDownloader::OK) {
+-    // A copy it replaced hands its state to the new one; that also clears the render cache.
+-    if (BookUpdateMigration::pending(finalPath)) {
+-      BookUpdateMigration::begin(finalPath, /*renderCacheIsOld=*/true);
+-    } else {
+-      clearBookCache(finalPath);
+-    }
+-    BookOrbitDownloadIndex::record(bookId, finalPath);
+-    // A new book, or new contents under a known path: the Library's index is stale.
+-    library::invalidateLibraryIndex();
+-  }
+-  return result;
+-}
+-
+-}  // namespace BookOrbitCatalogDownload
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogDownload.h b/src/activities/browser/bookorbit/BookOrbitCatalogDownload.h
+deleted file mode 100644
+index 03bae636..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogDownload.h
++++ /dev/null
+@@ -1,92 +0,0 @@
+-#pragma once
+-
+-#include <cstddef>
+-#include <cstdint>
+-#include <string>
+-#include <vector>
+-
+-#include "network/BookOrbitCatalogClient.h"
+-#include "network/HttpDownloader.h"
+-
+-/**
+- * A BookOrbit catalog book's file on the SD card: finding a copy already there, where a
+- * download goes, and the transfer itself.
+- */
+-namespace BookOrbitCatalogDownload {
+-
+-/**
+- * What the transfer tells the download screen, and the input it checks. Implemented by
+- * BookOrbitCatalogBrowserActivity, which owns the screen state and its RenderLock.
+- */
+-class Reporter {
+- public:
+-  // Called once the transfer is set up, right before its first request: whatever the
+-  // caller can free goes now, so its block joins the heap the TLS session starts from.
+-  virtual void releaseForTransfer() = 0;
+-  // Every chunk received. redraw: the screen should repaint, throttled to meaningful
+-  // steps (partial refreshes still wear the panel).
+-  virtual void reportProgress(size_t downloaded, size_t total, bool redraw) = 0;
+-  // Polls the input: true when the user asked to stop. Asked until it says so once.
+-  virtual bool cancelRequested() = 0;
+-
+- protected:
+-  ~Reporter() = default;
+-};
+-
+-/**
+- * True when the catalog book already exists locally, with its path in outPath. The
+- * download index knows where past downloads landed, whatever the folder setting or the
+- * server's naming template was at the time; the fallback filename heuristic covers
+- * pre-index downloads in the current download location, the SD root (the old fixed
+- * location) and the /Read folder the finished-book move feature uses. It cannot cover the
+- * server's naming template: only the book detail carries the resolved path, and a listing
+- * would need one request per row to know it. Books downloaded under a template but missing
+- * from the index (another device, or an index dropped when the server URL changed) are
+- * therefore not detected — as with books moved or renamed by hand, this stays a
+- * best-effort convenience marker.
+- */
+-bool findOnDevice(int64_t bookId, const std::string& title, const std::string& author, std::string& outPath);
+-
+-// findOnDevice() for a page of books, with one pass over the download index for all of them:
+-// outPaths[i] is where books[i] is, or empty. outPaths holds books.size() strings.
+-void findOnDevice(const std::vector<BookOrbitCatalogBook>& books, std::string* outPaths);
+-
+-// The book's EPUB file among its formats; false when it has none.
+-bool findEpubFile(const BookOrbitBookDetail& detail, BookOrbitCatalogFile& outFile);
+-
+-/**
+- * The full SD path a catalog book downloads to: the configured download folder ("" = SD
+- * root), then where the file belongs under it. BookOrbit resolves the account's KOReader
+- * file naming template (or this device's override) and returns it as the file's
+- * devicePath, so a book lands where the same account's KOReader devices put it — series
+- * folders and all. Servers that do not send one keep the title-author name this fork
+- * always used.
+- */
+-std::string destination(const BookOrbitBookDetail& detail, const BookOrbitCatalogFile& file);
+-
+-/**
+- * A book another app sent or a copy over USB put at the very path the server's naming
+- * template gives it is not in the download index, so its row was not marked. The details
+- * name that path and the library file's size: a file there of that size is this book.
+- */
+-bool isAlreadyAt(const std::string& path, const BookOrbitCatalogFile& file);
+-
+-// Creates the download folder and, when the server's naming template nests the book
+-// ("Sprawl/<book>.epub"), every folder it asks for. False, logged, when the card refuses.
+-bool makeFolders(const std::string& path);
+-
+-/**
+- * Downloads the file to finalPath, staged in the private transfer directory and only put in
+- * place once it opens as an EPUB. variant is the file's downloadVariant: with it, an attempt
+- * the connection drops resumes from the staged bytes, and the download only fails after three
+- * attempts in a row that end with no more of the file than it ever had. A copy it replaces
+- * stays beside the new one until BookUpdateMigration has moved the state keyed by its content.
+- * On OK, that hand-over is done (or the book's render cache cleared), and the download index
+- * and the Library know of the book. Giving up keeps the bytes received, with their version,
+- * for the next download of this book to resume (/.crosspoint/bookorbit_partial.json); one
+- * book's at most, as starting another drops them. A cancel or a full card removes them.
+- */
+-HttpDownloader::DownloadError transfer(int64_t bookId, int64_t fileId, const std::string& variant,
+-                                       const std::string& finalPath, Reporter& reporter);
+-
+-}  // namespace BookOrbitCatalogDownload
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.cpp
+deleted file mode 100644
+index 9a99b59c..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.cpp
++++ /dev/null
+@@ -1,126 +0,0 @@
+-#include "BookOrbitCatalogListOptions.h"
+-
+-#include <I18n.h>
+-#include <Logging.h>
+-
+-#include <iterator>
+-#include <utility>
+-
+-#include "CrossPointSettings.h"
+-#include "components/OptionPopup.h"
+-
+-namespace BookOrbitCatalogListOptions {
+-namespace {
+-
+-// The Library's sort methods that BookOrbit can apply, in the Library's order. The server
+-// sorts authors by last name and has no first-name or genre order.
+-struct SortChoice {
+-  const char* id;  // BookOrbit's sort id
+-  StrId label;
+-  bool descendingFirst;  // the server's own direction for it: newest first for dates
+-};
+-constexpr SortChoice SORT_CHOICES[] = {
+-    {"recently_added", StrId::STR_LIBRARY_DATE_ADDED, true},
+-    {"title", StrId::STR_TITLE, false},
+-    {"author", StrId::STR_LIBRARY_AUTHOR_LAST_NAME, false},
+-    {"recently_read", StrId::STR_BOOKORBIT_SORT_RECENTLY_READ, true},
+-    {"series", StrId::STR_LIBRARY_SERIES, false},
+-};
+-constexpr int SORT_CHOICE_COUNT = static_cast<int>(std::size(SORT_CHOICES));
+-// The sort picker's rows: the direction and the list view above a divider, then the methods.
+-constexpr int SORT_ROW_DIRECTION = 0;
+-constexpr int SORT_ROW_LIST_VIEW = 1;
+-constexpr int SORT_ROW_FIRST_METHOD = 2;
+-// What the server sorts by when a query names no sort (an author's books).
+-constexpr int DEFAULT_SORT_CHOICE = 0;
+-
+-struct ReadStatusChoice {
+-  const char* id;  // BookOrbit's readStatus filter; empty for every book
+-  StrId label;
+-};
+-constexpr ReadStatusChoice READ_STATUS_CHOICES[] = {
+-    {"", StrId::STR_BOOKORBIT_STATUS_ALL},
+-    {"unread", StrId::STR_BOOKORBIT_STATUS_UNREAD},
+-    {"reading", StrId::STR_BOOKORBIT_STATUS_READING},
+-    {"finished", StrId::STR_BOOKORBIT_STATUS_FINISHED},
+-};
+-constexpr int READ_STATUS_CHOICE_COUNT = static_cast<int>(std::size(READ_STATUS_CHOICES));
+-
+-int sortChoiceIndex(const std::string& sort) {
+-  if (sort.empty()) return DEFAULT_SORT_CHOICE;
+-  for (int i = 0; i < SORT_CHOICE_COUNT; i++) {
+-    if (sort == SORT_CHOICES[i].id) return i;
+-  }
+-  return DEFAULT_SORT_CHOICE;
+-}
+-
+-int readStatusChoiceIndex(const std::string& readStatus) {
+-  for (int i = 0; i < READ_STATUS_CHOICE_COUNT; i++) {
+-    if (readStatus == READ_STATUS_CHOICES[i].id) return i;
+-  }
+-  return 0;
+-}
+-}  // namespace
+-
+-bool sortsDescending(const BookOrbitBookQuery& query) {
+-  if (!query.order.empty()) return query.order == "desc";
+-  return SORT_CHOICES[sortChoiceIndex(query.sort)].descendingFirst;
+-}
+-
+-const char* readStatusLabel(const std::string& readStatus) {
+-  return I18N.get(READ_STATUS_CHOICES[readStatusChoiceIndex(readStatus)].label);
+-}
+-
+-void show(OptionPopup& popup, const Picker picker, const BookOrbitBookQuery& query, std::function<void(int)> onPick) {
+-  if (picker == Picker::Sort) {
+-    // The Library's button layout: the direction first, then the methods. The list view
+-    // rides along, so the sections can be turned off without leaving the catalog.
+-    const std::string listView = std::string(tr(STR_LIBRARY_LIST_VIEW)) + ": " +
+-                                 (SETTINGS.libraryListExpanded ? tr(STR_LIBRARY_EXPANDED) : tr(STR_COMPACT));
+-    const char* labels[SORT_ROW_FIRST_METHOD + SORT_CHOICE_COUNT];
+-    labels[SORT_ROW_DIRECTION] = sortsDescending(query) ? "Z-A" : "A-Z";
+-    labels[SORT_ROW_LIST_VIEW] = listView.c_str();
+-    for (int i = 0; i < SORT_CHOICE_COUNT; i++) labels[SORT_ROW_FIRST_METHOD + i] = I18N.get(SORT_CHOICES[i].label);
+-    popup.show(tr(STR_LIBRARY_SORT_BY), labels, SORT_ROW_FIRST_METHOD + SORT_CHOICE_COUNT,
+-               SORT_ROW_FIRST_METHOD + sortChoiceIndex(query.sort), std::move(onPick));
+-    popup.setDividerAfterOption(SORT_ROW_FIRST_METHOD - 1);
+-  } else {
+-    StrId labels[READ_STATUS_CHOICE_COUNT];
+-    for (int i = 0; i < READ_STATUS_CHOICE_COUNT; i++) labels[i] = READ_STATUS_CHOICES[i].label;
+-    popup.show(StrId::STR_BOOKORBIT_READ_STATUS, labels, READ_STATUS_CHOICE_COUNT,
+-               readStatusChoiceIndex(query.readStatus), std::move(onPick));
+-  }
+-  popup.setDismissOnOutsideTouchDown(true);
+-}
+-
+-Change apply(const Picker picker, const int choice, const BookOrbitBookQuery& current, BookOrbitBookQuery& next) {
+-  next = current;
+-  if (picker == Picker::Filter) {
+-    if (choice >= READ_STATUS_CHOICE_COUNT) return Change::None;
+-    next.readStatus = READ_STATUS_CHOICES[choice].id;
+-  } else if (choice == SORT_ROW_LIST_VIEW) {
+-    return Change::ListView;
+-  } else if (choice == SORT_ROW_DIRECTION) {
+-    // The direction row. Spelled out only where it departs from the sort's own, so
+-    // the query, and the cache key built from it, stay the same for the same order.
+-    const bool descending = !sortsDescending(next);
+-    next.order = descending == SORT_CHOICES[sortChoiceIndex(next.sort)].descendingFirst ? ""
+-                 : descending                                                           ? "desc"
+-                                                                                        : "asc";
+-  } else {
+-    const int method = choice - SORT_ROW_FIRST_METHOD;
+-    // The current method keeps its direction; another starts in its own, as in the Library.
+-    if (method >= SORT_CHOICE_COUNT || method == sortChoiceIndex(next.sort)) return Change::None;
+-    next.sort = SORT_CHOICES[method].id;
+-    next.order.clear();
+-  }
+-  if (next.sort == current.sort && next.order == current.order && next.readStatus == current.readStatus) {
+-    return Change::None;
+-  }
+-  LOG_INF("BookOrbit", "Listing now sorted by %s%s%s, read status '%s'",
+-          next.sort.empty() ? SORT_CHOICES[DEFAULT_SORT_CHOICE].id : next.sort.c_str(), next.order.empty() ? "" : " ",
+-          next.order.c_str(), next.readStatus.c_str());
+-  return Change::Listing;
+-}
+-
+-}  // namespace BookOrbitCatalogListOptions
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.h b/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.h
+deleted file mode 100644
+index 7c6528e5..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogListOptions.h
++++ /dev/null
+@@ -1,41 +0,0 @@
+-#pragma once
+-
+-#include <cstdint>
+-#include <functional>
+-#include <string>
+-
+-#include "network/BookOrbitCatalogClient.h"
+-
+-class OptionPopup;
+-
+-/**
+- * The two pickers of a BookOrbit server book list: the Library's sort methods that
+- * BookOrbit can apply, in the Library's order, and BookOrbit's read-status filter. The
+- * server does both, so paging stays exact. Sort and Left on button-only devices, Filter
+- * and Right; a header control each on touch devices.
+- */
+-namespace BookOrbitCatalogListOptions {
+-
+-enum class Picker : uint8_t { Sort, Filter };
+-
+-// What a pick asks of the listing.
+-enum class Change : uint8_t {
+-  None,      // nothing: dismissed, or the order or filter already in place
+-  ListView,  // the sort picker's list view row: the Library's sections on or off
+-  Listing,   // another order or filter: the listing loads again for the new query
+-};
+-
+-// The order the query lists in: its own, or the sort's natural direction.
+-bool sortsDescending(const BookOrbitBookQuery& query);
+-
+-// The label of a read-status filter, for the header.
+-const char* readStatusLabel(const std::string& readStatus);
+-
+-// Fills the picker for the listing's query. onPick receives the row picked; applying it
+-// is left to the caller, once the picker has closed.
+-void show(OptionPopup& popup, Picker picker, const BookOrbitBookQuery& query, std::function<void(int)> onPick);
+-
+-// The query the row picked asks for, in `next`, when the pick is Change::Listing.
+-Change apply(Picker picker, int choice, const BookOrbitBookQuery& current, BookOrbitBookQuery& next);
+-
+-}  // namespace BookOrbitCatalogListOptions
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogRows.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogRows.cpp
+deleted file mode 100644
+index 31c7929c..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogRows.cpp
++++ /dev/null
+@@ -1,185 +0,0 @@
+-#include "BookOrbitCatalogRows.h"
+-
+-#include <Epub.h>
+-#include <FsHelpers.h>
+-#include <HalStorage.h>
+-#include <I18n.h>
+-#include <Logging.h>
+-
+-#include <algorithm>
+-#include <utility>
+-
+-#include "RecentBooksStore.h"
+-#include "activities/reader/BookReadingStats.h"
+-#include "components/HeaderDate.h"
+-
+-namespace BookOrbitCatalogRows {
+-namespace {
+-using Entry = BookOrbitCatalogEntry;
+-
+-// Appends a row's " (count)" badge, remembering where the title itself ends.
+-void addCountBadge(Entry& entry, const int count) {
+-  entry.badgeAt = static_cast<uint16_t>(entry.title.size());
+-  entry.title += " (" + std::to_string(count) + ")";
+-}
+-
+-// The root section's entry count, the way BookOrbit's own plugin badges its Browse tiles:
+-// -1 for a section it has none for.
+-int sectionCount(const BookOrbitCatalogCounts& counts, const std::string& id) {
+-  if (id == "all-books" || id == "recent") return counts.totalBooks;
+-  if (id == "continue-reading") return counts.inProgress;
+-  if (id == "libraries") return counts.libraries;
+-  if (id == "authors") return counts.authors;
+-  if (id == "series") return counts.series;
+-  if (id == "collections") return counts.collections;
+-  if (id == "smart-scopes") return counts.smartScopes;
+-  return -1;
+-}
+-
+-std::string bookTitleFromPath(const std::string& path) {
+-  const size_t slash = path.find_last_of('/');
+-  const size_t start = slash == std::string::npos ? 0 : slash + 1;
+-  const size_t end = path.size() > start + 5 ? path.size() - 5 : path.size();  // strip ".epub"
+-  return path.substr(start, end - start);
+-}
+-}  // namespace
+-
+-bool isFacetSection(const std::string& sectionId) {
+-  return sectionId == "authors" || sectionId == "series" || sectionId == "collections" || sectionId == "libraries" ||
+-         sectionId == "smart-scopes";
+-}
+-
+-std::string titleWithoutBadge(const Entry& entry) {
+-  return entry.badgeAt > 0 ? entry.title.substr(0, entry.badgeAt) : entry.title;
+-}
+-
+-void appendRoot(std::vector<Entry>& rows, const std::vector<BookOrbitCatalogSection>& sections,
+-                const BookOrbitCatalogCounts& counts, const int onDeviceCount, const size_t inProgressCount) {
+-  for (const auto& section : sections) {
+-    Entry entry;
+-    entry.type = isFacetSection(section.id) ? Entry::Type::FACET_SECTION : Entry::Type::SECTION;
+-    entry.title = section.title;
+-    const int count = sectionCount(counts, section.id);
+-    if (count >= 0) addCountBadge(entry, count);
+-    entry.sectionId = section.id;
+-    rows.push_back(std::move(entry));
+-  }
+-  // The want-to-read shelf BookOrbit's own plugin shows, which the server does not list
+-  // among its sections. After them, so the rows above keep their places.
+-  if (counts.wantToRead >= 0) {
+-    Entry wantToRead;
+-    wantToRead.type = Entry::Type::SECTION;
+-    wantToRead.title = tr(STR_BOOKORBIT_WANT_TO_READ);
+-    addCountBadge(wantToRead, counts.wantToRead);
+-    wantToRead.sectionId = BookOrbitCatalogClient::WANT_TO_READ_SHELF;
+-    rows.push_back(std::move(wantToRead));
+-  }
+-  Entry onDevice;
+-  onDevice.type = Entry::Type::LOCAL_SECTION;
+-  onDevice.title = tr(STR_BOOKORBIT_ON_DEVICE);
+-  addCountBadge(onDevice, onDeviceCount);
+-  onDevice.sectionId = "on-device";
+-  rows.push_back(std::move(onDevice));
+-  Entry inProgress;
+-  inProgress.type = Entry::Type::LOCAL_SECTION;
+-  inProgress.title = tr(STR_BOOKORBIT_IN_PROGRESS);
+-  addCountBadge(inProgress, static_cast<int>(inProgressCount));
+-  inProgress.sectionId = "in-progress";
+-  rows.push_back(std::move(inProgress));
+-  Entry search;
+-  search.type = Entry::Type::SEARCH;
+-  search.title = tr(STR_SEARCH);
+-  rows.push_back(std::move(search));
+-}
+-
+-size_t collectInProgress(std::vector<Entry>* sink) {
+-  size_t count = 0;
+-  for (const auto& book : RECENT_BOOKS.getBooks()) {
+-    if (!FsHelpers::hasEpubExtension(book.path) || !Storage.exists(book.path.c_str())) continue;
+-    const BookReadingStats stats = BookReadingStats::load(Epub::cachePathForFilePath(book.path, "/.crosspoint"));
+-    if (stats.isCompleted) continue;
+-    count++;
+-    if (!sink) continue;
+-    Entry entry;
+-    entry.type = Entry::Type::LOCAL_BOOK;
+-    entry.title = book.title.empty() ? book.path : book.title;
+-    entry.subtitle = book.author;
+-    entry.path = book.path;
+-    sink->push_back(std::move(entry));
+-  }
+-  LOG_DBG("BookOrbit", "Local scan: kind=in-progress count=%u", static_cast<unsigned>(count));
+-  return count;
+-}
+-
+-void sortByTitle(std::vector<Entry>& rows) {
+-  std::sort(rows.begin(), rows.end(), [](const Entry& a, const Entry& b) {
+-    if (FsHelpers::naturalLess(a.title, b.title)) return true;
+-    if (FsHelpers::naturalLess(b.title, a.title)) return false;
+-    return FsHelpers::naturalLess(a.subtitle, b.subtitle);
+-  });
+-}
+-
+-void setFacet(Entry& entry, BookOrbitFacetEntry&& facet) {
+-  entry.type = Entry::Type::FACET;
+-  entry.title = std::move(facet.title);
+-  if (facet.count > 0) addCountBadge(entry, facet.count);
+-  entry.sectionId = std::move(facet.id);
+-  entry.seriesId = std::move(facet.seriesId);
+-}
+-
+-void setBook(Entry& entry, BookOrbitCatalogBook&& book, std::string&& devicePath) {
+-  entry.type = Entry::Type::BOOK;
+-  entry.bookId = book.id;
+-  entry.onDevice = !devicePath.empty();
+-  if (entry.onDevice) {
+-    entry.path = std::move(devicePath);
+-  } else {
+-    std::string().swap(entry.path);  // a reused row: release its old path too
+-  }
+-  entry.title = std::move(book.title);
+-  entry.subtitle = std::move(book.author);
+-  // The list section the sort files the book under. The day is formatted once, here:
+-  // short enough to fit the string without a heap block.
+-  if (!book.series.empty()) {
+-    entry.sectionId = std::move(book.series);
+-  } else if (book.addedAt != 0) {
+-    char day[24];
+-    if (formatLocalDateText(day, sizeof(day), book.addedAt)) entry.sectionId = day;
+-  }
+-}
+-
+-void setLocalBook(Entry& entry, std::string&& path) {
+-  entry.type = Entry::Type::LOCAL_BOOK;
+-  entry.title = bookTitleFromPath(path);
+-  entry.path = std::move(path);
+-}
+-
+-BookOrbitBookQuery facetBookQuery(const std::string& facetSectionId, const Entry& facet) {
+-  // Mirror BookOrbit's own plugin (paramsForEntry): author filters by the
+-  // entry id; series prefers the numeric seriesId and sorts by series order;
+-  // collections, libraries and SmartScopes filter by their numeric id and
+-  // sort by title (the server's own booksHref for all three).
+-  BookOrbitBookQuery query;
+-  if (facetSectionId == "series") {
+-    query.sort = "series";
+-    if (!facet.seriesId.empty()) {
+-      query.seriesId = facet.seriesId;
+-    } else {
+-      query.series = facet.sectionId;
+-    }
+-  } else if (facetSectionId == "collections") {
+-    query.sort = "title";
+-    query.collectionId = facet.sectionId;
+-  } else if (facetSectionId == "libraries") {
+-    query.sort = "title";
+-    query.libraryId = facet.sectionId;
+-  } else if (facetSectionId == "smart-scopes") {
+-    query.sort = "title";
+-    query.smartScopeId = facet.sectionId;
+-  } else {
+-    query.author = facet.sectionId;
+-  }
+-  return query;
+-}
+-
+-}  // namespace BookOrbitCatalogRows
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogRows.h b/src/activities/browser/bookorbit/BookOrbitCatalogRows.h
+deleted file mode 100644
+index a580eadf..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogRows.h
++++ /dev/null
+@@ -1,74 +0,0 @@
+-#pragma once
+-
+-#include <cstddef>
+-#include <cstdint>
+-#include <string>
+-#include <vector>
+-
+-#include "network/BookOrbitCatalogClient.h"
+-
+-/** One row of the BookOrbit catalog's listings. */
+-struct BookOrbitCatalogEntry {
+-  enum class Type { SECTION, FACET_SECTION, FACET, LOCAL_SECTION, LOCAL_BOOK, SEARCH, BOOK };
+-
+-  Type type;
+-  std::string title;
+-  std::string subtitle;  // author, for BOOK/LOCAL_BOOK entries
+-  // Section id (SECTION/FACET_SECTION/LOCAL_SECTION), facet entry id (FACET), or for a
+-  // BOOK the list section its listing's sort files it under (its series, the day it was
+-  // added), empty when that sort has none.
+-  std::string sectionId;
+-  std::string seriesId;  // numeric series id, for FACET entries of the series facet
+-  std::string path;      // SD path: LOCAL_BOOK entries, and BOOK entries already on the device
+-  int64_t bookId = 0;
+-  bool onDevice = false;  // BOOK entries: a matching file already exists on the device (at `path`)
+-  uint16_t page = 0;      // listing page the row came from; 0 for the root and In progress
+-  // Length of `title` before its " (count)" badge, 0 when it has none. A listing opened
+-  // from the row is titled without it: its header counts what the listing holds.
+-  uint16_t badgeAt = 0;
+-};
+-
+-/**
+- * What each catalog listing's rows hold, made from what the server or the SD card
+- * returned: the root's sections with their counts, a facet listing's entries, a server
+- * book list's books with their on-device mark, and the two on-device lists. The browser
+- * decides where the rows go (see BookOrbitCatalogWindow); these say what is in them.
+- */
+-namespace BookOrbitCatalogRows {
+-
+-// Root sections that list facets (authors, series...) rather than books.
+-bool isFacetSection(const std::string& sectionId);
+-
+-// A row's title without the count badge the root and facet listings give it.
+-std::string titleWithoutBadge(const BookOrbitCatalogEntry& entry);
+-
+-// Rows the root holds beyond the server's sections: Want to read, the two on-device lists
+-// and Search.
+-constexpr size_t ROOT_EXTRA_ROWS = 4;
+-
+-// The root: the server's sections, badged with the counts the server gave (an older
+-// server without the dashboard gives none), the want-to-read shelf when the server has
+-// one, the On device and In progress lists with their counts, then Search.
+-void appendRoot(std::vector<BookOrbitCatalogEntry>& rows, const std::vector<BookOrbitCatalogSection>& sections,
+-                const BookOrbitCatalogCounts& counts, int onDeviceCount, size_t inProgressCount);
+-
+-// The books In progress lists: those with local reading progress, the recent-books list
+-// minus finished ones. Appends their rows when a sink is given, and returns the count either
+-// way, so the root can badge the category without building its rows.
+-size_t collectInProgress(std::vector<BookOrbitCatalogEntry>* sink);
+-
+-// In progress in title order, then author.
+-void sortByTitle(std::vector<BookOrbitCatalogEntry>& rows);
+-
+-// The rows of a facet page, a server book page and an On device page, each filled in
+-// place (see BookOrbitCatalogWindow::placePage) and taking the strings it is given. A book
+-// row's devicePath is where the book is on the card, empty when it is not (see
+-// BookOrbitCatalogDownload::findOnDevice(), which answers for a whole page).
+-void setFacet(BookOrbitCatalogEntry& entry, BookOrbitFacetEntry&& facet);
+-void setBook(BookOrbitCatalogEntry& entry, BookOrbitCatalogBook&& book, std::string&& devicePath);
+-void setLocalBook(BookOrbitCatalogEntry& entry, std::string&& path);
+-
+-// The book listing a facet row opens; facetSectionId is the facet listing's own section.
+-BookOrbitBookQuery facetBookQuery(const std::string& facetSectionId, const BookOrbitCatalogEntry& facet);
+-
+-}  // namespace BookOrbitCatalogRows
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogScreens.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogScreens.cpp
+deleted file mode 100644
+index 15ab8d6a..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogScreens.cpp
++++ /dev/null
+@@ -1,75 +0,0 @@
+-#include "BookOrbitCatalogScreens.h"
+-
+-#include <GfxRenderer.h>
+-#include <I18n.h>
+-
+-#include "MappedInputManager.h"
+-#include "components/CompactHeader.h"
+-#include "components/TouchHeaderBackButton.h"
+-#include "components/UITheme.h"
+-#include "fontIds.h"
+-
+-namespace BookOrbitCatalogScreens {
+-namespace {
+-// The one hint the screens around the listing show, under the first button.
+-void drawFirstHint(GfxRenderer& renderer, const MappedInputManager& input, const char* label) {
+-  const auto labels = input.mapLabels(label, "", "", "");
+-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+-}
+-}  // namespace
+-
+-void drawHeader(GfxRenderer& renderer, const MappedInputManager& input, const char* title, const bool listControls) {
+-  if (input.hasTouchHardware() && listControls) {
+-    // The title stops short of the sort and filter controls.
+-    TouchHeaderBackButton::draw(
+-        renderer, TouchHeaderBackButton::compactHeaderRect(renderer), title, /*readerContext=*/false,
+-        2 * HEADER_CONTROL_SIZE + HEADER_CONTROL_GAP + TouchHeaderBackButton::controlRightInset() + 10);
+-  } else if (input.hasTouchHardware()) {
+-    TouchHeaderBackButton::drawCompact(renderer, title);
+-  } else {
+-    CompactHeader::drawTitle(renderer, title);
+-  }
+-}
+-
+-void drawStatus(GfxRenderer& renderer, const MappedInputManager& input, const char* message) {
+-  renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2, message);
+-  drawFirstHint(renderer, input, tr(STR_BACK));
+-}
+-
+-void drawError(GfxRenderer& renderer, const MappedInputManager& input, const char* message) {
+-  const auto pageWidth = renderer.getScreenWidth();
+-  const auto pageHeight = renderer.getScreenHeight();
+-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 50, tr(STR_ERROR_MSG));
+-  // Error messages can be several lines long; drawCenteredText with an over-wide
+-  // string starts at a negative x and clips, so wrap it explicitly.
+-  const int messageWidth = pageWidth - 80;
+-  const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+-  const auto messageLines = renderer.wrappedText(UI_10_FONT_ID, message, messageWidth, 4);
+-  int messageY = pageHeight / 2 - 20;
+-  for (const auto& line : messageLines) {
+-    renderer.drawCenteredText(UI_10_FONT_ID, messageY, line.c_str());
+-    messageY += lineHeight + 4;
+-  }
+-  drawFirstHint(renderer, input, tr(STR_BACK));
+-}
+-
+-void drawDownload(GfxRenderer& renderer, const MappedInputManager& input, const char* title, const size_t downloaded,
+-                  const size_t total) {
+-  const auto pageWidth = renderer.getScreenWidth();
+-  const auto pageHeight = renderer.getScreenHeight();
+-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 40, tr(STR_DOWNLOADING));
+-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, title);
+-  if (total > 0) {
+-    GUI.drawProgressBar(renderer, Rect{50, pageHeight / 2 + 20, pageWidth - 100, 20}, downloaded, total);
+-  }
+-  drawFirstHint(renderer, input, tr(STR_CANCEL));
+-}
+-
+-void drawListHints(GfxRenderer& renderer, const MappedInputManager& input, const char* confirmLabel,
+-                   const bool listButtons) {
+-  const auto labels = input.mapLabels(tr(STR_BACK), confirmLabel, listButtons ? tr(STR_SORT) : "",
+-                                      listButtons ? tr(STR_BOOKORBIT_FILTER) : "");
+-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+-}
+-
+-}  // namespace BookOrbitCatalogScreens
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogScreens.h b/src/activities/browser/bookorbit/BookOrbitCatalogScreens.h
+deleted file mode 100644
+index 9bae8667..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogScreens.h
++++ /dev/null
+@@ -1,37 +0,0 @@
+-#pragma once
+-
+-#include <cstddef>
+-
+-class GfxRenderer;
+-class MappedInputManager;
+-
+-/**
+- * The BookOrbit catalog's screens around its listing, drawn from plain values: the
+- * activity decides which one shows and with what, these say how it looks. None of them
+- * pushes the frame; the activity does once the screen is complete.
+- */
+-namespace BookOrbitCatalogScreens {
+-
+-// A server book list's header controls on touch devices, sized and spaced like the Library's.
+-constexpr int HEADER_CONTROL_SIZE = 44;
+-constexpr int HEADER_CONTROL_GAP = 10;
+-
+-// The compact header and its title; on touch devices with a back button, the title then
+-// stopping short of the sort and filter controls when the listing has them (listControls).
+-void drawHeader(GfxRenderer& renderer, const MappedInputManager& input, const char* title, bool listControls);
+-
+-// A single centred line while Wi-Fi comes up or a listing loads, with Back.
+-void drawStatus(GfxRenderer& renderer, const MappedInputManager& input, const char* message);
+-
+-// The error heading and its message, wrapped, with Back.
+-void drawError(GfxRenderer& renderer, const MappedInputManager& input, const char* message);
+-
+-// The book being downloaded, its progress once the size is known, and Cancel.
+-void drawDownload(GfxRenderer& renderer, const MappedInputManager& input, const char* title, size_t downloaded,
+-                  size_t total);
+-
+-// The listing's button hints: Back, Confirm's action for the selected row, and on
+-// button-only devices Sort and Filter for a server book list (listButtons).
+-void drawListHints(GfxRenderer& renderer, const MappedInputManager& input, const char* confirmLabel, bool listButtons);
+-
+-}  // namespace BookOrbitCatalogScreens
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogViewport.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogViewport.cpp
+deleted file mode 100644
+index 42cac6a0..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogViewport.cpp
++++ /dev/null
+@@ -1,70 +0,0 @@
+-#include "BookOrbitCatalogViewport.h"
+-
+-#include <algorithm>
+-
+-void BookOrbitCatalogViewport::beginFrame(const int top, const int selection) {
+-  pass = 0;
+-  passAgain = false;
+-  fromTop = top;
+-  fromSelection = selection;
+-}
+-
+-freeink::ui::ListNav* BookOrbitCatalogViewport::measureNav() {
+-  measure.reset();
+-  return &measure;
+-}
+-
+-bool BookOrbitCatalogViewport::endPass(const Pass& drawn, const bool sections) {
+-  const int top = drawn.top;
+-  nextTop = top;
+-  if (sections) {
+-    const int rows = measure.drawnRows;
+-    const int relativeTop = top - drawn.windowStart;
+-    const int windowEnd = drawn.windowStart + drawn.rowCount;
+-    int wanted = top;
+-    if (rows > 0 && drawn.selected >= relativeTop && drawn.selected >= relativeTop + rows) {
+-      // The selection fell below what fitted: down just far enough for it.
+-      wanted = top + drawn.selected - (relativeTop + rows) + 1;
+-    } else if (rows > 0 && drawn.listingEnds && relativeTop + rows < drawn.rowCount &&
+-               top >= windowEnd - drawn.visibleRows) {
+-      // The listing ends on this screen, but its last rows did not fit under the headings.
+-      wanted = top + drawn.rowCount - (relativeTop + rows);
+-      if (drawn.selected >= relativeTop) wanted = std::min(wanted, drawn.windowStart + drawn.selected);
+-    }
+-    if (wanted > top && pass + 1 < MAX_PASSES) {
+-      nextTop = wanted;
+-      passAgain = true;
+-      return true;
+-    }
+-  }
+-  // What the loop may take for its next move (adoptedTop, screenRows).
+-  renderedTop.store(top);
+-  renderedRows.store(sections ? measure.drawnRows : 0);
+-  renderedFromTop.store(fromTop);
+-  renderedFromSelection.store(fromSelection);
+-  renderedListing.store(listingGeneration, std::memory_order_release);
+-  return false;
+-}
+-
+-bool BookOrbitCatalogViewport::takeAnotherPass() {
+-  if (!passAgain) return false;
+-  passAgain = false;
+-  pass++;
+-  return true;
+-}
+-
+-int BookOrbitCatalogViewport::adoptedTop(const int top, const int selection, const int windowStart,
+-                                         const int windowEnd) const {
+-  if (renderedListing.load(std::memory_order_acquire) != listingGeneration) return top;
+-  if (renderedFromTop.load() != top || renderedFromSelection.load() != selection) return top;
+-  const int rendered = renderedTop.load();
+-  return rendered >= windowStart && rendered < windowEnd ? rendered : top;
+-}
+-
+-int BookOrbitCatalogViewport::screenRows(const int top, const int visibleRows) const {
+-  const int rows = renderedRows.load();
+-  if (renderedListing.load(std::memory_order_acquire) != listingGeneration || renderedTop.load() != top || rows <= 0) {
+-    return visibleRows;
+-  }
+-  return std::min(rows, visibleRows);
+-}
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogViewport.h b/src/activities/browser/bookorbit/BookOrbitCatalogViewport.h
+deleted file mode 100644
+index 8adb6060..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogViewport.h
++++ /dev/null
+@@ -1,73 +0,0 @@
+-#pragma once
+-
+-#include <FreeInkApp.h>
+-
+-#include <atomic>
+-#include <cstdint>
+-
+-/**
+- * What the BookOrbit catalog's list screen really drew, handed from the render task to the
+- * loop.
+- *
+- * Section headings take room, so a screen holds fewer rows than visibleRows assumes. The
+- * render task measures how many it drew and, when the selection or the listing's end fell
+- * below the screen, draws again further down. The loop keeps owning topIndex: it takes the
+- * render's correction only for the very top and selection it rendered from (adoptedTop),
+- * never mid-walk.
+- *
+- * Each member says which task calls it. The render task's state is its own; the loop only
+- * reads what endPass() published, and changes newListing() under the RenderLock.
+- */
+-class BookOrbitCatalogViewport {
+- public:
+-  // What one pass of the list screen drew from.
+-  struct Pass {
+-    int top;           // the first row drawn, counted from the listing's start
+-    int selected;      // the selection's index in the rows in memory, -1 when not there
+-    int windowStart;   // the listing row of the first row in memory
+-    int rowCount;      // rows in memory
+-    int visibleRows;   // rows a screen holds without headings
+-    bool listingEnds;  // no page follows the rows in memory
+-  };
+-
+-  // Loop, under the RenderLock: a new listing, so what was measured belongs to the last one.
+-  void newListing() { listingGeneration++; }
+-
+-  // Render task: a frame starts from the loop's top and selection.
+-  void beginFrame(int top, int selection);
+-  // Render task: the row the current pass draws from; firstPassTop on the frame's first pass.
+-  int passTop(int firstPassTop) const { return pass == 0 ? firstPassTop : nextTop; }
+-  // Render task: a nav for the list to report how many rows it drew. Handing the list a nav
+-  // also makes it skip its fixed-height clamp.
+-  freeink::ui::ListNav* measureNav();
+-  // Render task: after the list drew from drawn.top. With sections, when the selection or the
+-  // listing's end fell below the screen, asks for another pass further down and returns true;
+-  // otherwise publishes what the loop may take for its next move.
+-  bool endPass(const Pass& drawn, bool sections);
+-  // Render task: true once after a pass asked for another, which the caller then draws on a
+-  // blank frame.
+-  bool takeAnotherPass();
+-
+-  // Loop: the top the last frame was really drawn from, when it was drawn for this top and
+-  // selection and that row is in memory ([windowStart, windowEnd)); `top` otherwise.
+-  int adoptedTop(int top, int selection, int windowStart, int windowEnd) const;
+-  // Loop: rows a screen holds from `top`: what the last frame drew, when headings made that
+-  // fewer than visibleRows.
+-  int screenRows(int top, int visibleRows) const;
+-
+- private:
+-  static constexpr int MAX_PASSES = 4;
+-
+-  freeink::ui::ListNav measure;  // render task: measures rows drawn, never scrolls
+-  int pass = 0;                  // render task: 0 for a frame's first layout
+-  int nextTop = 0;               // render task: the row the next pass is drawn from
+-  bool passAgain = false;        // render task: the frame needs a pass from nextTop
+-  int fromTop = 0;               // render task: topIndex and selectorIndex as the
+-  int fromSelection = 0;         //   frame started, which its correction answers
+-  uint32_t listingGeneration = 0;
+-  std::atomic<uint32_t> renderedListing{0};
+-  std::atomic<int> renderedFromTop{-1};
+-  std::atomic<int> renderedFromSelection{-1};
+-  std::atomic<int> renderedTop{0};
+-  std::atomic<int> renderedRows{0};
+-};
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogWindow.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogWindow.cpp
+deleted file mode 100644
+index 246b27ec..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogWindow.cpp
++++ /dev/null
+@@ -1,108 +0,0 @@
+-#include "BookOrbitCatalogWindow.h"
+-
+-#include <algorithm>
+-#include <utility>
+-
+-namespace {
+-using Entry = BookOrbitCatalogEntry;
+-
+-// Reserved once for the session, so the rows never move through doubling reallocations
+-// that would leave holes next to the TLS buffers.
+-constexpr size_t WINDOW_ROWS = (BookOrbitCatalogWindow::MAX_PAGES + 1) * BookOrbitCatalogClient::PAGE_SIZE;
+-}  // namespace
+-
+-void BookOrbitCatalogWindow::reset(const size_t rows, const int firstRow) {
+-  const size_t wanted = std::max(rows, WINDOW_ROWS);
+-  if (entries.capacity() > wanted) {
+-    // Free the large block first, so the smaller one can be carved out of it.
+-    std::vector<Entry>().swap(entries);
+-  }
+-  entries.clear();
+-  entries.reserve(wanted);
+-  first = firstRow;
+-  letterCount = 0;
+-}
+-
+-void BookOrbitCatalogWindow::release() { std::vector<Entry>().swap(entries); }
+-
+-const Entry* BookOrbitCatalogWindow::at(const int row) const {
+-  const int index = row - first;
+-  if (index < 0 || index >= static_cast<int>(entries.size())) return nullptr;
+-  return &entries[index];
+-}
+-
+-Entry* BookOrbitCatalogWindow::at(const int row) { return const_cast<Entry*>(std::as_const(*this).at(row)); }
+-
+-size_t BookOrbitCatalogWindow::placePage(const PageLoad load, const size_t count, const uint16_t page) {
+-  // An exact reserve: insert() would otherwise double the block. Only a listing whose
+-  // pages or screen are larger than WINDOW_ROWS planned for gets here.
+-  if (entries.size() + count > entries.capacity()) entries.reserve(entries.size() + count);
+-  Entry blank;
+-  blank.type = Entry::Type::BOOK;
+-  blank.page = page;
+-  if (load == PageLoad::Prepend) {
+-    entries.insert(entries.begin(), count, blank);
+-    first -= static_cast<int>(count);
+-    return 0;
+-  }
+-  const size_t firstIndex = entries.size();
+-  entries.insert(entries.end(), count, blank);
+-  return firstIndex;
+-}
+-
+-void BookOrbitCatalogWindow::dropPagesBefore(const int keepFrom, const int incoming) {
+-  while (!entries.empty() && entries.back().page - entries.front().page + 1 + incoming > MAX_PAGES) {
+-    const uint16_t page = entries.front().page;
+-    const auto pageEnd =
+-        std::find_if(entries.begin(), entries.end(), [page](const Entry& entry) { return entry.page != page; });
+-    const int count = static_cast<int>(pageEnd - entries.begin());
+-    if (first + count > keepFrom) break;  // the viewport still shows that page
+-    entries.erase(entries.begin(), pageEnd);
+-    first += count;
+-  }
+-}
+-
+-int BookOrbitCatalogWindow::dropPagesAfter(const int keepThrough, const int incoming) {
+-  int lastPage = 0;
+-  while (!entries.empty() && entries.back().page - entries.front().page + 1 + incoming > MAX_PAGES) {
+-    const uint16_t page = entries.back().page;
+-    const auto pageStart = std::find_if(entries.rbegin(), entries.rend(), [page](const Entry& entry) {
+-                             return entry.page != page;
+-                           }).base();
+-    if (first + static_cast<int>(pageStart - entries.begin()) <= keepThrough) break;
+-    entries.erase(pageStart, entries.end());
+-    lastPage = page - 1;
+-  }
+-  return lastPage;
+-}
+-
+-int BookOrbitCatalogWindow::clamp(const int row) const {
+-  if (entries.empty()) return row;
+-  return std::clamp(row, first, end() - 1);
+-}
+-
+-void BookOrbitCatalogWindow::setLetters(const std::vector<BookOrbitLetterBucket>& buckets) {
+-  letterCount = 0;
+-  for (const auto& bucket : buckets) {
+-    if (letterCount == MAX_LETTERS) break;
+-    LetterStart& slot = letters[letterCount++];
+-    slot.row = bucket.row;
+-    slot.heading[0] = bucket.letter;
+-  }
+-}
+-
+-const char* BookOrbitCatalogWindow::heading(const size_t index) const {
+-  if (letterCount > 0) {
+-    const int row = first + static_cast<int>(index);
+-    for (size_t i = 0; i < letterCount; i++) {
+-      if (letters[i].row == row) return letters[i].heading;
+-    }
+-    return nullptr;
+-  }
+-  const Entry& entry = entries[index];
+-  if (entry.type != Entry::Type::BOOK || entry.sectionId.empty()) return nullptr;
+-  // The first row in memory may go on with a section that began on a page no longer held:
+-  // it is headed again, which names the section the screen opens on.
+-  if (index > 0 && entries[index - 1].sectionId == entry.sectionId) return nullptr;
+-  return entry.sectionId.c_str();
+-}
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogWindow.h b/src/activities/browser/bookorbit/BookOrbitCatalogWindow.h
+deleted file mode 100644
+index cd046fd0..00000000
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogWindow.h
++++ /dev/null
+@@ -1,85 +0,0 @@
+-#pragma once
+-
+-#include <array>
+-#include <cstddef>
+-#include <cstdint>
+-#include <vector>
+-
+-#include "BookOrbitCatalogRows.h"
+-
+-/**
+- * The rows the BookOrbit catalog holds in memory for the listing on screen: a whole root
+- * or In progress list, or a window of a few consecutive pages of a book or facet listing,
+- * or of the On device list.
+- *
+- * Rows are numbered from the start of the listing, so a page dropped from the window
+- * changes no row number: rows()[0] is row start(). A listing used to keep every page it
+- * had shown, about 150 bytes a row plus its strings, until a C3 catalog session had no
+- * block left for a 16 KB TLS record by the third page (issue #96). Two pages cover a
+- * screen and the next; a third arrives before the first one goes.
+- *
+- * The render task draws these rows: the browser changes them only under its RenderLock.
+- */
+-class BookOrbitCatalogWindow {
+- public:
+-  using Entry = BookOrbitCatalogEntry;
+-
+-  // How a page joins the rows. Open starts a listing at that page; Append and Prepend
+-  // extend the window by one page at either end.
+-  enum class PageLoad : uint8_t { Open, Append, Prepend };
+-
+-  // Server pages a book or facet listing keeps in memory.
+-  static constexpr int MAX_PAGES = 2;
+-
+-  // Empties the rows for a new listing that will hold about `rows`, its first row in
+-  // memory numbered `firstRow`, and forgets its letters. Gives back a larger block a
+-  // previous In progress listing left behind.
+-  void reset(size_t rows, int firstRow = 0);
+-  // Frees the rows and their block: a download needs every KB of contiguous heap.
+-  void release();
+-
+-  bool empty() const { return entries.empty(); }
+-  int start() const { return first; }
+-  int end() const { return first + static_cast<int>(entries.size()); }
+-  // The row at a listing row number, nullptr when it is not in memory.
+-  const Entry* at(int row) const;
+-  Entry* at(int row);
+-  // The rows in memory: a whole listing's builder (the root, In progress) fills them
+-  // straight after reset().
+-  std::vector<Entry>& rows() { return entries; }
+-  const std::vector<Entry>& rows() const { return entries; }
+-  // The page the first row in memory came from; 0 when the window is empty or whole.
+-  uint16_t firstPage() const { return entries.empty() ? 0 : entries.front().page; }
+-
+-  // Room for `count` blank rows of page `page`, at the front for Prepend and at the end
+-  // otherwise; returns the index of the first.
+-  size_t placePage(PageLoad load, size_t count, uint16_t page);
+-  // Drop whole pages from the front while the window holds more than MAX_PAGES (counting
+-  // `incoming` pages about to join it) and the page lies wholly before row keepFrom.
+-  void dropPagesBefore(int keepFrom, int incoming);
+-  // The same from the end, for pages wholly after row keepThrough. Returns the last page
+-  // the window then holds when it dropped any, 0 when it dropped none.
+-  int dropPagesAfter(int keepThrough, int incoming);
+-  // The row in memory nearest `row`; `row` itself when there is none.
+-  int clamp(int row) const;
+-
+-  // Where each letter starts in a listing sorted by title or author, from its first page.
+-  void setLetters(const std::vector<BookOrbitLetterBucket>& letters);
+-  // The section heading drawn above rows()[index], or nullptr: the letter that starts
+-  // there, or for a book list without letters the section the sort files the row under.
+-  const char* heading(size_t index) const;
+-
+- private:
+-  // Where each letter starts in a listing sorted by title or author; none for any other
+-  // listing. The heading strings stay put for the list to point at.
+-  struct LetterStart {
+-    int row = 0;
+-    char heading[2] = {'#', '\0'};
+-  };
+-  static constexpr size_t MAX_LETTERS = 27;  // A to Z, and '#'
+-
+-  std::vector<Entry> entries;
+-  int first = 0;
+-  std::array<LetterStart, MAX_LETTERS> letters{};
+-  size_t letterCount = 0;
+-};

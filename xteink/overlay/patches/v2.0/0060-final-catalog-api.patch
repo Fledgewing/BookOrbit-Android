@@ -1,0 +1,27 @@
+Subject: [PATCH] BookSync: adapt the 0.11 catalog to final base APIs
+
+The index now streams from SD and has no RAM cache to unload. An empty delivery
+variant preserves the 0.11 download request behavior.
+
+diff --git a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+index 53fb18f4..d8489e5e 100644
+--- a/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/bookorbit/BookOrbitCatalogBrowserActivity.cpp
+@@ -596,7 +596,7 @@ void BookOrbitCatalogBrowserActivity::onExit() {
+   listOptions.reset();
+   entries.clear();
+   if (onDeviceListing) BookOrbitLocalBooks::clear();
+-  BookOrbitDownloadIndex::unload();
++  // The final base streams the index from SD; no in-memory index remains to unload.
+ 
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+   // X4's global worker owns its task and radio. Navigation never reboots it.
+@@ -1825,7 +1825,7 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+     }
+     downloadOptions.resumePartial = attempt > 0;
+     result = BookOrbitCatalogClient::downloadFile(
+-        fileId, finalPath,
++        fileId, std::string(), finalPath,
+         [this, &lastRenderedPercent, &lastProgressUpdateMs, &percent, &now
+ #if CROSSINK_TAILNET_DOWNLOAD_PROGRESS
+          ,

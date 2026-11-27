@@ -240,7 +240,7 @@ Outcome refreshOne(const orbify::refresh::Entry& entry, bool (*cancelled)()) {
     if (cancelled && cancelled()) return Outcome::Stop;
     // A transfer a wake press stopped resumes from its .part (the hash check below still decides).
     options.resumePartial = attempt > 0 || Storage.exists((entry.path + ".part").c_str());
-    result = BookOrbitCatalogClient::downloadFile(file.id, entry.path, nullptr, &cancel, options);
+    result = BookOrbitCatalogClient::downloadFile(file.id, file.downloadVariant, entry.path, nullptr, &cancel, options);
     if (result == HttpDownloader::OK || result == HttpDownloader::ABORTED ||
         result == HttpDownloader::INSUFFICIENT_SPACE) {
       break;
