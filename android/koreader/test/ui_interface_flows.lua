@@ -21,7 +21,7 @@ return function(here,test,eq,ok)
     -- Use the real settings service, merge policy, persistence ordering and wire echo.
     local function settingsWorld()
         local e,L=world()
-        for _,name in ipairs({"logic/sleep_pool.lua","logic/settings_ui.lua","ko/shared.lua"}) do
+        for _,name in ipairs({"logic/budgets.lua","logic/sleep_pool.lua","logic/settings_ui.lua","ko/shared.lua"}) do
             setfenv(assert(loadfile(root..name)),e)()
         end
         local f=assert(io.open(here.."/../../../shared/settings/schema.json"));local raw=f:read("*a");f:close()

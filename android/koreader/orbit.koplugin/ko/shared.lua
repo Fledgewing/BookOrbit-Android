@@ -222,6 +222,7 @@ end
 -- A complete local intent: publish the final values once, then apply effects in key order.
 -- Presets deliberately retain per-key effect order (including the two Wi-Fi keys).
 function Shared.setMany(keys, values, why)
+    local finish = Budgets.span("library.settings.edit", now_s, log)
     local at = os.time() * 1000
     for _, key in ipairs(keys) do
         S[key] = Cache.copy(values[key])
@@ -232,6 +233,7 @@ function Shared.setMany(keys, values, why)
     saveSettings()
     Shared.push("patch menu")
     for _, key in ipairs(keys) do Shared.onChange(key, why) end
+    finish()
 end
 
 function Shared.set(key, value, why)
