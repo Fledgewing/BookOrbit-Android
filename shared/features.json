@@ -142,7 +142,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "SQLite cache via companion; local window queries",
+          "note": "SQLite cache via companion; local window queries serve cached pages immediately",
           "reason": null,
           "evidence": [
             {
@@ -154,31 +154,39 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi, independent of source page size",
+          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi or Loading screens, independent of source page size",
           "reason": null,
           "evidence": [
             {
               "path": "xteink/orbify/CacheStore.cpp",
               "line": 396
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0059-offline-catalog-paging.patch",
+              "line": 7
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x4": {
           "status": "supported",
-          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi, independent of source page size",
+          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi or Loading screens, independent of source page size",
           "reason": null,
           "evidence": [
             {
               "path": "xteink/orbify/CacheStore.cpp",
               "line": 396
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0059-offline-catalog-paging.patch",
+              "line": 7
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x3": {
           "status": "missing",
-          "note": "Online catalog; no refreshed SD windows",
+          "note": "Online catalog; no refreshed SD windows or BookSync offline paging",
           "reason": "hardware: X3 flash gate; no PSRAM",
           "evidence": [
             {

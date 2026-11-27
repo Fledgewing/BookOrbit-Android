@@ -491,3 +491,25 @@ series-card cover fetch and no lent connection, so it runs the three that apply 
 | `catalog_refresh_stamp` | catalog refresh stamp (screenshot) | X4 Pro |
 | `catalog_cache_first` | cache-first catalog | X4 Pro |
 | `menu_home_swipe` | menu Home swipe | X4 Pro |
+
+### Offline catalog paging regression
+
+`offline_cached_list_no_loading` (X4 Pro) saves 245 synthetic books through an ordinary
+Home refresh, using its real 100-row write-through replies, with no bulk generation.
+It removes saved Wi-Fi credentials and makes 64 forward/backward swipes through the
+saved list with compact rows; `home_refresh_completion_stamp` also checks the default
+sectioned layout. Every swipe must complete, including the actual simulator list paint, in
+less than 250 ms; no blocking catalog paint, HTTP request or Wi-Fi join is allowed
+once the listing opens. The simulator logs blocking paints directly from `render()`,
+so a transient Loading screen cannot hide between screenshots.
+
+The session-list cache previously missed these refreshed sources and caused the
+browser to paint Loading before the catalog client consulted the write-through cache.
+At CrossInk `87e2e1984481e8a3d996f12b34b50a383f9013b8`, the session-only probe is
+[`src/activities/browser/BookOrbitCatalogListCache.cpp:223`](https://github.com/agosez/CrossInk-Bookorbit/blob/87e2e1984481e8a3d996f12b34b50a383f9013b8/src/activities/browser/BookOrbitCatalogListCache.cpp#L223)
+and the premature Loading call is
+[`src/activities/browser/BookOrbitCatalogBrowserActivity.cpp:931`](https://github.com/agosez/CrossInk-Bookorbit/blob/87e2e1984481e8a3d996f12b34b50a383f9013b8/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp#L931).
+Patch 0059 makes the list-cache probe use that client's SD adapters with network access
+explicitly disabled. The existing two-page row window stays bounded. X4 Classic uses
+the same cache path; X3 has no BookSync offline mirror. Hardware SD latency and e-ink
+refresh duration still need a real-reader check.

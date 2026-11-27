@@ -1,0 +1,181 @@
+Subject: [PATCH] BookSync: consult every SD cache before a blocking catalog fetch
+
+Ordinary refresh saves 100-row replies, not session-list pages. Resolve those
+locally before the browser decides it needs a Loading screen. Cache probes
+never enter HTTP, including when the radio is already connected.
+
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -2332,6 +2332,9 @@
+       // so a finger can walk a long listing the way the buttons already do.
+       const auto swipe = mappedInput.wasSwipe();
+       if (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Down) {
++#ifdef SIMULATOR
++        const unsigned long pageTurnBegan = millis();
++#endif
+         if (swipe == MappedInputManager::SwipeDir::Up) {
+           const int wantedCount = topIndex + 2 * visibleRows;
+           while (loadedEnd() < wantedCount && hasMorePages()) {
+@@ -2345,6 +2348,12 @@
+         topIndex = scrollListBy(topIndex, delta, visibleRows, loadedEnd());
+         if (!revealRow(topIndex)) topIndex = windowStart;
+         if (topIndex != previousTop) requestUpdate();
++#ifdef SIMULATOR
++        // Wait for the actual list paint, so the budget includes rendering as well as SD reads.
++        requestUpdateAndWait();
++        LOG_INF("BookOrbit", "Catalog page turn: from=%d to=%d elapsedMs=%lu", previousTop, topIndex,
++                millis() - pageTurnBegan);
++#endif
+         return;
+       }
+       // Prefetch at the page turn: after a forward move onto the last loaded
+@@ -2623,6 +2632,9 @@
+   // WIFI_SELECTION: the Wi-Fi screen is only pushed on the next loop, and a network
+   // boot paints the catalog before that, with no listing loaded yet.
+   if (state == BrowserState::CHECK_WIFI || state == BrowserState::LOADING || state == BrowserState::WIFI_SELECTION) {
++#ifdef SIMULATOR
++    LOG_INF("BookOrbit", "Catalog blocking paint: %s", statusMessage.c_str());
++#endif
+     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, statusMessage.c_str());
+     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
+--- a/src/activities/browser/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+@@ -197,10 +197,16 @@
+ 
+ bool loadFacetPage(const std::string& sectionId, const int page, BookOrbitFacetPage& outPage) {
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+-  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchSectionEntries(sectionId,page,outPage);
++  if(OrbifyBulk::active()) return BookOrbitCatalogClient::fetchSectionEntries(sectionId,page,outPage, /*allowNetwork=*/false);
+ #endif
+   std::string text;
+-  if (!readJsonStringFile(cachePathForKey(facetCacheKey(sectionId, page)), text)) return false;
++  if (!readJsonStringFile(cachePathForKey(facetCacheKey(sectionId, page)), text)) {
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++    return BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, outPage, /*allowNetwork=*/false);
++#else
++    return false;
++#endif
++  }
+ 
+   JsonDocument doc;
+   if (deserializeJson(doc, text) != DeserializationError::Ok || !doc["items"].is<JsonArray>()) return false;
+@@ -243,10 +249,16 @@
+ 
+ bool loadBooksPage(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage) {
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+-  if(OrbifyBulk::active() && query.query.empty()) return BookOrbitCatalogClient::fetchBooks(query,page,outPage);
++  if(OrbifyBulk::active() && query.query.empty()) return BookOrbitCatalogClient::fetchBooks(query,page,outPage, /*allowNetwork=*/false);
+ #endif
+   std::string text;
+-  if (!readJsonStringFile(cachePathForKey(booksCacheKey(query, page)), text)) return false;
++  if (!readJsonStringFile(cachePathForKey(booksCacheKey(query, page)), text)) {
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++    return BookOrbitCatalogClient::fetchBooks(query, page, outPage, /*allowNetwork=*/false);
++#else
++    return false;
++#endif
++  }
+ 
+   JsonDocument doc;
+   if (deserializeJson(doc, text) != DeserializationError::Ok || !doc["items"].is<JsonArray>()) return false;
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -175,7 +175,7 @@
+ // tens of KB. Buffering them in a std::string aborts on OOM (throwing operator new with
+ // -fno-exceptions), so stream the body to a temp file on SD instead and parse it from
+ // there with a filter that keeps only the handful of fields we actually read.
+-bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDocument& outDoc) {
++bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDocument& outDoc, const bool allowNetwork = true) {
+   constexpr char TMP_PATH[] = "/.crosspoint/bookorbit_catalog.json";
+   CatalogRequestLock networkLock(catalogNetworkMutex, std::defer_lock);
+   BookOrbitCatalogClient::lastFetchBadResponse = false;
+@@ -196,6 +196,10 @@
+     JsonDocument filter(ORBIFY_CATALOG_JSON_ALLOCATOR);buildFilter(filter);
+     if(OrbifyCache::readWindow(url,filter.as<JsonVariantConst>(),outDoc))return true;
+   }
++  // A browser cache probe includes every saved representation (bulk, refreshed
++  // 100-row windows, and exact replies). A miss must not acquire a radio hold,
++  // connect, or enter HTTP, even if Wi-Fi is currently connected.
++  if (!allowNetwork && (!cached.serve || cached.fetch)) return false;
+   OrbifyWifi::Hold miss(OrbifyWifi::Owner::OfflineMiss, !cached.hasEntry);
+   if (!cached.hasEntry) OrbifyWifi::simulatorIdleOffProbe();
+   // Patch 0040: offline with nothing saved, no request (orbify::cache::readStep). The cache-first
+@@ -208,6 +212,8 @@
+   }
+   OrbifyWifi::Hold requestRadio(OrbifyWifi::Owner::Catalog, step == orbify::cache::ReadStep::Request);
+   if (step == orbify::cache::ReadStep::Saved) parsePath = cached.path.c_str();
++#else
++  if (!allowNetwork) return false;
+ #endif
+ 
+   // Two attempts: TLS on the C3 runs with a few KB of headroom, so a fetch can fail
+@@ -805,7 +811,7 @@
+   return result;
+ }
+ 
+-bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage) {
++bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage, const bool allowNetwork) {
+   outPage = BookOrbitBookPage{};
+   if (!BOOKORBIT_STORE.hasCredentials()) return false;
+ 
+@@ -815,7 +821,7 @@
+       bookOrbitSetFilter(filter, R"({"section":{"books":[{"id":true,"title":true,"authors":true,"formats":true}]}})");
+     };
+     JsonDocument doc(ORBIFY_CATALOG_JSON_ALLOCATOR);
+-    if (!fetchJson(booksUrl(query, page, PAGE_SIZE), buildFilter, doc)) return false;
++    if (!fetchJson(booksUrl(query, page, PAGE_SIZE), buildFilter, doc, allowNetwork)) return false;
+     JsonArrayConst books = doc["section"]["books"].as<JsonArrayConst>();
+     outPage.books.reserve(books.size());
+     for (JsonObjectConst item : books) {
+@@ -844,7 +850,7 @@
+     }
+   };
+   JsonDocument doc(ORBIFY_CATALOG_JSON_ALLOCATOR);
+-  if (!fetchJson(url, buildFilter, doc)) return false;
++  if (!fetchJson(url, buildFilter, doc, allowNetwork)) return false;
+ 
+   outPage.page = doc["page"] | page;
+   outPage.total = doc["total"] | 0;
+@@ -867,7 +873,7 @@
+ }
+ 
+ bool BookOrbitCatalogClient::fetchSectionEntries(const std::string& sectionId, const int page,
+-                                                 BookOrbitFacetPage& outPage) {
++                                                 BookOrbitFacetPage& outPage, const bool allowNetwork) {
+   outPage = BookOrbitFacetPage{};
+   if (!BOOKORBIT_STORE.hasCredentials()) return false;
+ 
+@@ -887,7 +893,7 @@
+                        R"({"page":true,"total":true,"size":true,"hasNext":true,"items":[{"id":true,"title":true,"count":true,"seriesId":true}]})");
+   };
+   JsonDocument doc(ORBIFY_CATALOG_JSON_ALLOCATOR);
+-  if (!fetchJson(url, buildFilter, doc)) return false;
++  if (!fetchJson(url, buildFilter, doc, allowNetwork)) return false;
+ 
+   outPage.page = doc["page"] | page;
+   outPage.hasNext = doc["hasNext"] | false;
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -229,7 +229,7 @@
+    * @param query Sort and filter fields; empty fields are omitted
+    * @param page 1-based page number
+    */
+-  static bool fetchBooks(const BookOrbitBookQuery& query, int page, BookOrbitBookPage& outPage);
++  static bool fetchBooks(const BookOrbitBookQuery& query, int page, BookOrbitBookPage& outPage, bool allowNetwork = true);
+ 
+   /** The total of a books listing, read from a single-item page. -1 on failure. */
+   static int fetchBookTotal(const BookOrbitBookQuery& query);
+@@ -239,7 +239,7 @@
+    * @param sectionId The facet section id from the catalog root
+    * @param page 1-based page number
+    */
+-  static bool fetchSectionEntries(const std::string& sectionId, int page, BookOrbitFacetPage& outPage);
++  static bool fetchSectionEntries(const std::string& sectionId, int page, BookOrbitFacetPage& outPage, bool allowNetwork = true);
+ 
+   /** Fetch full detail (including downloadable files) for one book. */
+   static bool fetchBookDetail(int64_t bookId, BookOrbitBookDetail& outDetail);
