@@ -102,9 +102,9 @@ companion and plugin remain one publication unit with matching installed version
 See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
 bridge has reached devices; 0.12 is prepared on feature/0.12.
 
-The upstream-driven Xteink release policy below applies through 0.11. From 0.12,
+The legacy Xteink version policy below applies through 0.11. From 0.12,
 firmware tags are xteink-v<booksync version>+crossink.<upstream tag>, with the upstream
-"+" replaced by ".". BookSync preview/rc/stable decides the channel. Daily publication
+"+" replaced by ".". BookSync preview/rc labels remain pre-releases; stable also requires explicit firmware promotion. Daily publication
 remains limited to the legacy bridge line; upstream pins change only through PRs. Unified
 builds keep the release commit's pin and publish only at the matching Android tag.
 
@@ -119,8 +119,10 @@ builds keep the release commit's pin and publish only at the matching Android ta
   See [version encoding](docs/design/release-versions.md) for Android package codes.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
-  An upstream rc or beta builds a pre-release, a final upstream release a stable one
-  (`xteink/scripts/upstream-line.sh`). Firmware tags keep CrossInk's upstream rc/beta labels;
+  Every build defaults to a pre-release (preview), including final upstream tags. Only a
+  maintainer-requested manual `promote_stable=true` after device testing can publish stable;
+  upstream rc/beta tags always remain pre-releases (`xteink/scripts/upstream-line.sh`).
+  Ordinary publication and `feed_only` preserve the feed's existing stable entries. Firmware tags keep CrossInk's upstream rc/beta labels;
   they describe the upstream base, not a judgment that our overlay is a release candidate.
 - "latest" must stay an Android release: older companions and plugins (and the old patch) read
   `releases/latest` (0.6.x through the old BookOrbit-Android URL, parsing only `v<version>` tags).

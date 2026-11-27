@@ -22,6 +22,7 @@ def module(name, path):
 
 I = module('inputs', 'tools/releases/inputs.py')
 F = module('feed', 'tools/xteink-feed.py')
+XF = module('xteink_feed', 'tools/releases/xteink_feed.py')
 
 class Fingerprints(unittest.TestCase):
     def setUp(self):
@@ -265,6 +266,24 @@ class Feed(unittest.TestCase):
                     created_at=version, assets=[dict(name=I.FIRMWARE[d]+'-v'+version+'.bin',
                     browser_download_url='https://example.invalid/'+d+'/'+version, size=10,
                     digest='sha256:abc') for d in devices])
+
+    def test_stable_feed_changes_only_on_promotion(self):
+        stable = self.release('1.6.1.114+bookorbit.9', I.FIRMWARE, False)
+        stable['assets'][0]['orbify_signature'] = 'retained-signature'
+        final = self.release('2.0.0.765+bookorbit.1', I.FIRMWARE, False)
+        preview = self.release('2.0.0.766+bookorbit.1', I.FIRMWARE)
+        previous = [stable]
+        # Default publication and feed_only must ignore even a manually marked
+        # stable GitHub release. Missing/deleted releases cannot erase stable.
+        for releases in ([stable, final, preview], [final, preview], [preview], []):
+            result = XF.refresh(releases, previous)
+            self.assertEqual([r for r in result if not r['prerelease']], previous)
+        result = XF.refresh([stable, final, preview], previous, promote_stable=True)
+        self.assertEqual([r['tag_name'] for r in result if not r['prerelease']], [final['tag_name']])
+        self.assertIn(preview['tag_name'], [r['tag_name'] for r in result])
+        # Ordinary refreshes keep the explicitly promoted stable on later runs.
+        self.assertEqual([r for r in XF.refresh([preview], result) if not r['prerelease']],
+                         [r for r in result if not r['prerelease']])
 
     def test_partial_release_preserves_other_devices_and_bridges(self):
         old = self.release('0.12.0-preview.2', I.FIRMWARE)
