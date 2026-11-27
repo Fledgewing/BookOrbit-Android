@@ -142,6 +142,7 @@ local NEEDS = {
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
+    { "frontend/ui/widget/imagewidget.lua", { "_render", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },

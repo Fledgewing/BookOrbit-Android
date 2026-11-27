@@ -626,6 +626,18 @@ return function(test,eq,ok,E,W,Widget)
                 cover:paintTo({},0,0); cover:paintTo({},0,0); eq(calls,1)
                 cover:free(); eq(canceled,1)
                 deliver("/unused-after-free"); eq(calls,1,"late delivery ignored")
+                local nativeRequire=E.require
+                local decoded=0
+                E.require=function(name)
+                    if name=="ui/widget/imagewidget" then return U.Frame:extend{_render=function() decoded=decoded+1 end} end
+                    return nativeRequire(name)
+                end
+                local imageCover=E.HomeWidgets.cover(c,b,0,0,80,120)
+                imageCover:paintTo({},0,0); eq(decoded,0)
+                deliver("/saved-cover.jpg"); eq(decoded,1)
+                ok(imageCover[1]._render,"placeholder replaced by prepared bitmap")
+                imageCover:free()
+                E.require=nativeRequire
             end)
             E.Library.prepareCardCover=prepare
             ok(success,err)
