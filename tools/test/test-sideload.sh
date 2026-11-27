@@ -128,10 +128,18 @@ check "run number must be a number" error "$(printf 'v0.1.0\n' | "$tools/android
     check "overlapping data" bad "$(valid_device_table <<<"$s3"$'\n1 130 65536 4096 overlap' || echo bad)"
     check "missing app" bad "$(valid_device_table <<<"$(sed '/^0 16 /d' <<<"$s3")" || echo bad)"
 
+    {
+        entry 1 2 $((0x9000)) $((0x5000)) nvs
+        entry 1 0 $((0xe000)) $((0x2000)) otadata
+        entry 0 16 $((0x10000)) $((0x7e0000)) app0
+        entry 0 17 $((0x7f0000)) $((0x7e0000)) app1
+        entry 1 130 $((0xfd0000)) $((0x14000)) spiffs
+        entry 1 3 $((0xfe4000)) $((0x1c000)) coredump
+    } >"$tmp/factory.bin"
     # Exercise the real read/validate path with an offline esptool stub.
     port_free() { :; }
-    # shellcheck disable=SC2329 # invoked through ESPTOOL by read_device
-    esptool_mock() { cp "$tmp/table.bin" "$WORK/device.parttable"; echo 'Chip is ESP32-S3'; }
+    # shellcheck disable=SC2317,SC2329 # invoked through ESPTOOL by read_device
+    esptool_mock() { cp "$tmp/factory.bin" "$WORK/device.parttable"; echo 'Chip is ESP32-S3'; }
     ESPTOOL=esptool_mock ESPTOOL_MAJOR=4 CHIP=ESP32-S3 PORT=unused WORK="$tmp"
     BIN="$tmp/s3.bin" BUILD_PT="$tmp/table.bin"
     check "read_device accepts compatible table without writes" ok "$(read_device >/dev/null && echo ok)"
