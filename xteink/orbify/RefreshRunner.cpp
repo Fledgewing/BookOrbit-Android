@@ -213,7 +213,7 @@ void bootBegin() {
 void bootComplete() {
   // Also retires an exhausted marker on the boot that quarantined the job.
   bootAttempt.complete();
-  if (Storage.exists(CRASHED)) attempt.complete();
+  if (Storage.exists(CRASHED) && !requested()) attempt.complete();
 }
 Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(stateMutex);

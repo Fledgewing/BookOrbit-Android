@@ -279,6 +279,22 @@ def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
         after(recovered.output, "BookOrbit Home: refresh stopped: Refresh stopped after a crash.")
         assert (bulk / "active").exists() != disable_pointer
         x, y = home_tile(recovered.output, "sync")
+        if not disable_pointer:
+            # A repair keeps CRASHED until success, but must still resume and
+            # count actual crashes rather than resetting its allowance at boot.
+            interrupted = ctx.sim.run(card, "normal-repair-crash-1", script=f"3000:TAP:{x},{y},100",
+                                      timeout_s=30, env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+            assert interrupted.returncode == 86
+            assert (folder / "refresh.inflight").read_text() == "1"
+            interrupted = ctx.sim.run(card, "normal-repair-crash-2", timeout_s=15,
+                                      env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+            assert interrupted.returncode == 86
+            assert (folder / "refresh.inflight").read_text() == "2"
+            stopped = ctx.sim.run(card, "normal-repair-stopped", script="6000:QUIT", timeout_s=15,
+                                  env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
+            assert stopped.returncode == 0
+            assert stopped.output.count("crash breaker stopped automatic resume") == 1
+            assert not (folder / "mirror.request").exists()
         refreshed = ctx.sim.run(card, f"normal-refresh-{disable_pointer}",
                                 script=f"3000:TAP:{x},{y},100", timeout_s=100,
                                 env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"}, quit_after_sync=False)
