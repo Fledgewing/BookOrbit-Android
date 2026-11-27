@@ -1,7 +1,9 @@
 # BookSync 0.12 firmware plan
 
 27 November 2026. Implementation authorized by the maintainer; Home revision 16 is
-approved. This plan schedules work, not a release or permission to invent screens.
+approved. Firmware B1–B5 mockups are approved on 27 Nov 2026 with the touch
+keyboard change recorded in [SCREENS.md](SCREENS.md). This plan schedules work,
+not a release or permission to invent screens.
 Android 0.12 remains the semantic reference. X4 Pro, X4 Classic and X3/C3 X4 ship
 the same Library, durable state and widget meanings; X3 draws bounded text views.
 
@@ -167,18 +169,19 @@ include Tailnet/TLS/import code even before UI is complete.
 | F35a–c | **Each** editor increment: add/remove/reset; move/resize/focus; page create/name/reorder; `ui/Editor<Part>.*` | F34; a then b then c; parallel services | Atomic edits, focus/geometry invariants; Pro touch, Classic buttons, X3 approved Settings list equivalents | 2–7 each / 1–3 each |
 | F36a–c | **Each** approved catalog surface: Library/lists; detail/actions; series/download-next; `ui/<Surface>.*` | F22/F23/F25/F34; parallel surfaces | Neutral snapshot/action tests; approved offline/back/download/error scenes in each profile | 3–9 each / 2–5 each |
 | F37a–c | **Each** account surface: server/account; independent sync/OPDS logins; sign-out/origin confirmation; `ui/account/<Surface>.*` | F12/F15/F29/F34; a then b then c | Capabilities and account epochs; approved manual/phone sign-in states, closed form never repaints | 2–6 each |
-| F38k | **Each** approved Settings control, separate service then UI slice; `services/Settings<Kind>.*`, `reader/SettingsBridge.*`, `ui/settings/<Kind>.*` | F26a/F29/F34; independent families; B4 blocks uncovered controls | Enum mapping/roundtrip/Undo; approved reading/Custom, sync/power, Library/storage, About/channel scenes | 1–3 per half |
+| F38k | **Each** approved Settings control, separate service then UI slice; `services/Settings<Kind>.*`, `reader/SettingsBridge.*`, `ui/settings/<Kind>.*` | F26a/F29/F34; independent families; B4 approved; control dependencies apply | Enum mapping/roundtrip/Undo; approved reading/Custom, sync/power, Library/storage, About/channel scenes | 1–3 per half |
 | F39 | Personal provider precedence and stats coverage/watermarks; `services/PersonalReading.*`, `ReadingStats.*` | F09/F18b/F27c/F21; parallel UI | No aggregate/session double count, deterministic picks, absent versus zero; offline/local/account coverage | 3–10 |
 | F40w | **Each** remaining widget, one provider projection then one renderer slice; `services/widgets/<Id>.*`, `ui/widgets/<Id>.*` | F34/F39, relevant adapter/system capability; parallel widget IDs | Independent known/empty/off/unsupported/stale/oversize fixture; approved widget scene and X3 text action | 1–4 per half |
 | F41r | **Each** approved reader panel, separate intent seam then presentation slice; `reader/<Panel>.*`, `ui/reader/<Panel>.*` | F09/F12/F19/F20/F22/F38k; parallel panel IDs | Engine invocation/locator preserved, capability and cancel; approved panel/Back/read-position scenario | 1–5 per half |
 | F42 | Cached sleep presentation and bounded sleep/wake drain; `services/Sleep.*`, `ui/Sleep.*`, reader sleep seam | F11/F12/F19/F29/F34 | Deadline/capture before sleep, cached-only draw, wake ownership; sleep/reboot/resume no network during paint | 3–8 |
-| F43 | Device/control projections and diagnostics recovery; `services/Device.*`, `Battery.*`, `system/Diagnostics.*` | F11/F12/F29/F38k; parallel F40/F41; B1/B4/B5 block new screens | Hardware capability truth, crash dedup, storage ownership; approved battery/light/rotate actions, no unsolicited overlay | 3–10 |
-| F44 | Full cutover/fault/reader regression gate; `test/host/`, `test/simulator/`, `tools/ci/*` | All applicable slices and approved blocked-screen slices | Lost power/full SD/unknown delivery/account isolation; six builds, three full scenarios, maps/heap/time reports | 0 |
+| F43 | Device/control projections and diagnostics recovery; `services/Device.*`, `Battery.*`, `system/Diagnostics.*` | F11/F12/F29/F38k; parallel F40/F41; B1/B4/B5 approved; slice dependencies apply | Hardware capability truth, crash dedup, storage ownership; approved battery/light/rotate actions, no unsolicited overlay | 3–10 |
+| F44 | Full cutover/fault/reader regression gate; `test/host/`, `test/simulator/`, `tools/ci/*` | All applicable slices, including essential B1–B5 presentations | Lost power/full SD/unknown delivery/account isolation; six builds, three full scenarios, maps/heap/time reports | 0 |
 | F45 | Maintainer device acceptance gate; BookSync integration repo acceptance record and feature/roadmap evidence | F44; no parallel promotion | Passing host/simulator receipts supplied; maintainer alone checks devices and records acceptance | 0 |
 
 F38k control groups (one slice per control per half): Reading/Custom; Sync/Wi-Fi/power policy; Library/storage; About/update
 channel. Implement only controls whose device presentation is approved. Direct
-hardware configuration not illustrated is B1/B4 below, not implicit approval.
+hardware configuration follows the approved B1/B4 states below; additional
+unillustrated states still need approval.
 
 F40w IDs: also-reading, streak, week, today, goal, buddy, highlight, discover,
 recently-added, year, forecast, hours, records, year-ago, finished-in-year, word,
@@ -251,32 +254,34 @@ devices/serial ports; only the maintainer sideloads and checks typography, ancho
 reading stats, SD/NVS migration, Tailnet identity, sleep/wake, OTA and e-ink/input
 behavior on every reader. Device evidence cannot be replaced by simulator success.
 
-## 5. Screens blocked on approved mockups
+## 5. Approved firmware screens (B1–B5)
 
-Proposed [firmware gallery](mockups.html) and [screen/state inventory](SCREENS.md)
-cover B1–B5 below. They await maintainer approval; this list remains blocked.
+The maintainer approved the [firmware gallery](mockups.html) and
+[screen/state inventory](SCREENS.md) on **27 Nov 2026** (PR #202), with one
+change, verbatim: "On screen keyboard should always be on the bottom for touch".
+B1–B5 no longer have a blocked-screens approval gate. Each approved UI slice may
+proceed when its corresponding service, test and slice dependencies are satisfied.
+The Q1–Q7 coordinator decisions are recorded in SCREENS.md.
 
-Approved coverage is revision 16's gallery/prototype, including X3's text/button
-mode, not just screenshots with a device filename. Home/editor, lists/filters,
-detail/series/download state, account/connector sign-in/out, reading/Custom,
-sync/power, storage, battery, channel picker and illustrated reader panels may
-follow those designs. Phone sign-in mockups do not authorize Tailnet pairing UI.
-For every surface record its exact prototype scene/state before implementation;
-missing device/error/confirmation states join this list rather than being invented.
+Home revision 16 remains approved, including X3's text/button mode. The firmware
+gallery adds the B1–B5 device, error and confirmation states. Record the exact
+prototype scene/state for every implementation slice; additional unillustrated
+states need approval rather than being invented. Touch on-screen keyboards always
+dock at the bottom, with content and fields visible above; button views are unchanged.
 
-| ID | Needs maintainer-approved mockup before UI work | Services/tests that may proceed |
+| ID | Approved presentation coverage | Required service/test dependencies |
 |---|---|---|
-| B1 | Wi-Fi network selection/password/captive or failed-join recovery; Tailnet join/login URL or code, pairing status, relay controls, logout/re-pair confirmation; C3 network-phase wait/refusal/recovery | F10/F11 transport, NVS retention and leases; fake-hardware tests |
-| B2 | Upgrade/import progress, unsupported/corrupt legacy state, unresolved identity/anchor conflicts, queue capacity and migration recovery; any destructive reset or downgrade warning | F26–F29 read-only import/proofs and safe activation; no new modal |
-| B3 | Firmware download/install/restart progress, signature/root/board rejection, interrupted-update/recovery and rollback controls beyond the approved channel picker | F30–F32 parser/trust/bridge and deferred-install tests |
-| B4 | Unillustrated firmware-only settings: calibration, ruled-line/font assets, hardware shortcuts/frontlight schedules, PIN/security, USB/SD ownership/transfer recovery, and new dictionary/search error/confirmation flows | Retain engine/settings/data; F38/F41/F43 service seams and existing native escape, no new screen |
-| B5 | Persistent crash summary, diagnostic export/recovery/reset confirmation and any new first-run/upgrade-news surface absent from the approved firmware scenes | F43 capture/dedup/read model; no automatic upload or presentation |
+| B1 | Wi-Fi selection/password/join recovery; Tailnet pairing/status/route/logout/re-pair; C3 network wait/refusal/recovery | F10/F11 transport, NVS retention and leases; F12/F43 and fake-hardware tests |
+| B2 | Upgrade/import progress, corrupt/unsupported state, unresolved conflicts, queue capacity, migration recovery, settings-only reset and downgrade warning | F26–F29 read-only import/proofs and safe activation; durable capacity policy |
+| B3 | Firmware download/install/restart, trust/board rejection, interrupted update/recovery and compatible return controls | F30–F32 parser/trust/bridge, F29 compatibility proof and deferred-install tests |
+| B4 | Calibration, ruled lines/fonts, hardware shortcuts/frontlight schedules, PIN/security, USB/SD ownership and dictionary/search recovery | F38k/F41r/F43 service seams, retained engine/settings/data and native escape |
+| B5 | Persistent crash summary, local diagnostics export, recovery/reset confirmations, optional first-run and once-only Home upgrade news | F43 capture/dedup/read model; F29 for upgrade news; no automatic upload or presentation |
 
-These are blocked presentations, not reasons to omit settings or lose old data.
-Do not ship a cutover with essential configuration/recovery inaccessible. Obtain
-mockup approval, then implement each approved screen/state as its own worker-day
-UI slice on its corresponding tested service. F44 waits for essential blocked
-surfaces; optional new presentations can remain blocked without delaying core tests.
+Approval does not waive durability, compatibility, resource or device acceptance.
+Do not ship a cutover with essential configuration/recovery inaccessible. Implement
+each approved screen/state as its own small UI slice on its tested service. F44
+waits for essential B1–B5 surfaces and their tests; optional presentations may be
+deferred without delaying core tests.
 
 ## 6. Remaining one-way doors
 
