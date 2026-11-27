@@ -37,27 +37,40 @@ return function(test,eq,ok,E,W,withHost)
         end
         return function(v) value=v end, function(v) groupValue=v end
     end
-    test("Finish sheet opens saved Series and Back returns to the same reader sheet",function()
+    test("Finish sheet opens saved Series from the reader and Back restores its sheet",function()
         withHost(function(batches,reads)
             fixtures(reads)
-            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             local ui={document={file="finished.epub"}}
-            local b={file="finished.epub",digest="finished",summary={status="complete"}}
-            local model,action=E.FinishUI.model,E.Library.catalogAction
+            local b={file="finished.epub",digest="finished-series",summary={status="complete"}}
+            local model,action,native=E.FinishUI.model,E.Library.catalogAction,E.Library.nativeReader
+            local nextTick,finish=E.UIManager.nextTick,E.Library.finishCurrent
+            local jobs,sending=E.FinishUI.jobs[b.digest],E.FinishUI.sending
+            local order,scheduled={},nil
+            E.liveUI=function() return ui end
+            E.HomeHost.active=nil; W.shown={ui}
+            E.Library.nativeReader=function() return b end
+            E.FinishUI.jobs[b.digest]={}; E.FinishUI.sending=nil
             E.FinishUI.model=function() return {title="Finished",status="Saved",series_key="opaque-series"} end
-            E.Library.catalogAction=function() error("viewing a series must not send finish or download commands") end
+            E.Library.catalogAction=function(op) eq(op,"finish.leave");order[#order+1]=op end
+            E.UIManager.nextTick=function(_,fn) scheduled=fn end
+            E.Library.finishCurrent=function(done) order[#order+1]="existing-writer";done(true) end
             local success,why=pcall(function()
                 E.FinishUI.showSheet(ui,b)
-                local sheet=E.FinishUI.sheet
-                tap(sheet,"View series")
+                tap(E.FinishUI.sheet,"View series")
+                local h=E.HomeHost.active
                 eq(E.FinishUI.sheet,nil);eq(h.series_key,"opaque-series")
                 eq(reads[#reads].op,"series");eq(reads[#reads].key,"opaque-series")
                 eq(h.metrics.network,0);eq(h.metrics.spawns,0);eq(h.metrics.roundTrips,1)
+                eq(order[1],"finish.leave");eq(#order,1);ok(scheduled)
+                scheduled();eq(order[2],"existing-writer")
                 tap(h,"‹ Back")
                 ok(E.FinishUI.sheet);eq(E.FinishUI.sheet.ui,ui);eq(E.FinishUI.sheet.book,b)
-                eq(ui.document.file,"finished.epub")
+                eq(E.HomeHost.foreground(),false);eq(ui.document.file,"finished.epub")
             end)
-            E.FinishUI.closeSheet();E.FinishUI.model,E.Library.catalogAction=model,action
+            E.FinishUI.closeSheet()
+            E.FinishUI.model,E.Library.catalogAction,E.Library.nativeReader=model,action,native
+            E.UIManager.nextTick,E.Library.finishCurrent=nextTick,finish
+            E.FinishUI.jobs[b.digest],E.FinishUI.sending=jobs,sending
             if not success then error(why) end
         end)
     end)

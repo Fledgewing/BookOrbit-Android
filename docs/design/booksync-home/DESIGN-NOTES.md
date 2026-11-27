@@ -1077,7 +1077,8 @@ Android's existing finish sheet now opens the owned Series page through the Book
 interface. The companion's saved finish snapshot supplies an opaque series key; the
 UI never chooses a source or scans membership. Last book and unknown series order
 still allow View series; no membership omits it. Back restores the sheet only while
-the initiating document remains open. Viewing does not send a finish or download.
+the initiating document remains open. The existing Home-host reader-leave checkpoint
+and deferred sole finish writer remain intact; viewing never requests a download.
 
 Reuse: `server/bookorbit/FinishLogic.kt:12` selects saved next/suggestion cards;
 `ko/finish.lua:42` reads the bounded finish projection; `ko/endsheet.lua:77` draws
