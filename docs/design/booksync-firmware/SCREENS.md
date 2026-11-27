@@ -1,12 +1,14 @@
 # BookSync 0.12 firmware screen inventory
 
-Status: **designing; maintainer approval pending**. These static mockups complete the
-presentation inventory requested by PLAN B1–B5; they do not mark those groups approved.
+Status: **approved — 27 Nov 2026**, with the keyboard change. The maintainer
+approved [the firmware mockups](mockups.html) on `feature/0.12` (PR #202), with
+one change, verbatim: "On screen keyboard should always be on the bottom for touch".
+This approves the presentation inventory for PLAN B1–B5, subject to slice dependencies.
 [Gallery](mockups.html) · [plan](PLAN.md) · [approved Home revision 16](../booksync-home/DESIGN.md).
 Each row below links one screen/state, with all three device views and captions.
 Implementation expands per state/control into the plan’s small UI slices; service work
-may proceed under the plan before UI approval. Android keeps its approved Home/reader
-and system settings; these proposals are firmware-specific. Nothing ships in this PR,
+and UI work proceed under their plan slice dependencies. Android keeps its approved Home/reader
+and system settings; these approved screens are firmware-specific. Nothing ships in this PR,
 so shipped feature cells remain unchanged.
 
 The gallery uses the approved 480 × 800 design viewport and frame tokens, not a claim
@@ -93,8 +95,8 @@ budgeted/tested under F41r; a renderer must not scan a book.
   engine rules; wrong-code errors never unlock settings. A reset cannot bypass it.
 - The QR in the static gallery is deliberately non-scannable. Live pairing uses the
   existing approval URL supplied privately through the Library pairing model; no
-  synthetic hostname, address or account is shown. The runtime retains the existing readable live link and manual Check; an additional
-  handoff is Q1, not an invented code exchange. Regions and book names are synthetic.
+  synthetic hostname, address or account is shown. The runtime retains the existing
+  readable live link and manual Check; no phone-assisted handoff is included (Q1). Regions and book names are synthetic.
 - Destructive confirmations default focus to Keep/Cancel. Settings reset is narrowly
   scoped; unsent work, original imports, credentials and pairing are retained.
   No format, erase-all, discard-queue or reset-identity action is proposed.
@@ -108,41 +110,41 @@ budgeted/tested under F41r; a renderer must not scan a book.
   remounts and rebuilds projections behind Library. X3 powers off for card removal.
 - First-run can skip sign-in. Upgrade progress resumes idempotently; unknown format,
   unreadable originals, uncertain delivery and ambiguous anchors never become empty
-  success or guessed acknowledgments. Pending-queue capacity is Q2; do not promise
-  lossless capture after exhaustion without service proof.
+  success or guessed acknowledgments. At pending-queue capacity, saved books
+  remain read-only; operations that cannot record durably are blocked with a message (Q2). Never evict unacknowledged work.
 
 ## Screens and plan slices
 
-| Screen | State | Build slice after mockup approval | Library service group |
+| Screen | State | Approved build slice (dependencies apply) | Library service group |
 |---|---|---|---|
-| [wifi-list — Wi-Fi](mockups.html#wifi-list) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-empty — No networks found](mockups.html#wifi-empty) | empty; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-scan — Looking for networks](mockups.html#wifi-scan) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-hidden — Other network](mockups.html#wifi-hidden) | entry; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-password — Wi-Fi password](mockups.html#wifi-password) | entry; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-joining — Connecting](mockups.html#wifi-joining) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-save — Save this password?](mockups.html#wifi-save) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-ready — Wi-Fi connected](mockups.html#wifi-ready) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-failed — Could not connect](mockups.html#wifi-failed) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-captive — This network needs a web sign-in](mockups.html#wifi-captive) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [wifi-forget — Forget this network?](mockups.html#wifi-forget) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [private-off — Private connection](mockups.html#private-off) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-loading — Getting sign-in ready](mockups.html#pair-loading) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-scan — Pair this reader](mockups.html#pair-scan) | waiting; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-connected — Reader paired](mockups.html#pair-connected) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-failed — Pairing did not finish](mockups.html#pair-failed) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-expired — Sign-in has expired](mockups.html#pair-expired) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [relay — Connection route](mockups.html#relay) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [relay-regions — Choose a region](mockups.html#relay-regions) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [relay-empty — Regions not saved yet](mockups.html#relay-empty) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [private-logout — Unpair this reader?](mockups.html#private-logout) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [private-repair — Reader unpaired](mockups.html#private-repair) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [network-wait — Connecting safely](mockups.html#network-wait) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [network-refused — Connect after reading](mockups.html#network-refused) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [network-recover — Connection could not start](mockups.html#network-recover) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-checking — Checking approval](mockups.html#pair-checking) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-unapproved — Not approved yet](mockups.html#pair-unapproved) | waiting; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
-| [pair-no-wifi — Connect to Wi-Fi first](mockups.html#pair-no-wifi) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 (B1 UI approval gate) | Library Device / network intents (F10–F12, F43) |
+| [wifi-list — Wi-Fi](mockups.html#wifi-list) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-empty — No networks found](mockups.html#wifi-empty) | empty; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-scan — Looking for networks](mockups.html#wifi-scan) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-hidden — Other network](mockups.html#wifi-hidden) | entry; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-password — Wi-Fi password](mockups.html#wifi-password) | entry; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-joining — Connecting](mockups.html#wifi-joining) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-save — Save this password?](mockups.html#wifi-save) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-ready — Wi-Fi connected](mockups.html#wifi-ready) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-failed — Could not connect](mockups.html#wifi-failed) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-captive — This network needs a web sign-in](mockups.html#wifi-captive) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [wifi-forget — Forget this network?](mockups.html#wifi-forget) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [private-off — Private connection](mockups.html#private-off) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-loading — Getting sign-in ready](mockups.html#pair-loading) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-scan — Pair this reader](mockups.html#pair-scan) | waiting; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-connected — Reader paired](mockups.html#pair-connected) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-failed — Pairing did not finish](mockups.html#pair-failed) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-expired — Sign-in has expired](mockups.html#pair-expired) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [relay — Connection route](mockups.html#relay) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [relay-regions — Choose a region](mockups.html#relay-regions) | normal; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [relay-empty — Regions not saved yet](mockups.html#relay-empty) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [private-logout — Unpair this reader?](mockups.html#private-logout) | confirmation; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [private-repair — Reader unpaired](mockups.html#private-repair) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [network-wait — Connecting safely](mockups.html#network-wait) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [network-refused — Connect after reading](mockups.html#network-refused) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [network-recover — Connection could not start](mockups.html#network-recover) | error; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-checking — Checking approval](mockups.html#pair-checking) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-unapproved — Not approved yet](mockups.html#pair-unapproved) | waiting; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
+| [pair-no-wifi — Connect to Wi-Fi first](mockups.html#pair-no-wifi) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
 | [import-intro — Keep your reading history](mockups.html#import-intro) | confirmation; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
 | [import-progress — Keeping your reading history](mockups.html#import-progress) | progress; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
 | [import-resume — Continue the upgrade](mockups.html#import-resume) | recovery; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
@@ -242,24 +244,33 @@ budgeted/tested under F41r; a renderer must not scan a book.
 | [upgrade-news — A familiar place for your books](mockups.html#upgrade-news) | normal; X4 Pro / X4 Classic / X3 | B5: F43 (F29 for upgrade news) | Library Device / diagnostics intents (F43; F29 for upgrade news) |
 | [recovery-active — Basic settings for this start](mockups.html#recovery-active) | recovery; X4 Pro / X4 Classic / X3 | B5: F43 (F29 for upgrade news) | Library Device / diagnostics intents (F43; F29 for upgrade news) |
 
-## Open questions for the maintainer
+## Recorded coordinator decisions (Q1–Q7)
 
-- **Q1 — Pairing on button readers:** Keep the existing QR, readable live link and manual Check, or additionally offer a phone-assisted handoff for button readers? No short-code protocol exists in the audited firmware. The gallery shows a non-scannable diagram and never invents a URL.
-- **Q2 — Queue at capacity:** Approve the proposed read-only saved-books path when no new delivery record fits, or block operations that cannot durably record a change? Never evict unacknowledged work; local capture guarantees must be proven before enabling this state.
-- **Q3 — Unresolved imports:** Approve keeping ambiguous copies/anchors unresolved for later review, or require an explicit mapping UI before activation? The gallery provides no guessed match and no outgoing replay for unresolved records.
-- **Q4 — Reset and forgotten code:** Approve settings-only reset, one-boot basic settings and a separate verified forgot-code recovery procedure? No erase-all, lock bypass, credential reset or source deletion is authorized here.
-- **Q5 — Rollback admission:** Which previous signed versions are proven safe with the new durable schema? Enable Return to previous only after F29/F32 compatibility proof; otherwise use Previous version unavailable.
-- **Q6 — Diagnostic scope and retention:** Approve local redacted export and report-only deletion, and decide the retention limit. X3 gets a bounded summary only, never a promised S3 core dump.
-- **Q7 — First-run and upgrade news:** Approve optional setup, saved-books-first welcome and once-only news at Home after upgrade? These are new firmware surfaces, not covered by phone sign-in approval.
+These are coordinator calls. The maintainer approved the mockups after seeing
+them on 27 Nov 2026; the maintainer's requested change is recorded above.
+
+- **Q1 — Pairing on button readers:** Keep the existing QR, live link and manual Check; no phone-assisted handoff.
+- **Q2 — Queue at capacity:** Read-only saved-books path at capacity; operations that can't record durably are blocked with a message; never evict unacknowledged work.
+- **Q3 — Unresolved imports:** Keep ambiguous imports unresolved for later review; no guessed match and no outgoing replay.
+- **Q4 — Reset and forgotten code:** Approve settings-only reset, one-boot basic settings and a separate verified forgot-code recovery; nothing erases books or sign-ins.
+- **Q5 — Rollback admission:** Offer Return to previous only for versions proven compatible after F29/F32; otherwise show Previous version unavailable.
+- **Q6 — Diagnostic scope and retention:** Local redacted export to SD, keep the last 5 reports, user can delete them; X3 gets a bounded summary.
+- **Q7 — First-run and upgrade news:** Optional first-run setup; once-only upgrade news on Home.
 
 ## Acceptance before implementation approval becomes shipment
+
+For every text-entry screen, the acceptance criterion is: **touch on-screen keyboard
+always docked at the bottom**. Content, fields and actions remain visible above it;
+button-device presentation is unchanged. This applies to `wifi-hidden`,
+`wifi-password`, `pin-new`, `pin-repeat`, `pin-unlock` and `search-entry`, and to
+any later text-entry state.
 
 Each state needs render/Back/focus coverage in all three simulator profiles and a
 matching Library fake for success, cancellation, error and stale delivery. Prove
 zero work during paint, no overlay/restart while reading, bounded X3 memory, card
 ownership and no unacknowledged eviction. Firmware size/margin and real-device
 sideload acceptance remain PLAN gates; this document measures neither. Essential
-recovery UI remains a cutover blocker until the maintainer approves it.
+recovery UI remains a cutover blocker until its implementation passes these gates.
 
 Review validation for this documentation change: headless-browser inspection of all
 126 states / 378 device views found no content clipping, broken internal anchors,
@@ -267,3 +278,8 @@ page errors or horizontal overflow at 1200 px and 390 px widths. Representative
 password, pairing, import conflict, install, calibration, code-entry, USB ownership
 and crash-summary views were rendered and visually inspected. Repository branding
 and feature-reference tests pass. This is browser QA, not firmware/device evidence.
+
+Approval-change validation: all six X4 Pro text/keypad views dock the keyboard at
+the screen bottom with fields and actions visible above it. All 252 button-device
+views are unchanged. The 378-view clipping/anchor/overflow checks pass at 1200 px
+and 390 px widths; password and code-entry renders were visually inspected.
