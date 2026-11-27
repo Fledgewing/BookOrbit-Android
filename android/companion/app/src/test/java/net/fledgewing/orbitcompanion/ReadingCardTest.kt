@@ -144,6 +144,10 @@ class ReadingCardTest {
                 assertEquals(78L,result(owner,battery)["level"])
             }
             events.clear()
+            assertEquals(true,model.storageCommand(commandOwner,"storage.refresh",emptyMap<Any,Any>())["ok"])
+            for(owner in owners) assertEquals(1,rows(owner).size)
+            assertEquals(owners.toSet(),events.map { it["owner"] }.toSet())
+            events.clear()
             assertFalse(model.publish("departed",listOf(window)))
             assertFalse(model.refreshLocalFiles("departed"))
             assertTrue(events.isEmpty())

@@ -147,7 +147,7 @@ class LibraryReadModel(
     fun storageCommand(owner: String, op: String, args: Map<*, *>): Map<String, Any?> {
         val projection = if (owner == DeviceLibrary.OWNER) DeviceLibrary(roots()) else adapter ?: ServerAdapters.forStore(
             store, clock = clock, fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
-        val result = DeviceStorage(store, projection).command(owner, op, args)
+        val result = if(op=="storage.refresh") mapOf("ok" to true) else DeviceStorage(store, projection).command(owner, op, args)
         if(op=="storage.remove.preview") return result
         // Local files are shared, but each owner is projected independently with fresh batch context.
         refreshLocalFiles(owner)

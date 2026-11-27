@@ -76,9 +76,13 @@ function HomeWidgets.coverTap(canvas,callback,x,y,w,h)
         ges_events={TapCardCover={require("ui/gesturerange"):new{ges="tap",range=range}}}},x,y)
 end
 function HomeWidgets.more(canvas,b,dispatch,x,y,w,h)
-    HomeWidgets.button(canvas,"⋯",x,y,w,h,function() dispatch("more",b) end)
+    local job=not b.local_path and b.transfer
+    local active=job and job.id and (job.state=="running" or job.state=="queued" or job.state=="canceling")
+    HomeWidgets.button(canvas,active and "Cancel" or "⋯",x,y,w,h,function() dispatch(active and "download-cancel" or "more",b) end)
 end
 function HomeWidgets.caption(settings, book)
+    local job=not book.local_path and book.transfer
+    if job then return job.progress_text or job.error or job.state or "" end
     local cap=settings.cap or 0
     if cap==1 then return book.added and tostring(book.added):sub(1,10) or "—" end
     if type(book.status_note)=="string" then return book.status_note end
@@ -138,7 +142,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         HomeWidgets.text(canvas,pct and string.format("%d%%",pct) or _("—"),tx,h-scale(short and 105 or 128),percentW,short and 16 or 26,true,true)
         HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=(pct or 0)/100,radius=0,margin_h=0,margin_v=0,
             bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
-        HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
+        HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Download"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
     elseif geometry.shelf then
         local count=math.min(snapshot.count,geometry.capacity)
         local cw=math.floor((w-2*pad)/math.max(1,count))

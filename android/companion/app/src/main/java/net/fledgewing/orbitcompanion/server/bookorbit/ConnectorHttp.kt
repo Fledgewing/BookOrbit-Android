@@ -39,6 +39,9 @@ internal object ConnectorHttp : BookOrbitServerAdapter.ConnectorTransport {
         } catch (_: Exception) { BookOrbitAccount.Reply(0) }
         finally { c.disconnect(); OLog.i("connector.http ms=${(System.nanoTime()-start)/1_000_000}") }
     }
+    override fun transfer(server:String,path:String,headers:Map<String,String>,destination:File,
+        progress:(Long,Long?)->Unit,canceled:()->Boolean):Boolean =
+        BookTransferHttp().transfer(server,path,headers,destination,progress,canceled)
     override fun download(server: String, path: String, headers: Map<String, String>, destination: File): Boolean {
         val part = File(destination.parentFile, destination.name + ".part")
         val reply = AdapterWorker.UrlHttp.get(server + path, headers, part, 536870912)

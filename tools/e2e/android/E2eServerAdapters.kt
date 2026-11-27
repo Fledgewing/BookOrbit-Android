@@ -4,6 +4,7 @@ package net.fledgewing.orbitcompanion
 import android.content.Context
 import android.content.Intent
 import java.io.File
+import net.fledgewing.orbitcompanion.server.bookorbit.CatalogTransfers
 
 /** Compiled only in the disposable emulator build. Never added to app source sets. */
 object ServerAdapters {
@@ -13,6 +14,7 @@ object ServerAdapters {
     private val prefs get() = requireNotNull(context).getSharedPreferences("e2e", Context.MODE_PRIVATE)
     private val signedIn get() = context != null && prefs.getBoolean("signedIn", false)
     private const val OWNER = "emulator-fixture"
+    private val transfers by lazy { CatalogTransfers(File(root,"emulator-transfers")) }
     private val adapter = object : ServerAdapter {
         override val id = "fixture"
         override fun owner() = OWNER.takeIf { signedIn }
@@ -29,7 +31,7 @@ object ServerAdapters {
         }
         override fun signOut() { prefs.edit().putBoolean("signedIn", false).commit() }
         override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
-            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("lists" to mapOf("read" to true,"save" to false))
+            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("download" to true,"lists" to mapOf("read" to true,"save" to false))
             if(request["op"]=="lists") return mapOf("items" to listOf(mapOf("key" to "fixture-list","title" to "Fixture shelf","count" to 59)),"freshness" to mapOf("saved" to true))
             return books.project(DeviceLibrary.OWNER, request)
         }
@@ -37,6 +39,32 @@ object ServerAdapters {
         override fun localFiles(owner: String) = books.localFiles(DeviceLibrary.OWNER)
         override fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
             done(mapOf("state" to "complete", "freshness" to mapOf("saved" to true)), null)
+        }
+        override fun catalogAction(owner:String,action:String,args:Map<*,*>,done:(Map<String,Any?>?,String?)->Unit) {
+            try {
+                when(action) {
+                    "download.prepare" -> done(mapOf("items" to listOf(
+                        mapOf("file_reference" to 1L,"label" to "EPUB","destination" to "/storage/emulated/0/BookSync/Transfer review.epub"),
+                        mapOf("file_reference" to 2L,"label" to "PDF","destination" to "/storage/emulated/0/BookSync/Transfer review.pdf")),"row_count" to 2),null)
+                    "download.status" -> done(transfers.read(owner,args["id"] as String),null)
+                    "download.cancel" -> done(transfers.cancel(owner,args["id"] as String),null)
+                    "download.start","download.resume" -> {
+                        val result=if(action=="download.start") transfers.start(owner,args) else transfers.resume(owner,args["id"] as String)
+                        done(result,null)
+                        BulkWork.executor.execute { transfers.run(owner,result["id"] as String) { job ->
+                            val id=job["id"] as String
+                            repeat(20) {
+                                if(transfers.canceled(owner,id)) throw ServerFailure("canceled")
+                                transfers.progress(owner,id,(it+1)*1024L,null);Thread.sleep(250)
+                            }
+                            val target=File(job["destination"] as String);target.parentFile!!.mkdirs()
+                            File(android.os.Environment.getExternalStorageDirectory(),"Books/001 Seedfall.epub").copyTo(target,overwrite=true)
+                            mapOf("local_path" to target.path)
+                        } }
+                    }
+                    else -> done(null,"unsupported")
+                }
+            } catch(e:ServerFailure) { done(null,e.kind) }
         }
         override fun captureLifecycle(capture: Map<*, *>): Pair<String, ByteArray> =
             "fixture-document" to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))

@@ -300,6 +300,33 @@ function Library:read(op, args)
     bytes=decoded or 0
     assert(bytes<=args.bytes,"Library call budget exceeded")
     if bytes>0 then charge(0,bytes) end
+    if result and result.items and Library.unavailablePaths then
+        local decorated
+        for i,row in ipairs(result.items) do
+            local untilAt=type(row)=="table" and row.local_path and Library.unavailablePaths[row.local_path]
+            if untilAt and untilAt>now_s() then
+                if not decorated then decorated=Cache.copy(result) end
+                decorated.items[i].local_path=nil
+            end
+        end
+        if decorated then result=decorated end
+    end
+    if result and result.items and Library.downloadJobs then
+        local decorated
+        for i,row in ipairs(result.items) do
+            local job=type(row)=="table" and not row.local_path and Library.downloadJobs[row.key]
+            if job then
+                local overlay={id=job.id,state=job.state,progress_text=job.progress_text or job.error}
+                local size=#UIUtil.encode(overlay)+32
+                local available=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
+                if size<=available then
+                    if not decorated then decorated=Cache.copy(result) end
+                    decorated.items[i].transfer=overlay;charge(0,size)
+                end
+            end
+        end
+        if decorated then result=decorated end
+    end
     if result then
         rows=result.row_count or (result.items and #result.items or 1)
         assert(type(rows)=="number" and rows>=0 and rows==math.floor(rows) and rows<=args.limit,"Library call budget exceeded")
@@ -373,8 +400,19 @@ function Library.changed(event)
     end
     if Library.listener then Library.listener(event) end
 end
+Library.unavailablePaths={}
+Library.unavailableOrder={}
 function Library.open(row)
     if type(row.local_path) ~= "string" then return false end
+    if not Store.fileExists(row.local_path) then
+        if not Library.unavailablePaths[row.local_path] then
+            Library.unavailableOrder[#Library.unavailableOrder+1]=row.local_path
+            if #Library.unavailableOrder>32 then Library.unavailablePaths[table.remove(Library.unavailableOrder,1)]=nil end
+        end
+        Library.unavailablePaths[row.local_path]=now_s()+30
+        Library.storageCommand("storage.refresh",{},function() LibraryAdapter.reset();Library.changed({kind="library_source",owner=LibraryAdapter.owner()}) end)
+        return false,"missing"
+    end
     require("apps/reader/readerui"):showReader(row.local_path)
     return true
 end
@@ -460,7 +498,10 @@ local function storagePath()
     local ui=liveUI and liveUI()
     return ui and ui.document and ui.document.file or nil
 end
-function Library:storage() return self:read("storage.summary",{limit=1,exclude_path=storagePath(),current_folder=G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("home_dir")}) end
+function Library.downloadRoot()
+    return G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("home_dir") or Device.home_dir or G_reader_settings:readSetting("lastdir")
+end
+function Library:storage() return self:read("storage.summary",{limit=1,exclude_path=storagePath(),current_folder=Library.downloadRoot()}) end
 function Library:collections(offset,limit) return self:read("collections",{offset=offset or 0,limit=limit or 6}) end
 function Library.storageCommand(op,args,done)
     args.exclude_path=storagePath(); args.owner=LibraryAdapter.owner()
@@ -593,10 +634,52 @@ function Library.cardRemoval(row,token,done)
         end)
 end
 
--- Explicit download reuses the catalog's validated atomic-file/ledger workflow.
-function Library.downloadCard(row,done)
-    return Library.catalogAction("finish.download",{key=row.key},done)
+-- Transfer control is companion-owned; renderers read only this bounded in-memory overlay.
+Library.downloadJobs={}
+Library.downloadOrder={}
+function Library.downloadState(key) return Library.downloadJobs[key] end
+function Library.rememberDownload(key,result)
+    local previous=Library.downloadJobs[key]
+    if previous and previous.id==result.id and (tonumber(previous.sequence) or 0)>(tonumber(result.sequence) or 0) then return previous end
+    if result.state=="complete" and result.local_path then Library.unavailablePaths[result.local_path]=nil end
+    if not Library.downloadJobs[key] then
+        Library.downloadOrder[#Library.downloadOrder+1]=key
+        if #Library.downloadOrder>32 then Library.downloadJobs[table.remove(Library.downloadOrder,1)]=nil end
+    end
+    Library.downloadJobs[key]=result
+    return result
 end
+local function transferResult(result,kind)
+    local bytes=#UIUtil.encode(result or {})
+    local rows=result.row_count or (result.items and #result.items) or 1
+    assert(Budgets.check(Budgets.get("screens",kind),{rows=rows,bytes=bytes,snapshotBytes=bytes,network=0,spawns=0,roundTrips=1}))
+    return result
+end
+function Library.downloadPrepare(row,done)
+    return Library.catalogAction("download.prepare",{key=row.key,root=Library.downloadRoot()},function(result) done(transferResult(result,"download-options")) end)
+end
+function Library.downloadStart(row,choice,done)
+    return Library.catalogAction("download.start",{key=row.key,file_reference=choice.file_reference,variant=choice.variant,destination=choice.destination},function(result)
+        Library.rememberDownload(row.key,transferResult(result,"download-job"));done(result)
+    end)
+end
+function Library.downloadControl(row,action,done)
+    local job=Library.downloadState(row.key)
+    if not job or not job.id then return false end
+    return Library.catalogAction("download."..action,{id=job.id},function(result)
+        local current=Library.downloadState(row.key)
+        if not current or current.id~=job.id then if done then done({error="canceled"}) end;return end
+                if result.error and not result.id then
+            local failed=Cache.copy(current);failed.error=result.error;failed.state="error";failed.progress_text="Status unavailable · Try again";result=failed
+        end
+        local adopted=Library.rememberDownload(row.key,transferResult(result,"download-job"));if done then done(adopted) end
+    end)
+end
+function Library.downloadConnect(done)
+    return Net.up(Library.controller(),{reason="manual",cap=20},function(ready) done(ready) end)
+end
+-- Kept for existing caller compatibility; new UI uses the job controls above.
+function Library.downloadCard(row,done) return Library.catalogAction("finish.download",{key=row.key},done) end
 
 -- Card cover preparation runs after the first paint. The interface owns cache misses,
 -- account/generation cancellation and retries; widgets see only a bounded local path.

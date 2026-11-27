@@ -836,23 +836,97 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
-    test("Home card download: one explicit job and no late reader focus",function()
+    test("transfer controls: out-of-order same-job replies adopt only the latest sequence",function() withHost(function()
+        local jobs,order,command=E.Library.downloadJobs,E.Library.downloadOrder,E.LibraryAdapter.command
+        E.Library.downloadJobs={};E.Library.downloadOrder={}
+        local callbacks={};local reply
+        E.LibraryAdapter.command=function(_,_,done) callbacks[#callbacks+1]=done;return true end
+        local success,err=pcall(function()
+            E.Library.rememberDownload("book",{id="same-job",state="canceled",sequence=2})
+            E.Library.downloadControl({key="book"},"status",function(result) reply=result end)
+            E.Library.downloadControl({key="book"},"resume",function() end)
+            callbacks[2]({id="same-job",state="queued",sequence=3,row_count=1})
+            callbacks[1]({id="same-job",state="canceled",sequence=2,row_count=1})
+            eq(reply.state,"queued");eq(reply.sequence,3)
+            eq(E.Library.downloadState("book").state,"queued")
+        end)
+        E.Library.downloadJobs,E.Library.downloadOrder,E.LibraryAdapter.command=jobs,order,command
+        ok(success,err)
+    end) end)
+
+    test("transfer snapshots: late canceled reply cannot replace a newer Resume",function() withHost(function()
+        local saved,order=E.Library.downloadJobs,E.Library.downloadOrder
+        E.Library.downloadJobs={};E.Library.downloadOrder={}
+        E.Library.rememberDownload("book",{id="same-job",state="canceled",sequence=2})
+        E.Library.rememberDownload("book",{id="same-job",state="queued",sequence=3})
+        local adopted=E.Library.rememberDownload("book",{id="same-job",state="canceled",sequence=2})
+        eq(adopted.state,"queued");eq(E.Library.downloadState("book").sequence,3)
+        E.Library.rememberDownload("book",{id="same-job",state="complete",sequence=5})
+        adopted=E.Library.rememberDownload("book",{id="same-job",state="running",sequence=4})
+        eq(adopted.state,"complete")
+        E.Library.downloadJobs,E.Library.downloadOrder=saved,order
+    end) end)
+
+    test("Home open: missing local file clears availability without starting a transfer",function() withHost(function()
+        local exists,storage,req=E.Store.fileExists,E.Library.storageCommand,E.require
+        local paths,order=E.Library.unavailablePaths,E.Library.unavailableOrder
+        E.Library.unavailablePaths={};E.Library.unavailableOrder={}
+        local opened,refreshed=0,0
+        E.Store.fileExists=function() return false end
+        E.Library.storageCommand=function(op,_,done) eq(op,"storage.refresh");refreshed=refreshed+1;done({ok=true}) end
+        E.require=function(name)
+            if name=="apps/reader/readerui" then return {showReader=function(_,path) eq(path,"/fixture/book.epub");opened=opened+1 end} end
+            return req(name)
+        end
+        local success,err=pcall(function()
+            local did,why=E.Library.open({local_path="/fixture/book.epub"})
+            eq(did,false);eq(why,"missing");eq(opened,0);eq(refreshed,1)
+            local paint=E.Library.paint("home");local result=paint:widget("booklist"):window("library/all",{},0,1)
+            eq(result.items[1].local_path,nil,"known missing path is not offered as local")
+            E.Store.fileExists=function() return true end
+            ok(E.Library.open({local_path="/fixture/book.epub"}));eq(opened,1)
+        end)
+        E.Store.fileExists,E.Library.storageCommand,E.require=exists,storage,req
+        E.Library.unavailablePaths,E.Library.unavailableOrder=paths,order
+        ok(success,err)
+    end) end)
+
+    test("Home card download: explicit format, bounded progress, cancellation and no late focus",function()
         withHost(function()
-            local download,open=E.Library.downloadCard,E.Library.open
+            local prepare,start,control,open=E.Library.downloadPrepare,E.Library.downloadStart,E.Library.downloadControl,E.Library.open
+            local connected=E.NetworkMgr.isConnected
+            E.NetworkMgr.isConnected=function() return true end
             local calls,opened,deliver=0,0
-            E.Library.downloadCard=function(row,done) eq(row.key,"remote");calls=calls+1;deliver=done end
-            E.Library.open=function(row) eq(row.local_path,"saved.epub");opened=opened+1;return true end
+            E.Library.downloadPrepare=function(_,done) calls=calls+1;deliver=done end
+            E.Library.downloadStart=function(row,choice,done)
+                eq(choice.file_reference,7);E.Library.rememberDownload(row.key,{id="job",state="running"});done({id="job",state="running"})
+            end
+            E.Library.downloadControl=function(_,action,done)
+                if action=="status" then deliver=done elseif action=="cancel" then done({state="canceled"}) end
+            end
+            E.Library.open=function() opened=opened+1;return true end
             local success,err=pcall(function()
                 local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
-                h:dispatch("download",{key="remote"});eq(calls,1);eq(h.cardDownload,"remote")
-                h:dispatch("download",{key="remote"});eq(calls,1,"pending download coalesces taps")
-                deliver({local_path="saved.epub"});eq(opened,1);eq(W.shown[#W.shown],nil)
-                deliver({local_path="saved.epub"});eq(opened,1,"leaving Home rejects late focus")
-                local available=E.Library.cardActions({key="remote"},{download=true})
-                eq(available[2].id,"download");eq(available[2].enabled,true)
-                eq(E.Library.cardActions({key="remote"},{download=false})[2].enabled,false)
+                h:dispatch("download",{key="remote"});h:dispatch("download",{key="remote"});eq(calls,1)
+                deliver({items={{file_reference=7,label="EPUB",destination="/fixture/book.epub"}}})
+                local chooser=W.shown[#W.shown];eq(chooser.buttons[1][1].text,"EPUB · size unknown")
+                chooser.buttons[1][1].callback()
+                local poll=W.queue[#W.queue].fn;poll()
+                h:dispatch("download-cancel",{key="remote"})
+                deliver({state="complete",local_path="saved.epub"});eq(opened,0,"Cancel revokes completion focus")
+                E.Library.rememberDownload("remote",{id="next-job",state="running"})
+                E.DownloadUI.watch(h,{key="remote"},function() return E.HomeHost.active==h end,true)
+                poll=W.queue[#W.queue].fn;poll();E.HomeHost.active=nil
+                deliver({state="complete",local_path="saved.epub"});eq(opened,0,"departure revokes completion focus")
+                E.HomeHost.active=h;W.shown={h}
+                E.Library.rememberDownload("remote",{id="final-job",state="running"})
+                E.DownloadUI.watch(h,{key="remote"},function() return E.HomeHost.active==h end,true)
+                poll=W.queue[#W.queue].fn;poll()
+                deliver({state="complete",local_path="saved.epub"});eq(opened,1,"visible originating screen may open once")
+                deliver({state="complete",local_path="saved.epub"});eq(opened,1,"terminal event cannot reopen it")
             end)
-            E.Library.downloadCard,E.Library.open=download,open
+            E.Library.downloadPrepare,E.Library.downloadStart,E.Library.downloadControl,E.Library.open=prepare,start,control,open
+            E.NetworkMgr.isConnected=connected;E.Library.downloadJobs={};E.Library.downloadOrder={};E.DownloadUI.preparing={};E.DownloadUI.intents={}
             ok(success,err)
         end)
     end)

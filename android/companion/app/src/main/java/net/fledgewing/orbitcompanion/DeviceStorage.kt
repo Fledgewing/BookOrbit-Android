@@ -49,7 +49,7 @@ class DeviceStorage(private val store: ProjectionStore, private val adapter: Ser
     private fun folder(): String? = File(store.root,"download-folder").let { if (it.isFile) it.readText().takeIf(folders::contains) else null }
     fun summary(owner: String, excludePath: String? = null, currentFolder: String? = null): Map<String,Any?> {
         val selected=folder()
-        val destination=selected?.let { File(volume,it) } ?: currentFolder?.let { Places.inside(it,listOf(volume)) }
+        val destination=currentFolder?.let { Places.inside(it,listOf(volume)) } ?: selected?.let { File(volume,it) }
         val label=destination?.let { if(it.parentFile?.canonicalFile==volume.canonicalFile) "/${it.name}" else it.path } ?: "Not selected"
         val books=files(owner)
         val coverFiles=coverFiles()

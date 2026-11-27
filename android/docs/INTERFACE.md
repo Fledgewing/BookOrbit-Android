@@ -630,3 +630,19 @@ bounded reply contains `token`, bytes and a plain confirmation detail.
 `storage.remove` requires the same path/token and rechecks tracked-file/account and
 open-book exclusions. Only the book file is removed. Sidecars are retained. Both
 commands run on the existing companion worker, not the reader UI thread.
+
+
+### Transfer jobs (0.12)
+
+`catalog.action` accepts `download.prepare` (opaque book key and optional current native root), returning at most
+eight file choices with opaque selection, bounded label, optional byte size and
+resolved destination. `download.start` freezes that choice and returns a job ID.
+`download.status`, `download.cancel` and `download.resume` take that exact ID;
+replies carry state, strictly ordered sequence across Resume/cancel/running, received bytes, optional total, plain progress
+text and a validated local path only on completion. Status/Cancel remain available
+while transfer IO occupies the catalog worker. Restart requires explicit Resume.
+
+`storage.refresh` recomputes bounded local-file views without deleting anything or
+contacting a server, including the signed-out device owner. A missing-file open
+uses this command and never silently downloads. Widgets receive a charged,
+immutable transfer overlay from Library rather than polling during paint.

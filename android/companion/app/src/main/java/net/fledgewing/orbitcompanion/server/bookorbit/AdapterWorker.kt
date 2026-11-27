@@ -77,7 +77,7 @@ object AdapterWorker : ServerRuntime {
         synchronized(lock) { patches.addLast {
             try {
                 val store = worker().store
-                val owner = if(op in setOf("storage.remove.preview","storage.remove")) {
+                val owner = if(op in setOf("storage.remove.preview","storage.remove","storage.refresh")) {
                     val requested=args["owner"] as? String ?: throw ServerFailure("unauthorized")
                     if(requested!=(LibraryAccount.owner() ?: DeviceLibrary.OWNER)) throw ServerFailure("canceled")
                     requested
@@ -173,14 +173,42 @@ object AdapterWorker : ServerRuntime {
         return try { work() } finally { catalogActionRunning=false }
     }
 
+    private var transferJobs:CatalogTransfers?=null
+    @Synchronized private fun transferJobs():CatalogTransfers = transferJobs ?: CatalogTransfers(root()).also { transferJobs=it }
     fun catalogAction(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, args: Map<*,*>,
         done: (Map<String,Any?>?,String?) -> Unit) {
         app=ctx.applicationContext
         BulkWork.attach(ctx)
+        if(action in setOf("download.status","download.cancel")) {
+            val result=runCatching {
+                if(owner!=LibraryAccount.owner()) throw ServerFailure("canceled")
+                val id=args["id"] as? String ?: throw ServerFailure("invalid")
+                if(action=="download.cancel") transferJobs().cancel(owner,id) else transferJobs().read(owner,id)
+            }
+            result.fold({done(it,null)},{done(null,(it as? ServerFailure)?.kind ?: "unavailable")});return
+        }
         synchronized(lock) { patches.addLast { catalogActionWork {
             val start=System.nanoTime()
             val result=runCatching {
                 if(owner!=LibraryAccount.owner() || worker().store.meta("owner")!=owner) throw ServerFailure("canceled")
+                if(action in setOf("download.start","download.resume")) {
+                    val control=transferJobs()
+                    val started=if(action=="download.start") control.start(owner,args) else control.resume(owner,args["id"] as? String ?: throw ServerFailure("invalid"))
+                    val id=started["id"] as String
+                    done(started,null)
+                    control.run(owner,id) { saved ->
+                        val observed=object:BookOrbitServerAdapter.ConnectorTransport {
+                            override fun request(server:String,path:String,method:String,body:Map<String,Any?>?,headers:Map<String,String>)=ConnectorHttp.request(server,path,method,body,headers)
+                            override fun download(server:String,path:String,headers:Map<String,String>,destination:File):Boolean = ConnectorHttp.transfer(server,path,headers,destination,
+                                { bytes,total -> control.progress(owner,id,bytes,total) },{ control.canceled(owner,id) || owner!=LibraryAccount.owner() })
+                        }
+                        CatalogWorkflow(worker(),credentials,owner,observed,reading={Reading.now(ctx)},
+                            current={owner==LibraryAccount.owner() && !control.canceled(owner,id)},checkpoint=BulkWork::checkpoint,
+                            retainPartial={owner==LibraryAccount.owner() && !control.canceled(owner,id)})
+                            .command("finish.download",saved)
+                    }
+                    return@catalogActionWork
+                }
                 CatalogWorkflow(worker(),credentials,owner,ConnectorHttp,reading={ Reading.now(ctx) },
                     current={ owner==LibraryAccount.owner() },checkpoint=BulkWork::checkpoint).command(action,args)
             }
