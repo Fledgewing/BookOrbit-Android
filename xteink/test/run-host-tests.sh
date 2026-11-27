@@ -66,6 +66,11 @@ fi
   "$here/ota_return_test.cpp" "$repo/xteink/orbify/OtaReturn.cpp" -o "$out/ota_return_test"
 "$out/ota_return_test"
 
+# Actual durable resumable-work breaker, including interrupted marker writes.
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$here/resumed_work_stubs" -I"$repo/xteink/orbify" \
+  "$here/resumed_work_test.cpp" -o "$out/resumed_work_test"
+"$out/resumed_work_test"
+
 # BookSync's own logic (xteink/orbify/core): pure C++, tested with ArduinoJson, the JSON library the
 # firmware links: the build fetches it, so CI runs these after the build.
 ajson="${ARDUINOJSON_DIR:-}"

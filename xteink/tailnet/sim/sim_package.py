@@ -64,6 +64,57 @@ def patch_input(src_dir):
     _edit(Path(src_dir) / "HalGPIO.cpp", "orbify_sim_input::now", transform, changed, "input poll clock")
     return changed
 
+# The host has no flash cache. Model the ESP-IDF cache_utils.c stack assertion
+# explicitly, so simulator builds exercise the same caps API as the S3 build.
+FLASH_MODEL = """\
+// SPDX-License-Identifier: MIT
+#pragma once
+#include <cstdlib>
+#include <cstdio>
+#include <esp_heap_caps.h>
+#include <freertos/task.h>
+namespace orbify_sim_flash {
+inline thread_local uint32_t stackCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+inline void write() {
+  if (!std::getenv("ORBIFY_SIM_FLASH_ON_CONNECT")) return;
+  static thread_local bool done = false;
+  if (done) return;
+  done = true;
+  if (!(stackCaps & MALLOC_CAP_INTERNAL)) {
+    std::fprintf(stderr, "Flash cache disabled with external task stack\\n");
+    std::fflush(nullptr); std::_Exit(87);
+  }
+  std::fprintf(stderr, "Flash write on internal task stack: %s\\n", pcTaskGetName(nullptr));
+}
+}
+"""
+CAPS_TASK = """\
+// SPDX-License-Identifier: MIT
+#pragma once
+#include <freertos/task.h>
+#include <orbify_sim_flash.h>
+#include <memory>
+struct OrbifySimCapsCall { void (*fn)(void*); void* arg; uint32_t caps; };
+inline BaseType_t xTaskCreateWithCaps(void (*fn)(void*), const char* name,
+    uint32_t bytes, void* arg, BaseType_t priority, TaskHandle_t* task, uint32_t caps) {
+  auto* call = new OrbifySimCapsCall{fn, arg, caps};
+  return xTaskCreate([](void* p) {
+    std::unique_ptr<OrbifySimCapsCall> call(static_cast<OrbifySimCapsCall*>(p));
+    orbify_sim_flash::stackCaps = call->caps;
+    call->fn(call->arg);
+  }, name, bytes, call, priority, task);
+}
+"""
+
+
+def patch_flash(src_dir):
+    src = Path(src_dir)
+    (src / "orbify_sim_flash.h").write_text(FLASH_MODEL)
+    (src / "freertos/idf_additions.h").write_text(CAPS_TASK)
+    changed = []
+    return changed
+
+
 MIN_FREE = """\
 inline size_t heap_caps_get_minimum_free_size(const uint32_t caps) {
   simulator_heap::initialize();
@@ -202,7 +253,7 @@ def _edit(path, marker, transform, changed, what):
 def patch(src_dir):
     """Patch the package sources in src_dir (.pio/libdeps/<env>/simulator/src). Returns what changed."""
     heap = Path(src_dir) / "esp_heap_caps.h"
-    changed = patch_input(src_dir)
+    changed = patch_input(src_dir) + patch_flash(src_dir)
     clock = Path(src_dir) / WIFI_CLOCK_HEADER
     if not clock.exists() or clock.read_text() != WIFI_CLOCK:
         clock.write_text(WIFI_CLOCK)
