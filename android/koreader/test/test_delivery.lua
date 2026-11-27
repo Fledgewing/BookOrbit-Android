@@ -236,25 +236,58 @@ return function(test,eq,ok,here,Cache)
         R.run("manual",function(okay) eq(okay,true);calls=calls+1 end)
         h:ready({remaining=0});h:step();eq(calls,1);eq(#h.q,0)
     end)
-    for _,replace in ipairs({false,true}) do
-        test("delivery: position timeout suppresses late consent, document replaced="..tostring(replace),function()
-            local h=harness();h:load("ko/position_sync.lua");local R=h.e.ReadingSync;local calls,presents,verified=0,0,0
-            h.ui={document={file="/fixture/current"}}
-            R.ready=true;R.on=function() return true end
-            R.capture=function() return {path="/fixture/current",online=true,automatic=true} end
-            R.geometry=function() return {} end
-            R.present=function() presents=presents+1 end;R.verify=function() verified=verified+1 end
-            R.run("manual",function(okay,why) eq(okay,false);ok(why);calls=calls+1 end)
-            h:ready({snapshot={},document="document"});h:step();eq(h.sent[2].op,"sync.decide")
-            -- Run the independent completion timeout, leaving durable command polling live.
-            h.time=21
-            local timeout
-            for _,item in ipairs(h.q) do if item.at==20 then timeout=item.fn end end
-            ok(timeout);timeout();eq(calls,1)
-            if replace then h.ui.document={file="/fixture/replacement"} end
-            h:ready({applied="ask",remaining=0});h:step()
-            eq(presents,0);eq(calls,1);eq(verified,replace and 0 or 1);eq(#h.q,0)
-        end)
+    for _,stage in ipairs({"capture","decision"}) do
+        for _,stale in ipairs({"none","book","native document","account","account epoch","newer run"}) do
+            test("delivery: late position consent after "..stage..", invalidation="..stale,function()
+                local h=harness();h:load("ko/position_sync.lua");local R=h.e.ReadingSync
+                local calls,presents,verified=0,0,0
+                h.ui={document={file="/fixture/current"}};h.reading=true
+                R.ready=true;R.on=function() return true end
+                R.capture=function() return {path="/fixture/current",online=true,automatic=true} end
+                R.geometry=function() return {} end
+                R.present=function() presents=presents+1;eq(h.reading,true) end
+                R.verify=function() verified=verified+1 end
+                R.run("manual",function(okay,why) eq(okay,false);ok(why);calls=calls+1 end)
+                if stage=="decision" then
+                    h:ready({snapshot={},document="document"},"1");h:step();eq(h.sent[2].op,"sync.decide")
+                end
+                -- Expire only caller completion; real Library delivery remains live.
+                h.time=21
+                local timeout
+                for _,item in ipairs(h.q) do if item.at==20 then timeout=item.fn end end
+                ok(timeout);timeout();eq(calls,1)
+                if stale=="book" then h.ui.document={file="/fixture/replacement"}
+                elseif stale=="native document" then h.ui.document={file="/fixture/current"}
+                elseif stale=="account" then h:owner("B")
+                elseif stale=="account epoch" then h:owner("B");h:owner("A")
+                elseif stale=="newer run" then
+                    R.run("manual",function() end)
+                    -- Keep the newer run pending until the older delivery is observed.
+                end
+                if stage=="capture" then
+                    h:ready({snapshot={},document="document"},"1");h:step()
+                    if stale=="none" then eq(h.sent[#h.sent].op,"sync.decide")
+                    else eq(h.sent[#h.sent].op,"sync.drain") end
+                    h:ready({applied="ask",remaining=0});h:step()
+                else
+                    h:ready({applied="ask",remaining=0},"2");h:step()
+                end
+                eq(presents,stale=="none" and 1 or 0);eq(calls,1)
+                eq(verified,stale=="none" and 1 or 0)
+                -- Newer work still runs and may offer its own live consent.
+                if stale=="newer run" then
+                    local newer=stage=="capture" and "2" or "3"
+                    h:ready({snapshot={},document="newer"},newer)
+                    local sent=#h.sent
+                    for _=1,4 do if #h.sent>sent then break end;h:step() end
+                    eq(h.sent[#h.sent].op,"sync.decide")
+                    h:ready({applied="ask",remaining=0})
+                    for _=1,4 do if #h.q==0 then break end;h:step() end
+                    eq(presents,1)
+                end
+                eq(#h.q,0)
+            end)
+        end
     end
     for _,op in ipairs({"folder","sleep"}) do
         test("delivery: retired "..op.." presentation still adopts durable device change",function()
