@@ -21,11 +21,11 @@ class ServerCredentials(private val vault: AccountVault) {
         }
         @Synchronized override fun save(value: Map<String, Any?>?) = synchronized(this@ServerCredentials) {
             mutate {
-                if (value == null) {
-                    data.remove("account")
-                    // Adopted credentials have the same account provenance as newly created ones.
+                val previous = data["account"] as? Map<*, *>
+                if (value == null || previous?.get("id") != value["id"] || previous?.get("server") != value["server"]) {
                     for (kind in KINDS) if (login(kind)?.origin == "account") data.remove(kind)
-                } else data["account"] = value.toMap()
+                }
+                if (value == null) data.remove("account") else data["account"] = value.toMap()
             }
         }
     }

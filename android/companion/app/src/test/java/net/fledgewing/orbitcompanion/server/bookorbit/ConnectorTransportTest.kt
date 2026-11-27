@@ -84,6 +84,32 @@ class ConnectorTransportTest {
             adapter.removeLogin("sync"); assertEquals(true,(adapter.state()["opds"] as Map<*,*>)["set"])
         } finally { server.close(); thread.join(1000); root.deleteRecursively() }
     }
+    @Test fun coverTransportReturnsRedirectForCaller() {
+        val server = ServerSocket(0, 16, InetAddress.getLoopbackAddress())
+        val paths = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val thread = Thread {
+            try {
+                while (!server.isClosed) server.accept().use { socket ->
+                    val reader = socket.getInputStream().bufferedReader()
+                    val path = reader.readLine().split(' ')[1]
+                    paths.add(path)
+                    while (!reader.readLine().isNullOrEmpty()) { }
+                    val response = if (path == "/start")
+                        "HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    else "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    socket.getOutputStream().apply { write(response.toByteArray()); flush() }
+                }
+            } catch (_: java.net.SocketException) { }
+        }.apply { isDaemon = true; start() }
+        try {
+            val url = URI("http", null, server.inetAddress.hostAddress, server.localPort, "/start", null, null).toString()
+            val response = BookOrbitCovers.UrlHttp.get(url, mapOf("Authorization" to "Basic fixture"))
+            assertEquals(302, response.code)
+            assertNull(response.body)
+            assertEquals(listOf("/start"), paths.toList())
+        } finally { server.close(); thread.join(1000) }
+    }
+
     @Test fun opdsRejectsExternalCredentialsAndDocumentDeclarations() {
         val base = "https://library.invalid/api/v1"
         for (link in listOf("https://other.invalid/api/v1/opds/1/download", "https://user:password@library.invalid/api/v1/opds/1/download", "/api/v1/auth/me")) {

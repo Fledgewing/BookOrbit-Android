@@ -120,7 +120,7 @@ object BookOrbitCovers : CoverService {
             val msg = SharpCoversLogic.signInMessage(outcome, tok != null)
             if (msg == null && tok != null) {
                 sp(ctx).edit().putString("token", vault.seal(tok)).putString("state", State.ON.key)
-                    .putString("user", user).remove("lost_why").apply()
+                    .putString("user", user).putString("server", base).remove("lost_why").apply()
                 onMain { Attention.evaluate(ctx.applicationContext, "sharp covers signed in", notify = false) }
             }
             return msg
@@ -179,6 +179,8 @@ object BookOrbitCovers : CoverService {
             val tok = token(ctx) ?: return 0.also { lost(ctx, Outcome.AUTH_LOST) }
             val acct = account(SleepScreen.dir()) ?: return 0
             val base = CoverProtocol.apiBase(acct.server) ?: return 0
+            val signedServer = sp(ctx).getString("server", null) ?: return 0.also { lost(ctx, Outcome.AUTH_LOST) }
+            if (base != signedServer) return 0
             val (pw, ph, _) = SleepScreen.panel(ctx)
             val ids = SleepScreen.pool().map { it.id }
             val d = NoMedia.directory(dir(ctx))
@@ -268,12 +270,13 @@ object BookOrbitCovers : CoverService {
 
     // ---------------------------------------------------------------- defaults
 
-    private object UrlHttp : Http {
+    internal object UrlHttp : Http {
         private const val MAX = 16 * 1024 * 1024
 
         override fun get(url: String, headers: Map<String, String>): Resp {
             val c = URL(url).openConnection() as HttpURLConnection
             try {
+                c.instanceFollowRedirects = false
                 c.connectTimeout = 15_000
                 c.readTimeout = 30_000
                 c.useCaches = false

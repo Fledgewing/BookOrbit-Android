@@ -213,10 +213,11 @@ object LuaValue {
         fun peek(): Int { ws(); return if (i < b.size) b[i].toInt() and 0xff else -1 }
         fun expect(c: Char) { if (peek() != c.code) error("expected $c at $i"); i++ }
 
-        fun value(): Any? {
+        fun value(depth: Int = 0): Any? {
+            require(depth <= 40)
             val c = peek()
             return when {
-                c == '{'.code -> table()
+                c == '{'.code -> table(depth)
                 c == '"'.code -> string()
                 c == '-'.code || (c >= '0'.code && c <= '9'.code) -> number()
                 word("nil") -> null
@@ -271,7 +272,7 @@ object LuaValue {
             return o.toString()
         }
 
-        fun table(): Any {
+        fun table(depth: Int): Any {
             expect('{')
             val list = ArrayList<Any?>()
             val map = java.util.TreeMap<String, Any?>()
@@ -280,13 +281,13 @@ object LuaValue {
                 if (peek() == '}'.code) { i++; break }
                 if (peek() == '['.code) {
                     i++
-                    val k = value()
+                    val k = value(depth + 1)
                     expect(']'); expect('=')
-                    val v = value()
+                    val v = value(depth + 1)
                     keyed = true
                     if (v != null) map[text(k)] = v
                 } else {
-                    list.add(value())
+                    list.add(value(depth + 1))
                 }
                 val c = peek()
                 if (c == ','.code || c == ';'.code) i++

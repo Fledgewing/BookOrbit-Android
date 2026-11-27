@@ -90,6 +90,44 @@ class SharpCoversTest {
     }
 
     @Test
+    fun poolServerMustMatchSignIn() {
+        assertNull(signIn())
+        val pool = File(SleepScreen.dir(), "pool.json")
+        val original = pool.readText()
+        for ((before, after) in listOf("b.example" to "other.example", "/api/v1" to "/other/api/v1")) {
+            pool.writeText(original.replace(before, after))
+            requests.clear()
+            assertEquals(0, BookOrbitCovers.syncNow(ctx, "test"))
+            assertTrue(requests.isEmpty())
+        }
+        pool.writeText(original)
+        requests.clear()
+        reply = { _, _ -> BookOrbitCovers.Resp(304, null, null) }
+        BookOrbitCovers.syncNow(ctx, "test")
+        assertEquals(2, requests.size)
+    }
+
+    @Test
+    fun coverLoginCanDifferFromPoolLogin() {
+        reply = { _, _ -> BookOrbitCovers.Resp(200, null, feed) }
+        assertNull(BookOrbitCovers.signIn(ctx, "https://b.example/api/v1", "opds-reader", password.toCharArray()))
+        requests.clear()
+        reply = { _, _ -> BookOrbitCovers.Resp(304, null, null) }
+        BookOrbitCovers.syncNow(ctx, "test")
+        assertEquals(2, requests.size)
+    }
+
+    @Test
+    fun existingSignInNeedsItsServerBinding() {
+        assertNull(signIn())
+        ctx.getSharedPreferences("orbit_sharp", Context.MODE_PRIVATE).edit().remove("server").commit()
+        requests.clear()
+        assertEquals(0, BookOrbitCovers.syncNow(ctx, "test"))
+        assertTrue(requests.isEmpty())
+        assertEquals(SharpCoversLogic.State.LOST, BookOrbitCovers.state(ctx))
+    }
+
+    @Test
     fun signInErrorsSayWhatHappened() {
         reply = { _, _ -> BookOrbitCovers.Resp(401, null, null) }
         assertEquals("OPDS username or password not accepted.", BookOrbitCovers.signIn(ctx, "https://b.example", "reader", password.toCharArray()))
