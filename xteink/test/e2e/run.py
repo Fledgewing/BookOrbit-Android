@@ -180,6 +180,7 @@ def full_refresh_large_catalog(ctx: Context, tmp: Path) -> None:
          "--modes", "cold", "--timeout", "580"],
         env={**os.environ, "ORBIFY_SIM_FLASH_ON_CONNECT": "1"},
         capture_output=True, text=True, timeout=600)
+    ctx.artifacts.mkdir(parents=True, exist_ok=True)
     (ctx.artifacts / "large-catalog.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stderr
     stats = json.loads((tmp / "results.json").read_text())[0]
