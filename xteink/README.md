@@ -30,7 +30,9 @@ simulator to the immutable commit in `tools/firmware/simulator.json`. It changes
 only the temporary build configuration, never the committed firmware seed.
 Its Linux build hook supplies the GIF decoder's missing Arduino timing include,
 links the simulator's MD5 dependency and isolates duplicate checksum fallbacks;
-these adjustments apply only to the host simulator.
+these adjustments apply only to the host simulator. Device builds also pin the
+PlatformIO core inside the platform's SDK subprocess environment, matching the
+legacy build's tool setup so a nested build cannot replace SCons mid-process.
 Actions is disabled in the firmware repository and its inherited workflows are
 removed. This foundation changes no reader behavior and is not a release.
 

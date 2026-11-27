@@ -44,6 +44,16 @@ jobs:
           cache-prefix: owned-${{ matrix.environment }}
           extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
 
+      - name: Pin the device SDK subprocess core
+        if: matrix.environment == 'x4-pro' || matrix.environment == 'x4-classic' || matrix.environment == 'default'
+        working-directory: xteink/firmware
+        env:
+          BUILD_ENV: ${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          pio pkg install -e "$BUILD_ENV" </dev/null
+          uv pip install --python ~/.platformio/penv/bin/python "pioarduino==6.1.19"
+
       - name: Configure Linux simulator build
         if: contains(matrix.environment, 'simulator')
         run: python3 tools/firmware/prepare_simulator.py xteink/firmware
