@@ -42,9 +42,13 @@ object ServerAdapters {
             "fixture-document" to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))
         override fun position(document: String, update: Map<String, Any?>?): Map<String, Any?> {
             val file=File(requireNotNull(context).filesDir,"e2e-position.lua")
-            if(update!=null) file.writeBytes(LuaValue.encode(update))
-            @Suppress("UNCHECKED_CAST")
-            return if(file.isFile) LuaValue.parse(file.readBytes()) as Map<String,Any?> else mapOf("percentage" to 0.5,"label" to "Fixture tablet","timestamp" to System.currentTimeMillis()/1000)
+            if(update!=null) {
+                file.writeBytes(LuaValue.encode(update))
+                return update
+            }
+            // A scripted second reader stays ahead throughout this scenario. Local
+            // background uploads are recorded separately and cannot replace its place.
+            return mapOf("percentage" to 0.5,"label" to "Fixture tablet","timestamp" to 1_700_000_000L)
         }
         override fun lifecyclePhase(entry: LifecycleQueue.Entry, phase: String, checkpoint: ByteArray, openPath: String?) = SyncPhaseResult(checkpoint)
     }

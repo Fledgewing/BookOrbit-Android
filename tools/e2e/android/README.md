@@ -44,6 +44,8 @@ and the normal account worker and sync owner. Sign-in uses the synthetic address
 `https://fixture.example.test`, user `reader`, password `fixture`. No HTTP listener
 or external service is required. This tests the interface, not the shipping
 adapter's HTTP protocol or a live server refresh/download.
+Position consent uses a fixed remote-ahead snapshot; local uploads are recorded
+separately so background sync cannot alter that scripted second reader.
 
 `run.py setup` reuses `android/koreader/package.sh` for version stamping, settings,
 credits and battery assets. APK `install -r` and whole plugin replacement follow
