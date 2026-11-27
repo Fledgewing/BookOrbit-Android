@@ -261,3 +261,16 @@ index a5a7b9f2..1486577a 100644
 +  SleepWakePolicy::WakePressDetector keyDetector{0, false};
 +#endif
  };
+diff --git a/platformio.ini b/platformio.ini
+index 787048db..d248c815 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -365,7 +365,7 @@ extra_scripts =
+   pre:scripts/build_web.py
+   post:.pio/libdeps/$PIOENV/simulator/run_simulator_project.py
+ lib_deps =
+-  simulator=https://github.com/uxjulia/crossink-simulator
++  simulator=https://github.com/uxjulia/crossink-simulator#df519ac238f9695040d95a4fac9b4684ecabf0fe
+   ImageToneMapper=symlink://freeink-sdk/libs/assets/ImageToneMapper
+   SecureNet=symlink://freeink-sdk/libs/network/SecureNet
+   JsonSax=symlink://freeink-sdk/libs/network/JsonSax
