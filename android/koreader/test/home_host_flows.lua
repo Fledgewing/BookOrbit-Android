@@ -79,6 +79,7 @@ return function(test,eq,ok,E,W,Widget)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
+    dofile((arg[0]:match("^(.*)/") or ".").."/local_widget_flows.lua")(test,eq,ok,E,W,withHost)
     test("First run: upgrade news appears once on Home, with a static budget",function()
         withHost(function(batches)
             local pending=E.S.news_012_pending

@@ -5944,6 +5944,57 @@
         }
       },
       "deferred": "Device acceptance and firmware integration; untracked files remain unmanaged."
+    },
+    {
+      "id": "home-local-widgets",
+      "feature": "Word of the day, Reading buddy and Light picker widgets (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Installed 2×1 and 2×2 widgets: companion daily vocabulary/context/source, local reading message and native frontlight controls; explicit loading/empty/offline/error states.",
+          "reason": "deliberately deferred: device appearance and latency acceptance pending; Highlight and A year ago need authorized server snapshots.",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/local_widgets.lua",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Local optional widgets follow Android.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware local vocabulary and controls follow; X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-G-LOCAL-WIDGETS.md",
+              "line": 1
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

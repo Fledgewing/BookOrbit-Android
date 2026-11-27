@@ -13,6 +13,7 @@ class LibraryReadModel(
     private val fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null },
+    private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
     private val adapter: ServerAdapter? = null,
 ) {
     companion object {
@@ -32,10 +33,11 @@ class LibraryReadModel(
             java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it)
         } + DeviceStorage.downloadRoot(store.root)) else adapter ?: ServerAdapters.forStore(store, clock = clock,
             fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
+        val localStats by lazy { readingStats() }
         val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
         val account by lazy { if (local) null else accountStats(owner) }
-        val stats by lazy { ReadingStats.display(AccountStats.combine(readingStats(), if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
+        val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -48,6 +50,9 @@ class LibraryReadModel(
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
                     "reading.stats" -> stats
+                    "local.word" -> LocalWidgets.word(vocabulary(), clock())
+                    "local.buddy" -> LocalWidgets.buddy(localStats)
+                    "local.light" -> LocalWidgets.light(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
                     "device.clock" -> ClockWidget.snapshot(clock(), power, twelve = args["twelve_hour"] == true)
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power

@@ -17,6 +17,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status |
 |---|---|---|
+| Word of the day, local Reading buddy and hardware Light picker widgets; Highlight and A year ago await authorized server snapshots. | Android; X4 Pro/X4/X3 deferred to firmware | building (device acceptance pending) |
 | Server-free Android catalog operations: companion-owned covers, refresh, copies, recommendations and end-of-book snapshots and commands. | Android; X4 Pro, X4, X3 later under Android-first ruling | building: covers, mirror planning and query/store reads migrated; copies, grouping, recommendations and finish pending |
 | Independent optional account, sync and OPDS logins, encrypted credentials, origin-aware sign-out and account-wide reading statistics through the library interface. | Android; X4 Pro, X4, X3 later | building (Android F12-K foundation and F12-N plugin screens implemented; device acceptance and firmware follow) |
 | Configure one Book list widget with presets, paged counted sources and local Custom filters in the Home editor. | Android building; X4 Pro, X4, X3 follow Android | building (approved design rev 16; device acceptance pending) |
