@@ -40,6 +40,31 @@ return function(test,eq,ok,E,W,withHost)
             eq(host.metrics.roundTrips,1); eq(host.metrics.spawns,0); eq(host.metrics.network,0)
         end)
     end)
+    test('recommend/discover: one neutral batch and Another changes only interface pick',function()
+        withHost(function(batches)
+            local picks={}
+            E.LibraryAdapter.read=function(raw)
+                local args=E.Cache.decode(raw)
+                if args.op=='capabilities' then return {},2 end
+                eq(args.op,'personal.reading'); eq(args.limit,1); eq(args.source,nil)
+                picks[args.kind]=args.pick
+                return {state='ready',book={title='The Moon',local_path='/Books/moon.epub'},row_count=1,freshness={saved=true}},100
+            end
+            E.S.home_discover_pick=0
+            E.S.home_layout=E.Layout.default()
+            E.S.home_layout.pages={{id='picks',tab='Home',name='Picks',placements={
+                {instance='r',widget='recommended',version=1,x=0,y=0,w=2,h=2,settings={}},
+                {instance='d',widget='discover',version=1,x=2,y=0,w=2,h=2,settings={}}}}}
+            local host=E.HomeHost.create(); E.HomeHost.active=host; W.shown={host}
+            eq(picks.discover,0); eq(#batches,1); eq(#batches[1],3)
+            eq(host.metrics.roundTrips,1); eq(host.metrics.rows,3)
+            host:dispatch('discover-another',nil,{widget='discover'})
+            eq(E.S.home_discover_pick,1); eq(picks.discover,1)
+            eq(E.Library.localWidgetNeed('discover').pick,1)
+            eq(E.Library.localWidgetNeed('recommended').pick,nil)
+            eq(host.metrics.spawns,0); eq(host.metrics.network,0)
+        end)
+    end)
     test('local widgets: signed-out pending snapshots keep local loading, not account setup',function()
         withHost(function()
             E.LibraryAdapter.read=function(raw)
@@ -60,7 +85,7 @@ return function(test,eq,ok,E,W,withHost)
     end)
     test('local widgets: every size/state paints immutable data without reads; 50px actions',function()
         withHost(function()
-            for _,id in ipairs({'word','light','buddy','highlight','yearago'}) do
+            for _,id in ipairs({'word','light','buddy','highlight','yearago','recommended','discover'}) do
                 ok(E.HomeWidgets.renderers[id])
                 local offered=false
                 for _,name in ipairs(E.HomeEditor.available({})) do if name==id then offered=true end end
@@ -87,6 +112,8 @@ return function(test,eq,ok,E,W,withHost)
                         end
                         eq(E.Cache.encode(result),before)
                         if state=='ready' or state=='offline-with-data' then
+                            if id=='recommended' or id=='discover' then eq(actions[1][1],'book'); eq(actions[1][2].title,'The Moon') end
+                            if id=='discover' then eq(actions[2][1],'discover-another') end
                             if id=='word' then eq(actions[1][1],'word-lookup'); eq(actions[1][2],'lantern') end
                             if id=='light' then eq(actions[1][1],'light-down'); eq(actions[2][1],'light-up') end
                         end

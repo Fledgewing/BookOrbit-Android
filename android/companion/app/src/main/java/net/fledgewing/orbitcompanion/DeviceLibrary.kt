@@ -33,11 +33,14 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val hash=MessageDigest.getInstance("SHA-256").digest(file.canonicalPath.toByteArray()).joinToString("") { "%02x".format(it) }
         val cover=sidecar(file).listFiles()?.filter { it.isFile && it.nameWithoutExtension=="cover" && Places.inside(it,roots)!=null }?.sortedBy { it.name }?.firstOrNull()
         return mapOf("key" to "device:book:$hash","title" to LuaValue.boundedText((props?.get("title") as? String)?.let(LuaValue::utf8) ?: file.nameWithoutExtension,256),
+            "series_key" to (props?.get("series") as? String), "series_position" to props?.get("series_index"),
             "authors" to listOfNotNull((props?.get("authors") as? String)?.let { LuaValue.boundedText(LuaValue.utf8(it),256) }),
             "local_path" to LuaValue.str(file.canonicalPath),"on_device" to true,"status" to status,"progress" to fraction?.times(100),
             "last_read" to (metadata.lastModified()/1000).takeIf { metadata.isFile },"cover_path" to cover?.path?.let(LuaValue::str),
             "formats" to listOf(file.extension.lowercase()),"available" to mapOf("cover" to (cover!=null)),"downloadable" to false)
     }
+    override fun personalCatalog(owner: String): Map<String, Any?> =
+        if (owner == OWNER) mapOf("items" to books, "freshness" to mapOf("saved" to true)) else unsupported()
     override fun localFiles(owner: String): List<LocalBook>? = if(owner==OWNER) books.map {
         LocalBook(File(LuaValue.utf8(it["local_path"] as String)),it["status"]=="finished",null)
     } else null

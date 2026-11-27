@@ -1,6 +1,9 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Local native access stays behind Library; the host alone requests projections.
 function Library.localWidgetNeed(id)
+    if id=="recommended" or id=="discover" then
+        return {op="personal.reading",kind=id,limit=1,pick=id=="discover" and (S.home_discover_pick or 0) or nil}
+    end
     if id=="highlight" or id=="yearago" then return {op="personal.reading",kind=id,limit=1} end
     local need={op="local."..id,limit=1}
     if id=="light" then
@@ -12,6 +15,10 @@ function Library.localWidgetNeed(id)
     return need
 end
 function Library.localWidgetAction(action,value)
+    if action=="discover-another" then
+        S.home_discover_pick=((S.home_discover_pick or 0)+1)%1000000000
+        saveSettings(); Library.retry(); return true
+    end
     if action=="word-lookup" then
         if type(value)~="string" or #value>384 or value=="" then return false end
         local ui=liveUI() or require("apps/filemanager/filemanager").instance

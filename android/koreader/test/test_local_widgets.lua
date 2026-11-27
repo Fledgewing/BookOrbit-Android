@@ -4,7 +4,7 @@ return function(test,eq,ok,here,Cache)
     for _,file in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/local_widgets.lua'}) do
         setfenv(assert(loadfile(here..'/../orbit.koplugin/'..file)),e)()
     end
-    for _,id in ipairs({'word','light','buddy','highlight','yearago'}) do
+    for _,id in ipairs({'word','light','buddy','highlight','yearago','recommended','discover'}) do
         test('local widget: '..id..' state and contract',function()
             eq(#e.WidgetRegistry[id].sizes['android-tablet'],2)
             for _,state in ipairs({'ready','empty','loading','error','offline-with-data','offline-without-data','unavailable'}) do

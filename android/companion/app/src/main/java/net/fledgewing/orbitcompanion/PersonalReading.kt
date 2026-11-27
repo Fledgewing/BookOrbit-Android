@@ -10,8 +10,8 @@ interface PersonalReadingSource {
 data class PersonalReadingRecord(val identity: String, val fields: Map<String, Any?>)
 
 class PersonalReading(private val sources: List<PersonalReadingSource>) {
-    companion object { val KINDS = setOf("highlight", "yearago") }
-    fun window(kind: String, now: Long): Map<String, Any?> {
+    companion object { val KINDS = setOf("highlight", "yearago", "recommended", "discover") }
+    fun window(kind: String, now: Long, pick: Long = 0): Map<String, Any?> {
         require(kind in KINDS)
         val merged = linkedMapOf<String, PersonalReadingRecord>()
         var succeeded = false
@@ -24,11 +24,14 @@ class PersonalReading(private val sources: List<PersonalReadingSource>) {
             } catch (e: Exception) { if (e is InterruptedException) throw e }
         }
         val day = java.time.Instant.ofEpochSecond(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
-        val records = merged.values.toList()
+        val records = if (kind == "discover") merged.values.sortedBy {
+            java.security.MessageDigest.getInstance("SHA-256").digest(("$day:" + it.identity).toByteArray())
+                .joinToString("") { b -> "%02x".format(b) }
+        } else merged.values.toList()
         // Round-robin over a stable pool: no repetition within a complete cycle, no process state.
-        val selected = if (records.isEmpty()) null else records[if (kind == "highlight") Math.floorMod(day, records.size.toLong()).toInt() else 0]
+        val selected = if (records.isEmpty()) null else records[if (kind == "highlight") Math.floorMod(day, records.size.toLong()).toInt() else if (kind == "discover") (pick.coerceIn(0, 1000000000) % records.size).toInt() else 0]
         val result = (selected?.fields ?: emptyMap()) + mapOf("state" to if (selected != null) "ready" else if (succeeded) "empty" else "error",
-            "message" to LuaValue.str(if (kind == "yearago") "No reading from a year ago on this device yet" else "Save a highlight while reading."),
+            "message" to LuaValue.str(when(kind) { "yearago" -> "No reading from a year ago on this device yet"; "recommended", "discover" -> "No unread books saved yet"; else -> "Save a highlight while reading." }),
             "row_count" to 1, "freshness" to mapOf("saved" to succeeded))
         return if (LuaValue.encode(result).size <= LibraryReadModel.MAX_BYTES) result
         else mapOf("state" to "error", "row_count" to 1, "message" to "Reading data exceeds this widget's budget")

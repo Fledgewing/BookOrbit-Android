@@ -9,7 +9,17 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     local pad=scale(10)
     local c=HomeWidgets.canvas(w,h)
     HomeWidgets.text(c,p.widget=="light" and plan.ready and plan.message or _(plan.title),pad,pad,w-2*pad,18,false,true)
-    if (p.widget=="highlight" or p.widget=="yearago") and plan.ready then
+    if (p.widget=="recommended" or p.widget=="discover") and plan.ready and plan.book then
+        local bw=p.widget=="discover" and math.floor((w-3*pad)/2) or w-2*pad
+        if p.h>1 then
+            HomeWidgets.text(c,plan.book.title or _("Untitled"),pad,pad+scale(36),w-2*pad,18,false,true)
+            HomeWidgets.text(c,plan.source or "",pad,pad+scale(68),w-2*pad,13)
+        end
+        HomeWidgets.button(c,p.h==1 and (plan.book.title or _("Untitled")) or _("Open book ›"),pad,h-pad-scale(50),bw,scale(50),function() dispatch("book",plan.book) end)
+        if p.widget=="discover" then
+            HomeWidgets.button(c,_("Another"),2*pad+bw,h-pad-scale(50),bw,scale(50),function() dispatch("discover-another") end)
+        end
+    elseif (p.widget=="highlight" or p.widget=="yearago") and plan.ready then
         local content=p.widget=="highlight" and plan.passage or plan.book_title
         if p.widget=="highlight" and p.h>1 then
             local u=HomeWidgets.ui()
@@ -55,7 +65,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"word","light","buddy","highlight","yearago"}) do
+for _,id in ipairs({"word","light","buddy","highlight","yearago","recommended","discover"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}

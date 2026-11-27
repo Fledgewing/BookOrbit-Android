@@ -1089,3 +1089,23 @@ finish rows, 16 KiB per snapshot, zero subprocesses/network on paint and at most
 one batched companion round-trip. No additional read or row is needed for the key.
 AGENTS.md's screen/widget performance rule remains binding. Firmware implementation
 and physical-device visual/timing acceptance follow Android; this is not a release.
+
+
+## F12-recdisc: Android Recommended and Discover implementation
+
+The 2026-11-26 slice authorization builds these formerly staged picker entries.
+Recommended uses the prototype's 4×2 and 2×2 sizes; Discover uses 2×1 and 2×2.
+They are optional installed widgets, with no default-layout changes.
+The UI requests personal-reading kinds through BookSync Library; source registration,
+local/mirror aggregation, dedupe, series/history ranking and daily choice stay in the
+companion. Device data precedes the saved catalog. No server recommendation source
+is installed; the existing PersonalReadingSource seam has an independent toy-provider test.
+
+Both widgets inherit one display-book/16 KiB budgets in logic/budgets.lua, zero
+subprocesses and network on paint, and the host's single batched companion request.
+The interface persists Discover's Another offset locally; the companion applies it
+to a deterministic daily shuffle of unread identities. Cached data remains usable
+offline; loading, empty, missing offline data and errors have explicit cards.
+Device font metrics and latency remain acceptance work. X4 Pro, X4 and X3 follow
+the Android-first authorization; no firmware implementation is claimed.
+See [implementation evidence](F12-RECDISC.md).
