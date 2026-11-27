@@ -86,9 +86,11 @@ pioenv = env.subst("$PIOENV")  # noqa: F821
 # each one takes. overlay/platformio.local.ini hooks this script into each of them.
 SIM_ENVS = {"x4-pro-simulator": "x4-pro", "x4-classic-simulator": "x4-classic", "simulator-X3": "default"}
 SIMULATOR = pioenv in SIM_ENVS
-# W10: size optimization and LTO for the X3 reader activities. Network, OTA, TLS,
-# MicroLink and simulator sources keep their existing compile flags.
-if pioenv == "default":
+# Size optimization and LTO for hardware reader activities. This already keeps
+# the X3 within budget; the final 2.0 base needs it on the X4 Pro as well.
+# Network, OTA, TLS, MicroLink and simulator sources keep their existing flags.
+SMALL_READER_ENVS = ("default", "x4-pro", "x4-classic")
+if pioenv in SMALL_READER_ENVS:
     def small_reader(node_env, node):
         build_env = node_env.Clone()
         build_env.Append(CCFLAGS=["-Oz", "-flto"])
@@ -419,7 +421,7 @@ _orig_process_project_deps = env.ProcessProjectDeps  # noqa: F821
 
 def _process_project_deps_with_tailnet(env):
     _orig_process_project_deps()
-    if pioenv == "default":
+    if pioenv in SMALL_READER_ENVS:
         env.Append(LINKFLAGS=["-flto"])
     if os.path.basename(env.subst("$PROJECT_SRC_DIR")) == ".dummy":
         # The framework's lib-builder pass (custom_sdkconfig) links a dummy sketch to
