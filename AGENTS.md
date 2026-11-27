@@ -303,3 +303,8 @@ Storage and folder screens inherit a one-row, 16 KiB local snapshot budget;
 Collections uses six projected rows. Capacity, file eligibility and removal
 previews belong to the companion; render paths never scan folders. Preserve
 reading sidecars and exclude the foreground book from removal previews.
+
+Device-local library projections use their own reserved owner without changing catalog
+ownership. They inherit the same screen/widget row, byte and one-batch limits; folder and
+sidecar work stays on the companion. Login adoption checkpoints secrets and its migration
+marker together in the existing encrypted vault; never activate a second lifecycle writer.

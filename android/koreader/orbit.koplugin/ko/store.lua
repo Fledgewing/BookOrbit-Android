@@ -147,7 +147,9 @@ Store.within = within
 -- Ready-to-draw 0.12 results: one row, size checked by SQLite before decoding.
 -- Reuse the same owner/reading/busy gate as all existing cache reads.
 function Store.library(owner, request)
-    return within(owner, "library:" .. request, function(conn)
+    -- Device rows share this DB without claiming or reading the catalog's owner.
+    local catalog_owner = owner ~= "device-local" and owner or nil
+    return within(catalog_owner, "library:" .. request, function(conn)
         local r = rows(conn, "SELECT body FROM library_views WHERE owner=? AND request=? AND length(body)<=16384",
             owner, request)[1]
         local body = r and r[1]

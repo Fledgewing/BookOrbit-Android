@@ -200,13 +200,13 @@ return function(test, eq, ok, here, Cache)
         local reads=0
         local e=setmetatable({Cache=Cache,Library={},
             serverPlugin=function() error("render accessed a server plugin") end,
-            Store={library=function(owner,request) reads=reads+1; eq(owner,"opaque-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
+            Store={library=function(owner,request) reads=reads+1; ok(owner=="opaque-owner" or owner=="device-local"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
         setfenv(assert(loadfile(root.."ko/library.lua")),e)()
         e.LibraryAdapter.managed_owner="opaque-owner"
         eq(e.LibraryAdapter.owner(),"opaque-owner")
         local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0);eq(bytes,32);eq(reads,1)
         e.LibraryAdapter.managed_owner=nil
-        eq(e.LibraryAdapter.read("bounded"),nil);eq(reads,1)
+        eq(e.LibraryAdapter.owner(),"device-local"); ok(e.LibraryAdapter.read("bounded")); eq(reads,2)
 
     end)
     test("storage: local IO and directory providers work without a backend", function()
@@ -266,7 +266,7 @@ return function(test, eq, ok, here, Cache)
         local body=Cache.encode(state)
         local e=setmetatable({Cache=Cache,ServerCache={encode=Cache.encode,decode=Cache.decode},Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
             Jni={call=function() return {ok="1",body=body} end},serverPlugin=function() return nil end,
-            Store={library=function() error("no catalog should be read") end}}, {__index=_G})
+            Store={library=function(owner) eq(owner,"device-local"); return nil end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         e.LibraryAdapter.accountReturned()
         local a,n=e.LibraryAdapter.read("opaque","account.state")

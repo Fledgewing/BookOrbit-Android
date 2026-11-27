@@ -306,22 +306,22 @@ return function(test,eq,ok,E,W,Widget)
             h:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
-    test("Home wiring: all three required default pages draw and Stats shares one bounded row",function()
+    test("Home wiring: both approved default pages draw and Stats shares one bounded row",function()
         withHost(function(batches,reads)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             local rectangles=0
             local bb={paintRect=function(_,x,y,w,h,color) ok(w>=0 and h>=0); ok(color~=nil); rectangles=rectangles+1 end}
-            for page=1,3 do
+            for page=1,2 do
                 eq(h.index,page)
                 h[1]:paintTo(bb,0,0)
                 ok(E.Budgets.check(E.Budgets.screens.home,h.metrics))
                 eq(h.metrics.spawns,0); eq(h.metrics.network,0); eq(h.metrics.roundTrips,1)
-                if page<3 then h:onNext() end
+                if page<2 then h:onNext() end
             end
             local stats=0
             for _,a in ipairs(reads) do if a.op=="reading.stats" then stats=stats+1 end end
-            eq(stats,1); eq(#batches,3)
+            eq(stats,1); eq(#batches,2)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
@@ -540,7 +540,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
-        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,3)
+        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,2)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false},battery=false})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)

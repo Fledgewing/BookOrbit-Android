@@ -78,6 +78,7 @@ function disabledText(app, disabler, hint)
 end
 
 -- One additive Android 0.12 cutover; all other settings and ledgers stay untouched.
+-- No saved layout is rewritten: absent layouts use Layout.default() (M8C Home / Stats).
 function HomePlan.migrate012(settings)
     if settings.home_012_migrated then return false end
     local upgrade = next(settings) ~= nil
