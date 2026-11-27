@@ -14,6 +14,11 @@ with "shared" stamps the manifest identity. Test APKs retain their explicit test
 Preview builds are MAJOR.MINOR.PATCH-preview.N, release candidates are
 MAJOR.MINOR.PATCH-rc.N, and stable builds have no suffix. Their ordering is
 preview.1 < preview.2 < rc.1 < rc.2 < stable. Test artifacts never publish.
+Firmware publication defaults to pre-release even on a final CrossInk base. A stable
+firmware release requires maintainer device testing and an explicit manual
+`promote_stable=true`; upstream rc/beta and product preview/RC labels remain pre-releases.
+The signed feed preserves existing stable entries on every ordinary publication and
+`feed_only` refresh. Only a successful explicit stable publication may replace them.
 Unified firmware test identities use MAJOR.MINOR.PATCH-0.test.<run>, below every
 preview, so the next real release installs over a sideloaded test. Feed selection
 rejects test identities even when prereleases are enabled.

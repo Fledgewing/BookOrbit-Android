@@ -151,6 +151,47 @@ with tempfile.TemporaryDirectory() as temp:
                     output.read_text() != ("" if rejected else "sha=reviewed-source\n")):
                 errors.append(f"xteink: {event} must build only the reviewed lock (input {requested!r})")
 
+# Execute the resolver's actual legacy-channel shell against a final upstream fixture.
+# No network or publication: gh returns synthetic release bodies only.
+resolve_step = xteink_jobs['resolve'].split('      - id: r\n', 1)[1].split('\n      - name:', 1)[0]
+resolve_script = textwrap.dedent(resolve_step.split('        run: |\n', 1)[1])
+with tempfile.TemporaryDirectory() as temp:
+    temp = pathlib.Path(temp)
+    fixture_tag = 'v2.0.0+bookorbit.1'
+    fixture_lock = temp / 'upstreams.lock'
+    fixture_lock.write_text('crossink-v2.0 ignored ' + fixture_tag + ' ' + 'a' * 40 + '\n')
+    script = resolve_script.replace('tools/upstreams.lock', str(fixture_lock)).replace(
+        '$(python3 tools/booksync-version.py unified)', 'false')
+    trap = temp / 'gh'
+    trap.write_text('#!/bin/sh\nprintf "upstream=' + fixture_tag + ' overlay-tree=' +
+                    subprocess.check_output(['git', 'rev-parse', 'HEAD:xteink'], cwd=root, text=True).strip() + '\n"\n')
+    trap.chmod(0o755)
+    for event, promote, test_build, want in [
+        ('workflow_dispatch', '', '', 'true'), ('push', '', '', 'true'),
+        ('schedule', '', '', 'true'), ('push', 'true', '', 'true'),
+        ('workflow_dispatch', 'true', '', 'false'),
+        ('workflow_dispatch', 'true', 'true', 'false')]:
+        output = temp / 'output'
+        output.write_text('')
+        env = dict(os.environ, PATH=str(temp) + os.pathsep + os.environ['PATH'],
+                   GITHUB_EVENT_NAME=event, PROMOTE_STABLE=promote, TEST_BUILD=test_build,
+                   FORCE='', GITHUB_RUN_NUMBER='900', RUN_BASE='100',
+                   GITHUB_REPOSITORY='example/booksync', GITHUB_OUTPUT=str(output))
+        result = subprocess.run(['bash', '-c', script], cwd=root, env=env,
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        outputs = dict(line.split('=', 1) for line in output.read_text().splitlines())
+        assert outputs['prerelease'] == want, (event, promote, outputs)
+        if event == 'push' or test_build:
+            assert outputs['publish'] == 'false', outputs
+        if event == 'workflow_dispatch' and promote and not test_build:
+            assert outputs['publish'] == 'true', outputs
+feed_job = xteink_jobs['feed']
+assert "needs: [resolve, publish]" in feed_job
+assert "--previous \"$RUNNER_TEMP/previous.json\"" in feed_job
+assert "--promote-stable \"$PROMOTE_STABLE\"" in feed_job
+assert "github.event_name == 'workflow_dispatch' && inputs.promote_stable && !inputs.test_build && !inputs.feed_only && needs.publish.result == 'success' && needs.resolve.outputs.prerelease == 'false'" in feed_job
+
 if "needs.resolve.outputs.firmware_release_tests == 'false'" not in xteink_jobs["publish"]:
     errors.append("xteink: skipped emulated tests require matching source evidence")
 for name, job in [("Android sign", release_jobs["sign"]), ("firmware dispatch", release_jobs["firmware"]),

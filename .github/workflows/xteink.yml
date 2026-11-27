@@ -6,8 +6,8 @@ name: Xteink
 #   and later is built: 1.6 is retired (xteink/scripts/upstream-line.sh refuses it).
 # - daily schedule and manual runs: build the same reviewed tools/upstreams.lock as PR CI,
 #   then publish an unreleased (upstream tag, xteink/ tree) pair. Update upstream through a PR.
-#   A final upstream tag is published as a stable release, which
-#   makes it the feed's stable entry; an rc or beta stays a pre-release (upstream-line.sh channel). Readers see it under
+#   Every release defaults to preview. Stable requires an explicit manual promote_stable
+#   after device testing; upstream rc/beta tags remain pre-releases. Readers see it under
 #   Settings > Check for updates: the overlay points their updater at this repo's
 #   xteink-v releases (overlay patch ota-tag-prefix).
 #
@@ -30,7 +30,7 @@ name: Xteink
 # Readers find firmware through a feed, not GitHub's release list: GitHub orders that list by
 # version-like tag name, so prefixed xteink-v tags sort after every v<version> Android release
 # and fall off any page a reader could read. After each release the feed job writes the newest
-# stable and the newest pre-release firmware release to xteink/releases.json on the
+# explicitly promoted stable and the newest pre-release firmware release to xteink/releases.json on the
 # xteink-feed branch, in GitHub's release format; the firmware reads it from
 # raw.githubusercontent.com (xteink/tailnet/tailnet_build.py OTA_FEED).
 #
@@ -59,6 +59,11 @@ on:
         type: string
       force_release:
         description: "Publish even if this upstream tag + overlay commit was already released"
+        required: false
+        type: boolean
+        default: false
+      promote_stable:
+        description: "Publish stable after maintainer device testing (final upstream only; not feed_only/test_build)"
         required: false
         type: boolean
         default: false
@@ -141,12 +146,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force_release }}
           TEST_BUILD: ${{ inputs.test_build }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
         run: |
           set -euo pipefail
           read -r _ _ tag commit < <(awk '$1 == "crossink-v2.0"' tools/upstreams.lock)
           [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tools/upstreams.lock has no crossink-v2.0 commit"; exit 1; }
-          # Refuses a 1.x tag; stable for a final release, prerelease for an rc or beta.
-          channel="$(xteink/scripts/upstream-line.sh channel "$tag")"
+          # Refuses 1.x; final upstream tags also default to preview.
+          channel="$(xteink/scripts/upstream-line.sh channel "$tag" "$GITHUB_EVENT_NAME" "${PROMOTE_STABLE:-false}")"
+          [ "$channel" != stable ] || FORCE=true
           # 2.0.0+bookorbit.1-rc3 -> 2.0.0.<run>+bookorbit.1-rc3
           base="${tag#v}"
           numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
@@ -155,7 +162,8 @@ jobs:
             test_args=()
             [ "${TEST_BUILD:-false}" = true ] && test_args+=(test)
             version="$(python3 tools/booksync-version.py firmware "$tag" "$GITHUB_RUN_NUMBER" "${test_args[@]}")"
-            channel="$(python3 tools/booksync-version.py channel)"
+            # A product preview/RC cannot be promoted by this input.
+            if [ "$(python3 tools/booksync-version.py channel)" != stable ]; then channel=prerelease; fi
           fi
           asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
           lines="$(jq -cn --arg tag "$tag" --arg commit "$commit" --arg version "$version" --arg asset "$asset_version" \
@@ -527,10 +535,8 @@ jobs:
             firmware/SHA256SUMS
             firmware/FIRMWARE-INPUTS.json
 
-      # "latest" stays an Android release (AGENTS.md "Releases"). An upstream rc or beta stays a
-      # pre-release here too: only readers with Include pre-releases on are offered it. A
-      # final upstream release is stable, and the feed job makes it the stable entry
-      # (xteink/scripts/upstream-line.sh channel).
+      # "latest" stays Android. Every build defaults to preview; only an explicit manual
+      # promotion after device testing makes a final-upstream build stable.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -563,7 +569,11 @@ jobs:
   # The readers' update feed: the newest stable and the newest pre-release xteink-v release,
   # reduced to what the updater reads (tag, pre-release flag, assets with size and digest).
   feed:
-    needs: publish
+    # Serialize read/modify/write so a concurrent refresh cannot restore an old stable head.
+    concurrency:
+      group: xteink-feed
+      cancel-in-progress: false
+    needs: [resolve, publish]
     if: ${{ always() && (needs.publish.result == 'success' || inputs.feed_only) }}
     runs-on: ubuntu-latest
     permissions:
@@ -580,10 +590,16 @@ jobs:
       - name: Write the feed
         env:
           GH_TOKEN: ${{ github.token }}
+          PROMOTE_STABLE: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_stable && !inputs.test_build && !inputs.feed_only && needs.publish.result == 'success' && needs.resolve.outputs.prerelease == 'false' }}
         run: |
           set -euo pipefail
+          # Fail closed if the current feed cannot be read. Ordinary refreshes must
+          # preserve its stable entries, even if a GitHub release was edited manually.
+          gh api "repos/$GITHUB_REPOSITORY/contents/$FEED_PATH?ref=$FEED_BRANCH" \
+            --jq .content | base64 -d > "$RUNNER_TEMP/previous.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s 'add' \
-            | python3 tools/xteink-feed.py > "$RUNNER_TEMP/unsigned.json"
+            | python3 tools/releases/xteink_feed.py --previous "$RUNNER_TEMP/previous.json" \
+                --promote-stable "$PROMOTE_STABLE" > "$RUNNER_TEMP/unsigned.json"
           # Each image's signature from its release's SIGNATURES, as "orbify_signature" (what the
           # readers check; docs/design/release-signing.md). Releases from before signing have none.
           echo '{}' > "$RUNNER_TEMP/signatures.json"
@@ -596,7 +612,7 @@ jobs:
               mv "$RUNNER_TEMP/s.json" "$RUNNER_TEMP/signatures.json"
             done < <(jq -r --arg t "$tag" '.[] | select(.tag_name == $t) | .assets[].name' "$RUNNER_TEMP/unsigned.json")
             echo "$tag: $(jq --arg t "$tag" '.[$t] // {} | length' "$RUNNER_TEMP/signatures.json") signed assets"
-          done < <(jq -r '.[].tag_name' "$RUNNER_TEMP/unsigned.json")
+          done < <(jq -r --arg promote "$PROMOTE_STABLE" '.[] | select(.prerelease or $promote == "true") | .tag_name' "$RUNNER_TEMP/unsigned.json")
           jq --slurpfile m "$RUNNER_TEMP/signatures.json" '
             map(.tag_name as $t | .assets |= map(
               ($m[0][$t][.name] // null) as $s | if $s then . + {orbify_signature: $s} else . end))' \

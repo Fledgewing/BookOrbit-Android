@@ -11,15 +11,21 @@ expect() { # want, then the command's arguments; stdin passes through
   if [ "$got" = "$want" ]; then echo "ok   $* -> $got"; else echo "FAIL $* -> $got (want $want)"; fails=$((fails + 1)); fi
 }
 
-# A final 2.x upstream release is our stable release (the feed's stable entry, which moves
-# readers still on 1.6 to it); an rc or beta stays a pre-release.
+# Every supported upstream defaults to preview. Only a manual promotion of a final
+# upstream may be stable; neither a push nor a schedule can promote.
 expect prerelease channel v2.0.0+bookorbit.1-rc3
 expect prerelease channel v2.0.0+bookorbit.1-beta2
 expect prerelease channel v2.1.0-rc1+bookorbit.1
 expect prerelease channel v2.0.0+bookorbit.1-RC4
-expect stable channel v2.0.0+bookorbit.1
-expect stable channel v2.0.1+bookorbit.2
-expect stable channel 2.3.0
+expect prerelease channel v2.0.0+bookorbit.1
+expect prerelease channel v2.0.1+bookorbit.2
+expect prerelease channel 2.3.0
+expect prerelease channel v2.0.0+bookorbit.1 workflow_dispatch false
+expect prerelease channel v2.0.0+bookorbit.1 push true
+expect prerelease channel v2.0.0+bookorbit.1 schedule true
+expect stable channel v2.0.0+bookorbit.1 workflow_dispatch true
+expect prerelease channel v2.0.0+bookorbit.1-rc3 workflow_dispatch true
+expect prerelease channel v2.0.0+bookorbit.1-beta2 workflow_dispatch true
 # Only 2.x and later are built: 1.6 is no longer supported.
 expect refused channel v1.6.1+bookorbit.9
 expect refused channel v1.7.0
@@ -34,7 +40,7 @@ expect refused pick <<<$'v1.6.1+bookorbit.9'
 
 # Whether a run publishes (release bodies on stdin; each carries "upstream=<tag> overlay-tree=<tree>").
 # Releases are batched: the daily run publishes only for an upstream tag never released before (a
-# new rc, or the final that becomes stable); our own changes go out only by a manual run.
+# new rc, or the final); our own changes go out only by a manual run.
 released=$'Firmware.\nupstream=v2.0.0+bookorbit.1-rc3 overlay-tree=aaa\n\nupstream=v2.0.0+bookorbit.1-rc2 overlay-tree=bbb'
 expect false publish schedule v2.0.0+bookorbit.1-rc3 "upstream=v2.0.0+bookorbit.1-rc3 overlay-tree=ccc" false <<<"$released"
 expect false publish schedule v2.0.0+bookorbit.1-rc3 "upstream=v2.0.0+bookorbit.1-rc3 overlay-tree=aaa" false <<<"$released"

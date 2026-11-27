@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Which CrossInk-Bookorbit tags BookSync builds, and which release channel a build goes to.
-#   upstream-line.sh channel <tag>   prints "stable" or "prerelease"; refuses an unsupported tag
+#   upstream-line.sh channel <tag> [event] [promote_stable]   prints "stable" or "prerelease"; refuses an unsupported tag
 #   upstream-line.sh pick            reads tags newest first on stdin, prints the first supported one
 #   upstream-line.sh publish <event> <tag> <marker> <force>
 #                                    reads the published releases' bodies on stdin, prints "true" or
@@ -10,9 +10,9 @@
 #                                    only by a manual run (workflow_dispatch), once per overlay tree
 #                                    (<marker> = "upstream=<tag> overlay-tree=<tree>") unless forced.
 # Supported: CrossInk 2.x and later (1.6 is retired; its readers stay on the feed's stable entry,
-# xteink-v1.6.1.114, until a final 2.x release takes its place).
-# Channel: a tag with a pre-release part (a "-" followed by a letter: -rc3, -beta2) is a
-# pre-release; any other supported tag is stable, and the feed then offers it as the stable entry.
+# xteink-v1.6.1.114, until an explicitly promoted 2.x release takes its place).
+# Channel: previews by default, including final upstream tags. Only an explicit manual
+# promotion can be stable; upstream rc/beta tags always remain pre-releases.
 # Tested by xteink/test/upstream_line_test.sh.
 set -euo pipefail
 
@@ -26,7 +26,12 @@ case "${1:-}" in
   channel)
     tag="${2:-}"
     supported "$tag" || { echo "unsupported CrossInk tag '$tag': BookSync builds 2.x and later only" >&2; exit 1; }
-    if printf '%s' "$tag" | grep -Eq -- '-[A-Za-z]'; then echo prerelease; else echo stable; fi
+    if [ "${3:-}" = workflow_dispatch ] && [ "${4:-false}" = true ] &&
+       ! printf '%s' "$tag" | grep -Eq -- '-[A-Za-z]'; then
+      echo stable
+    else
+      echo prerelease
+    fi
     ;;
   pick)
     while IFS= read -r tag; do
@@ -54,7 +59,7 @@ case "${1:-}" in
     esac
     ;;
   *)
-    echo "usage: upstream-line.sh channel <tag> | pick | publish <event> <tag> <marker> <force>" >&2
+    echo "usage: upstream-line.sh channel <tag> [event] [promote_stable] | pick | publish <event> <tag> <marker> <force>" >&2
     exit 2
     ;;
 esac

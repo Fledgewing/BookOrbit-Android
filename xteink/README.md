@@ -47,19 +47,27 @@ The 0.11 bridge retains the legacy numeric tag and adds booksync_version to the
 feed. It must reach readers before 0.12. The feed retains legacy channel heads
 indefinitely so old devices can still install the bridge. Stable-only devices need
 a stable bridge. See [rollout, version rules and tests](../docs/design/unified-version.md).
-The following upstream-driven release policy applies through the bridge line.
+The following legacy version policy applies through the bridge line.
 
 ### Releases and the update feed
 
 Readers' updaters read `xteink/releases.json` on the `xteink-feed` branch: the newest stable and
-the newest pre-release `xteink-v…` release. Which one a build becomes is decided by the upstream tag
+the newest pre-release `xteink-v…` release. Builds default to previews, independent of upstream final tags
 (`scripts/upstream-line.sh channel`, tested by `test/upstream_line_test.sh`):
 
 | Upstream tag | Our release | Feed |
 |---|---|---|
 | an upstream CrossInk release candidate or beta (`v2.0.0+bookorbit.1-rc3`) | pre-release | the pre-release entry (readers with Include pre-releases on) |
-| a final release (`v2.0.0+bookorbit.1`, no `-rc`/`-beta`) | stable | the stable entry: readers still on 1.6 are offered it at their next check |
+| a final release (`v2.0.0+bookorbit.1`, no `-rc`/`-beta`), default run | pre-release (preview) | the pre-release entry; stable stays unchanged |
+| a final release, manual `promote_stable=true` after maintainer device testing | stable | the stable entry: readers still on 1.6 are offered it at their next check |
 | 1.x | refused | — |
+
+Promotion publishes a new immutable build; it never moves an existing tag. It also bypasses
+the already-released overlay check, so no separate `force_release` is needed. Upstream rc/beta
+builds cannot be promoted. `test_build` never publishes, and `feed_only` never promotes.
+Ordinary feed refreshes retain the current stable entries, even if GitHub release flags
+were changed by hand; an unreadable current feed fails the job. Feed writes are serialized.
+The policy is enforced by `tools/releases/xteink_feed.py` and the workflow resolver tests.
 
 Every firmware release keeps `make_latest=false`: GitHub's "latest" stays an Android release.
 
@@ -73,7 +81,7 @@ missing or bad signature is only logged (`unsigned`, `signature invalid`) and th
 
 Releases are batched, so readers don't get a new build for every change:
 - **The daily run** publishes only when the reviewed pin has a tag no release was built from yet
-  (a new rc, or the final, which becomes the stable entry). Otherwise it builds and publishes
+  (a new rc or final, both previews by default). Otherwise it builds and publishes
   nothing.
 - **Our own changes** go out only when someone runs the workflow by hand (`gh workflow run Xteink
   --ref main`), which publishes what main has unless that exact overlay was already released
