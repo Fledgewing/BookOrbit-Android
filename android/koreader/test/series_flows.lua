@@ -192,4 +192,50 @@ return function(test,eq,ok,E,W,withHost)
         end)
     end)
 
+    test("Series download preview requires explicit file review and never opens completed books",function()
+        withHost(function(_,reads)
+            fixtures(reads)
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h};h.series_key="opaque-series"
+            local command,file,connected,root,schedule=E.Library.seriesCommand,E.Library.seriesFile,E.NetworkMgr.isConnected,E.Library.downloadRoot,E.UIManager.scheduleIn
+            local calls={}
+            local success,why=pcall(function()
+                E.Library.downloadRoot=function() return "/Books" end
+                E.NetworkMgr.isConnected=function() return true end
+                E.UIManager.scheduleIn=function() end
+                E.Library.seriesCommand=function(op,args,done)
+                    calls[#calls+1]=op
+                    if op=="find" then done({})
+                    elseif op=="preview" then eq(args.count,3);done({items={{key="a",title="One"},{key="b",title="Two"}},token="exact"})
+                    elseif op=="start" then
+                        eq(args.token,"exact");eq(args.root,"/Books");eq(args.choices.a.file_reference,2);eq(args.choices.b.file_reference,2)
+                        done({id="batch",state="complete",items={},summary="2 saved"})
+                    else error(op) end
+                end
+                E.Library.seriesFile=function(_,root,done) eq(root,"/Books");done({items={{file_reference=1,label="EPUB"},{file_reference=2,label="PDF"}}}) end
+                E.SeriesUI.download(h)
+                eq(table.concat(calls,","),"find,preview")
+                local function click(row,col) W.shown[#W.shown].buttons[row][col or 1].callback() end
+                click(3);click(2);click(2)
+                eq(W.shown[#W.shown].title:sub(1,17),"Download 2 books?")
+                eq(table.concat(calls,","),"find,preview")
+                click(3);eq(table.concat(calls,","),"find,preview,start");eq(W.shown[#W.shown].title,"2 saved")
+            end)
+            E.Library.seriesCommand,E.Library.seriesFile,E.NetworkMgr.isConnected,E.Library.downloadRoot,E.UIManager.scheduleIn=command,file,connected,root,schedule
+            if not success then error(why) end
+        end)
+    end)
+    test("Series download callbacks cannot reopen a departed series",function()
+        withHost(function(_,reads)
+            fixtures(reads)
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h};h.series_key="before"
+            local command,root=E.Library.seriesCommand,E.Library.downloadRoot
+            local pending
+            E.Library.downloadRoot=function() return "/Books" end
+            E.Library.seriesCommand=function(op,_,done) eq(op,"find");pending=done end
+            E.SeriesUI.download(h);h.series_key="after"
+            pending({});eq(#W.shown,1)
+            E.Library.seriesCommand,E.Library.downloadRoot=command,root
+        end)
+    end)
+
 end

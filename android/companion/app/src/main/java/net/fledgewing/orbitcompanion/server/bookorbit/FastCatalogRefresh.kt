@@ -100,8 +100,9 @@ class FastCatalogRefresh(
         if (plan.op == "full" || meta("identity") != identity || meta("g") == null) {
             // Clean only unpublished generations. The previous published cache stays intact.
             val keep = old ?: 0L
+            val complete = store.meta("bulk_complete")?.toLongOrNull() ?: keep
             store.transaction {
-                for (table in BulkCatalog.tables) db.exec("DELETE FROM $table WHERE g<>?", keep)
+                for (table in BulkCatalog.tables) db.exec("DELETE FROM $table WHERE g<>? AND g<>?", keep, complete)
                 db.exec("DELETE FROM meta WHERE k LIKE 'bulk_stage_%'")
                 generation = keep + 1
                 set("g", generation); set("identity", identity); set("pct", 0)

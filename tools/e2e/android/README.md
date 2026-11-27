@@ -106,3 +106,10 @@ Resume and completion after departure without reader focus. The disposable
 fixture uses production durable job control and synthetic file bytes; HTTP range
 recovery and real catalog linking are JVM integration tests. Both this flow and
 `review.py` disable Wi-Fi and mobile data before asserting offline behavior.
+
+
+Series queues: `python3 tools/e2e/android/series_downloads.py --serial emulator-N
+--out <evidence>` checks the native exact preview, count editor, per-book format
+choices, queue and per-row/all cancellation without auto-opening. The fixture
+executes the production durable Series/transfer control planes with synthetic bytes.
+JVM tests cover actual protocol, catalog coverage, restart and offline recovery.

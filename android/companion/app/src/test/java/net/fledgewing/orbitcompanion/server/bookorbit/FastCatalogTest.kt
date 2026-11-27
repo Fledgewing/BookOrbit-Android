@@ -501,4 +501,45 @@ class FastCatalogTest {
         } finally { worker.store.close();root.deleteRecursively() }
     }
 
+    @Test fun lastCompleteSeriesSurvivesRepeatedPartialRefreshAndBulkPreviewStaysDisabled() {
+        val root=Files.createTempDirectory("series-coverage").toFile()
+        try { CacheStore(root,{},::JdbcSql).use { store ->
+            val owner=plan().owner
+            store.own(owner)
+            assertEquals("finished",run(store))
+            val key=BookOrbitLibrary.key(owner,"series",202L)
+            val projection=BookOrbitProjection(store)
+            val before=projection.project(owner,mapOf("op" to "series","key" to key,"limit" to 8))
+            assertTrue((before["total"] as Int)>0)
+            val complete=store.meta("bulk_complete")
+            repeat(2) { attempt ->
+                assertEquals("incomplete coverage",run(store,request={ path ->
+                    if("seriesId=202" in path && store.meta("bulk_active")!=complete) throw CatalogFailure()
+                    val response=reply(path)
+                    if("/manifest" in path) response+mapOf("items" to (response["items"] as List<*>).map { (it as Map<*,*>)+mapOf("updatedAt" to "2026-02-0${attempt+1}T00:00:00Z") }) else response
+                }))
+                assertEquals(complete,store.meta("bulk_complete"))
+                val view=projection.project(owner,mapOf("op" to "series","key" to key,"limit" to 8))
+                assertEquals(before["total"],view["total"]);assertEquals(true,view["membership_incomplete"])
+                assertEquals("incomplete",projection.project(owner,mapOf("op" to "series.preview","key" to key))["error"])
+            }
+        } } finally { root.deleteRecursively() }
+    }
+
+    @Test fun seriesPreviewIsSavedBoundedAndTokenChangesWhenASelectedBookIsQueued() {
+        val root=Files.createTempDirectory("series-preview").toFile()
+        try { CacheStore(root,{},::JdbcSql).use { store ->
+            val owner=plan().owner;store.own(owner);assertEquals("finished",run(store))
+            File(root,"copies/ask.lua").apply { parentFile.mkdirs();writeBytes(LuaValue.encode(mapOf("owner" to owner,"books" to emptyList<Any>()))) }
+            val request=mapOf("op" to "series.preview","key" to BookOrbitLibrary.key(owner,"series",202L),"count" to 10,"start_key" to BookOrbitLibrary.key(owner,"book",8L))
+            val projection=BookOrbitProjection(store)
+            val preview=projection.project(owner,request)
+            val items=preview["items"] as List<*>
+            assertTrue(items.isNotEmpty());assertTrue(items.size<=10);assertTrue(LuaValue.encode(preview).size<=16384)
+            assertEquals(preview["token"],projection.project(owner,request)["token"])
+            CatalogTransfers(root).start(owner,mapOf("key" to (items[0] as Map<*,*>)["key"]))
+            assertNotEquals(preview["token"],projection.project(owner,request)["token"])
+        } } finally { root.deleteRecursively() }
+    }
+
 }

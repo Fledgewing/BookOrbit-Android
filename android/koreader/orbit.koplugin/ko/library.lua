@@ -675,6 +675,19 @@ function Library.downloadControl(row,action,done)
         local adopted=Library.rememberDownload(row.key,transferResult(result,"download-job"));if done then done(adopted) end
     end)
 end
+-- Series commands return one bounded neutral snapshot. No catalog traversal in Lua.
+function Library.seriesCommand(action,args,done)
+    return Library.catalogAction("series."..action,args,function(result)
+        transferResult(result,"series-downloads")
+        for _,row in ipairs(result.items or {}) do
+            if row.id and row.key and row.state then Library.rememberDownload(row.key,row) end
+        end
+        if done then done(result) end
+    end)
+end
+function Library.seriesFile(row,root,done)
+    return Library.catalogAction("download.prepare",{key=row.key,root=root},function(result) done(transferResult(result,"download-options")) end)
+end
 function Library.downloadConnect(done)
     return Net.up(Library.controller(),{reason="manual",cap=20},function(ready) done(ready) end)
 end

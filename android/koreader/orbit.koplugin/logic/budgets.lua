@@ -160,3 +160,7 @@ Budgets.screens["download-options"] = budget(8,16384,50)
 Budgets.screens["download-options"].displayRows = 10
 Budgets.screens["download-job"] = budget(1,16384,50)
 Budgets.screens["download-job"].displayRows = 4
+
+-- One Series summary and at most ten exact file/job rows.
+Budgets.screens["series-downloads"] = budget(11,16384,50)
+Budgets.screens["series-downloads"].displayRows=15

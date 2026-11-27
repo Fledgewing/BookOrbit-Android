@@ -402,4 +402,23 @@ class CatalogWorkflowTest {
         assertEquals("Book 2 isn't in your library",(result["next"] as Map<*,*>)["line"])
         assertEquals("Unread",(result["suggestion"] as Map<*,*>)["title"])
     }
+    @Test fun seriesFilePlanUsesOnlyCachedManifestsAndRejectsChangedChoice()=World().use { w ->
+        val key=BookOrbitLibrary.key(w.owner,"book",7L)
+        val args=mapOf("items" to listOf(mapOf("key" to key,"title" to "Book")),"root" to File(w.external,"Chosen").path)
+        assertEquals(File(w.external,"Chosen").path,w.run("download.prepare",mapOf("key" to key,"root" to File(w.external,"Chosen").path))["root"])
+        val rows=w.run("series.choices",args)["items"] as List<*>
+        val choice=rows.single() as Map<*,*>
+        assertEquals(70L,choice["file_reference"])
+        assertTrue(LuaValue.utf8(choice["destination"].toString()).startsWith(File(w.external,"Chosen").path+"/"))
+        assertTrue(w.calls.isEmpty())
+        try { w.run("series.choices",args+mapOf("choices" to mapOf(key to mapOf("file_reference" to 71L,"variant" to "audioless_epub"))));fail("changed selection") }
+        catch(e:ServerFailure) { assertEquals("changed",e.kind) }
+        assertTrue(w.calls.isEmpty())
+    }
+    @Test fun queuedVariantIsRequestedAgainEvenWhenDeliveryPreferencesChange()=World().use { w ->
+        w.run("finish.download",mapOf("key" to BookOrbitLibrary.key(w.owner,"book",7L),"file_reference" to 70L,"variant" to "original"))
+        assertTrue(w.calls.any { it.startsWith("GET ") && "variant=original" in it })
+        assertTrue(w.calls.any { it.startsWith("DOWNLOAD ") && "variant=original" in it })
+    }
+
 }
