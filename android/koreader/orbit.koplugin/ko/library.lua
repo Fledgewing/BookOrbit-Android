@@ -31,12 +31,14 @@ function LibraryAdapter.read(request,op,maxBytes,screen)
     -- stays foreground. Background reads retain Store's memo-only reading rule.
     local user_surface=screen=="reader-top-panel" or screen=="reader-bottom-panel" or screen=="book-info" or screen=="details" or screen=="end-of-book"
     local result, bytes = Store.library(owner, request, maxBytes, user_surface)
+    local decodedBytes=bytes or 0
+    if type(result)~="table" then result=nil end
     if op=="capabilities" and LibraryAdapter.account_snapshot then
         local merged={}
         for k,v in pairs(result or {}) do merged[k]=v end
         merged.account=LibraryAdapter.account_snapshot
-        bytes=#Cache.encode(merged)
-        if bytes>maxBytes then return nil end
+        bytes=math.max(decodedBytes,#Cache.encode(merged))
+        if bytes>maxBytes then return nil,decodedBytes end
         result=merged
     end
     LibraryAdapter.ready[owner .. request] = result ~= nil
@@ -281,19 +283,27 @@ function Library:read(op, args)
     assert(self.metrics.rows + args.limit <= self.screen_budget.rows, "Library page row budget exhausted")
     assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
     local result, decoded = LibraryAdapter.read(request,op,args.bytes,self.screen)
-    if result then
-        rows, bytes = result.row_count or (result.items and #result.items or 1), decoded or 0
-        assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")
-        local call = counts(); call.rows, call.bytes, call.snapshotBytes = rows, bytes, bytes
+    if type(result)~="table" then result=nil end
+    local function charge(n, size)
+        local call = counts(); call.rows, call.bytes, call.snapshotBytes = n, size, size
         assert(Budgets.check(Budgets.libraryWindow, call))
         local usage = counts()
-        usage.rows, usage.bytes = self.usage.rows + rows, self.usage.bytes + bytes
-        usage.snapshotBytes = self.is_widget and usage.bytes or math.max(self.usage.snapshotBytes, bytes)
+        usage.rows, usage.bytes = self.usage.rows + n, self.usage.bytes + size
+        usage.snapshotBytes = self.is_widget and usage.bytes or math.max(self.usage.snapshotBytes, size)
         assert(Budgets.check(self.budget, usage))
         for k,v in pairs(usage) do self.usage[k]=v end
-        self.metrics.rows, self.metrics.bytes = self.metrics.rows + rows, self.metrics.bytes + bytes
+        self.metrics.rows, self.metrics.bytes = self.metrics.rows + n, self.metrics.bytes + size
         self.metrics.snapshotBytes = math.max(self.metrics.snapshotBytes, self.usage.snapshotBytes)
         assert(Budgets.check(self.screen_budget, self.metrics))
+    end
+    -- Decoding work is charged before interpreting even malformed result metadata.
+    bytes=decoded or 0
+    assert(bytes<=args.bytes,"Library call budget exceeded")
+    if bytes>0 then charge(0,bytes) end
+    if result then
+        rows=result.row_count or (result.items and #result.items or 1)
+        assert(type(rows)=="number" and rows>=0 and rows==math.floor(rows) and rows<=args.limit,"Library call budget exceeded")
+        charge(rows,0)
     end
     if not self.seen[request] then
         assert(#self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")

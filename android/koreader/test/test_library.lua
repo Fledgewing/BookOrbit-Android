@@ -193,6 +193,31 @@ return function(test, eq, ok, here, Cache)
         eq(reads,2,"exhausted widget must fail before IO or decode")
         p:flush()
     end)
+    test("library: failed decodes still consume the caller's byte allowance",function()
+        local reads=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(request)
+                reads=reads+1
+                local q=Cache.decode(request)
+                if reads==2 then eq(q.bytes,6384) end
+                return reads==2 and 42 or nil,reads==1 and 10000 or 6384
+            end,request=function() return true end}},{__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        local p=e.Library.paint("home");local widget=p:widget("library")
+        eq(widget:summary().pending,true)
+        eq(widget.usage.bytes,10000,"invalid decoded input is still UI work")
+        eq(widget:read("storage.summary",{limit=1}).pending,true)
+        eq(widget.usage.bytes,16384)
+        eq(pcall(widget.summary,widget),false);eq(reads,2)
+        local m=p:flush();eq(m.bytes,16384);eq(m.rows,0)
+        e.LibraryAdapter.read=function() return {row_count="invalid"},500 end
+        local malformed=e.Library.paint("home")
+        local invalid=malformed:widget("library")
+        eq(pcall(invalid.summary,invalid),false)
+        eq(invalid.usage.bytes,500,"malformed metadata cannot erase decode work either")
+        eq(malformed:flush().bytes,500)
+    end)
     test("library: facet request inherits the picker budget in one batch", function()
         local request, sends
         local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,

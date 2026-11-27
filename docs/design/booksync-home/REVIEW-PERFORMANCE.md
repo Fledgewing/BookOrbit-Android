@@ -34,6 +34,7 @@ as a test assertion.
 | Screen/widget/service | Budget | Measured before | After |
 |---|---|---|---|
 | Library/storage tile: second read after 10,000 B already consumed | Entire tile ≤16,384 B | Next read asks for 16,384 B; overrun checked after decode | Next read asks for 6,384 B; SQL excludes larger bodies before decode |
+| Failed decode | Charge every decoded byte, even on a miss | 10,000 decoded bytes charged as 0 | Charged as 10,000; the remaining allowance falls to 6,384 |
 | Exhausted widget | No further read/decode | Row allowance checked after read | Rejected before adapter read |
 | Card covers: 12 visible jobs | Four jobs per deferred work window | 12 independently scheduled jobs | One drain; 4 + 4 + 4, including queued asynchronous deliveries |
 | Discover: two picks / 10,000 identities | One provider read and one rank/candidate per kind/time/batch | Two provider reads; digest/hex formatting inside comparisons; 2,775 ms | One read, 10,000 ranks; 17 ms |
