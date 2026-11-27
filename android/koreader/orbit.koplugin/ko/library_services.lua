@@ -26,12 +26,17 @@ function Library.settings.refresh(why) return Shared.refresh(why) end
 function Library.settings.setupNeededText() return Shared.setupNeededText() end
 function Library.settings.status(key) return Shared[key] end
 Library.companion={}
+function Library.companion.addon() return Companion.mode=="addon" end
 function Library.companion.has(cap) return Companion.has(cap) end
 function Library.companion.status() return Companion.state() end
 function Library.companion.disabledText() return Companion.disabledText() end
 function Library.companion.workerProblem(why) return Companion.workerProblem(why) end
 function Library.companion.installed() return Companion.installed() end
 function Library.companion.openStatus() return CompanionActivities.openStatus() end
+function Library.companion.openHelpers()
+    return Jni.startActivity{action=Companion.ACTION.SHOW_STATUS,package=Companion.PACKAGE, -- gate: user action (helper settings)
+        flags=0x20000000,extras={booksync_page="helpers"}}
+end
 function Library.companion.openHome() return CompanionActivities.openHome() end
 function Library.companion.openApps() return CompanionActivities.openApps() end
 function Library.companion.openPin()

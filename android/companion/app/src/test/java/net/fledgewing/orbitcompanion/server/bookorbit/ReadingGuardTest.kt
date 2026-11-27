@@ -44,6 +44,7 @@ class ReadingGuardTest {
         Site("Launcher.kt", "startActivity(Intent(this,", 2, "launcher page buttons"),
         Site("Clicker.kt", "startActivity(", 4, "clicker pages: the user's taps and key captures"),
         Site("Pages.kt", "startActivity(Intent(this,", 9, "companion pages: the user's taps, or opened from a page the user opened"),
+        Site("Pages.kt", "startActivity(SettingsPage.section(this, \"sync\", \"helper_wifi\"))", 1, "explicit reader helper-settings link; never background work"),
         Site("Pages.kt", "a.startActivity(SettingsPage.section(a, \"sync\")", 1, "Setup (Add-on): the user tapped Turn on for a helper"),
         Site("Pages.kt", "a.startActivity(", 5, "status and info (StatusPanel, the launcher page): the user's taps"),
         Site("SettingsPages.kt", "startActivity(", 18, "Settings pages: the user's taps"),

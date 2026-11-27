@@ -74,6 +74,8 @@ function OrbitAndroid:statusText()
     end
     local need = Library.settings.setupNeededText()
     if need then table.insert(parts, need) end
+    local update=Library.settings.status("app_update")
+    if update then table.insert(parts,update) end
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
@@ -258,6 +260,9 @@ function OrbitAndroid:menuItems()
                     modes[nextMode].callback()
                 end}
             local out = {modeRow}
+            if Library.companion.addon() then
+                out[#out+1]=action("Wi-Fi switching and sleep sync: in BookSync Companion ›",Library.companion.openHelpers)
+            end
             local text,go,note=AccountView.syncAction(account)
             table.insert(out, 1, action(text or "Sync now", text and go or function() Library.syncNow(self) end))
             out[1].help_text=note

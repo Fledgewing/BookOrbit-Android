@@ -53,6 +53,7 @@ function Shared.refresh(why)
     -- With no service (Add-on), the companion's status file carries the same (§4.4).
     local src = st or Companion.file
     Shared.setup_needed = src and tonumber(src.setup_needed) or nil
+    Shared.app_update = src and type(src.app_update)=="string" and #src.app_update<=128 and src.app_update or nil
     Shared.setup_prompt = src and type(src.setup_prompt) == "table" and src.setup_prompt or nil
     -- The companion's "Home opens": koreader, launcher or app (nil: unknown).
     local so = st and type(st.settings) == "table" and st.settings.home_opens or nil

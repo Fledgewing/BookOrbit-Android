@@ -6153,6 +6153,62 @@
           ]
         }
       }
+    },
+    {
+      "id": "android-addon-012-followups",
+      "feature": "Add-on install/update fallbacks and helper navigation (0.12)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Android 0.12 adds permission-free manual install/download fallbacks, reader update-ready text, helper deep-link and separate sleep/screen-off choices",
+          "reason": "deliberately deferred: emulator/device acceptance and remaining owned-menu recommendation integration are tracked for 0.12; not released.",
+          "evidence": [
+            {
+              "path": "docs/design/addon-mode.md",
+              "line": 740
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and launcher modes",
+          "reason": "not applicable: this outcome changes Android permission fallbacks and helper settings; firmware has no Android launcher or install permission.",
+          "evidence": [
+            {
+              "path": "docs/design/addon-mode.md",
+              "line": 584
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and launcher modes",
+          "reason": "not applicable: this outcome changes Android permission fallbacks and helper settings; firmware has no Android launcher or install permission.",
+          "evidence": [
+            {
+              "path": "docs/design/addon-mode.md",
+              "line": 584
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and launcher modes",
+          "reason": "not applicable: this outcome changes Android permission fallbacks and helper settings; firmware has no Android launcher or install permission.",
+          "evidence": [
+            {
+              "path": "docs/design/addon-mode.md",
+              "line": 584
+            }
+          ],
+          "version": null
+        }
+      },
+      "deferred": "Physical acceptance and owned-menu recommendation integration."
     }
   ],
   "release_evidence": {

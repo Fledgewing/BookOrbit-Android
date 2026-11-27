@@ -140,7 +140,7 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 
 | Action | Opens |
 |---|---|
-| `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3) |
+| `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3). In Add-on, string extra `booksync_page=helpers` opens existing Sync settings focused on Wi-Fi switching; the protected Settings page retains its PIN policy. Use SINGLE_TOP for an existing visible status activity. |
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
 | `net.fledgewing.orbitcompanion.action.SHOW_SETUP` | The "Setup needs you" prompt (the setup box's "Fix now"). Companion 0.4.1+; the patch falls back to `SHOW_STATUS`. |
 | `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's BookSync menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
@@ -601,3 +601,16 @@ setting and gesture identifiers. Lua only disables old methods and preserves nat
 settings. A late, absent or malformed descriptor cannot authorize the owned sync writer.
 Home/account/catalog UI uses the owned Library surfaces. `SLEEP_REFRESH` carries neutral
 settings only; the companion adapter resolves its login and preserves explicit login removal.
+
+## Android 0.12 add-on update status
+
+Both local status transports include nullable `app_update`: one companion-formatted,
+credential-free update-ready line, at most 128 bytes when consumed by the reader.
+It augments the reader's existing settings status; it never opens a notification or
+sheet. The persisted status file carries it when Add-on runs without a service.
+
+With install permission declined in Add-on, a verified signed feed may offer the
+selected HTTPS APK locator to the browser through the existing status page's
+**Download** action. Selection still observes the product channel, version ordering
+and persisted signed withdrawals. The companion creates no installer session for
+this path. Full mode retains the existing permission and verified installation path.

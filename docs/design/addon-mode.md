@@ -749,7 +749,9 @@ Each is written so that "yes" accepts my recommendation.
 | 6. Switching modes | yes | `ModeActivity`, `AddonLogic.toAddon`/`toFull`, `Mode.apply` |
 | 7. Docs | yes | `I/`, `S/`, `docs/FEATURES.md` |
 
-Waits for a later release (each is a fallback the design lists, not a lost feature):
+0.12 follow-up: the install-permission fallback, update-ready status mirroring, helper deep-link and separate Sleep sync / Screen off choices below are now implemented on the feature branch. Emulator and physical acceptance are recorded separately; they are not a release claim.
+
+Historical follow-up list (the final menu-recommendation item remains pending):
 - §3.1 "Install apps" declined: the KOReader row's "Install it yourself" link and a browser
   "Download" for companion updates. Today the KOReader row asks for the permission, as in Full.
 - §3.1 Notifications declined: the required-step text on BookSync settings' status line in KOReader
@@ -777,3 +779,20 @@ Waits for a later release (each is a fallback the design lists, not a lost featu
 | B9 | SETTINGS and STATS in Add-on with no service | start the service for them / record what matters | **Record what matters (book open/closed for restarts); drop the rest** | No permanent notification in Add-on (§7.2). Battery stats need the service's recorder, so they run only while a helper keeps it. |
 | B10 | The PIN in Add-on without its helper | clear it / keep the hash, enforce nothing | **Keep the hash, enforce nothing** | Turning the helper back on restores the same PIN. |
 | B11 | The first-run choice: where | its own page / inside Setup | **Its own page (`ModeActivity`), opened by Status and Setup while unset**, with "Later" | Matches mockup 1; Settings › Mode reuses it. |
+
+## Android 0.12 fallback verification
+
+The permission-free install/download, mirrored update-ready text, helper deep-link
+and independent keep choices are implemented with the existing approved screens.
+The new helper route handles fresh and reused status activities and keeps the
+existing protected Settings/PIN behavior. Native tests found task reuse needed
+explicit SINGLE_TOP delivery plus onNewIntent handling; both are covered.
+
+Validation: 256 Lua logic tests; 264 Lua flow tests; 833 companion tests (0 failures,
+4 skipped), shared-version verification, debug build and lint; server/UI boundary
+12/6 tests; feature matrix 4; emulator driver safety 8. The existing native review
+passed 57 screens and the add-on native flow passed 3 checks. Initial emulator setup
+needed its documented display dimensions and color-notice dismissal; add-on fixture
+corrections and the task-reuse fix preceded the passing evidence. No physical
+acceptance or release is claimed. The menu recommendation integration follows the
+owned reader-menu slice rather than installing another menu writer here.

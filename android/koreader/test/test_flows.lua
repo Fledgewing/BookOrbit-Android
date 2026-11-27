@@ -1056,10 +1056,15 @@ test("setup needs you: the companion's count shows in the menu status, no pop-up
     run(2)
     ok(#W.shown == 0, "no pop-up")
     ok(m:statusText():find("BookSync Companion: 2 setup steps need you", 1, true), "status: " .. m:statusText())
-    W.json.STATUS = { version = "0.2.4", setup_needed = 0 }
+    W.json.STATUS = { version = "0.2.4", setup_needed = 0, app_update="BookSync update ready: v99.0.0 (open the companion)" }
     m:onResume()
     run(2)
     ok(not m:statusText():find("setup step", 1, true), "gone when done")
+    ok(m:statusText():find("BookSync update ready: v99.0.0",1,true),"update ready mirrors into reader settings")
+    ok(#W.shown==0,"update ready never opens a popup while reading")
+    W.json.STATUS.app_update=string.rep("x",129)
+    m:onResume();run(2)
+    ok(not getfenv(Orbit.onSuspend).Shared.app_update,"oversized update status is rejected")
     W.web[url], W.json.STATUS = nil, nil
 end)
 
@@ -1543,7 +1548,7 @@ end)
 test("add-on: with no service, the setup box reads the companion's status file", function()
     capsReset()
     local f = io.open(CAPS_FILE, "wb"); f:write("CAPSFILE"); f:close()
-    W.json.CAPSFILE = { proto = "1", mode = "addon", caps = ADDON, setup_needed = 1,
+    W.json.CAPSFILE = { proto = "1", mode = "addon", caps = ADDON, setup_needed = 1, app_update="BookSync update ready: v99.0.0 (open the companion)",
         setup_prompt = { key = "signed_in", rows = { "Signed in to BookOrbit" } } }
     store.orbit_android.setup_prompt_shown = nil
     local _, m = newUI(false)
@@ -1557,6 +1562,7 @@ test("add-on: with no service, the setup box reads the companion's status file",
     capsReset()
     ok(box, "box from the file")
     ok(line:find("1 setup step needs you", 1, true), "status line: " .. line)
+    ok(line:find("BookSync update ready: v99.0.0",1,true),"update summary survives without a service")
 end)
 
 test("the status ping says whether a book is open (the companion's restart waits for it)", function()

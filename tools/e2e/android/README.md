@@ -81,3 +81,13 @@ The upgrade preserves a seven-minute idle setting and synthetic sentinel, checks
 the Home migration and once-only news acknowledgment, then verifies a fresh profile
 gets BookSync Home without upgrade news. The legacy and current builds use the
 same local debug key; no release key is needed.
+
+After the main review, the add-on fallback flow uses the same disposable emulator:
+
+```sh
+python3 tools/e2e/android/addon.py --serial emulator-5580 --out /tmp/booksync-addon-shots
+```
+
+It checks the native Download fallback, existing helper settings and the reader's
+helper deep-link/update summary. It restores the fixture's preferences even when
+an assertion fails; it never installs an update or opens a physical reader.
