@@ -391,6 +391,16 @@ end
 function Library.nativeReaderPosition(path) return LibraryAdapter.readerPosition(path) end
 function Library.idle() if LibraryAdapter.idle then return LibraryAdapter.idle() end end
 function Library.networkRestored() if LibraryAdapter.networkRestored then return LibraryAdapter.networkRestored() end end
+-- Consent may outlive a run's caller, while its durable commands remain device-lived.
+-- Keep account identity/epoch checks behind Library, shared across that run's replies.
+function Library.positionDelivery()
+    local owner,epoch=LibraryAdapter.owner(),LibraryAdapter.owner_epoch
+    local live=true
+    return function()
+        live=live and owner==LibraryAdapter.owner() and epoch==LibraryAdapter.owner_epoch
+        return live
+    end
+end
 function Library.positionCommand(op,args,done)
     return command(op,function() return LibraryAdapter.command(op,args,done or function() end,{kind="device"}) end)
 end

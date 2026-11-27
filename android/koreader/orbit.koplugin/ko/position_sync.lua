@@ -94,6 +94,14 @@ function ReadingSync.run(moment,done,override)
     local ui=liveUI()
     local args=ReadingSync.capture(ui,moment)
     local native=ui and ui.document
+    ReadingSync.generation=ReadingSync.generation+1
+    local generation=ReadingSync.generation
+    local ownerCurrent=Library.positionDelivery()
+    local function current()
+        return generation==ReadingSync.generation and ownerCurrent() and liveUI()==ui
+            and ui and ui.document==native and native and native.file==args.path
+            and args.automatic==ReadingSync.on()
+    end
     local function run()
         ReadingSync.running=(ReadingSync.running or 0)+1
         ReadingSync.busy=true
@@ -118,15 +126,17 @@ function ReadingSync.run(moment,done,override)
             if not r.snapshot then return finish(false,"Saved · awaiting remote place") end
             r.snapshot.document=r.document
             -- The worker sees geometry only while it still belongs to this native document.
-            if liveUI()~=ui or ui.document~=native or not ui.document or ui.document.file~=args.path then
+            if not current() then
                 return ReadingSync.command("sync.drain",{},function(d) finish(not d.error and (d.remaining or 0)==0,d.error) end)
             end
             local mapped=ReadingSync.geometry(r.snapshot,ui,moment)
             ReadingSync.command("sync.decide",mapped,function(d)
-                local current=liveUI()==ui and ui.document==native and args.automatic==ReadingSync.on()
-                -- The journal/decision still completes after timeout; late consent must not interrupt reading.
-                if not finished and current and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
-                if current and moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
+                local live=current()
+                -- Maintainer ruling: '"sync to this position" does make sense to interrupt your reading for'.
+                -- Timeout completes the caller only. Late consent still shows for a live
+                -- document/owner epoch/run; stale presentation never cancels durable work.
+                if live and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
+                if live and moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
                 finish(not d.error and (d.remaining or 0)==0,d.error)
             end)
         end)

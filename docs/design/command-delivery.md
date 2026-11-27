@@ -58,9 +58,20 @@ lease. Idempotent cleanup cannot clear a newer run. Run matching, heartbeat stal
 coalescing and healthy long-running refresh semantics remain feature-specific.
 
 Position runs name and unschedule their completion timer on success or timeout.
-After timeout the capture/decision/journal work still completes through the sole
-companion writer, but a late consent prompt is suppressed. Native-document guards,
-answer-token validation and durable verification remain in their existing owners.
+The maintainer changed the consent ruling after PR #197, verbatim:
+**'"sync to this position" does make sense to interrupt your reading for'.**
+The caller-facing timeout completes the caller once; it does **not** retire consent.
+A late consent prompt is still shown, even mid-reading, while its presentation ticket
+is live: the same native document and path remain open, the owner and owner epoch
+are unchanged, and no newer position run has superseded it. A → B → A account
+transitions cannot revive an old prompt. A new run supersedes old presentation at
+invocation, including while activation is pending. Existing mode and close/sleep
+prompt guards remain in place.
+
+Only stale presentation is dropped; capture/decision/journal work continues through
+the sole companion writer. Owner/epoch eligibility stays behind Library; ReadingSync
+owns native-document and run identity. Answer-token validation and durable verification
+remain in their existing owners.
 
 ## Performance and verification
 
