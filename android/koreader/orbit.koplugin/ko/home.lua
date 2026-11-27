@@ -391,8 +391,17 @@ end
 function OrbitAndroid:smartHome(source,from_extra,mode,held)
     local host=HomeHost.active
     local ui=liveUI()
-    if host and HomeHost.foreground() and (mode==nil or mode=="smart") then
-        if from_extra=="other_app" and ui and ui.document then UIManager:close(host);return true end
+    -- Preserve the owned Home's established toggle and Back behavior.
+    if S.home_screen=="booksync" then
+        if (mode==nil or mode=="smart") and host and topWidget()==host and ui and ui.document then return host:onClose() end
+        return HomeHost.show()
+    end
+    -- The older Home choice retains its book -> Home -> companion cycle using owned UI.
+    if host and HomeHost.foreground() then
+        if from_extra=="other_app" then
+            if ui and ui.document then UIManager:close(host);return true end
+            return HomeHost.show()
+        end
         if host.list_layout or host.series_key then return host:onClose() end
         return self:openCompanionHome()
     end

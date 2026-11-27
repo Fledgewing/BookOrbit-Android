@@ -75,7 +75,18 @@ return function(test,eq,ok,E,W,Widget)
         E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
-    test("owned Home: smart cycle opens Home, then companion, then restores the book",function() withHost(function()
+    test("owned Home: the default repeated Home returns to the open book",function() withHost(function()
+        E.S.home_screen="booksync"
+        local ui={document={file="/fixture/current.epub"}};E.liveUI=function() return ui end
+        local controller=setmetatable({ui=ui,openCompanionHome=function() error("default Home opened the companion") end},{__index=E.OrbitAndroid})
+        controller:smartHome("command",nil,"smart");local host=E.HomeHost.active
+        eq(W.shown[#W.shown],host)
+        controller:smartHome("command",nil,"smart")
+        for _,w in ipairs(W.shown) do ok(w~=host,"Home closed back to the current book") end
+        eq(ui.document.file,"/fixture/current.epub");eq(E.reading(),true)
+    end) end)
+    test("owned Home: legacy choice cycles Home, companion and the current book",function() withHost(function()
+        E.S.home_screen="server-home"
         local ui={document={file="/fixture/current.epub"}}
         E.liveUI=function() return ui end
         local opened=0
