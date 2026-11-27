@@ -346,7 +346,10 @@ class CatalogWorkflowTest {
         val key=BookOrbitLibrary.key(w.owner,"book",7)
         w.run("finish.download",mapOf("key" to key,"later" to true));assertTrue(w.calls.isEmpty())
         w.run("finish.drain");assertTrue(File(w.external,"books/Fiction/Next.epub").isFile)
-        assertTrue(w.events().any { it["kind"]=="download.saved" });assertTrue((w.state()["downloads"] as? Map<*,*>).orEmpty().isEmpty())
+        val saved=w.events().single { it["kind"]=="download.saved" }
+        // Assert spelling too: a case-insensitive host otherwise hides a legacy path regression.
+        assertEquals(File(w.external,"books/Fiction/Next.epub").path,saved["path"])
+        assertTrue((w.state()["downloads"] as? Map<*,*>).orEmpty().isEmpty())
     }
     @Test fun explicitNativeCatalogDestinationUsesNeutralReferenceAndPublishesLocalLedgerImmediately()=World().use { w ->
         val target=File(w.external,"books/chosen.epub")

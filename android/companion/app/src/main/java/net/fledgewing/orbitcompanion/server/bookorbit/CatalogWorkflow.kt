@@ -353,7 +353,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
     private fun downloadDirectory(requested:String?=null):File {
         val external=worker.root.parentFile?.parentFile?.parentFile ?: throw ServerFailure("forbidden")
         val path=requested ?: (globalSetting("download_dir") ?: globalSetting("home_dir") ?: globalSetting("lastdir")) as? String
-        val directory=path?.let { File(LuaValue.utf8(it)) } ?: File(external,"Books")
+        val directory=path?.let { File(LuaValue.utf8(it)) } ?: File(external,"books")
         require(Places.inside(directory,listOf(external))!=null)
         return directory
     }
