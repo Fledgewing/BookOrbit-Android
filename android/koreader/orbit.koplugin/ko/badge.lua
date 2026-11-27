@@ -155,7 +155,7 @@ function Badge.start(manual, s)
     Badge.notices = {}
     if Badge.closing then UIManager:unschedule(Badge.closing); Badge.closing = nil end
     Badge.pct, Badge.text_now, Badge.expanded, Badge.status, Badge.running = math.max(0, tonumber(s and s.pct) or 0), nil, nil, s, true
-    if manual then orbitNote(Badge.popupText(Badge.pct), Badge.POPUP_S, true) end
+    if manual then orbitNote(_("Full refresh starting…"), Badge.POPUP_S, true) end
     Badge.draw()
 end
 

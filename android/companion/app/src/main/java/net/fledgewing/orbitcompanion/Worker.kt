@@ -72,7 +72,10 @@ object Worker {
     }).also { worker = it }
 
     internal fun nativeFooterRepair(before: String, after: String, token: String) {
-        worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token))
+        synchronized(lock) {
+            patches.addLast { worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token)) }
+        }
+        start()
     }
 
     private fun creds(i: Intent): CacheWorker.Creds? {

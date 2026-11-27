@@ -236,15 +236,17 @@ end
 function Mirror.fullRunning()
     local s = Mirror.status()
     return Mirror.active == true and Mirror.busy == true
-        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full" and s.engine == "bulk")
+        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full" and s.engine == "bulk"
+            or Mirror.manual and s.engine == "bulk")
 end
 
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
 function Mirror.showProgress(why)
     local s = Mirror.status()
     Mirror.manual = true
+    Mirror.no_ack, Mirror.sent_at, Mirror.queried_at = nil, nowT(), nil
     log("mirror: Full refresh already running (" .. tostring(why) .. "); kept,", s.done or 0, "of", s.total or 0, "saved")
-    if not Badge.running then Badge.start(false, s) else Badge.update(s) end
+    if not Badge.running then Badge.start(true, s) else Badge.update(s) end
     Badge.expand()
 end
 
@@ -270,6 +272,7 @@ function Mirror.poll()
         local s = load("status.lua")
         if s and s.run == Mirror.run_id then Mirror._status = s end
         if state and state.run == Mirror.run_id then
+            Mirror.acknowledged = true
             if state.state == "stopped" then
                 -- The summary can arrive between our reads above; check once more.
                 local ended = load("summary.lua")
@@ -283,9 +286,14 @@ function Mirror.poll()
                 Mirror._status = current
             end
         end
-        -- A stale heartbeat is a reason to ask, never evidence that work stopped.
-        if not Mirror.queried_at or nowT() - Mirror.queried_at >= Mirror.POLL_S then
+        if not Mirror.acknowledged and not Mirror.no_ack and nowT() - (Mirror.sent_at or nowT()) >= 6 then
+            Mirror.no_ack = true
+            if Mirror.manual then orbitNote(_("BookSync's companion isn't responding · Retry"), 6, true) end
+        end
+        -- Back off unanswered liveness queries; local status still polls every three seconds.
+        if not Mirror.queried_at or nowT() - Mirror.queried_at >= (Mirror.query_wait or Mirror.POLL_S) then
             Mirror.queried_at = nowT()
+            Mirror.query_wait = math.min(60, (Mirror.query_wait or Mirror.POLL_S) * 2)
             Companion.send(Companion.ACTION.MIRROR, { query_run = Mirror.run_id })
         end
         Badge.update(Mirror._status)
@@ -349,6 +357,7 @@ function Mirror.launch(op, reason)
         if coroutine.status(co) ~= "dead" then return UIManager:scheduleIn(0.01, advance) end
         Mirror.preparing = nil
         Mirror.run_id, Mirror.queried_at = plan.run, nil
+        Mirror.sent_at, Mirror.acknowledged, Mirror.no_ack, Mirror.query_wait = nowT(), nil, nil, nil
         if op == "full" then
             Mirror._status.run = plan.run
             OC.writeFile(Mirror.dir() .. "/status.lua", Cache.encode(Mirror._status))
@@ -361,7 +370,7 @@ function Mirror.launch(op, reason)
     UIManager:nextTick(advance)
     -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
     if Mirror.manual and op == "full" then Badge.start(true, Mirror._status)
-    elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
+    elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(true, Mirror.status()) end
     return true
 end
 
@@ -463,9 +472,9 @@ function Mirror.start(reason, manual)
     end
     Mirror.manual = manual
     if Mirror.busy and not Mirror.preparing and Mirror.status().engine == "bulk" then
-        -- Finish stopping the owned run before admitting an explicit replacement.
-        Mirror.next = { op = "full", reason = reason }
-        OC.writeFile(Mirror.stopFile(), "stop")
+        -- The companion's bulk catalog already saves the whole catalog. Join its
+        -- admission instead of waiting silently for a queued incremental run to stop.
+        if manual then Mirror.showProgress(reason) end
         return true
     end
     if manual and Mirror.preparing then

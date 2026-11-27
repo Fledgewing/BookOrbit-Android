@@ -166,6 +166,38 @@ return {
         } finally { root.deleteRecursively() }
     }
 
+    @Test(timeout = 3000) fun oversizedSettingsTokenStreamStopsWithoutChangingAnyFile() {
+        val root = Files.createTempDirectory("repair-budget").toFile()
+        try {
+            val book = File(root, "Book.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs() }
+            val text = "return {" + "[1]=1,".repeat(50_000) + "}"
+            book.writeText(text)
+            File(book.path + ".old").writeText(lua(15))
+            val logs = arrayListOf<String>()
+            assertTrue(StatusMarginRepair.run(root, {}, logs::add))
+            assertEquals(text, book.readText())
+            assertTrue(logs.any { "unsupported settings" in it })
+            assertFalse(File(book.path + ".booksync-w31.done").exists())
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun scanWatchdogStopsWithoutCompletionAndKeepsAlreadyCheckedFiles() {
+        val root = Files.createTempDirectory("repair-watchdog").toFile()
+        try {
+            val book = File(root, "Book.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs(); writeText(lua(10)) }
+            File(book.path + ".old").writeText(lua(15))
+            var time = 0L
+            try {
+                StatusMarginRepair.run(root, {}, {}, clock = { time.also { time += 30_001 } })
+                fail("scan must stop")
+            } catch (e: IllegalStateException) { assertEquals("status repair scan watchdog", e.message) }
+            assertFalse(File(root, "koreader/settings/booksync-w31-repair.done").exists())
+            assertEquals(lua(10), book.readText())
+            assertTrue(StatusMarginRepair.run(root, {}, {}))
+            assertEquals(lua(15), book.readText())
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun interruptionDoesNotMarkMigrationComplete() {
         val root=Files.createTempDirectory("margin-paused").toFile()
         try {
@@ -174,7 +206,7 @@ return {
             val source=File("src/main/java/net/fledgewing/orbitcompanion/StatusMarginRepair.kt").readText()
             assertTrue(source.contains("BulkWork::checkpoint"))
             assertTrue(source.contains("closedReported && prefs.koreaderBook == \"0\""))
-            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("val complete = run(android.os.Environment"))
+            assertTrue(source.indexOf("maintenance.execute") < source.indexOf("val complete = run(android.os.Environment"))
         } finally { root.deleteRecursively() }
     }
 }

@@ -965,7 +965,9 @@ class CacheWorker(
             if(plan.limit!=null)storage(StorageAsk("before refresh",plan.limit,plan.coverDir,plan.coversOn))
             coverUsage=if(plan.limit!=null)CoverUsage(storageItems(plan.coverDir,plan.coversOn)) else null
             val fast = FastCatalogRefresh(st, plan, { path ->
-                val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
+                val reply = BulkWork.awaitReply(threadFactory, yieldTo) {
+                    http.get(url(creds, path), headers(creds), null, MAX_BODY)
+                }
                 if(reply.code != 200 || reply.body == null) throw FastCatalogRefresh.FetchFailure(reply.body?.size?.toLong() ?: 0L)
                 val body = try { decodeJson(String(reply.body, Charsets.UTF_8)) as? Map<*, *> } catch(_:Exception) { null }
                     ?: throw FastCatalogRefresh.FetchFailure(reply.body.size.toLong())
@@ -1148,7 +1150,7 @@ class CacheWorker(
                 // BATCH): one commit for many replies (a commit on shared storage costs milliseconds),
                 // while the pool keeps fetching from the jobs queued ahead.
                 val batch = ArrayList<Landed>()
-                landed.poll(30, TimeUnit.SECONDS)?.let { batch.add(it) } ?: continue
+                landed.poll(100, TimeUnit.MILLISECONDS)?.let { batch.add(it) } ?: continue
                 val until = clockMs() + BATCH_MS
                 while (batch.size < BATCH && batch.size < inFlight.size) {
                     landed.drainTo(batch, BATCH - batch.size)

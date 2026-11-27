@@ -86,6 +86,28 @@ class BulkWorkTest {
         }
     }
 
+    @Test fun commandsRunWhileBulkNetworkWaitsAndRepairCannotOccupyTheirExecutor() {
+        val fetching = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        var handled = false
+        val reply = BulkWork.awaitReply({ name, task -> Thread(task, name) }, {
+            assertTrue(fetching.await(1, TimeUnit.SECONDS))
+            handled = true
+            release.countDown()
+        }) { fetching.countDown(); assertTrue(release.await(2, TimeUnit.SECONDS)); 42 }
+        assertTrue(handled)
+        assertEquals(42, reply)
+        val repairStarted = CountDownLatch(1)
+        val repairRelease = CountDownLatch(1)
+        val command = CountDownLatch(1)
+        StatusMarginRepair.maintenance.execute { repairStarted.countDown(); repairRelease.await(3, TimeUnit.SECONDS) }
+        try {
+            assertTrue(repairStarted.await(1, TimeUnit.SECONDS))
+            BulkWork.executor.execute { command.countDown() }
+            assertTrue(command.await(1, TimeUnit.SECONDS))
+        } finally { repairRelease.countDown() }
+    }
+
     @Test fun repeatedNetUpAndWifiCallbacksShareOneVpnAttemptUntilDisconnect() {
         val gate = VpnConnectGate()
         assertFalse(gate.request(false, false))

@@ -4046,6 +4046,8 @@ test("mirror: missing, queued and stale working states never time out; only comp
     local client, Cat = cacheSetup()
     local send = E.Companion.send
     local queries, launches = 0, 0
+    local note, notices = E.orbitNote, {}
+    E.orbitNote = function(text) notices[#notices + 1] = text end
     E.Companion.send = function(action, extras)
         if action == E.Companion.ACTION.MIRROR then
             if extras.query_run then queries = queries + 1 else launches = launches + 1 end
@@ -4056,8 +4058,13 @@ test("mirror: missing, queued and stale working states never time out; only comp
         E.Mirror._status_dir = E.Mirror.dir()
         E.Mirror.run_id, E.Mirror.busy, E.Mirror.active = "queued", true, true
         E.Mirror._status = { engine = "bulk", op = "full", done = 0, total = 100, left = 100 }
+        E.Mirror.manual, E.Mirror.sent_at = true, W.clock
+        E.Mirror.acknowledged, E.Mirror.no_ack, E.Mirror.query_wait = nil, nil, nil
         E.Mirror.poll()
         run(180)
+        eq(notices[1], "BookSync's companion isn't responding · Retry")
+        eq(#notices, 1, "unanswered companion warns once")
+        ok(queries <= 7, "unanswered liveness queries back off: " .. queries)
         ok(E.Mirror.busy, "missing acknowledgement is never a timer-only death")
         local function state(name)
             E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="queued", state=name,
@@ -4081,7 +4088,7 @@ test("mirror: missing, queued and stale working states never time out; only comp
         state("stopped"); run(3)
         ok(not E.Mirror.busy and not E.Mirror.active, "explicit companion stop ends ownership")
     end)
-    E.Companion.send = send
+    E.Companion.send, E.orbitNote = send, note
     cacheTeardown()
     ok(success, err)
 end)
@@ -5027,6 +5034,74 @@ test("mirror: pressing Full refresh after a failed bulk run resumes saved progre
     cacheTeardown()
 end)
 
+test("mirror: Full refresh joins a stalled incremental job and warns even after a silent background timeout", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local cat = pluginCatalog(Cat, client)
+    local note, send = E.orbitNote, E.Companion.send
+    local notices, launches = {}, 0
+    E.orbitNote = function(text) notices[#notices + 1] = text end
+    E.Companion.send = function(action, extras)
+        if action == E.Companion.ACTION.MIRROR and not extras.query_run then launches = launches + 1 end
+        return true
+    end
+    local success, err = pcall(function()
+        withHost(cat, function()
+            E.Mirror.cat = cat
+            E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "incremental"
+            E.Mirror.preparing, E.Mirror.manual = nil, nil
+            E.Mirror._status_dir = E.Mirror.dir()
+            E.Mirror._status = { engine = "bulk", op = "incremental", done = 37, total = 100, left = 63, pct = 37 }
+            E.Mirror.run_id, E.Mirror.sent_at = "background", W.clock
+            E.Mirror.acknowledged, E.Mirror.no_ack = nil, nil
+            E.Badge.close(); E.Badge.running = nil
+            E.Mirror.poll(); run(9)
+            eq(#notices, 0, "automatic work is silent")
+            E.OC.fullRefresh(cat)
+            eq(notices[1], "Full refresh starting…", "joining responds immediately")
+            eq(E.Badge.pct, 37, "the active job's real progress is shown")
+            ok(not E.Mirror.next and not E.OC.readFile(E.Mirror.stopFile()), "joining never stops the job")
+            ok(E.Mirror.fullRunning(), "a joined bulk run owns subsequent taps")
+            run(9)
+            eq(notices[2], "BookSync's companion isn't responding · Retry", "the background timeout cannot swallow manual feedback")
+            E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="background", state="progress"}))
+            E.OC.writeFile(E.Mirror.dir() .. "/status.lua", E.Cache.encode({run="background", engine="bulk", op="incremental", pct=60, done=60, total=100, left=40}))
+            run(3)
+            eq(E.Badge.pct, 60, "live progress replaces the starting state")
+            eq(launches, 0, "no duplicate bulk request")
+        end)
+    end)
+    E.orbitNote, E.Companion.send = note, send
+    cacheTeardown()
+    ok(success, err)
+end)
+
+test("mirror: an explicit resumed Full refresh shows immediate startup feedback before acknowledgement", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local cat = pluginCatalog(Cat, client)
+    local note, send = E.orbitNote, E.Companion.send
+    local notices = {}
+    E.orbitNote = function(text) notices[#notices + 1] = text end
+    E.Companion.send = function() return true end
+    local success, err = pcall(function()
+        withHost(cat, function()
+            E.Mirror.cat = cat
+            E.Mirror.active, E.Mirror.busy = nil, nil
+            E.Mirror._status_dir = E.Mirror.dir()
+            E.Mirror._status = { engine = "bulk", op = "full", done = 15, total = 100, left = 85, pct = 15 }
+            E.Badge.close(); E.Badge.running = nil
+            E.OC.fullRefresh(cat)
+            eq(notices[1], "Full refresh starting…", "the tap responds before any companion work")
+            ok(E.Badge.running, "saved progress is visible")
+            eq(E.Badge.pct, 15, "resumed progress is preserved")
+        end)
+    end)
+    E.orbitNote, E.Companion.send = note, send
+    cacheTeardown()
+    ok(success, err)
+end)
+
 test("mirror: background full runs and resumes never display a badge", function()
     local client, Cat = cacheSetup()
     W.wifi = true
@@ -5528,7 +5603,7 @@ test("mirror: the Full refresh badge: a popup at the start, then one % that only
         run(1200)
         local m = E.Mirror.status()
         ok(m.at and m.left == 0 and m.total > 450, "finished: " .. tostring(m.done) .. "/" .. tostring(m.total))
-        ok(#popups == 1 and popups[1].text:find("^Full refresh in progress · about %d+%% done · you can keep reading and browsing while it loads$"), "one popup: " .. tostring(popups[1] and popups[1].text))
+        ok(#popups == 1 and popups[1].text == "Full refresh starting…", "one popup: " .. tostring(popups[1] and popups[1].text))
         ok(#notes == 0, "no other note: " .. table.concat(notes, " | "))
         local h, last = E.Badge.history, -1
         ok(#h > 5, "the % moved along: " .. table.concat(h, " "))
