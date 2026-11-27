@@ -119,7 +119,9 @@ function HomeHost.create()
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
-            local snapshot=HomeHostPlan.snapshot(result,caps.account)
+            local snapshotAccount=caps.account
+            if WidgetRegistry[p.widget].localOnly then snapshotAccount=nil end
+            local snapshot=HomeHostPlan.snapshot(result,snapshotAccount)
             local interval=WidgetRegistry[p.widget].refreshSeconds
             if interval then refreshDelay=math.min(refreshDelay or interval,interval) end
             local dispatch=function(action,row) self:dispatch(action,row,p) end
@@ -207,6 +209,9 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "setup" then AccountView.open()
         elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "word-lookup" or action == "light-down" or action == "light-up" then
+            Library.localWidgetAction(action,row)
+            if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()
         elseif action == "storage" then StorageUI.show()
         elseif action == "collections" then StorageUI.show("collections",function(row)
