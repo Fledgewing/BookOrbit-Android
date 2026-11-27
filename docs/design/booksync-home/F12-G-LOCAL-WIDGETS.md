@@ -6,7 +6,7 @@ still draws placeholders for these; meaningful copy follows DESIGN §3.1/§3.4.
 Highlight's authorized passage and A year ago's server snapshot remain staged,
 alongside Recommended and Discover, under this slice's server-data exclusion.
 
-Reuse: `ko/home_widgets.lua:4` registers isolated renderers; `ko/home_host.lua:89`
+Reuse references at initial baseline `ed66409d`: `ko/home_widgets.lua:4` registers isolated renderers; `ko/home_host.lua:89`
 reads through `ko/library.lua:29` into `LibraryReadModel.kt:25`. The same Home owner
 owns invalidation, batching, Back and editor placement; no alternate store/cache or
 transport. `logic/local_widgets.lua` contains presentation state only; the existing

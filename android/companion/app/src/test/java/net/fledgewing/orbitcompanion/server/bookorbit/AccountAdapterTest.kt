@@ -64,6 +64,23 @@ class AccountAdapterTest {
         fun origin(kind: String) = (adapter.state()[kind] as Map<*,*>)["origin"]
         fun canSync() = adapter.position("a".repeat(32))
     }
+    @Test fun adoptedUpgradeLoginsSyncAndDownloadWithoutAnAccountOrNetworkSetup() {
+        val k=Kit()
+        val legacyOwner="fixture|https://library.invalid/api/v1"
+        k.credentials.adoptLegacy(mapOf(
+            "sync" to ServerCredentials.Login("https://library.invalid/api/v1","fixture-sync","a".repeat(32),"user",legacyOwner),
+            "opds" to ServerCredentials.Login("https://library.invalid/api/v1","fixture-opds","fixture-private","user",legacyOwner)))
+        assertTrue(k.calls.isEmpty()); assertEquals(0,k.syncCreates); assertEquals(0,k.opdsCreates)
+        assertEquals(legacyOwner,k.adapter.owner()); assertEquals(legacyOwner,k.adapter.positionOwner())
+        assertEquals(false,k.adapter.state()["signedIn"])
+        assertEquals(true,(k.adapter.state()["sync"] as Map<*,*>)["available"])
+        assertEquals(true,(k.adapter.state()["catalog"] as Map<*,*>)["cachedDetail"])
+        k.canSync()
+        assertEquals("a".repeat(32),k.calls.last().second["x-auth-key"])
+        val row=((k.adapter.catalog()["items"] as List<*>).single() as Map<*,*>)
+        assertTrue(k.adapter.download(row["key"] as String,File("unused-upgrade-destination")))
+        k.adapter.signOut(); k.canSync(); assertEquals("user",k.origin("opds"))
+    }
     @Test fun coverCommandResolvesOnlyCurrentAccountKeysInsideAdapter() {
         val k=Kit(); k.user("sync")
         val owner=k.credentials.login("sync")!!.owner()

@@ -14,8 +14,7 @@ class LibraryReadModel(
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null },
     private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
-    private val adapter: ServerAdapter = ServerAdapters.forStore(store, clock = clock,
-        fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats),
+    private val adapter: ServerAdapter? = null,
 ) {
     companion object {
         const val MAX_BYTES = 16384
@@ -28,19 +27,24 @@ class LibraryReadModel(
         var changed = false
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
-        if (store.meta("owner") != owner) return false
+        if (owner != DeviceLibrary.OWNER && store.meta("owner") != owner) return false
+        val local = owner == DeviceLibrary.OWNER
+        val projection = if (local) DeviceLibrary(DeviceStorage.folders.map {
+            java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it)
+        } + DeviceStorage.downloadRoot(store.root)) else adapter ?: ServerAdapters.forStore(store, clock = clock,
+            fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats)
         val localStats by lazy { readingStats() }
-        val storage by lazy { DeviceStorage(store, adapter) }
+        val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
-        val account by lazy { accountStats(owner) }
-        val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, adapter.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
+        val account by lazy { if (local) null else accountStats(owner) }
+        val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
             if (request.length > 8192) continue
             val args = LuaValue.parse(request.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: continue
             store.transaction {
-                if (store.meta("owner") != owner) return@transaction
+                if (!local && store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
@@ -53,8 +57,8 @@ class LibraryReadModel(
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
                     "sleep.choices" -> SleepChoiceWindow.project(SleepChoices.read(SleepScreen.dir()), args)
-                    "capabilities" -> adapter.capabilities(owner) + mapOf("battery" to true)
-                    else -> adapter.project(owner, args)
+                    "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true)
+                    else -> projection.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 val items = result["items"] as? List<*>
                 val measuredRows = items.orEmpty().size + items.orEmpty().sumOf {

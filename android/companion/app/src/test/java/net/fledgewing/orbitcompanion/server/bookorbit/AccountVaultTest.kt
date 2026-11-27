@@ -43,5 +43,18 @@ class AccountVaultTest {
         assertEquals("user",reloaded.status("sync")["origin"])
         reloaded.remove("sync"); assertFalse(file.exists())
     }
+    @Test fun importedPasswordIsOnlyPersistedInsideTheExistingEncryptedVault() {
+        val root=Files.createTempDirectory("import-encrypted").toFile()
+        try {
+            val file=java.io.File(root,"account.enc")
+            val key=KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+            val vault=EncryptedAccountVault(file) { key }
+            val credentials=ServerCredentials(vault)
+            credentials.adoptLegacy(mapOf("opds" to ServerCredentials.Login("https://library.invalid/api/v1","fixture","import-secret","user")))
+            assertFalse(String(file.readBytes()).contains("import-secret"))
+            assertEquals("import-secret",ServerCredentials(vault).login("opds")!!.secret)
+            assertEquals(listOf("account.enc"),root.listFiles()!!.map { it.name })
+        } finally { root.deleteRecursively() }
+    }
 
 }

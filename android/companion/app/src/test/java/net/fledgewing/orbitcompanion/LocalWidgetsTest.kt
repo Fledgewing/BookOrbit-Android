@@ -37,6 +37,9 @@ class LocalWidgetsTest {
                 assertEquals(1L,result["row_count"])
             }
             assertFalse(model.publish("another-owner",requests))
+            assertTrue(model.publish(DeviceLibrary.OWNER,requests))
+            assertEquals(2,reads)
+            assertEquals(3,sql.query("SELECT body FROM library_views WHERE owner=?",DeviceLibrary.OWNER) { it.bytes(0)!! }.size)
         } } finally { dir.deleteRecursively() }
     }
     @Test fun vocabularyIsOneBoundedDailyRecordWithContextAndSource() {

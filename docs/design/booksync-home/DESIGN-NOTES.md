@@ -750,8 +750,8 @@ the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values 
 Owned Home is the Android 0.12 default on both fresh installs and upgrades. The
 legacy Home selector is retired from the shared settings schema and Settings;
 old internal navigation remains only for compatibility while transport moves.
-The existing `logic/layout.lua:181` defaults provide Home, Library and Stats,
-including Also reading, Recently added, Want to read, On device and Finished.
+The existing `logic/layout.lua:181` defaults follow §4: Home and Stats on the M8C, including Also reading, Recently
+added and Want to read. On device and Finished remain Book list presets.
 A saved layout (including class overrides) remains authoritative; this cutover
 never resets it or copies catalogs, logins, outbox or reading intents.
 
@@ -788,11 +788,6 @@ The upgrade sheet uses pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54
 handles both Back and outside taps; Done acknowledges explicitly before closing.
 The regression double follows that native path rather than InfoMessage's separate
 `dismiss_callback`. The compatibility guard now requires the native callback field.
-
-Pass 3 integration ruling: the first-run task explicitly requires three Android
-default pages. Keep Home, Library and Stats and the existing starter shelves,
-while retaining pass 4's navigation and touch fixes. This explicit task requirement
-supersedes pass 4's two-page default adjustment; saved layouts remain untouched.
 
 The upgrade sheet's Done action declares a 50 px content height, in addition to
 native padding/borders. Pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`
@@ -1040,3 +1035,31 @@ Each widget inherits one row, 16 KiB, zero subprocesses/render network and one s
 Home batch from budgets.lua. Selection, count and messages stay in the companion;
 Lua draws immutable windows. Timing spans remain device evidence, not host acceptance.
 See [local widget implementation](F12-G-LOCAL-WIDGETS.md) for pinned source evidence.
+
+### Pass 3 follow-ups (Android, 2026-11-26)
+
+The M8C uses §4's two default pages, Home and Stats, with the exact approved
+placements; the X4's three-page default remains a later firmware slice. Existing
+saved layouts remain authoritative, including any saved Library page.
+
+Existing device-entered logins are imported as `user` (§21–§22): they predate
+account sign-in, remain independent, and survive account sign-out. This differs
+from a connector found on the server during an explicit account sign-in, which
+has account provenance. `ServerAdapters.kt:29` composes the worker-only import;
+`server/bookorbit/ServerCredentials.kt:16` checkpoints both logins and the marker
+in the existing encrypted vault, preserving newer logins and the legacy catalog
+identity. A crash before or after that atomic save is safe to retry. No source
+credential file or legacy position/lifecycle queue is changed. Native OPDS source:
+pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`plugins/opds.koplugin/main.lua:15`, `:63` and `opdsbrowser.lua:248`. Existing
+sync source: pinned BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`,
+`koreader-plugin/bookorbit.koplugin/main.lua:145`, `:155` and `:264`.
+
+Signed-out projections use the reserved device owner without claiming or reading
+a previous account's catalog. Reuse `LibraryReadModel.kt:30` for materialization,
+`ReadingStats.kt:24` and `LibraryFilter.kt:30` for local stats and filtering, and
+`DeviceStorage.kt:19` for local folder choices. Native metadata and custom covers
+are read only by the companion; the plugin receives bounded windows. All existing
+caller budgets and info timing spans apply: zero network/subprocess work while
+painting, at most one batch per Home paint, at most 24 display rows and 16 KiB per
+widget. Host test timings do not establish device performance acceptance.
