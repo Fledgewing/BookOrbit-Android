@@ -188,22 +188,22 @@ void bootBegin() {
   // Before any saved catalog is decoded or the first activity is selected.
   // A refresh can also leave a published cache that fails during setup, before
   // service() has a chance to see the worker's in-flight marker.
-  // A quarantined incident is settled. Its warning is restored by service(),
-  // without arming setup again or touching a catalog pointer a second time.
-  if (Storage.exists(CRASHED) && !requested()) return;
-  if (!requested() && !attempt.exhausted() &&
+  if (!requested() && !Storage.exists(CRASHED) && !attempt.exhausted() &&
       !Storage.exists("/.crosspoint/orbify/refresh.inflight")) return;
   if (bootAttempt.exhausted() || !bootAttempt.begin()) {
-    quarantine();
+    // An old warning is already quarantined; do not repeat that transition.
+    // Still protect setup if the retained catalog itself later fails to load.
+    if (!Storage.exists(CRASHED)) quarantine();
     // Disable the suspect cache by moving only its pointer, never the books or
     // the catalog generation itself. Do not decode any of it during recovery.
     constexpr const char* active = "/.crosspoint/orbify-catalog/bulk/active";
+    const bool hadPointer = Storage.exists(active) || Storage.exists("/.crosspoint/orbify-catalog/bulk/active.bak");
     if (Storage.exists(active)) {
       Storage.remove("/.crosspoint/orbify-catalog/bulk/active.crashed");
       Storage.rename(active, "/.crosspoint/orbify-catalog/bulk/active.crashed");
     }
     Storage.remove("/.crosspoint/orbify-catalog/bulk/active.bak");
-    LOG_ERR("ORB", "Full refresh: early-boot breaker disabled saved catalog pointer");
+    if (hadPointer) LOG_ERR("ORB", "Full refresh: early-boot breaker disabled saved catalog pointer");
     return;
   }
 #ifdef SIMULATOR

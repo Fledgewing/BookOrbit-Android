@@ -64,7 +64,9 @@ catalog from being decoded on that boot. The generation bytes remain on SD.
 Quarantine retires the worker attempt; completing setup retires the boot attempt,
 including on the quarantine path. Later boots restore the actionable warning
 ("Refresh stopped after a crash. Run Full refresh to rebuild.") without repeating
-quarantine, rearming the boot breaker or moving the pointer again. This also
+quarantine or moving the pointer again. Setup remains guarded while the warning
+exists, so a later failure decoding a retained catalog still disables its pointer;
+each completed setup clears that boot's attempt. This also
 settles the exhausted markers left by older firmware. A Full refresh interrupted
 by one restart has a fresh attempt allowance and resumes normally.
 

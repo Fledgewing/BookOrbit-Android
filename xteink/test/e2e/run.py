@@ -348,7 +348,7 @@ def full_refresh_early_boot_breaker(ctx: Context, tmp: Path) -> None:
     logs = [run.output]
     for boot in range(3):
         settled = ctx.sim.run(card, f"settled-{boot}", script="6000:QUIT", timeout_s=15,
-                              env={"ORBIFY_SIM_CRASH_REFRESH_BOOT": "1", "ORBIFY_SIM_CRASH_REFRESH": "1"})
+                              env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
         assert settled.returncode == 0
         logs.append(settled.output)
         assert not (folder / "refresh-boot.inflight").exists()
