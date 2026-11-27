@@ -57,7 +57,7 @@ design and mockup approval still apply.
 
 | Outcome | Platforms | Status |
 |---|---|---|
-| **BookSync Home** replaces the BookOrbit Home on Android and Xteink: complete reader-preset widget library retained as the staged target and rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4, X3 | approved (W36; maintainer 2026-11-25; Android first) |
+| **BookSync Home** replaces the BookOrbit Home on Android and Xteink: complete reader-preset widget library retained as the staged target and rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4, X3 | building on Android (host/editor/detail and seventeen widget types implemented; [retained inventory gaps](docs/design/booksync-home/F12-HOME-INVENTORY.md)); firmware later |
 | **Widget-first Home editor**: independent widgets in one versioned shared layout with per-device grids; full Android/X4 editor, X3 Settings list; editor plus Continue reading, Shelf and Browse links first, then one widget per accepted increment. | Android, X4 Pro, X4, X3 | approved (maintainer 2026-11-25; Android first on feature/0.12) |
 | **Tap to download** (Next 5) on Home, lists, series and detail. | Android, X4 Pro, X4, X3 | implemented on feature/0.12 for Android ([jobs](docs/design/booksync-home/F12-DOWNLOADS.md)); physical acceptance and firmware pending |
 | **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android, X4 Pro, X4, X3 | implemented on feature/0.12 for Android ([next-N queues](docs/design/booksync-home/F12-SERIES-DOWNLOADS.md)); physical acceptance and firmware pending |
