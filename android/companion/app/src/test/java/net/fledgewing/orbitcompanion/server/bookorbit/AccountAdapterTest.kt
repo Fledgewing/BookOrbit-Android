@@ -26,6 +26,7 @@ class AccountAdapterTest {
         var existing: Any? = null
         var provision: ByteArray? = null
         var syncCreates = 0; var opdsCreates = 0
+        var accountId = 7
         var selection = "first"
         var dashboardCode = 200
         var lastBody: Map<String,Any?>? = null
@@ -34,7 +35,7 @@ class AccountAdapterTest {
         val account = BookOrbitAccount(credentials.accountVault, object : BookOrbitAccount.Http {
             override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?): BookOrbitAccount.Reply = when {
                 path.startsWith("/koreader/plugin-package?") -> BookOrbitAccount.Reply(200,provision?.copyOf())
-                path == "/auth/login" -> BookOrbitAccount.Reply(200,mapOf("accessToken" to "private-access", "refreshToken" to "private-refresh", "accessTokenExpiresAt" to Instant.ofEpochSecond(now+900).toString(), "refreshTokenExpiresAt" to Instant.ofEpochSecond(now+604800).toString(), "user" to mapOf("id" to 7)))
+                path == "/auth/login" -> BookOrbitAccount.Reply(200,mapOf("accessToken" to "private-access", "refreshToken" to "private-refresh", "accessTokenExpiresAt" to Instant.ofEpochSecond(now+900).toString(), "refreshTokenExpiresAt" to Instant.ofEpochSecond(now+604800).toString(), "user" to mapOf("id" to accountId)))
                 path == "/koreader/credentials" && method == "GET" -> BookOrbitAccount.Reply(200,existing)
                 path == "/koreader/credentials" && method == "POST" -> { syncCreates++; existing = mapOf("username" to body!!["username"]); BookOrbitAccount.Reply(201) }
                 path == "/opds-users" && method == "POST" -> { opdsCreates++; BookOrbitAccount.Reply(201) }
@@ -116,6 +117,29 @@ class AccountAdapterTest {
             for (secret in listOf("separate-secret","private-access","private-refresh","must-not-escape")) assertFalse(result.toString(),result.toString().contains(secret))
         }
     }
+    @Test fun accountReplacementRefreshesItsConnectorSlots() {
+        for (changeServer in listOf(false, true)) {
+            val k = Kit(); k.account()
+            val previous = k.credentials.login("sync")!!
+            val previousOpds = k.credentials.login("opds")!!
+            k.existing = null
+            if (!changeServer) k.accountId = 8
+            k.adapter.signIn(if (changeServer) "https://second.invalid" else "https://library.invalid", "next", "fixture-password".toCharArray())
+            assertNotEquals(previous.owner(), k.credentials.login("sync")!!.owner())
+            assertNotEquals(previous.secret, k.credentials.login("sync")!!.secret)
+            assertNotEquals(previousOpds.secret, k.credentials.login("opds")!!.secret)
+            assertEquals(2, k.syncCreates); assertEquals(2, k.opdsCreates)
+        }
+    }
+    @Test fun accountReplacementRetainsDirectConnectorSlots() {
+        val k = Kit(); k.user("sync"); k.account()
+        val direct = k.credentials.login("sync")!!.encoded()
+        val previousOpds = k.credentials.login("opds")!!.secret
+        k.accountId = 8; k.account()
+        assertEquals(direct, k.credentials.login("sync")!!.encoded())
+        assertNotEquals(previousOpds, k.credentials.login("opds")!!.secret)
+    }
+
     @Test fun accountOnlySignOutRemovesBothConnectorsAndStopsSyncAndDownloads() {
         val k = Kit(); k.account()
         assertEquals("account",k.origin("sync")); assertEquals("account",k.origin("opds")); k.canSync()

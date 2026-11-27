@@ -16,6 +16,21 @@ local function eq(a, b, what)
     if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end
 end
 
+test("cache values retain their literal format", function()
+    local bytes = {}
+    for i=0,255 do bytes[#bytes+1]=string.char(i) end
+    local input = {text=table.concat(bytes), array={true,false,1,-2,1.25}, [9]="number key"}
+    local encoded=M.Cache.encode(input)
+    local output=M.Cache.decode(encoded)
+    eq(output.text,input.text); eq(output.array[2],false); eq(output[9],"number key")
+    eq(M.Cache.decode('{name="fixture", nested={count=2}}').nested.count,2)
+    eq(M.Cache.decode("{(function() return 1 end)()}"),nil)
+    eq(M.Cache.decode("{[1+1]=2}"),nil)
+    eq(M.Cache.decode("{[{}]=1}"),nil) -- unsupported key encoding
+    eq(M.Cache.decode(string.rep("{",10000).."1"..string.rep("}",10000)),nil)
+    eq(M.Cache.decode('{["x"]=1} trailing'),nil)
+end)
+
 test("0.12 first run: fresh install, additive upgrade and crash retry", function()
     local fresh={}
     ok(M.HomePlan.migrate012(fresh))

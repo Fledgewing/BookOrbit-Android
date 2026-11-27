@@ -14,8 +14,72 @@ Cache = {}
 -- with Cache.decode. Functions and userdata are dropped.
 function Cache.encode(...) return UIUtil.encode(...) end
 
+-- Accept the literal format emitted by UIUtil.encode before loading a value.
+local function literal(s)
+    local i, n = 1, #s
+    local function peek()
+        while i <= n and s:sub(i,i):match("%s") do i = i + 1 end
+        return s:sub(i,i)
+    end
+    local function take(c)
+        if peek() ~= c then error("literal") end
+        i = i + 1
+    end
+    local value
+    value = function(depth)
+        if depth > 40 then error("literal") end
+        local c = peek()
+        if c == '"' then
+            i = i + 1
+            while i <= n do
+                c = s:sub(i,i); i = i + 1
+                if c == '"' then return end
+                if c == "\\" then
+                    local e = s:sub(i,i)
+                    if e == "" then error("literal") end
+                    if e:match("%d") then
+                        local digits = s:match("^%d%d?%d?", i)
+                        if tonumber(digits) > 255 then error("literal") end
+                        i = i + #digits
+                    elseif e:match('[abfnrtv\\"\n]') then i = i + 1
+                    else error("literal") end
+                elseif c:byte() < 32 then error("literal") end
+            end
+            error("literal")
+        elseif c == "{" then
+            i = i + 1
+            if peek() == "}" then i = i + 1; return end
+            while true do
+                if peek() == "[" then
+                    i = i + 1
+                    if peek() == "{" then error("literal") end
+                    value(depth + 1); take("]"); take("=")
+                else
+                    local _, last = s:find("^[%a_][%w_]*%s*=", i)
+                    if last then i = last + 1 end
+                end
+                value(depth + 1)
+                c = peek()
+                if c == "}" then i = i + 1; return end
+                if c ~= "," and c ~= ";" then error("literal") end
+                i = i + 1
+                if peek() == "}" then i = i + 1; return end
+            end
+        else
+            local token = s:match("^[%w%.%+%-]+", i)
+            if not token then error("literal") end
+            if token ~= "true" and token ~= "false" and token ~= "nil" and not tonumber(token) then error("literal") end
+            i = i + #token
+        end
+    end
+    value(0)
+    return peek() == ""
+end
+
 function Cache.decode(s)
     if type(s) ~= "string" or s == "" then return nil end
+    local valid, complete = pcall(literal, s)
+    if not valid or not complete then return nil end
     local fn = loadstring("return " .. s)
     if not fn then return nil end
     setfenv(fn, {})
