@@ -11,6 +11,7 @@ struct Snapshot {
   size_t done = 0, total = 0, failures = 0;
   size_t books = 0;
   std::string result;
+  bool stopped() const { return finished && failures != 0; }
 };
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
 void bootBegin();

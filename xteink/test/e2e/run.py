@@ -275,6 +275,7 @@ def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
         assert recovered.returncode == 0
         assert (folder / "mirror.request.crashed").read_text() == (
             "Refresh stopped after a crash. Run Full refresh to rebuild.")
+        after(recovered.output, "BookOrbit Home: refresh stopped: Refresh stopped after a crash.")
         assert (bulk / "active").exists() != disable_pointer
         x, y = home_tile(recovered.output, "sync")
         refreshed = ctx.sim.run(card, f"normal-refresh-{disable_pointer}",
@@ -290,6 +291,7 @@ def normal_refresh_after_quarantine(ctx: Context, tmp: Path) -> None:
                               env={"ORBIFY_SIM_CRASH_REFRESH": "1"})
         assert settled.returncode == 0
         assert "crash breaker stopped automatic resume" not in settled.output
+        assert "BookOrbit Home: refresh stopped:" not in settled.output
         assert not (folder / "mirror.request.crashed").exists()
 
 
