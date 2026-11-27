@@ -1070,3 +1070,21 @@ are read only by the companion; the plugin receives bounded windows. All existin
 caller budgets and info timing spans apply: zero network/subprocess work while
 painting, at most one batch per Home paint, at most 24 display rows and 16 KiB per
 widget. Host test timings do not establish device performance acceptance.
+
+## F12-endsheet implementation (2026-11-26)
+
+Android's existing finish sheet now opens the owned Series page through the BookSync
+interface. The companion's saved finish snapshot supplies an opaque series key; the
+UI never chooses a source or scans membership. Last book and unknown series order
+still allow View series; no membership omits it. Back restores the sheet only while
+the initiating document remains open. Viewing does not send a finish or download.
+
+Reuse: `server/bookorbit/FinishLogic.kt:12` selects saved next/suggestion cards;
+`ko/finish.lua:42` reads the bounded finish projection; `ko/endsheet.lua:77` draws
+its rows; `ko/series.lua:154` owns Series entry/Back. PersonalReading's highlight
+and anniversary registry is unrelated to catalog series membership and remains unchanged.
+The existing end-of-book and Series screen/widget budgets apply: at most three
+finish rows, 16 KiB per snapshot, zero subprocesses/network on paint and at most
+one batched companion round-trip. No additional read or row is needed for the key.
+AGENTS.md's screen/widget performance rule remains binding. Firmware implementation
+and physical-device visual/timing acceptance follow Android; this is not a release.

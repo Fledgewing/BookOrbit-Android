@@ -150,6 +150,41 @@ test("catalog actions: end sheet uses only the library action dispatcher",functi
     eq(calls[1],"mark");sheet:onClose();eq(calls[2],"back")
     E.Library.endAction=endAction
 end) end)
+test("catalog actions: series action appears only for companion-projected membership",function() isolated(function()
+    local ui,m,b=fixture();local action=E.Library.endAction;local calls={}
+    E.Library.endAction=function(...) calls[#calls+1]={...} end
+    local success,why=pcall(function()
+        for _,model in ipairs({
+            {series_key="opaque-series",next={line="Next in series",book_id="next",title="Next"}},
+            {series_key="opaque-series",next={line="You've finished the series"}},
+            {},
+            {series_key="opaque-series",offline=true,next={line="Next in series",book_id="next",title="Saved",local_path="saved.epub"}},
+        }) do
+            model.title,model.status="Synthetic","Saved"
+            local sheet=E.EndSheet:new{ui=ui,book=b,model=model};local found=0
+            for _,row in ipairs(sheet:rows()) do
+                if row.text=="View series" then
+                    found=found+1;row.action()
+                    local call=calls[#calls];eq(call[1],"series");eq(call[2],ui);eq(call[3],b);eq(call[4],model.series_key)
+                end
+            end
+            eq(found,model.series_key and 1 or 0)
+        end
+    end)
+    E.Library.endAction=action;if not success then error(why) end
+end) end)
+test("catalog actions: failed series entry restores sheet and stale Back cannot reopen it",function() isolated(function()
+    local ui,m,b=fixture();local show,model=E.SeriesUI.show,E.FinishUI.model;local restore
+    E.FinishUI.model=function() return {title="Synthetic",status="Saved"} end
+    local success,why=pcall(function()
+        E.SeriesUI.show=function() return false end
+        eq(E.Library.endAction("series",ui,b,"opaque"),false);ok(E.FinishUI.sheet)
+        E.SeriesUI.show=function(key,back) eq(key,"opaque");restore=back;return true end
+        ok(E.Library.endAction("series",ui,b,"opaque"));eq(E.FinishUI.sheet,nil)
+        ui.document={file="other.epub"};restore();eq(E.FinishUI.sheet,nil)
+    end)
+    E.SeriesUI.show,E.FinishUI.model=show,model;if not success then error(why) end
+end) end)
 test("catalog actions: every added screen and widget has strict deterministic budgets",function()
     for _,id in ipairs({"end-of-book","settings-recommendations","copies-state"}) do
         local b=E.Budgets.get("screens",id);eq(b.network,0);eq(b.spawns,0);ok(b.roundTrips<=1);ok(b.snapshotBytes<=16384)

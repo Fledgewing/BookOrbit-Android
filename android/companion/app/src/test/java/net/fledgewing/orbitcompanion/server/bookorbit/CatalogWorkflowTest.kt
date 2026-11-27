@@ -237,6 +237,24 @@ class CatalogWorkflowTest {
         val bounded=w.worker.store.db().query("SELECT body FROM library_views WHERE request=?",request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
         assertEquals("budget",bounded["error"])
     }
+    @Test fun finishSeriesIdentitySurvivesOfflineLastBookAndMissingOrder()=World().use { w ->
+        w.run("initialize")
+        val base=w.detail()
+        for (position in listOf(1L,2L,null)) {
+            w.worker.store.putDetail(7,base+mapOf("seriesId" to 42L,"seriesIndex" to position,
+                "seriesMembers" to listOf(mapOf("id" to 8L,"title" to "Next","seriesIndex" to 2L,"readStatus" to "read"))),100)
+            val result=FinishLogic.snapshot(w.worker.store,w.owner,mapOf("path" to w.old.path))
+            assertEquals(BookOrbitLibrary.key(w.owner,"series",42),result["series_key"])
+            if(position==1L) assertEquals(BookOrbitLibrary.key(w.owner,"book",8),(result["next"] as Map<*,*>)["book_id"])
+            if(position==2L) assertEquals("You've finished the series",(result["next"] as Map<*,*>)["line"])
+            assertTrue((result["row_count"] as Int)<=3)
+            assertTrue(LuaValue.encode(result).size<=16384)
+        }
+        w.worker.store.putDetail(7,base+mapOf("seriesId" to null),100)
+        val none=FinishLogic.snapshot(w.worker.store,w.owner,mapOf("path" to w.old.path))
+        assertNull(none["series_key"]);assertNull(none["next"])
+        assertTrue(w.calls.isEmpty()) // Saved snapshots do not acquire data, even offline.
+    }
     @Test fun nextGapIsNotSkippedAndReadSuggestionsAreExcluded()=World().use { w ->
         w.run("initialize");w.worker.store.putDetail(7,w.detail()+mapOf("seriesId" to 1L,"seriesIndex" to 1L,
             "seriesMembers" to listOf(mapOf("id" to 9L,"seriesIndex" to 3L,"readStatus" to "read")),

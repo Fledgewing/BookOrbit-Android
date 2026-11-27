@@ -37,6 +37,30 @@ return function(test,eq,ok,E,W,withHost)
         end
         return function(v) value=v end, function(v) groupValue=v end
     end
+    test("Finish sheet opens saved Series and Back returns to the same reader sheet",function()
+        withHost(function(batches,reads)
+            fixtures(reads)
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            local ui={document={file="finished.epub"}}
+            local b={file="finished.epub",digest="finished",summary={status="complete"}}
+            local model,action=E.FinishUI.model,E.Library.catalogAction
+            E.FinishUI.model=function() return {title="Finished",status="Saved",series_key="opaque-series"} end
+            E.Library.catalogAction=function() error("viewing a series must not send finish or download commands") end
+            local success,why=pcall(function()
+                E.FinishUI.showSheet(ui,b)
+                local sheet=E.FinishUI.sheet
+                tap(sheet,"View series")
+                eq(E.FinishUI.sheet,nil);eq(h.series_key,"opaque-series")
+                eq(reads[#reads].op,"series");eq(reads[#reads].key,"opaque-series")
+                eq(h.metrics.network,0);eq(h.metrics.spawns,0);eq(h.metrics.roundTrips,1)
+                tap(h,"‹ Back")
+                ok(E.FinishUI.sheet);eq(E.FinishUI.sheet.ui,ui);eq(E.FinishUI.sheet.book,b)
+                eq(ui.document.file,"finished.epub")
+            end)
+            E.FinishUI.closeSheet();E.FinishUI.model,E.Library.catalogAction=model,action
+            if not success then error(why) end
+        end)
+    end)
     test("Series flow: grouped Library/Search, reading order snapshots, Back and explicit entry",function()
         withHost(function(batches,reads)
             fixtures(reads)

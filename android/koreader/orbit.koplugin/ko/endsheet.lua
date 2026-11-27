@@ -112,6 +112,10 @@ function EndSheet:rows()
         add({ kind = "label", text = nxt.line })
         if nxt.book_id then card(nxt) end
     end
+    if m.series_key then
+        add({ kind = "button", text = "View series", secondary = true,
+            action = function() Library.endAction("series",ui, b, m.series_key) end })
+    end
     local s = m.suggestion
     if s then
         add({ kind = "label", text = s.line })
