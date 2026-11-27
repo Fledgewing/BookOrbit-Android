@@ -1164,3 +1164,17 @@ presets perform one persistence and one settings dispatch, with no catalog scan,
 network on paint or subprocess. Host operation counts are regression evidence;
 device latency remains acceptance work. This is the authorized Android slice;
 X4 Pro, X4 and X3 implementation remains deferred.
+
+## Android performance review (2026-11-27)
+
+The screen/widget budgets also bind all interface services introduced by #184.
+Remaining rows/bytes are checked before reads and decodes, not after excess work;
+status file/Binder JSON is capped at 16 KiB. Card-cover acquisition and delivery
+share four-job deferred windows, including asynchronous result bursts. Discover
+ranks each candidate once and shares a per-kind pool within one companion
+publication batch; no cache survives the batch or hides changed reading data.
+
+The review reuses the existing Library/Store boundary, Home host, cover renderer
+and companion projection/provider registry. It adds 10,000-book, 50,000-visit
+fixtures and an optional deterministic flow report. No device timing acceptance
+is claimed. See [before/after measurements and reproduction](REVIEW-PERFORMANCE.md).

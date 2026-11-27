@@ -68,6 +68,60 @@ return function(test, eq, ok, here, Cache)
         rows=Cache.takeWindow(q,4); eq(#rows,2); eq(rows[1],5); eq(q.head,1); eq(q.tail,0); eq(next(q.seen),nil)
         eq(pcall(Cache.takeWindow,q,25),false)
     end)
+    test("card covers: one deferred drain delivers at most four of twelve visible jobs", function()
+        local queue,delivered,commands={},0,0
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
+            UIManager={nextTick=function(_,fn) queue[#queue+1]=fn end,
+                unschedule=function(_,fn) for i=#queue,1,-1 do if queue[i]==fn then table.remove(queue,i) end end end},
+            LibraryAdapter={owner=function() return "fixture" end,sent={},order={}},
+            require=function(name) eq(name,"lfs"); return {attributes=function() return {mode="file",size=100} end} end}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        e.Library.acquireCover=function() commands=commands+1 end
+        local cancel
+        for i=1,12 do
+            local stop=e.Library.prepareCardCover({cover_path="saved-"..i},function() delivered=delivered+1 end)
+            if i==12 then cancel=stop end
+        end
+        eq(delivered,0);eq(commands,0);eq(#queue,1,"one host-owned post-paint task")
+        table.remove(queue,1)();eq(delivered,4);eq(#queue,1)
+        table.remove(queue,1)();eq(delivered,8);eq(#queue,1)
+        cancel();table.remove(queue,1)();eq(delivered,11);eq(#queue,0)
+        eq(commands,0,"saved covers never dispatch acquisition")
+        eq(e.Library.cardCoverJobs.tail,0)
+        local callbacks={}
+        e.Library.acquireCover=function(_,done) callbacks[#callbacks+1]=done end
+        for i=1,12 do e.Library.prepareCardCover({key="remote-"..i},function() delivered=delivered+1 end) end
+        for batch=1,3 do table.remove(queue,1)();eq(#callbacks,batch*4) end
+        eq(delivered,11)
+        for _,done in ipairs(callbacks) do done({local_path="acquired.jpg"}) end
+        eq(delivered,11,"burst of asynchronous answers must also defer bitmap delivery")
+        eq(#queue,1)
+        for batch=1,3 do table.remove(queue,1)();eq(delivered,11+batch*4) end
+        eq(#queue,0)
+        e.Library.deferCardCover(function() error("failed cover") end)
+        e.Library.deferCardCover(function() delivered=delivered+1 end)
+        table.remove(queue,1)();eq(delivered,24,"one failed bitmap must not poison the shared drain")
+        eq(#queue,0)
+        local stop=e.Library.prepareCardCover({cover_path="retired.jpg"},function() error("retired delivery") end)
+        eq(#queue,1);stop();eq(#queue,0,"retiring the last job removes its drain")
+        eq(e.Library.cardCoverJobs.active,0)
+    end)
+    test("interface status: file and binder JSON are bounded before decoding",function()
+        local body,decoded,closed="{}",0,0
+        local e=setmetatable({Budgets={MAX_SNAPSHOT=16384},PATCH_VERSION="fixture",
+            Jni={call=function() return {ok="1",status=body} end},
+            io={open=function() return {read=function(_,limit) eq(limit,16385);return body:sub(1,limit) end,close=function() closed=closed+1 end} end},
+            require=function(name) eq(name,"json");return {decode=function(raw) decoded=decoded+#raw;return {} end} end},{__index=_G})
+        setfenv(assert(loadfile(root.."ko/companion.lua")),e)()
+        e.Companion.statusFile=function() return "fixture-status" end
+        e.Companion.state=function() return "ok" end
+        e.Companion.bookOpen=function() return false end
+        ok(e.Companion.readFile());ok(e.Companion.status());eq(decoded,4)
+        body=string.rep(" ",16384);ok(e.Companion.readFile());ok(e.Companion.status());eq(decoded,32772)
+        decoded=0;body=string.rep(" ",1000000)
+        eq(e.Companion.readFile(),nil);eq(e.Companion.status(),nil);eq(decoded,0);eq(closed,3)
+    end)
     test("reader display: unknown values, clamp, and ready stats", function()
         local e=setmetatable({}, {__index=_G})
         setfenv(assert(loadfile(root .. "logic/reader_panel.lua")),e)()
@@ -123,6 +177,50 @@ return function(test, eq, ok, here, Cache)
         local page=e.Library.paint("home")
         page:widget("booklist"):window("reading")
         eq(pcall(function() page:widget("booklist"):counts() end),false,"combined widget snapshot is bounded")
+    end)
+    test("library: remaining widget bytes are enforced before the next decode", function()
+        local reads=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(request,op,maxBytes)
+                reads=reads+1
+                local q=Cache.decode(request)
+                if reads==2 then eq(q.bytes,6384); eq(maxBytes,6384) end
+                return {row_count=1},reads==1 and 10000 or 100
+            end,request=function() return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        local p=e.Library.paint("home")
+        local widget=p:widget("library")
+        widget:summary(); widget:read("storage.summary",{limit=1})
+        eq(widget.usage.bytes,10100); eq(widget.usage.rows,2)
+        eq(pcall(widget.summary,widget),false)
+        eq(reads,2,"exhausted widget must fail before IO or decode")
+        p:flush()
+    end)
+    test("library: failed decodes still consume the caller's byte allowance",function()
+        local reads=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(request)
+                reads=reads+1
+                local q=Cache.decode(request)
+                if reads==2 then eq(q.bytes,6384) end
+                return reads==2 and 42 or nil,reads==1 and 10000 or 6384
+            end,request=function() return true end}},{__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        local p=e.Library.paint("home");local widget=p:widget("library")
+        eq(widget:summary().pending,true)
+        eq(widget.usage.bytes,10000,"invalid decoded input is still UI work")
+        eq(widget:read("storage.summary",{limit=1}).pending,true)
+        eq(widget.usage.bytes,16384)
+        eq(pcall(widget.summary,widget),false);eq(reads,2)
+        local m=p:flush();eq(m.bytes,16384);eq(m.rows,0)
+        e.LibraryAdapter.read=function() return {row_count="invalid"},500 end
+        local malformed=e.Library.paint("home")
+        local invalid=malformed:widget("library")
+        eq(pcall(invalid.summary,invalid),false)
+        eq(invalid.usage.bytes,500,"malformed metadata cannot erase decode work either")
+        eq(malformed:flush().bytes,500)
     end)
     test("library: facet request inherits the picker budget in one batch", function()
         local request, sends
@@ -192,7 +290,7 @@ return function(test, eq, ok, here, Cache)
     end)
     test("library: ownership lookup never constructs a client or loads its ledger", function()
         local reads=0
-        local e=setmetatable({Cache=Cache,Library={},
+        local e=setmetatable({Cache=Cache,Library={},Budgets={MAX_SNAPSHOT=16384},
             serverPlugin=function() error("render accessed a server plugin") end,
             Store={library=function(owner,request) reads=reads+1; ok(owner=="opaque-owner" or owner=="device-local"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
         setfenv(assert(loadfile(root.."ko/library.lua")),e)()

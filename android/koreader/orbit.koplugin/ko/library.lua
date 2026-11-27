@@ -6,31 +6,39 @@ if not rawget(getfenv(1),"LibraryAdapter") then
 LibraryAdapter={sent={},order={},ready={}}
 LibraryAdapter.LOCAL_OWNER="device-local"
 function LibraryAdapter.owner() return LibraryAdapter.managed_owner or LibraryAdapter.LOCAL_OWNER end
-function LibraryAdapter.read(request,op,screen)
+function LibraryAdapter.read(request,op,maxBytes,screen)
+    maxBytes=math.min(maxBytes or Budgets.MAX_SNAPSHOT,Budgets.MAX_SNAPSHOT)
     if op=="settings.recommendations" and LibraryAdapter.recommendations then
-        return LibraryAdapter.recommendations,#Cache.encode(LibraryAdapter.recommendations)
+        local bytes=#Cache.encode(LibraryAdapter.recommendations)
+        if bytes>maxBytes then return nil end
+        return LibraryAdapter.recommendations,bytes
     end
     if op=="account.state" and LibraryAdapter.account_snapshot then
+        if LibraryAdapter.account_bytes>maxBytes then return nil end
         return LibraryAdapter.account_snapshot, LibraryAdapter.account_bytes
     end
     local owner = LibraryAdapter.owner()
     if not owner then
         if op=="capabilities" and LibraryAdapter.account_snapshot then
             local result={account=LibraryAdapter.account_snapshot}
-            return result,#Cache.encode(result)
+            local bytes=#Cache.encode(result)
+            if bytes>maxBytes then return nil end
+            return result,bytes
         end
         return nil
     end
     -- Explicit reader surfaces may read one bounded local snapshot while the book
     -- stays foreground. Background reads retain Store's memo-only reading rule.
     local user_surface=screen=="reader-top-panel" or screen=="reader-bottom-panel" or screen=="book-info" or screen=="details" or screen=="end-of-book"
-    local result, bytes = Store.library(owner, request, user_surface)
+    local result, bytes = Store.library(owner, request, maxBytes, user_surface)
+    local decodedBytes=bytes or 0
+    if type(result)~="table" then result=nil end
     if op=="capabilities" and LibraryAdapter.account_snapshot then
         local merged={}
         for k,v in pairs(result or {}) do merged[k]=v end
         merged.account=LibraryAdapter.account_snapshot
-        bytes=#Cache.encode(merged)
-        if bytes>Budgets.MAX_SNAPSHOT then return nil end
+        bytes=math.max(decodedBytes,#Cache.encode(merged))
+        if bytes>maxBytes then return nil,decodedBytes end
         result=merged
     end
     LibraryAdapter.ready[owner .. request] = result ~= nil
@@ -263,28 +271,39 @@ function Library:read(op, args)
     local function read()
     args = args or {}
     args.op = op
-    args.limit = math.max(1, math.min(self.budget.rows, Budgets.MAX_ROWS, Budgets.libraryWindow.rows,
+    local remainingRows=math.min(self.budget.rows-self.usage.rows,self.screen_budget.rows-self.metrics.rows)
+    local remainingBytes=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
+    assert(remainingRows>=1 and remainingBytes>=1,"Library caller budget exhausted")
+    args.limit = math.max(1, math.min(remainingRows, Budgets.MAX_ROWS, Budgets.libraryWindow.rows,
         math.floor(tonumber(args.limit) or self.budget.rows)))
-    args.bytes = math.min(self.budget.bytes, Budgets.libraryWindow.bytes, Budgets.MAX_SNAPSHOT)
+    args.bytes = math.min(remainingBytes, Budgets.libraryWindow.bytes, Budgets.MAX_SNAPSHOT)
     local request = Cache.encode(args)
     assert(#request <= Budgets.MAX_REQUEST, "Library request exceeds budget")
     assert(self.metrics.bytes + args.bytes <= self.screen_budget.bytes, "Library page byte budget exhausted")
     assert(self.metrics.rows + args.limit <= self.screen_budget.rows, "Library page row budget exhausted")
     assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
-    local result, decoded = LibraryAdapter.read(request,op,self.screen)
-    if result then
-        rows, bytes = result.row_count or (result.items and #result.items or 1), decoded or 0
-        assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")
-        local call = counts(); call.rows, call.bytes, call.snapshotBytes = rows, bytes, bytes
+    local result, decoded = LibraryAdapter.read(request,op,args.bytes,self.screen)
+    if type(result)~="table" then result=nil end
+    local function charge(n, size)
+        local call = counts(); call.rows, call.bytes, call.snapshotBytes = n, size, size
         assert(Budgets.check(Budgets.libraryWindow, call))
         local usage = counts()
-        usage.rows, usage.bytes = self.usage.rows + rows, self.usage.bytes + bytes
-        usage.snapshotBytes = self.is_widget and usage.bytes or math.max(self.usage.snapshotBytes, bytes)
+        usage.rows, usage.bytes = self.usage.rows + n, self.usage.bytes + size
+        usage.snapshotBytes = self.is_widget and usage.bytes or math.max(self.usage.snapshotBytes, size)
         assert(Budgets.check(self.budget, usage))
         for k,v in pairs(usage) do self.usage[k]=v end
-        self.metrics.rows, self.metrics.bytes = self.metrics.rows + rows, self.metrics.bytes + bytes
+        self.metrics.rows, self.metrics.bytes = self.metrics.rows + n, self.metrics.bytes + size
         self.metrics.snapshotBytes = math.max(self.metrics.snapshotBytes, self.usage.snapshotBytes)
         assert(Budgets.check(self.screen_budget, self.metrics))
+    end
+    -- Decoding work is charged before interpreting even malformed result metadata.
+    bytes=decoded or 0
+    assert(bytes<=args.bytes,"Library call budget exceeded")
+    if bytes>0 then charge(0,bytes) end
+    if result then
+        rows=result.row_count or (result.items and #result.items or 1)
+        assert(type(rows)=="number" and rows>=0 and rows==math.floor(rows) and rows<=args.limit,"Library call budget exceeded")
+        charge(rows,0)
     end
     if not self.seen[request] then
         assert(#self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
@@ -523,10 +542,46 @@ end
 
 -- Card cover preparation runs after the first paint. The interface owns cache misses,
 -- account/generation cancellation and retries; widgets see only a bounded local path.
+Library.cardCoverJobs={head=1,tail=0,active=0}
+function Library.drainCardCovers()
+    local queue=Library.cardCoverJobs
+    queue.scheduled=nil
+    local finish=Budgets.span("library.card-covers",now_s,log)
+    for _,job in ipairs(Cache.takeWindow(queue,Budgets.CARD_COVER_BATCH)) do
+        local ok,err=pcall(job)
+        if not ok then log("library.card-covers failed",tostring(err)) end
+    end
+    finish()
+    if Library.cardCoverJobs==queue and queue.head<=queue.tail and not queue.scheduled then
+        queue.scheduled=true; UIManager:nextTick(Library.drainCardCovers)
+    end
+end
+function Library.deferCardCover(task)
+    local queue=Library.cardCoverJobs
+    local live=true
+    queue.active=queue.active+1
+    queue.tail=queue.tail+1
+    queue[queue.tail]=function()
+        if not live then return end
+        live=false; queue.active=queue.active-1
+        task()
+    end
+    if not queue.scheduled then
+        queue.scheduled=true; UIManager:nextTick(Library.drainCardCovers)
+    end
+    return function()
+        if not live then return end
+        live=false; queue.active=queue.active-1
+        if queue.active==0 and Library.cardCoverJobs==queue then
+            UIManager:unschedule(Library.drainCardCovers)
+            Library.cardCoverJobs={head=1,tail=0,active=0}
+        end
+    end
+end
 function Library.prepareCardCover(row,done,visible)
     local owner=LibraryAdapter.owner()
     local canceled=false
-    local retire
+    local retire,cancelDelivery
     local function valid() return not canceled and owner==LibraryAdapter.owner() and not reading() and (not visible or visible()) end
     local function deliver(path)
         if not valid() or type(path)~="string" then return end
@@ -544,10 +599,16 @@ function Library.prepareCardCover(row,done,visible)
         table.insert(LibraryAdapter.order,key)
         if #LibraryAdapter.order>64 then LibraryAdapter.sent[table.remove(LibraryAdapter.order,1)]=nil end
         local accepted
-        accepted,retire=Library.acquireCover(row.key,function(result) deliver(result.local_path) end,valid)
+        accepted,retire=Library.acquireCover(row.key,function(result)
+            if valid() then cancelDelivery=Library.deferCardCover(function() deliver(result.local_path) end) end
+        end,valid)
     end
-    UIManager:nextTick(task)
-    return function() canceled=true; UIManager:unschedule(task); if retire then retire();retire=nil end end
+    local cancelTask=Library.deferCardCover(task)
+    return function()
+        canceled=true; cancelTask()
+        if cancelDelivery then cancelDelivery();cancelDelivery=nil end
+        if retire then retire();retire=nil end
+    end
 end
 
 -- Cover lookup never schedules work on a paint. The thumbnail host explicitly acquires misses
