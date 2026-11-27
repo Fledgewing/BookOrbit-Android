@@ -27,7 +27,8 @@ Reuse evidence on this implementation's base e93cbcc8:
 A year ago uses the same calendar day last year in the device timezone, clamping
 February 29 to February 28. SQL groups timed page visits by book, selects the book
 with most recorded time (book ID breaks ties), and returns minutes, days read and
-the latest stop page. No history is fabricated for a missing database or day.
+the latest stop page. Visits crossing midnight contribute only their time inside
+the selected day (including a visit starting the day before). No history is fabricated for a missing database or day.
 This window is one calendar day, so days read is one for a populated row.
 
 Highlight reads local books' native annotation sidecars (read-only, ≤1 MiB each),

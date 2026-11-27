@@ -64,6 +64,10 @@ class PersonalReadingTest {
             val row=DevicePersonalReading.yearago(db,now,ZoneOffset.UTC).single().fields
             assertEquals(5L,row["minutes"]); assertEquals(1,row["days_read"]); assertEquals(9L,row["stop_page"])
             assertEquals("2023-02-28",row["date"])
+            db.exec("INSERT INTO page_stat_data VALUES(1,6,?,120)",start-60)
+            db.exec("INSERT INTO page_stat_data VALUES(1,10,?,120)",start+86400-30)
+            val crossing=DevicePersonalReading.yearago(db,now,ZoneOffset.UTC).single().fields
+            assertEquals(6L,crossing["minutes"]); assertEquals(10L,crossing["stop_page"])
         } } finally { root.deleteRecursively() }
     }
 }

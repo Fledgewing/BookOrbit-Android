@@ -46,11 +46,15 @@ class DevicePersonalReading(private val roots: List<File>, private val statistic
             val day = Instant.ofEpochSecond(now).atZone(zone).toLocalDate().minusYears(1)
             val start = day.atStartOfDay(zone).toEpochSecond()
             val end = day.plusDays(1).atStartOfDay(zone).toEpochSecond()
-            return db.query("""SELECT b.id,substr(b.title,1,160),SUM(MIN(MAX(p.duration,0),86400)),
-                (SELECT q.page FROM page_stat_data q WHERE q.id_book=b.id AND q.start_time>=? AND q.start_time<? AND q.duration>0 ORDER BY q.start_time DESC,q.rowid DESC LIMIT 1)
-                FROM page_stat_data p JOIN book b ON b.id=p.id_book
-                WHERE p.start_time>=? AND p.start_time<? AND p.duration>0 GROUP BY b.id
-                ORDER BY SUM(MIN(MAX(p.duration,0),86400)) DESC,b.id LIMIT 1""",start,end,start,end) {
+            return db.query("""WITH visits AS (
+                SELECT p.id_book,p.page,p.start_time,p.rowid AS visit_id,
+                    MIN(?,p.start_time+MIN(p.duration,86400))-MAX(?,p.start_time) AS seconds
+                FROM page_stat_data p WHERE p.duration>0 AND p.start_time>0 AND p.start_time<?
+                    AND p.start_time+MIN(p.duration,86400)>?)
+                SELECT b.id,substr(b.title,1,160),SUM(p.seconds),
+                    (SELECT q.page FROM visits q WHERE q.id_book=b.id ORDER BY q.start_time DESC,q.visit_id DESC LIMIT 1)
+                FROM visits p JOIN book b ON b.id=p.id_book GROUP BY b.id
+                ORDER BY SUM(p.seconds) DESC,b.id LIMIT 1""",end,start,end,start) {
                 val minutes = (it.long(2) ?: 0)/60
                 val page = it.long(3)
                 PersonalReadingRecord("history:${it.long(0)}:$day", mapOf("source" to "On this reader",
