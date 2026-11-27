@@ -1,7 +1,7 @@
 return function(test,eq,ok,here,Cache)
     local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
     local root=here..'/../orbit.koplugin/'
-    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
+    for _,p in ipairs({'logic/ui_util.lua','logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
     end
     test('clock: library operation inherits one row and batches the host request',function()

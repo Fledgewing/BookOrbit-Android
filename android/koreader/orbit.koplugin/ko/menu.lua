@@ -10,13 +10,12 @@ function toggle(key, text, help)
     return {
         text = text,
         help_text = help,
-        checked_func = function() return S[key] == true end,
+        checked_func = function() return Library.settings.read(key) == true end,
         callback = function()
             -- A shared setting goes to the companion with its time (docs/design/companion-settings.md §4).
-            if SCHEMA.byKey[key] then return Shared.set(key, not S[key]) end
-            S[key] = not S[key]
-            saveSettings()
-            log("setting", key, "=", tostring(S[key]))
+            if Library.settings.schema().byKey[key] then return Library.settings.set(key, not Library.settings.read(key)) end
+            Library.settings.write(key, not Library.settings.read(key))
+            log("setting", key, "=", tostring(Library.settings.read(key)))
         end,
     }
 end
@@ -24,18 +23,18 @@ end
 -- A shared key's toggle with the companion's words: the schema's label, its line as help
 -- (docs/design/companion-settings.md §5.7).
 function stoggle(key)
-    local d = SCHEMA.byKey[key]
+    local d = Library.settings.schema().byKey[key]
     if not d then return toggle(key, key) end
     return toggle(key, _(d.label), _(d.line) .. (d.applies == "restart" and (" " .. _("Applies when KOReader restarts.")) or ""))
 end
 
 local function label(key, fallback)
-    local d = SCHEMA.byKey[key]
+    local d = Library.settings.schema().byKey[key]
     return d and _(d.label) or fallback
 end
 
 local function sectionTitle(id, fallback)
-    for _i, sec in ipairs(SCHEMA.sections or {}) do if sec.id == id then return _(sec.title) end end
+    for _i, sec in ipairs(Library.settings.schema().sections or {}) do if sec.id == id then return _(sec.title) end end
     return fallback
 end
 
@@ -48,17 +47,7 @@ end
 
 -- Tiny bundled notice, loaded only for this explicit menu action.
 function OrbitAndroid:showAbout()
-    local credits
-    for _i, path in ipairs({ SOURCE_DIR .. "/about_credits.json", SOURCE_DIR .. "/../../../shared/about/credits.json" }) do
-        local f = io.open(path, "rb")
-        if f then
-            local text = f:read("*a")
-            f:close()
-            credits = SettingsSync.decodeJson(text)
-            if credits then break end
-        end
-    end
-    assert(credits, "BookSync: shared About credits missing")
+    local credits = Library.resources.about()
     local lines = { "BookSync " .. PATCH_VERSION }
     for i, text in ipairs(credits.paragraphs) do
         table.insert(lines, text)
@@ -69,27 +58,27 @@ end
 
 function OrbitAndroid:statusText()
     local parts = {}
-    local cstate = Companion.state()
+    local cstate = Library.companion.status()
     if cstate == "ok" then
         table.insert(parts, _("companion installed"))
     elseif cstate == "frozen" then
-        table.insert(parts, Companion.disabledText())
+        table.insert(parts, Library.companion.disabledText())
     else
         table.insert(parts, _("no companion"))
     end
-    table.insert(parts, _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Shared.mode())))
-    local last = S.last_sleep_sync
+    table.insert(parts, _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Library.settings.mode())))
+    local last = Library.settings.read("last_sleep_sync")
     if last then
         table.insert(parts, string.format("%s %s %s", _("last sleep sync"), last.ok and fmt(last.seconds) or _("failed"),
             os.date("%H:%M", last.at)))
     end
-    local need = Shared.setupNeededText()
+    local need = Library.settings.setupNeededText()
     if need then table.insert(parts, need) end
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
 function OrbitAndroid:updateStatusText()
-    local st = S.patch_update_status
+    local st = Library.settings.read("patch_update_status")
     local head = string.format(_("Patch %s"), PATCH_VERSION)
     if not st then return head .. " · " .. _("not checked yet") end
     return string.format("%s · %s (%s)", head, st.text, os.date("%m-%d %H:%M", st.at))
@@ -106,55 +95,55 @@ function OrbitAndroid:showWhatsNew()
 end
 
 function OrbitAndroid:checkPatchUpdate()
-    UIManager:show(InfoMessage:new{ text = Updater.check("menu"), timeout = 6 }) -- gate: user action (menu Update)
+    UIManager:show(InfoMessage:new{ text = Library.checkUpdate("menu"), timeout = 6 }) -- gate: user action (menu Update)
 end
 
 -- All values and choices come from the shared schema; wire IDs stay unchanged.
 function OrbitAndroid:settingRow(key)
-    local d = assert(SCHEMA.byKey[key], "Missing shared setting: " .. key)
+    local d = assert(Library.settings.schema().byKey[key], "Missing shared setting: " .. key)
     local function display(text)
         if key == "sync_mode" and text == "Custom" then return "KOReader decides" end
-        return SettingsUI.words(text, key == "home_button" and S.home_screen or nil)
+        return SettingsUI.words(text, key == "home_button" and Library.settings.read("home_screen") or nil)
     end
     local function set(value)
-        Shared.set(key, value)
-        Shared.onChange(key, "settings")
+        Library.settings.set(key, value)
+        Library.settings.onChange(key, "settings")
     end
     local row = { help_text = _(display(d.line or "")) }
     row.note_func=function()
-        if key=="wifi_idle_min" and Shared.mode()~="jit" then return "Only used with Just in time Wi-Fi" end
-        if key=="sleep_cap" and not S.sync_on_sleep then return "Only used when syncing on sleep" end
-        if key=="reading_schedule" and Shared.mode()=="off_reading" and S.reading_schedule~="off" then
+        if key=="wifi_idle_min" and Library.settings.mode()~="jit" then return "Only used with Just in time Wi-Fi" end
+        if key=="sleep_cap" and not Library.settings.read("sync_on_sleep") then return "Only used when syncing on sleep" end
+        if key=="reading_schedule" and Library.settings.mode()=="off_reading" and Library.settings.read("reading_schedule")~="off" then
             return "Wi-Fi is off while reading; these syncs wait until you close the book."
         end
     end
     if d.type == "bool" then
         row.text = _(SettingsUI.labels[key] or display(d.label))
-        row.checked_func = function() return S[key] == true end
-        row.callback = function() set(not S[key]) end
+        row.checked_func = function() return Library.settings.read(key) == true end
+        row.callback = function() set(not Library.settings.read(key)) end
     elseif d.type == "source" then
         row.text = _(SettingsUI.labels[key] or display(d.label))
         row.sub_item_table = {}
         for _i, choice in ipairs(d.values) do
             row.sub_item_table[#row.sub_item_table+1] = {text=_(choice.label),
                 checked_func=function()
-                    for _j, id in ipairs(SleepPool.sources(S[key])) do if id == choice.id then return true end end
+                    for _j, id in ipairs(SleepPool.sources(Library.settings.read(key))) do if id == choice.id then return true end end
                     return false
                 end,
-                callback=function() set(SleepPool.togglePick(S[key], choice.id)) end}
+                callback=function() set(SleepPool.togglePick(Library.settings.read(key), choice.id)) end}
         end
         row.keep_choices=true
         row.sub_item_table[#row.sub_item_table+1] = {text=_("Choose saved lists…"), callback=function() SettingsView.sleepChoices(key) end}
     elseif d.type == "rules" then
-        row.text_func = function() return _(d.label) .. ": " .. SettingsUI.value(d, S[key]) end
+        row.text_func = function() return _(d.label) .. ": " .. SettingsUI.value(d, Library.settings.read(key)) end
         row.keep_choices=true
         row.sub_item_table_func=function()
             local items={}
-            for _,id in ipairs(SleepPool.decodeRules(S[key])) do
-                items[#items+1]={text="Remove: "..id,callback=function() set(SettingsUI.toggleRule(S[key],id)) end}
+            for _,id in ipairs(SleepPool.decodeRules(Library.settings.read(key))) do
+                items[#items+1]={text="Remove: "..id,callback=function() set(SettingsUI.toggleRule(Library.settings.read(key),id)) end}
             end
-            items[#items+1]={text="Whole library",checked_func=function() return S[key] and S[key][1]=="library" end,
-                callback=function() set(SettingsUI.toggleRule(S[key],"library")) end}
+            items[#items+1]={text="Whole library",checked_func=function() return Library.settings.read(key) and Library.settings.read(key)[1]=="library" end,
+                callback=function() set(SettingsUI.toggleRule(Library.settings.read(key),"library")) end}
             items[#items+1]={text="Browse lists, collections and tags…",callback=function() SettingsView.sleepChoices(key) end}
             items[#items+1]={text="Type a tag…",callback=function()
                 local dialog
@@ -163,7 +152,7 @@ function OrbitAndroid:settingRow(key)
                     {text="Add",callback=function()
                         local rule=SleepPool.parseRule("tag:"..dialog:getInputText())
                         UIManager:close(dialog)
-                        if rule then set(SettingsUI.toggleRule(S[key],rule.key)) end
+                        if rule then set(SettingsUI.toggleRule(Library.settings.read(key),rule.key)) end
                     end}}}}
                 UIManager:show(dialog) -- gate: user action (sleep exclusion tag)
                 dialog:onShowKeyboard()
@@ -171,15 +160,15 @@ function OrbitAndroid:settingRow(key)
             return items
         end
     elseif d.type == "text" then
-        row.text_func = function() return _(SettingsUI.labels[key] or display(d.label)) .. ": " .. SettingsUI.value(d, S[key]) end
+        row.text_func = function() return _(SettingsUI.labels[key] or display(d.label)) .. ": " .. SettingsUI.value(d, Library.settings.read(key)) end
         row.callback = function()
             local InputDialog = require("ui/widget/inputdialog")
             local dialog
-            dialog = InputDialog:new{title=_(SettingsUI.labels[key] or display(d.label)), input=SettingsSync.toWire(d, S[key]),
+            dialog = InputDialog:new{title=_(SettingsUI.labels[key] or display(d.label)), input=Library.settings.toWire(d, Library.settings.read(key)),
                 buttons={{
                     {text=_("Cancel"), callback=function() UIManager:close(dialog) end},
                     {text=_("Save"), callback=function()
-                        local value = SettingsSync.fromWire(d, dialog:getInputText())
+                        local value = Library.settings.fromWire(d, dialog:getInputText())
                         UIManager:close(dialog)
                         if value ~= nil then set(value) end
                     end},
@@ -189,20 +178,20 @@ function OrbitAndroid:settingRow(key)
         end
     else
         row.text_func = function()
-            return _(SettingsUI.labels[key] or display(d.label)) .. ": " .. _(display(SettingsUI.value(d, key == "wifi_mode" and Shared.mode() or S[key])))
+            return _(SettingsUI.labels[key] or display(d.label)) .. ": " .. _(display(SettingsUI.value(d, key == "wifi_mode" and Library.settings.mode() or Library.settings.read(key))))
         end
         row.sub_item_table = {}
         for _i, v in ipairs(d.values or {}) do
-            local value = SettingsSync.fromWire(d, v.id)
+            local value = Library.settings.fromWire(d, v.id)
             table.insert(row.sub_item_table, {text=key=="update_channel" and SettingsUI.channelText(v.id,v.label,PATCH_VERSION) or _(display(v.label)),
                 height=key=="update_channel" and 96 or nil,radio=true,
-                checked_func=function() return SettingsSync.toWire(d, S[key]) == tostring(v.id) end,
+                checked_func=function() return Library.settings.toWire(d, Library.settings.read(key)) == tostring(v.id) end,
                 callback=function() set(value) end})
         end
     end
     if key == "wifi_mode" or key == "wifi_idle_min" or key == "wifi_via_companion" then
-        row.enabled_func = function() return Companion.has("wifi") end
-        if not Companion.has("wifi") then
+        row.enabled_func = function() return Library.companion.has("wifi") end
+        if not Library.companion.has("wifi") then
             row.help_text = row.help_text .. " " .. _("Wi-Fi switching is unavailable in this setup. Wi-Fi stays as you leave it.")
         end
     end
@@ -254,19 +243,19 @@ function OrbitAndroid:menuItems()
             paint:flush()
             local modes = {}
             for _i, mode in ipairs(SettingsUI.modes) do
-                modes[#modes+1] = {text=_(mode.label) .. " · " .. SettingsUI.estimate(estimates, mode.id), help_text=_(mode.help) .. (Companion.has("wifi") and "" or (" " .. _("Wi-Fi switching is unavailable in this setup."))), radio=true,
-                    enabled_func=function() return Companion.has("wifi") end,
-                    checked_func=function() return SettingsUI.mode(S, Shared.mode()) == mode.id end,
+                modes[#modes+1] = {text=_(mode.label) .. " · " .. SettingsUI.estimate(estimates, mode.id), help_text=_(mode.help) .. (Library.companion.has("wifi") and "" or (" " .. _("Wi-Fi switching is unavailable in this setup."))), radio=true,
+                    enabled_func=function() return Library.companion.has("wifi") end,
+                    checked_func=function() return SettingsUI.mode(Library.settings.read(), Library.settings.mode()) == mode.id end,
                     callback=function()
-                        if not Companion.has("wifi") then return end
-                        for _i, key in ipairs(SettingsUI.modeKeys) do Shared.set(key, mode.values[key]) end
-                        for _i, key in ipairs(SettingsUI.modeKeys) do Shared.onChange(key, "mode") end
+                        if not Library.companion.has("wifi") then return end
+                        for _i, key in ipairs(SettingsUI.modeKeys) do Library.settings.set(key, mode.values[key]) end
+                        for _i, key in ipairs(SettingsUI.modeKeys) do Library.settings.onChange(key, "mode") end
                     end}
             end
-            local modeRow={text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(S, Shared.mode())) end, sub_item_table=modes,
-                card_text=function() return SettingsUI.modeCard(S,Shared.mode(),estimates) end,pending=estimates.pending,
+            local modeRow={text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(Library.settings.read(), Library.settings.mode())) end, sub_item_table=modes,
+                card_text=function() return SettingsUI.modeCard(Library.settings.read(),Library.settings.mode(),estimates) end,pending=estimates.pending,
                 card_action=function()
-                    local current=SettingsUI.mode(S,Shared.mode())
+                    local current=SettingsUI.mode(Library.settings.read(),Library.settings.mode())
                     local nextMode=({saver=2,balanced=3,current=1,custom=1})[current]
                     modes[nextMode].callback()
                 end}
@@ -274,13 +263,13 @@ function OrbitAndroid:menuItems()
             local text,go,note=AccountView.syncAction(account)
             table.insert(out, 1, action(text or "Sync now", text and go or function() Library.syncNow(self) end))
             out[1].help_text=note
-            if SettingsUI.mode(S, Shared.mode()) == "custom" then
+            if SettingsUI.mode(Library.settings.read(), Library.settings.mode()) == "custom" then
                 local reset = action("Back to Balanced", modes[2].callback)
                 reset.enabled_func = modes[2].enabled_func
                 out[#out+1] = reset
             end
             out[#out+1]={text_func=function()
-                local name=SettingsUI.modeLabel(S,Shared.mode())
+                local name=SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode())
                 return name=="Your own settings" and "Your settings" or "What "..name.." does"
             end,enabled=false,section=true}
             for _i,key in ipairs(SettingsUI.syncKeys) do
@@ -303,8 +292,8 @@ function OrbitAndroid:menuItems()
             out[#out+1]=sleep
             out[#out+1] = action("Battery ›", function() BatteryUI.show() end)
             out[#out+1] = action("Sync and sleep now", function() self:onOrbitSyncAndSleep() end)
-            if ReadingSync.on() and self.ui and self.ui.document then
-                out[#out+1] = action("Read from here everywhere", function() ReadingSync.readFromHere("menu") end)
+            if Library.positionEnabled() and self.ui and self.ui.document then
+                out[#out+1] = action("Read from here everywhere", function() Library.readFromHere("menu") end)
             end
             return out
         end),
@@ -340,7 +329,7 @@ function OrbitAndroid:menuItems()
         group("sleep", "Sleep screen", function()
             -- Shared values plus explicit six-row companion choice windows.
             local keys = {}
-            for _i, d in ipairs(SCHEMA.settings) do if d.section == "sleep" and not d.hidden then keys[#keys+1] = d.key end end
+            for _i, d in ipairs(Library.settings.schema().settings) do if d.section == "sleep" and not d.hidden then keys[#keys+1] = d.key end end
             local out = rows(keys)
             out[#out+1] = action("Choose lists…", function() SettingsView.sleepChoices("sleep_from") end)
             out[#out+1] = action("Never show…", function() SettingsView.sleepChoices("sleep_leave_out") end)
@@ -373,7 +362,7 @@ end
 
 -- Settings PIN set and locked: the companion's keypad, then open the menu again.
 function OrbitAndroid:showPinKeypad(why)
-    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_PIN, package = Companion.PACKAGE } -- gate: user action (menu)
+    local ok = Library.companion.openPin() -- gate: user action (menu)
     log("menu: locked by the Settings PIN; keypad (" .. why .. ")", ok and "started" or "FAILED")
     return ok
 end
@@ -422,7 +411,7 @@ function OrbitAndroid:settingsPresentation(items)
             if row.settings_group=="updates" or row.settings_group=="about" then
                 row.text_func=function()
                     if row.settings_group=="updates" then
-                        return row.text.." · "..SettingsUI.value(SCHEMA.byKey.update_channel,S.update_channel).." channel · "..PATCH_VERSION
+                        return row.text.." · "..SettingsUI.value(Library.settings.schema().byKey.update_channel,Library.settings.read("update_channel")).." channel · "..PATCH_VERSION
                     end
                     return row.text.." · "..SettingsUI.installed(PATCH_VERSION)
                 end
@@ -439,7 +428,7 @@ end
 
 -- The owned Home and reader gear share the existing Settings rows and PIN policy.
 function OrbitAndroid:showSettings(group)
-    Shared.refresh("menu")
+    Library.settings.refresh("menu")
     Library.refreshDevice()
     local items={}
     for _,row in ipairs(self:menuItems()) do
@@ -451,16 +440,16 @@ function OrbitAndroid:showSettings(group)
             local make=row.sub_item_table_func
             return SettingsView.open(row.text,function()
                 local rows=make()
-                return Shared.pin_locked and OrbitAndroid.readOnly(rows) or rows
+                return Library.settings.status("pin_locked") and OrbitAndroid.readOnly(rows) or rows
             end,"settings-"..group,function() self:showSettings() end)
         end end
     end
-    if group and not Shared.pin_locked then
+    if group and not Library.settings.status("pin_locked") then
         for _,row in ipairs(items) do
             if row.settings_group==group then items=row.sub_item_table_func(); break end
         end
     end
-    if Shared.pin_locked then items=self:lockedMenuItems(items) end
+    if Library.settings.status("pin_locked") then items=self:lockedMenuItems(items) end
     items=self:settingsPresentation(items)
     items.icon="appbar.settings"
     local menu=require("ui/widget/touchmenu"):new{width=Device.screen:getWidth(),tab_item_table={items}}
@@ -470,9 +459,9 @@ end
 
 function OrbitAndroid:addToMainMenu(menu_items)
     local entry = { text = _("BookSync"), sub_item_table_func = function()
-        Shared.refresh("menu")
+        Library.settings.refresh("menu")
         Library.refreshDevice()
-        if Shared.pin_locked then return self:settingsPresentation(self:lockedMenuItems()) end
+        if Library.settings.status("pin_locked") then return self:settingsPresentation(self:lockedMenuItems()) end
         UIManager:scheduleIn(0.5, function() self:maybeSetupPrompt("menu", "menu") end)
         return self:settingsPresentation(self:menuItems())
     end }

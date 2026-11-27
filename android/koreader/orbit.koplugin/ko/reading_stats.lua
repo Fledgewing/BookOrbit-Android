@@ -5,7 +5,7 @@ ReadingStatsWidgets = {}
 function ReadingStatsWidgets.render(id, snapshot, placement)
     local finish=Budgets.span(id..'.render',now_s,log)
     local budget=Budgets.get('widgets',id)
-    local bytes=placement.snapshotBytes or #Cache.encode(snapshot or {})
+    local bytes=placement.snapshotBytes or #UIUtil.encode(snapshot or {})
     assert(Budgets.check(budget,{rows=1,bytes=bytes,snapshotBytes=bytes,spawns=0,network=0,roundTrips=0}))
     local scale=Device and Device.screen:scaleBySize(100)/100 or 1
     local width,height=placement.w/scale,placement.h/scale

@@ -148,7 +148,7 @@ function SqliteStress.start(seconds)
                 local line, notes = SqliteStress.verdict(r, type(w) == "table" and w or nil)
                 log(line)
                 for _, n in ipairs(notes) do log("sqlite-stress:", n) end
-                UIManager:show(InfoMessage:new{ text = line .. (#notes > 0 and ("\n\n" .. table.concat(notes, "\n")) or "") }) -- gate: user action (menu: SQLite stress test)
+                ServiceNotices.showInfo({ text = line .. (#notes > 0 and ("\n\n" .. table.concat(notes, "\n")) or "") }) -- gate: user action (menu: SQLite stress test)
             end
             finish()
         end)

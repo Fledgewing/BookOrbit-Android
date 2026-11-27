@@ -1,0 +1,27 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- Local native access stays behind Library; the host alone requests projections.
+function Library.localWidgetNeed(id)
+    if id=="highlight" or id=="yearago" then return {op="personal.reading",kind=id,limit=1} end
+    local need={op="local."..id,limit=1}
+    if id=="light" then
+        local device=require("device")
+        local supported=device.hasFrontlight and device:hasFrontlight() or false
+        local power=supported and device:getPowerDevice()
+        need.native={supported=supported,level=power and power:frontlightIntensity()}
+    end
+    return need
+end
+function Library.localWidgetAction(action,value)
+    if action=="word-lookup" then
+        if type(value)~="string" or #value>384 or value=="" then return false end
+        local ui=liveUI() or require("apps/filemanager/filemanager").instance
+        if ui and ui.dictionary then ui.dictionary:onLookupWord(value,true); return true end
+        return false
+    end
+    if action=="light-down" or action=="light-up" then
+        local need=Library.localWidgetNeed("light")
+        if not need.native.supported or not need.native.level then return false end
+        return Library.readerControl({},"light",math.max(0,math.min(100,need.native.level+(action=="light-up" and 10 or -10))))
+    end
+    return false
+end

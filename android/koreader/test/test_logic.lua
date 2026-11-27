@@ -1122,7 +1122,7 @@ test("fixture registry: the plugin reads every table it is named for, and every 
     eq(table.concat(problems, "\n"), "", "REGISTRY.json")
 end)
 
-dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON)
+dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON, here)
 dofile(here .. "/booklist_tests.lua")(M,test,ok,eq)
 
 test("settings modes: approved presets use shared wire values and Balanced matches defaults", function()

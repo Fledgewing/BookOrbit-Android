@@ -15,7 +15,7 @@ end
 function HomeHost.document()
     -- Layout editor publishes the same validated layout-as-data in reader settings.
     HomeEditor.load()
-    local d=S.home_layout
+    local d=Library.settings.read("home_layout")
     if d and Layout.validate(d) then return d end
     return Layout.default()
 end
@@ -115,7 +115,7 @@ function HomeHost.create()
                 return data
             end)
             result=ok and result or {error="Unavailable"}
-            local signature=Cache.encode(result)
+            local signature=UIUtil.encode(result)
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
@@ -173,7 +173,7 @@ function HomeHost.create()
             {{text=_("Edit Home"),callback=function() UIManager:close(menu); HomeEditor.show(self) end}},
             {{text=_("BookSync settings"),callback=function()
                 UIManager:close(menu)
-                assert(state.module,"BookSync module unavailable"):showSettings()
+                assert(Library.controller(),"BookSync module unavailable"):showSettings()
             end}},
             {{text=_("Cancel"),callback=function() UIManager:close(menu) end}},
         }}
@@ -337,7 +337,7 @@ function HomeHost.create()
     return Host:new{}
 end
 function HomeHost.show()
-    local problem=Companion.workerProblem(_("for BookSync Home"))
+    local problem=Library.companion.workerProblem(_("for BookSync Home"))
     if problem then
         UIManager:show(InfoMessage:new{text=problem}) -- gate: user action (Home)
         return false
@@ -352,7 +352,7 @@ function HomeHost.show()
     if not ok then error(host) end
     HomeHost.active=host
     UIManager:show(host) -- gate: user action (Home command or menu)
-    if S.news_012_pending then HomeHost.whatsNew() end
+    if Library.settings.read("news_012_pending") then HomeHost.whatsNew() end
     return true
 end
 
@@ -362,9 +362,8 @@ function HomeHost.whatsNew()
     local budget=Budgets.get("screens","whats-new")
     local dialog
     local function acknowledge()
-        if not S.news_012_pending then return end
-        S.news_012_pending=false
-        saveSettings()
+        if not Library.settings.read("news_012_pending") then return end
+        Library.settings.write("news_012_pending",false)
         G_reader_settings:flush()
     end
     dialog=require("ui/widget/buttondialog"):new{

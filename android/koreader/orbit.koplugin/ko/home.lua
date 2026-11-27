@@ -7,26 +7,18 @@
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:checkCommand(source)
-    local cmd = Jni.takeIntentExtra(Companion.EXTRA_COMMAND)
-    if not cmd or cmd == "" then return false end
-    local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
-    local held = Jni.takeIntentExtra(Companion.EXTRA_ROTATION)
-    if not Companion.confirmCommand(cmd) then
-        log("command ignored:", cmd, "(" .. source .. "): not sent by Orbit Companion")
-        return false
-    end
-    log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "",
-        held and ("held " .. tostring(held)) or "")
+    local cmd, from, held = Library.launch.intake(source)
+    if not cmd then return false end
     if cmd == "home" or cmd == "home_smart" then
         self:smartHome(source, from or nil, cmd == "home" and HomePlan.SERVER_HOME or "smart", held or nil)
         return true
     end
     if cmd == "restart" then
-        self:restartForCompanion(source)
+        Library.launch.restart(self,source)
         return true
     end
     if cmd == "reopen_book" then
-        self:reopenAfterRestart(source)
+        Library.launch.reopen(self,source)
         return true
     end
     -- recommended settings' review page.
@@ -45,7 +37,7 @@ function OrbitAndroid:checkCommand(source)
         return true
     end
     if cmd == "sync_sleep" then
-        UIManager:scheduleIn(0.5, function() self:onOrbitSyncAndSleep() end)
+        UIManager:scheduleIn(0.5, function() Library.syncAndSleep(self) end)
         return true
     end
     if cmd == "test_sync_path" then
@@ -58,100 +50,6 @@ end
 
 function OrbitAndroid:openSignIn(source)
     return AccountView.open("account")
-end
-
--- COMMAND=restart (android/docs/INTERFACE.md): the companion installed a newer patch file; a restart
--- loads it. KOReader's own restart (UIManager:restartKOReader, frontend/ui/uimanager.lua:1766,
--- quit(85)) relies on a launcher script that Android lacks (Device canRestart = no,
--- frontend/device/android/device.lua:86), so: save like a kill would leave it (the open book
--- stays open_book_at_exit, so the cold start reopens it), ask the companion to start KOReader
--- again (RELAUNCH), and quit (Android Device:exit finishes the activity, device.lua:492-497).
--- quit_only: another app is in front; KOReader saves and quits without coming back, and the
--- next start (Home, the launcher) loads the new plugin and reopens the book.
-function OrbitAndroid:restartForCompanion(source, quit_only)
-    -- Once: the quit ends this process (a second request in the meantime is the same restart).
-    if state.restarting_at and now_s() - state.restarting_at < 5 then return end
-    state.restarting_at = now_s()
-    log("orbit: closing reader because companion restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
-        .. tostring(source) .. ")" or ("requested (" .. tostring(source) .. "); saving, then quitting so the new patch loads"))
-    local ui = liveUI()
-    if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
-    -- The quit closes the reader (which clears open_book_at_exit): remember the book apart, so
-    -- the next start reopens it where it was (v0.5.5).
-    S.restart_book = ui and ui.document and ui.document.file or nil
-    S.restart_screen = HomeHost.foreground() and HomePlan.SERVER_HOME or nil
-    saveSettings()
-    pcall(function() G_reader_settings:flush() end)
-    Stats.send("restart", nil, false)
-    if quit_only then
-        -- nothing relaunches it
-    elseif Companion.has("home") then
-        Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
-    else
-        -- Add-on: KOReader is in front, so it may start the companion's relaunch window, which
-        -- then starts KOReader again once it has gone (docs/design/addon-mode.md §7.4).
-        local ok = Jni.startActivity{ action = Companion.ACTION.RELAUNCH_UI, package = Companion.PACKAGE } -- gate: restarts only per RestartPlan (manual, screen off, background) or the companion's own restart
-        log("restart: companion relaunch window", ok and "started" or "FAILED (reopen KOReader by hand)")
-    end
-    UIManager:scheduleIn(0.5, function()
-        if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end -- gate: restarts only per RestartPlan (manual, screen off, background) or the companion's own restart
-    end)
-end
-
--- RestartPlan here: the version our own file on disk declares (PATCH_VERSION is near its top).
-function patchFileVersion()
-    if not SELF_PATH then return nil end
-    local f = io.open(SELF_PATH, "rb")
-    if not f then return nil end
-    local head = f:read(8192)
-    f:close()
-    return RestartPlan.fileVersion("\n" .. (head or ""))
-end
-
--- A newer patch file waits on disk: restart now, or when reading allows (RestartPlan).
-function OrbitAndroid:maybeRestart(event)
-    if state.restarting_at and now_s() - state.restarting_at < 5 then return "restart" end
-    local want = patchFileVersion()
-    -- Without the Home role nothing can start KOReader from the background: no restart at
-    -- screen-off, only while KOReader is in front (docs/design/addon-mode.md §7.4).
-    if event == "sleep" and not Companion.has("home") then event = "check_asleep" end
-    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook(), event)
-    if act == "wait" then
-        if state.restart_waiting ~= want then
-            state.restart_waiting = want
-            log("restart: v" .. tostring(want) .. " is installed; restarting when KOReader goes to the background or the screen goes off")
-        end
-    elseif act == "done" then
-        local text = RestartPlan.doneText(PATCH_VERSION)
-        S.restart_tried = nil
-        setUpdateStatus(text)
-        orbitNote(_(text), 3)
-    elseif act == "gave_up" then
-        if state.restart_gave_up ~= want then
-            state.restart_gave_up = want
-            setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (BookSync Companion > Setup)")
-        end
-    elseif act == "quit" then
-        S.restart_tried = want
-        saveSettings()
-        self:restartForCompanion("v" .. tostring(want) .. " installed (" .. event .. ")", true)
-    elseif act == "restart" and not Companion.has("relaunch") then
-        -- Nobody can start KOReader again after a quit (no companion): ask once, never quit
-        -- (docs/design/addon-mode.md §3, "Restart KOReader after an update").
-        if state.restart_asked ~= want then
-            state.restart_asked = want
-            local text = string.format(_("BookSync v%s is installed: close KOReader and open it again to finish."), tostring(want))
-            setUpdateStatus(text)
-            log("restart: v" .. tostring(want) .. " installed; no companion to relaunch KOReader, asking the reader")
-            Gate.show("restart ask", function() UIManager:show(InfoMessage:new{ text = text, timeout = 6 }) end) -- gate: Gate.show
-        end
-        return "ask"
-    elseif act == "restart" then
-        S.restart_tried = want
-        saveSettings()
-        self:restartForCompanion("v" .. tostring(want) .. " installed (" .. event .. ")")
-    end
-    return act
 end
 
 -- topmost (the plugin's own test, main.lua:1384) and shows its dashboard context
@@ -181,7 +79,7 @@ function reading()
     if HomeHost and (HomeHost.opening or HomeHost.foreground()) then return false end
     local ui = liveUI()
     if not (ui and ui.document) then return false end
-    if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
+    if not Library.isForeground() then return false end
 
     if ui.menu and ui.menu.menu_container then return false end -- a menu the reader opened
     if (FinishUI and FinishUI.sheet~=nil) then return false end                -- the reader reached the end
@@ -315,8 +213,8 @@ end
 function keepHeldRotation(action, held, in_reader, source)
     if held == nil then return end
     -- KOReader's start already kept the held rotation (patches/1-orbit-start-rotation.lua).
-    if source == "start" and rawget(_G, "ORBIT_START_ROTATION") ~= nil then
-        log("home: rotation kept from the start (" .. tostring(rawget(_G, "ORBIT_START_ROTATION")) .. ")")
+    if source == "start" and Library.launch.startRotation() ~= nil then
+        log("home: rotation kept from the start (" .. tostring(Library.launch.startRotation()) .. ")")
         return
     end
     local okc, current = pcall(function() return Device.screen:getRotationMode() end)
@@ -353,46 +251,13 @@ function keepRotationOnFileBrowser(why)
     log("file browser: keeps the current rotation (" .. why .. ")")
 end
 
--- The early user patch that keeps the held rotation through KOReader's start
--- (patches/1-orbit-start-rotation.lua): copied into koreader/patches/ when missing or different.
--- KOReader runs it at its next start (userpatch.lua, reader.lua:26-27); builds that skip user
--- patches fall back to keepHeldRotation, which turns once more after the start.
-START_PATCH = "1-orbit-start-rotation.lua"
-
-function installStartPatch(why)
-    local function slurp(path)
-        local h = io.open(path, "rb")
-        if not h then return nil end
-        local text = h:read("*a")
-        h:close()
-        return text
-    end
-    local want = slurp(PLUGIN_DIR .. "/patches/" .. START_PATCH)
-    local okd, DataStorage = pcall(require, "datastorage")
-    if not want or not okd then return false end
-    local dir = DataStorage:getDataDir() .. "/patches"
-    local dest = dir .. "/" .. START_PATCH
-    if slurp(dest) == want then return false end
-    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-    if okl and lfs.attributes(dir, "mode") ~= "directory" then lfs.mkdir(dir) end
-    local tmp = dest .. ".tmp"
-    local h = io.open(tmp, "wb")
-    if not h then log("start patch: can't write", dest); return false end
-    h:write(want)
-    h:close()
-    local okr, err = os.rename(tmp, dest)
-    if not okr then os.remove(tmp); log("start patch: install failed:", tostring(err)); return false end
-    log("start patch: installed", dest, "(" .. why .. ")")
-    return true
-end
-
 -- Home (android/docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
 -- HomePlan.SERVER_HOME (home).
 function OrbitAndroid:smartHome(source,from_extra,mode,held)
     local host=HomeHost.active
     local ui=liveUI()
     -- Preserve the owned Home's established toggle and Back behavior.
-    if S.home_screen=="booksync" then
+    if Library.settings.read("home_screen")=="booksync" then
         if (mode==nil or mode=="smart") and host and topWidget()==host and ui and ui.document then return host:onClose() end
         return HomeHost.show()
     end
@@ -409,39 +274,10 @@ function OrbitAndroid:smartHome(source,from_extra,mode,held)
     return HomeHost.show()
 end
 
-function OrbitAndroid:reopenAfterRestart(source)
-    local file = S.restart_book
-    if file ~= nil then S.restart_book = nil; saveSettings() end
-    if type(file) ~= "string" then
-        local okl, last = pcall(function() return G_reader_settings:readSetting("lastfile") end)
-        file = okl and last or nil
-    end
-    local ui = liveUI()
-    if type(file) ~= "string" then log("restart: no book to reopen (" .. source .. ")"); return end
-    if ui and ui.document then log("restart: a book is already open; not reopening", file); return end
-    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-    if not (okl and lfs.attributes(file, "mode") == "file") then log("restart: the book is gone:", file); return end
-    if HomeHost.active then UIManager:close(HomeHost.active) end
-    log("restart: reopening the book at its place (" .. source .. "):", file)
-    local screen = S.restart_screen
-    if screen then S.restart_screen = nil; saveSettings() end
-    UIManager:nextTick(function()
-        local ReaderUI = require("apps/reader/readerui")
-        if ReaderUI.instance then log("orbit: closing reader because companion requested reopening the saved book") end
-        ReaderUI:showReader(file)
-        if screen == HomePlan.SERVER_HOME then
-            UIManager:scheduleIn(2, function()
-                log("restart: back to library Home, where the reader was")
-                pcall(self.smartHome, self, "restart", nil, HomePlan.SERVER_HOME)
-            end)
-        end
-    end)
-end
-
 -- :2521-2525). If anything is left over it, or the plugin lacks goDashboard: close the catalog
 function OrbitAndroid:onOrbitGoHome() return HomeHost.show() end
 function OrbitAndroid:finishHome()
-    if state.pending_home then state.pending_home=nil;return HomeHost.show() end
+    if Library.launch.finishPendingHome() then return HomeHost.show() end
 end
 
 function OrbitAndroid:whereNow()
@@ -454,29 +290,35 @@ end
 -- The one-time "Setup needs you" box (SetupPrompt). where: given (the menu) or looked up.
 function OrbitAndroid:maybeSetupPrompt(why, where)
     pcall(self.maybeRecommendedLine, self, where)
-    if not Companion.has("setup") then return end
+    if not Library.companion.has("setup") then return end
     where = where or self:whereNow()
-    local prompt = Shared.setup_prompt
-    local show, reason = SetupPrompt.decide(prompt, where, S.setup_prompt_shown)
+    local prompt = Library.settings.status("setup_prompt")
+    local show, reason = SetupPrompt.decide(prompt, where, Library.settings.read("setup_prompt_shown"))
     if prompt then log("setup box (" .. why .. "):", show and ("showing in " .. where) or ("not now, " .. reason)) end
     if not show then return end
-    S.setup_prompt_shown = prompt.key
-    saveSettings()
+    Library.settings.write("setup_prompt_shown",prompt.key)
     UIManager:show(ConfirmBox:new{ -- gate: SetupPrompt.decide never shows it in a book
         text = _(SetupPrompt.text(prompt)),
         ok_text = _("Fix now"),
         cancel_text = _("Later"),
         ok_callback = function()
-            local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_SETUP, package = Companion.PACKAGE } -- gate: user action (setup box button)
-            if not ok then ok = Jni.startActivity{ action = Companion.ACTION.SHOW_STATUS, package = Companion.PACKAGE } end -- gate: user action (setup box button)
+            local ok = Library.companion.openSetup()
             log("setup box: Fix now", ok and "opened the companion" or "FAILED to open the companion")
         end,
         cancel_callback = function()
             -- The companion's own Later: quiet until an update or a step stops working.
-            Companion.send(Companion.ACTION.SETUP_LATER, {})
+            Library.companion.setupLater()
             log("setup box: Later")
         end,
     })
 end
 
 ---------------------------------------------------------------------------------------------
+
+function OrbitAndroid:showWakeBanner(res)
+    local text = _("Can't reach library. Reading from this device's place.") .. "\n" .. (res.detail or "")
+    local retry = function() Library.wake(self,"retry") end
+    Gate.show("wake banner: " .. text, function()
+        UIManager:show(InfoMessage:new{ text=text,timeout=6 }) -- gate: Gate.show
+    end, 60)
+end

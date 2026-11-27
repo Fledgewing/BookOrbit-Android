@@ -3639,6 +3639,7 @@ if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
 end
 dofile(here .. "/catalog_actions_flows.lua")({E=RE,W=W,test=test,eq=eq,ok=ok,newUI=newUI,UIManager=UIManager,store=store})
 dofile(here.."/retirement_flows.lua")(test,eq,ok,RE)
+dofile(here.."/ui_interface_flows.lua")(here,test,eq,ok)
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

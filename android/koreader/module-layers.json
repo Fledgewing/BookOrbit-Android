@@ -1,0 +1,470 @@
+{
+  "ko/account.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/background.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/badge.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/base.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Device",
+      "logger",
+      "log",
+      "ConfirmBox",
+      "Dispatcher",
+      "InfoMessage",
+      "NetworkMgr",
+      "PluginLoader",
+      "TextViewer",
+      "UIManager",
+      "WidgetContainer",
+      "time",
+      "Event",
+      "_",
+      "now_s",
+      "fmt",
+      "wrap",
+      "liveUI",
+      "inBook"
+    ]
+  },
+  "ko/battery.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/booklist_config.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/clicks_channel.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/clock.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/companion.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/companion_activities.lua": {
+    "layer": "internal",
+    "purpose": "Capability/fallback decisions and activity dispatch; generic hints are ServiceNotices UI."
+  },
+  "ko/companion_ui.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/covers.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/custom_reading.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/db.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/endsheet.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/filter_sheet.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/finish.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/home.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/home_editor.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/home_host.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/home_lifecycle.lua": {
+    "layer": "internal",
+    "purpose": "Restart and start-patch file lifecycle; requests notices from UI."
+  },
+  "ko/home_widgets.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/jni.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/keys.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/layout_store.lua": {
+    "layer": "internal",
+    "purpose": "Atomic layout primary/backup persistence; pure editor geometry stays in logic/layout.lua."
+  },
+  "ko/library.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/library_bootstrap.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/library_diagnostics.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/library_lifecycle.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/library_local_widgets.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/library_services.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/local_widgets.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/main_loop.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/menu.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/module.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/net.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/notices.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/position_prompt.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/position_sync.lua": {
+    "layer": "internal",
+    "purpose": "Position lifecycle, native locator captures and answer dispatch; consent screen is position_prompt."
+  },
+  "ko/reader_panel.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/reading_stats.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/reading_style.lua": {
+    "layer": "interface",
+    "purpose": "BookSync interface implementation.",
+    "public": [
+      "Library"
+    ]
+  },
+  "ko/reading_sync.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/recommendations.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/recommendations_backend.lua": {
+    "layer": "internal",
+    "purpose": "Observation, comparison and checkpointing; review screen is recommendations."
+  },
+  "ko/retirement.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/runtime.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/series.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/service_notices.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/settings.lua": {
+    "layer": "internal",
+    "purpose": "Load and seed private/shared setting definitions and persistence; not a settings screen."
+  },
+  "ko/settings_view.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/shared.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/sleep.lua": {
+    "layer": "internal",
+    "purpose": "Suspend/sync coordinator; requests generic progress/hints from ServiceNotices."
+  },
+  "ko/sleep_backend.lua": {
+    "layer": "internal",
+    "purpose": "Sleep files, refresh policy, native cover export and companion messaging."
+  },
+  "ko/sleepscreen.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/sqlite_stress.lua": {
+    "layer": "internal",
+    "purpose": "Diagnostic worker and verdict coordinator; generic notice is ServiceNotices UI."
+  },
+  "ko/start.lua": {
+    "layer": "internal",
+    "purpose": "Resume/wake coordinator; wake banner implemented in home UI."
+  },
+  "ko/status_layout.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/storage.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/store.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/test_sync_path.lua": {
+    "layer": "ui",
+    "purpose": "Screen/widget/native UI composition."
+  },
+  "ko/updater.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/wifi.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "ko/wifi_backend.lua": {
+    "layer": "internal",
+    "purpose": "Private runtime/transport/persistence service."
+  },
+  "logic/account.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/battery_widget.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/booklist.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/budgets.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/cache.lua": {
+    "layer": "internal",
+    "kind": "service",
+    "purpose": "Private shared state/codec or synchronization logic."
+  },
+  "logic/caps.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/clicks.lua": {
+    "layer": "internal",
+    "kind": "service",
+    "purpose": "Private shared state/codec or synchronization logic."
+  },
+  "logic/copies.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/filter_sheet.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/home_editor.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/home_host.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/home_plan.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/layout.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/local_widgets.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/native.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/orbismart.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/plan.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/prompts.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/reader_panel.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/reading_stats.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/reading_style.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/schedule.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/series.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/settings_sync.lua": {
+    "layer": "internal",
+    "kind": "service",
+    "purpose": "Private shared state/codec or synchronization logic."
+  },
+  "logic/settings_ui.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/sheet_layout.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/sleep_pool.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/stats.lua": {
+    "layer": "internal",
+    "kind": "service",
+    "purpose": "Private shared state/codec or synchronization logic."
+  },
+  "logic/status_layout.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/storage.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/ui_util.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/update.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/widget_registry.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  },
+  "logic/wifi_plan.lua": {
+    "layer": "internal",
+    "kind": "util",
+    "purpose": "Pure bounded geometry, presentation/configuration logic; no transport or persistence."
+  }
+}

@@ -47,12 +47,6 @@ function OrbitAndroid:wakeFlow(reason)
     end)
 end
 
-function OrbitAndroid:showWakeBanner(res)
-    local text = _("Can't reach library. Reading from this device's place.") .. "\n" .. (res.detail or "")
-    local retry = function() self:wakeFlow("retry") end
-    Gate.show("wake banner: " .. text, function()
-        UIManager:show(InfoMessage:new{ text=text,timeout=6 }) -- gate: Gate.show
-    end, 60)
-end
+
 
 ---------------------------------------------------------------------------------------------

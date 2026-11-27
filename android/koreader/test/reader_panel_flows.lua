@@ -59,7 +59,7 @@ return function(here, test, ok, eq)
             return require(name)
         end
         local function load(name) local fn=assert(loadfile(here.."/../orbit.koplugin/"..name)); setfenv(fn,E); fn() end
-        for _,name in ipairs({"logic/cache.lua","logic/budgets.lua","logic/reading_style.lua","logic/settings_ui.lua","logic/sheet_layout.lua","logic/reader_panel.lua","ko/library.lua","ko/endsheet.lua","ko/reading_style.lua","ko/custom_reading.lua","ko/reader_panel.lua"}) do load(name) end
+        for _,name in ipairs({"logic/ui_util.lua","logic/cache.lua","logic/budgets.lua","logic/reading_style.lua","logic/settings_ui.lua","logic/sheet_layout.lua","logic/reader_panel.lua","ko/library.lua","ko/library_services.lua","ko/endsheet.lua","ko/reading_style.lua","ko/custom_reading.lua","ko/reader_panel.lua"}) do load(name) end
         W.ui=ui
         return W,E
     end

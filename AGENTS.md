@@ -83,6 +83,24 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   version-skew handling. One check (`Companion.workerProblem`): missing or another version shows
   "BookSync Companion needed" or "Update BookSync Companion" and nothing heavy runs.
 
+## UI-interface rule
+
+Maintainer ruling (2026-11-26), verbatim:
+"This puts all decisions of syncing, aggregating, and anything else in our BookSync interface, and the UI never needs to talk to anything else (other than controlling KOReader as needed)"
+Confirmed after concrete examples: "Perfect that's the goal".
+
+Plugin screens, widgets, menus, dialogs, sleep menus, Home host/editor, badges and status
+call only `ko/library.lua` and its deliberate interface services, other UI composition,
+neutral pure utilities, and KOReader. Transport, source selection, aggregation, caching,
+persistence, settings wire formats, command authentication and companion messaging belong
+behind the interface. Never reference Companion, Store, Cache, SettingsSync, Jni or private
+shared globals from UI, including through aliases or imports. `android/koreader/module-layers.json`
+is the complete role inventory, including the purpose of each module. Add a role for every
+new file; an unclassified or stale entry fails `python3 tools/test/test-ui-boundary.py`.
+No path skips or line exceptions. Mixed modules must split presentation from service work.
+The existing per-screen/widget budgets also apply to interface services; moving code does
+not authorize catalog work, new subprocesses, network on paint, or additional paint round-trips.
+
 ## Screen and widget performance budgets
 
 Highlight and A year ago also inherit one-row/16 KiB budgets. Companion providers own

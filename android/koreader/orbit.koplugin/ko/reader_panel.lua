@@ -164,7 +164,8 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         local group=require("ui/widget/horizontalgroup"):new{}
         for i,text in ipairs({block.row.text,block.row.position}) do
             local width=i==1 and math.floor(w/2) or w-math.floor(w/2)
-            table.insert(group,require(i==1 and "ui/widget/container/leftcontainer" or "ui/widget/container/rightcontainer"):new{
+            local Align=i==1 and require("ui/widget/container/leftcontainer") or require("ui/widget/container/rightcontainer")
+            table.insert(group,Align:new{
                 dimen=require("ui/geometry"):new{w=width,h=h},
                 require("ui/widget/textwidget"):new{text=text,
                     face=require("ui/font"):getFace("cfont",14),max_width=width}})
@@ -282,7 +283,9 @@ function ReaderSheet:build()
     -- geometry; never silently crop controls to its default 90% sheet cap.
     self.sheet_h=self.plan.h
     self.frame.height=self.sheet_h
-    self[1] = require(self.screen=="reader-bottom-panel" and "ui/widget/container/bottomcontainer" or "ui/widget/container/topcontainer"):new{
+    local Container=self.screen=="reader-bottom-panel" and require("ui/widget/container/bottomcontainer")
+        or require("ui/widget/container/topcontainer")
+    self[1] = Container:new{
         dimen=require("ui/geometry"):new{w=self.screen_w, h=self.screen_h}, self.frame }
     finish()
 end
@@ -353,7 +356,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         if #lights>0 then table.insert(rows,{kind="reader-lights",controls=lights}) end
         table.insert(rows,{kind="reader-actions",choices={
             {text="More reading settings…",callback=function() back(); Library.readerAction(ui,"more-settings") end},
-            {text="Edit presets",callback=function() back(); if state.module then state.module:showSettings("reading") end end}}})
+            {text="Edit presets",callback=function() back(); if Library.controller() then Library.controller():showSettings("reading") end end}}})
     elseif screen == "reader-top-panel" then
         table.insert(rows, button(m.battery, function() BatteryUI.show() end))
         local text,go
@@ -381,11 +384,11 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             table.insert(rows, sync)
         end
         table.insert(rows, button("BookSync settings", function()
-            back(); if state.module then state.module:showSettings() end
+            back(); if Library.controller() then Library.controller():showSettings() end
         end))
         table.insert(rows, button("Book info", function() ReaderPanel.show(ui, "book-info") end))
         table.insert(rows, {kind="footer", text="Home", action=function()
-            back(); if state.module then state.module:onOrbitGoHome() end
+            back(); if Library.controller() then Library.controller():onOrbitGoHome() end
         end})
         table.insert(rows, {kind="footer", text="KOReader menu", action=function()
             back(); Library.readerAction(ui,"native-menu")

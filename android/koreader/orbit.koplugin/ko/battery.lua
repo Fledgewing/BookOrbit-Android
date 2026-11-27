@@ -102,7 +102,7 @@ function BatteryUI.create()
     return Page:new{}
 end
 function BatteryUI.show()
-    local problem=Companion.workerProblem(_("for Battery"))
+    local problem=Library.companion.workerProblem(_("for Battery"))
     if problem then
         UIManager:show(InfoMessage:new{text=problem}) -- gate: user action (Battery)
         return false

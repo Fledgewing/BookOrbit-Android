@@ -12,39 +12,7 @@ Cache = {}
 
 -- A canonical Lua literal of v: sorted keys, so equal bodies give equal strings; loadable back
 -- with Cache.decode. Functions and userdata are dropped.
-function Cache.encode(v, depth)
-    depth = depth or 0
-    local t = type(v)
-    if t == "string" then return string.format("%q", v) end
-    if t == "number" then
-        if v ~= v or v == math.huge or v == -math.huge then return "0" end
-        if v == math.floor(v) and math.abs(v) < 2^53 then return string.format("%d", v) end
-        return string.format("%.17g", v)
-    end
-    if t == "boolean" then return tostring(v) end
-    if t ~= "table" or depth > 40 then return "nil" end
-    local n = #v
-    local parts = {}
-    for i = 1, n do table.insert(parts, Cache.encode(v[i], depth + 1)) end
-    local keys = {}
-    for k, val in pairs(v) do
-        local kt = type(k)
-        local vt = type(val)
-        if vt ~= "function" and vt ~= "userdata" and vt ~= "thread"
-            and not (kt == "number" and k >= 1 and k <= n and k == math.floor(k)) and (kt == "string" or kt == "number") then
-            table.insert(keys, k)
-        end
-    end
-    table.sort(keys, function(a, b)
-        if type(a) == type(b) then return a < b end
-        return type(a) == "number"
-    end)
-    for _, k in ipairs(keys) do
-        local ks = type(k) == "string" and string.format("[%q]", k) or ("[" .. Cache.encode(k) .. "]")
-        table.insert(parts, ks .. "=" .. Cache.encode(v[k], depth + 1))
-    end
-    return "{" .. table.concat(parts, ",") .. "}"
-end
+function Cache.encode(...) return UIUtil.encode(...) end
 
 function Cache.decode(s)
     if type(s) ~= "string" or s == "" then return nil end
@@ -116,11 +84,7 @@ function Cache.hash(s)
 end
 
 -- 8551 -> "8,551" (the Full refresh indicator).
-function Cache.count(n)
-    local s = tostring(math.floor(tonumber(n) or 0))
-    local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-    return (out:gsub("^,", ""))
-end
+function Cache.count(n) return UIUtil.count(n) end
 
 ---------------------------------------------------------------- the storage limit (v0.11.2)
 

@@ -15,7 +15,7 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
         x.ui=ui; ReaderUI.instance=ui; FileManager.instance=nil; W.shown={ui}; W.queue={}
         E.Companion.workerProblem=function() return nil end
         E.S.sync_mode="orbismart"; E.S.reading_schedule="off"
-        E.ReadingSync.ready=true; E.ReadingSync.running=0; E.ReadingSync.busy=false; E.ReadingSync.prompt=nil
+        E.ReadingSync.ready=true; E.ReadingSync.running=0; E.ReadingSync.busy=false; E.PositionPrompt.current=nil
         E.Library.positionCached=function(path) return path==ui.document.file and x.snapshot or nil end
         E.Library.positionPreview=function(args) x.preview_args=args; return x.preview_result end
         E.Library.positionCommand=function(op,args,done)
@@ -62,27 +62,27 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
     end) end)
     test("position consent: one popup, Yes uses the companion answer, No never moves",function() world(function(x)
         E.ReadingSync.run("open"); run(1)
-        local prompt=E.ReadingSync.prompt; ok(prompt)
+        local prompt=E.PositionPrompt.current; ok(prompt)
         eq(prompt.widget.text,"Continue from fixture reader, p. 214?")
         E.ReadingSync.present({applied="ask",token=x.snapshot.token,document="toy:one",remote=x.snapshot.remote},x.ui)
-        eq(E.ReadingSync.prompt,prompt,"same remote place draws only once")
+        eq(E.PositionPrompt.current,prompt,"same remote place draws only once")
         prompt.widget.cancel_callback(); run(1)
         eq(#x.moves,0); eq(x.commands[#x.commands].op,"sync.answer"); eq(x.commands[#x.commands].args.yes,false)
         E.ReadingSync.present({applied="ask",token="new-place",document="toy:one",remote=x.snapshot.remote},x.ui)
-        E.ReadingSync.prompt.widget.ok_callback(); run(1)
+        E.PositionPrompt.current.widget.ok_callback(); run(1)
         eq(#x.moves,1); eq(x.page,214)
         eq(x.commands[#x.commands].args.yes,true)
     end) end)
     test("position consent: a cancelled or different document rejects late results",function() world(function(x)
         E.ReadingSync.run("open"); run(1)
-        x.delay=true; E.ReadingSync.prompt.widget.ok_callback()
+        x.delay=true; E.PositionPrompt.current.widget.ok_callback()
         x.ui.document={file="/fixture/other.epub"}
         x.callbacks[1](); eq(#x.moves,0,"accepted old-document result cannot move the new document")
     end) end)
     test("position preview: known forward placement moves before draw; worker owns the decision",function() world(function(x)
         x.preview_result={applied="now",document="toy:one",token=x.snapshot.token,remote=x.snapshot.remote}
         E.ReadingSync.preview(x.ui)
-        eq(x.page,214); eq(E.ReadingSync.prompt,nil)
+        eq(x.page,214); eq(E.PositionPrompt.current,nil)
         eq(x.preview_args.remote_page,214); eq(x.preview_args.marker_page,100)
         eq(x.commands[1].op,"sync.answer","marker acknowledgment goes back to the owner")
         eq(x.commands[1].args.yes,true)
@@ -91,7 +91,7 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
         x.snapshot.pending=true
         E.ReadingSync.resume(x.ui); run(1)
         eq(x.commands[1].op,"sync.decide"); eq(x.commands[1].args.moment,"wake-local")
-        ok(E.ReadingSync.prompt); eq(#x.moves,0)
+        ok(E.PositionPrompt.current); eq(#x.moves,0)
     end) end)
     test("position decision: replacing the native document rejects delayed consent and verification",function() world(function(x)
         x.delay=true
@@ -99,14 +99,14 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
         eq(x.commands[2].op,"sync.decide")
         x.ui.document={file="/fixture/other.epub"}
         x.callbacks[2]()
-        eq(E.ReadingSync.prompt,nil); eq(#x.commands,2); eq(#x.moves,0)
+        eq(E.PositionPrompt.current,nil); eq(#x.commands,2); eq(#x.moves,0)
     end) end)
     test("position decision: changing mode rejects the old in-flight decision",function() world(function(x)
         x.delay=true
         E.ReadingSync.run("open"); x.callbacks[1]()
         E.S.sync_mode="custom"; E.ReadingSync.modeChanged()
         x.callbacks[2]()
-        eq(E.ReadingSync.prompt,nil); eq(#x.commands,2); eq(#x.moves,0)
+        eq(E.PositionPrompt.current,nil); eq(#x.commands,2); eq(#x.moves,0)
     end) end)
     test("position capture: a close arriving during another sync is not dropped",function() world(function(x)
         x.delay=true

@@ -14,6 +14,52 @@ copy of read state; serve compact per-device packages from an optional BookSync 
 backend-specific code behind adapters; bring the Xteink readers along. The server stays
 optional: direct mode remains available.
 
+## UI interface ownership (UI-LAYER)
+
+Maintainer ruling (26 November 2026), verbatim:
+"This puts all decisions of syncing, aggregating, and anything else in our BookSync interface, and the UI never needs to talk to anything else (other than controlling KOReader as needed)"
+Confirmed after concrete examples: "Perfect that's the goal".
+
+Android UI depends on `Library` and its deliberately exposed services, KOReader, other
+presentation modules, and pure neutral geometry/formatting utilities. It never chooses a
+backend/source, arbitrates sync, interprets a wire record, reads a cache file, persists state
+or sends a companion message. The full role inventory is
+[`module-layers.json`](../../android/koreader/module-layers.json); `test-ui-boundary.py`
+checks every role and uses LuaJIT compilation (without executing code) to distinguish actual
+global dependencies from locals and table fields. It rejects internal globals even when
+aliased or passed as callbacks, indexed globals, private module imports, dynamic environment
+access and file/transport imports. The guard runs beside the server boundary in plugin CI.
+There is no file baseline or allowlisted source line. New files require classification.
+
+`ko/library_services.lua` supplies intent operations for layout load/save, settings read/write,
+companion availability/status and activity requests, authenticated launch intake, sleep
+refresh/settings, recommendation choices, report send and bundled presentation resources.
+`ko/library_lifecycle.lua` owns startup coordination; `ko/library_diagnostics.lua` owns sync
+path diagnostics. Native navigation/drawing remains in UI. Consent is drawn in
+`ko/position_prompt.lua`; the position service owns its decision, answer command and move.
+Service coordinators request generic notices from `ko/service_notices.lua` rather than
+housing widget constructors. Boot-only `ko/settings.lua` is a persistence/schema service,
+not the Settings screen (`ko/menu.lua` / `ko/settings_view.lua`).
+
+This is a behavior-preserving extraction, reusing the implementation at commit `609a3745`:
+
+| Existing implementation | Reused behind the interface |
+|---|---|
+| `ko/home_editor.lua:4-28` | JSON codec in `library_services.lua`; existing atomic primary/backup helpers from `logic/layout.lua:349-366` move to private `ko/layout_store.lua`. |
+| `ko/home.lua:9-25`, `:74-109`, `:344-386`, `:412-443` | Authenticated command intake, restart/relaunch, start-patch installation and reopen in services / `home_lifecycle.lua`. |
+| `ko/sleepscreen.lua:26-354`, `:456-464` | Existing files, cover export, refresh and activity requests in `sleep_backend.lua`; only menu/native UI hook stays in `sleepscreen.lua`. |
+| `ko/recommendations.lua:3-95` | Existing observation, backup/checkpoint, comparison and report in `recommendations_backend.lua`; review UI calls intent methods. |
+| `ko/menu.lua:51-61`, `ko/status_layout.lua:167-171` | Bundled About and battery drawing resources through `Library.resources`. |
+| `logic/cache.lua:15-47`, `:119-124`, `ko/store.lua:53`, `ko/wifi.lua:142` | Pure serialization, count formatting, injectable clock and vararg packing in `logic/ui_util.lua`, with legacy internal compatibility wrappers. |
+
+All paths above are relative to `android/koreader/orbit.koplugin/`. Existing logic/flow
+regressions cover drawing, lifecycle, reading gates and atomic layout recovery; interface
+contract tests add command trust, settings, transport intents and resource operations.
+This extraction adds no catalog scan, JSON decoding, network or subprocess on a paint.
+Existing `logic/budgets.lua` limits still govern screens/widgets and their library calls;
+host timing is not device acceptance. Android is implemented first under the authorised
+0.12 scope; X4 Pro, X4 and X3 remain deferred to their interface cutover, with the same rule.
+
 ## Phases
 
 ### 1. Owned Android client and ledger

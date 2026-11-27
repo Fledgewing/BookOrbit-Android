@@ -57,8 +57,8 @@ function HomeHostPlan.snapshot(result, account)
     if setup then state="error" end
     local snapshot={state=state,setup=setup or nil,items=result.items or {},count=#(result.items or {}),
         total=result.total, next=result.next, error=result.error, freshness=result.freshness,
-        data=not result.items and result or nil, bytes=#Cache.encode(result)}
-    if #Cache.encode(snapshot)>Budgets.MAX_SNAPSHOT then
+        data=not result.items and result or nil, bytes=#UIUtil.encode(result)}
+    if #UIUtil.encode(snapshot)>Budgets.MAX_SNAPSHOT then
         snapshot={state="error",items={},count=0,error="Snapshot budget exceeded",data={state="error"},bytes=64}
     end
     return HomeHostPlan.immutable(snapshot)

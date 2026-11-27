@@ -203,7 +203,7 @@ function StorageUI.create(mode,onCollection,onReturn)
     return Page:new{}
 end
 function StorageUI.show(mode,onCollection,onReturn)
-    local problem=Companion.workerProblem("for Storage")
+    local problem=Library.companion.workerProblem("for Storage")
     if problem then UIManager:show(InfoMessage:new{text=problem}); return false end -- gate: user action (Storage)
     StorageUI.opening=true
     local ok,page=pcall(StorageUI.create,mode,onCollection,onReturn)

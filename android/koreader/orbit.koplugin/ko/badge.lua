@@ -22,7 +22,7 @@ function Badge.notice(what)
     if #Badge.notices > 8 then table.remove(Badge.notices, 1) end
 end
 
-local function nowT() return Store.now() end
+local function nowT() return UIUtil.now() end
 
 -- "37%".
 function Badge.short(pct) return string.format("%d%%", pct or 0) end
@@ -32,7 +32,7 @@ function Badge.long(s, pct)
     s = s or {}
     local parts = { string.format(_("Full refresh · %d%%"), pct or 0) }
     local total = math.max(tonumber(s.total) or 0, tonumber(s.done) or 0)
-    if total > 0 then table.insert(parts, string.format(_("%s of %s"), Cache.count(s.done or 0), Cache.count(total))) end
+    if total > 0 then table.insert(parts, string.format(_("%s of %s"), UIUtil.count(s.done or 0), UIUtil.count(total))) end
     local eta = tonumber(s.eta_s)
     if eta and eta > 0 then
         table.insert(parts, eta < 90 and _("about 1 min left") or string.format(_("about %d min left"), math.floor(eta / 60 + 0.5)))

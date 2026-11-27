@@ -25,11 +25,11 @@ end
 function RS.refreshGeometry(s)
     local top, bottom, left, right = RS.margins(s)
     s.left, s.width = left, math.max(0, Device.screen:getWidth()-left-right)
-    local key = table.concat({top, bottom, left, right, StatusLayout.fontSize(S.status_orbit_size),
+    local key = table.concat({top, bottom, left, right, StatusLayout.fontSize(Library.settings.read("status_orbit_size")),
         tostring(s.ui.rolling and s.ui.rolling.cre_top_bar_enabled), Device.screen:scaleBySize(1)}, ":")
     if s.geometry_key == key then return end
     s.geometry_key = key
-    local size = StatusLayout.fontSize(S.status_orbit_size)
+    local size = StatusLayout.fontSize(Library.settings.read("status_orbit_size"))
     local face = s.Font:getFace("ffont", size)
     local text = s.Text:new{ text="Ag", face=face, bold=true, padding=0, fgcolor=s.BB.COLOR_BLACK }
     local height = StatusLayout.stripHeight(text:getSize().h, math.max(1, Device.screen:scaleBySize(1)))
@@ -164,11 +164,7 @@ function RS.enable(ui)
     log("status layout: loaded margins top=" .. tostring(margins[2]) .. " bottom=" .. tostring(margins[4])
         .. " footer_height=" .. tostring(s.footer:getHeight()) .. " footer_reclaim=" .. tostring(s.footer.reclaim_height)
         .. " footer_mode=" .. tostring(s.footer.mode))
-    for _, path in ipairs({ SOURCE_DIR .. "/battery.json", SOURCE_DIR .. "/../../../shared/ui/battery.json" }) do
-        local file = io.open(path, "rb")
-        if file then s.battery_program = SettingsSync.decodeJson(file:read("*a")); file:close(); break end
-    end
-    assert(s.battery_program, "BookSync battery drawing program missing")
+    s.battery_program = Library.resources.battery()
     RS.refreshGeometry(s)
     hook(s, s.footer, "reclaim_height", function() return true end)
     if ui.typeset and not ui.paging then
@@ -219,7 +215,7 @@ function RS.changed()
     UIManager:nextTick(function()
         local ui = liveUI()
         RS.disable()
-        if S.status_orbit_layout == true then RS.enable(ui) end
+        if Library.settings.read("status_orbit_layout") == true then RS.enable(ui) end
     end)
 end
 
@@ -234,7 +230,7 @@ local function after(name, fn)
 end
 after("onReaderReady", function(self)
     local repaired = RS.releaseHiddenFooter(self.ui)
-    if S.status_orbit_layout == true then RS.enable(self.ui)
+    if Library.settings.read("status_orbit_layout") == true then RS.enable(self.ui)
     elseif repaired then RS.relayout(self.ui) end
 end)
 after("onPageUpdate", function() local s=RS.session; if s then RS.dirty(s, false) end end)

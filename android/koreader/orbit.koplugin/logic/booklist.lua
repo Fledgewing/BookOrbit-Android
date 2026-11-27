@@ -26,7 +26,7 @@ function BookList.valid(cfg)
     if cfg.query~=nil then
         if type(cfg.query)~="table" then return nil,"invalid filter" end
         -- The neutral sheet owns query semantics. Bound serialized configuration at the library boundary.
-        local ok,raw=pcall(Cache.encode,cfg.query)
+        local ok,raw=pcall(UIUtil.encode,cfg.query)
         if not ok or #raw>4096 then return nil,"filter exceeds budget" end
     end
     if cfg.source_title~=nil and (type(cfg.source_title)~="string" or #cfg.source_title>80) then return nil,"invalid source title" end
