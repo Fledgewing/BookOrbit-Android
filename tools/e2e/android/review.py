@@ -15,6 +15,9 @@ from run import Emulator
 
 def review(device, out):
     out.mkdir(parents=True,exist_ok=True)
+    device.command('Library.companion.setupLater();local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then click("Later") end;return true')
+    time.sleep(1)
+    device.command('Library.settings.refresh("emulator-review");return true')
     evidence=[]
     def step(name,code,check=None):
         result=device.command(code)
@@ -29,7 +32,7 @@ def review(device, out):
         (out/"review.json").write_text(json.dumps(evidence,indent=2)+"\n")
         print(name,flush=True)
     def close(): device.command('UI:close(top());return true')
-    step("home",'Library.settings.write("home_layout",nil);HomeHost.show();return HomeHost.active.name')
+    step("home",'Library.settings.write("home_layout",nil);assert(HomeHost.show());return HomeHost.active.name')
     step("home-second-page",'HomeHost.active:turn(1);return HomeHost.active.index')
     step("editor",'HomeEditor.show(HomeHost.active);return true')
     step("editor-picker",'click("Add widget");return true')

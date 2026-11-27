@@ -203,6 +203,13 @@ function HomeHost.create()
         end
         UIManager:nextTick(self.redraw)
     end
+    function Host:paintTo(bb,x,y)
+        -- An event received behind a dialog stays pending. Revealing Home must
+        -- enqueue its existing bounded redraw instead of retaining a cold placeholder.
+        -- Keep all reads and rebuilding off the paint stack.
+        if self.invalid and HomeHost.active==self and topWidget()==self and not reading() then self:invalidate() end
+        return Input.paintTo(self,bb,x,y)
+    end
     function Host:dispatch(action,row,p)
         if action == "setup" then AccountView.open()
         elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")

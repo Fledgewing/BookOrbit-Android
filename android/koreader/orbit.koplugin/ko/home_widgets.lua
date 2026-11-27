@@ -92,11 +92,12 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     local canvas=HomeWidgets.canvas(w,h)
     local ready=snapshot.state == "ready" or snapshot.state == "offline-with-data"
     local hero=p.widget == "continue-reading" and ready
+    local heading
     local title=type((p.settings or {}).title) == "string" and p.settings.title or (p.widget == "continue-reading" and "Continue reading" or p.widget == "lists" and "Lists" or "Shelf")
     if compact then
         -- One horizontal band keeps both actions large in a one-row tile.
         HomeWidgets.button(canvas,_(title).." ›",pad,math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch("all") end)
-    elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad-(hero and scale(50) or 0),18,hero,true)
+    elseif hero or p.widget == "lists" then heading=HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad-(hero and scale(50) or 0),18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
     if not ready then
         local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or p.widget == "lists" and "No lists yet" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
@@ -120,7 +121,9 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         local b=snapshot.items[1]; local coverW=math.min(scale(110),math.floor(w*.23))
         local tx=pad+coverW+scale(18); local tw=w-tx-pad
         local coverH=math.min(h-2*pad-scale(32),math.floor(coverW*1.5))
-        HomeWidgets.cover(canvas,b,pad,math.floor((h-coverH)/2),coverW,coverH,true)
+        local coverY=math.max(math.floor((h-coverH)/2),pad+heading:getSize().h+scale(4))
+        coverH=math.max(1,math.min(coverH,h-pad-coverY))
+        HomeWidgets.cover(canvas,b,pad,coverY,coverW,coverH,true)
         HomeWidgets.more(canvas,b,dispatch,w-pad-scale(50),0,scale(50),scale(50))
         local short=h<scale(220)
         HomeWidgets.text(canvas,b.title or _("Untitled"),tx,pad+scale(35),tw,short and 18 or 25,true,true)

@@ -33,6 +33,9 @@ python3 tools/e2e/android/review.py --serial emulator-5580 --out /tmp/booksync-s
 python3 tools/e2e/android/test_driver.py
 ```
 
+Setup launches the companion once to initialize its status before opening KOReader.
+Dismiss KOReader's initial quickstart/color messages before the native review.
+
 `build.py` copies companion sources and shared inputs into an external directory,
 preserving strict Gradle verification. Only that disposable copy replaces the
 server composition with `E2eServerAdapters.kt`. The fixture implements the neutral

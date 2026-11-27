@@ -222,7 +222,7 @@ function Companion.workerProblem(purpose)
     local st = Companion.state()
     if st ~= "ok" then return _("BookSync Companion needed") .. " " .. purpose end
     local t = now_s()
-    if not Companion.version_at or t - Companion.version_at > 30 then
+    if Companion.version ~= PATCH_VERSION or not Companion.version_at or t - Companion.version_at > 30 then
         local f = Companion.readFile()
         Companion.version, Companion.version_at = f and f.version, t
     end

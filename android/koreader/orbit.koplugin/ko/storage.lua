@@ -51,6 +51,7 @@ function StorageUI.widget(p,snapshot,dispatch,rect)
                 x,0,width,s(50),function() dispatch("storage") end)
         end
         local caption=HomeWidgets.text(c,label,x,0,width,11)
+        caption.padding=0
         local y=h-caption:getSize().h
         caption.overlap_offset[2]=math.max(0,y)
         local barHeight=math.min(s(3),y-s(50))

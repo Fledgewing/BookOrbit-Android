@@ -59,6 +59,8 @@ def setup(device, apk, koreader, apksigner):
     device.shell("appops","set","org.koreader.launcher","MANAGE_EXTERNAL_STORAGE","allow")
     for permission in ("READ_EXTERNAL_STORAGE","WRITE_EXTERNAL_STORAGE"):
         device.shell("pm","grant",PACKAGE,"android.permission."+permission)
+    # A fresh APK has not run its first-launch initialization/status publication yet.
+    device.shell("am","start","-W","-n",PACKAGE+"/.LauncherActivity")
     device.shell("am","force-stop","org.koreader.launcher")
     with tempfile.TemporaryDirectory() as directory:
         work=Path(directory)

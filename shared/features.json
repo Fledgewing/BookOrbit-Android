@@ -5385,7 +5385,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets.",
+          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets. Fresh same-version startup avoids stale mismatch caching; revealed Home resumes pending updates and hero covers clear measured headings.",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {

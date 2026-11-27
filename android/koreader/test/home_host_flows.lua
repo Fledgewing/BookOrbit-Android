@@ -620,6 +620,40 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Home host: a covered event redraws after reveal without reading on paint",function()
+        withHost(function()
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            local nextTick=E.UIManager.nextTick
+            local pending,calls=nil,0
+            local rebuild=h.rebuild
+            h.rebuild=function(self) calls=calls+1;return rebuild(self) end
+            E.UIManager.nextTick=function(_,fn) pending=fn end
+            local success,err=pcall(function()
+                W.shown={h,{name="dialog"}}
+                h:invalidate();pending();eq(calls,0);eq(h.invalid,true)
+                pending=nil;W.shown={h}
+                h:paintTo({paintRect=function() end},0,0)
+                eq(calls,0,"paint only schedules the redraw")
+                ok(pending,"revealing Home resumes its pending invalidation")
+                pending();eq(calls,1);eq(h.invalid,nil)
+            end)
+            E.UIManager.nextTick=nextTick
+            ok(success,err)
+        end)
+    end)
+    test("Home cards: hero cover clears its measured heading",function()
+        withHost(function(_,_,U)
+            U.Text.getSize=function() return {w=100,h=60} end
+            local cover=E.HomeWidgets.cover
+            local y,height
+            E.HomeWidgets.cover=function(_,_,_,top,_,h) y,height=top,h end
+            local snapshot=E.HomeHostPlan.snapshot({items={{key="fixture",title="Fixture"}},freshness={saved=true}})
+            E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},snapshot,function() end,{w=600,h=280})
+            E.HomeWidgets.cover=cover
+            ok(y>=14+60+4,"cover border must not strike through the heading")
+            ok(y+height<=278-14,"cover stays within the tile")
+        end)
+    end)
     test("Home cards: projected labels, overflow routes and deferred cover lifetime",function()
         withHost(function(_,_,U)
             local b={key="opaque",title="The Moon",authors={"A"},progress=25,local_path="book.epub",series_key="series-key",

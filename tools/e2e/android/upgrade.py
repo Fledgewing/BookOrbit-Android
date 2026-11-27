@@ -31,7 +31,7 @@ def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):
     device.shot(out/"upgrade-011.png")
     run.setup(device,apk,koreader,apksigner)
     time.sleep(2)
-    device.command('assert(S.home_012_migrated);assert(S.home_screen=="booksync");assert(S.wifi_idle_min==7);assert(S.review_upgrade_marker=="upgrade-fixture");assert(S.news_012_pending);HomeHost.show();return true')
+    device.command('assert(S.home_012_migrated);assert(S.home_screen=="booksync");assert(S.wifi_idle_min==7);assert(S.review_upgrade_marker=="upgrade-fixture");assert(S.news_012_pending);assert(HomeHost.show());return true')
     # Setup reminders are unrelated to migration and may precede the news sheet.
     device.command('if UI:getTopmostVisibleWidget().text and UI:getTopmostVisibleWidget().text:find("setup steps",1,true) then click("Later") end;return true')
     device.shot(out/"upgrade-012-news.png")
@@ -40,7 +40,7 @@ def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):
     reset()
     run.setup(device,apk,koreader,apksigner)
     time.sleep(2)
-    device.command('assert(S.home_012_migrated);assert(S.home_screen=="booksync");assert(not S.news_012_pending);assert(not S.review_upgrade_marker);HomeHost.show();return true')
+    device.command('assert(S.home_012_migrated);assert(S.home_screen=="booksync");assert(not S.news_012_pending);assert(not S.review_upgrade_marker);assert(HomeHost.show());return true')
     device.shot(out/"fresh-012.png")
 
 if __name__=="__main__":

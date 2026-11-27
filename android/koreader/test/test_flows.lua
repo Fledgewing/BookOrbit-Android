@@ -1222,6 +1222,27 @@ end)
 local RE = getfenv(Orbit.onSuspend)
 
 ---------------------------------------------------------------- the companion's signer (security.md)
+test("companion: a missing or stale startup status cannot cache a false version mismatch",function()
+    local state,readFile,version,at=RE.Companion.state,RE.Companion.readFile,RE.Companion.version,RE.Companion.version_at
+    local current,reads=nil,0
+    RE.Companion.state=function() return "ok" end
+    RE.Companion.readFile=function() reads=reads+1;return current and {version=current} end
+    RE.Companion.version,RE.Companion.version_at=nil,nil
+    local success,err=pcall(function()
+        ok(RE.Companion.workerProblem()~=nil)
+        current=RE.PATCH_VERSION
+        eq(RE.Companion.workerProblem(),nil,"same-version status is usable immediately")
+        eq(reads,2)
+        eq(RE.Companion.workerProblem(),nil);eq(reads,2,"matching versions retain the bounded positive cache")
+        current="0.0.0";RE.Companion.version=current
+        ok(RE.Companion.workerProblem()~=nil)
+        current=RE.PATCH_VERSION
+        eq(RE.Companion.workerProblem(),nil,"an updated companion is usable without waiting 30 seconds")
+    end)
+    RE.Companion.state,RE.Companion.readFile,RE.Companion.version,RE.Companion.version_at=state,readFile,version,at
+    ok(success,err)
+end)
+
 test("companion: an app with its name and another signer gets nothing, the login above all", function()
     W.companion_cert = "1234abcd"
     RE.installed_cache.at = -1000

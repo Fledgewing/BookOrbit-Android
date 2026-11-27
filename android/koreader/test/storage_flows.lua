@@ -18,7 +18,7 @@ return function(test,eq,ok,E,W,withHost)
             local captions={}
             E.HomeWidgets.text=function(...)
                 local node=text(...)
-                node.getSize=function() return {w=200,h=28} end
+                node.getSize=function(self) return {w=200,h=30+2*(self.padding or 4)} end
                 captions[#captions+1]=node
                 return node
             end

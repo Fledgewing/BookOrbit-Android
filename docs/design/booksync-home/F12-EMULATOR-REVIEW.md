@@ -27,6 +27,8 @@ Defects corrected:
    reader panels from reading newly published snapshots. The library passes a
    narrow explicit-surface read permission. Background reads remain memo-only;
    the reading notification gate is unchanged. SQLite regression tests cover both.
+   Home also resumes a pending bounded redraw when a covering dialog is dismissed;
+   its paint callback only queues the work and performs no reads.
 3. The local adapter had no Series or end-sheet projection. Saved local membership
    now provides bounded ordered members, next-book metadata and View series;
    removal invalidates these snapshots too. Native reader progress takes precedence
@@ -35,7 +37,11 @@ Defects corrected:
    outside its border. Its compact actions share a band and its measured caption
    anchors inside the actual tile height.
 5. Stats provenance badges could overlap their titles. Native text measurements
-   now determine header clearance and feed the existing pure chart planner.
+   now determine header clearance and feed the existing pure chart planner. Hero
+   covers also clear the measured heading instead of striking through it.
+6. A missing startup status could cache a false companion-version mismatch for
+   30 seconds. Only the matching version keeps that positive cache; pending/stale
+   statuses can become usable immediately, without relaxing the exact-version gate.
 
 Performance rule inherited from AGENTS.md: every screen/widget and interface call
 retains its declared row and decoded-byte budget, zero subprocesses/network on
