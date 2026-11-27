@@ -120,6 +120,13 @@ def patch_storage(src_dir):
                             '    return ::mkdir(full.c_str(), 0777) == 0;\n' + anchor, 1)
     _edit(Path(src_dir) / "HalStorage.cpp", "ORBIFY_SIM_SDFAT_MKDIR", transform,
           changed, "SdFat mkdir semantics")
+    # The device's ensureDirectoryExists is idempotent even though mkdir is
+    # not. Preserve that distinct contract when the strict model is enabled.
+    ensure_anchor = 'bool HalStorage::ensureDirectoryExists(const char *path) { return mkdir(path); }'
+    _edit(Path(src_dir) / "HalStorage.cpp", "return exists(path) || mkdir(path);",
+          lambda text: text.replace(ensure_anchor,
+                                    ensure_anchor.replace('return mkdir(path);', 'return exists(path) || mkdir(path);'), 1),
+          changed, "idempotent ensureDirectoryExists")
     write_anchor = '  file = open(path, O_RDWR | O_CREAT | O_TRUNC);'
     def fail_marker(text):
         return text.replace(write_anchor,

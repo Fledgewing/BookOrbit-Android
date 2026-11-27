@@ -469,11 +469,14 @@ Where it differs from §4-§6:
   `OtaUpdater.cpp` out. It stays on the device checklist.
 
 The Full refresh network regressions enable `ORBIFY_SIM_SDFAT_MKDIR`: creating
-an existing final directory fails, as on the reader's SdFat storage. PR #190's
+an existing final directory fails, as on the reader's SdFat storage. The separate
+`ensureDirectoryExists` helper remains idempotent, matching the pinned SDK
+([`SDCardManager.cpp:606`, f7fa9b68](https://github.com/Free-Ink/freeink-sdk/blob/f7fa9b6871192ea27d8aa37a03beaa749462c3ab/libs/hardware/SDCardManager/src/SDCardManager.cpp#L606)). PR #190's
 host stub and simulator both returned success, hiding the marker failure that
 was misclassified as a crash. The same assumption also blocked the bulk SD
 writer. These tests assert real setup routing for catalog (35), Home refresh
-(36), Home settings (37), and sleep sync (33), as well as durable completion;
+(36), Home settings (37), and sleep sync (33), as well as durable completion
+([`src/SilentRestart.h:27–40`, 0695f2e1](https://github.com/agosez/CrossInk-Bookorbit/blob/0695f2e1456e2cfcaa7218027f1b3b71050a8f7b/src/SilentRestart.h#L27));
 queueing a request or observing a 0% badge is insufficient. The existing crash
 injections still require two genuinely unfinished attempts to quarantine.
 

@@ -34,6 +34,7 @@ assert not module.patch_input(out), "input patch must be idempotent"
 assert gpio.read_text().count("orbify_sim_input::now(millis())") == 1
 storage = out / "HalStorage.cpp"
 storage.write_text('  return ::mkdir(full.c_str(), 0777) == 0 || errno == EEXIST;\n'
+                   'bool HalStorage::ensureDirectoryExists(const char *path) { return mkdir(path); }\n'
                    '  file = open(path, O_RDWR | O_CREAT | O_TRUNC);\n')
 assert module.patch_storage(out)
 assert not module.patch_storage(out), "storage patch must be idempotent"
