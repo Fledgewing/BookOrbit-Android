@@ -92,6 +92,7 @@ class PerformanceBudgetTest {
                 val requests=cases.map { (_,args) -> String(LuaValue.encode(args+mapOf("bytes" to 16384)),Charsets.ISO_8859_1) }
                 val spans=mutableListOf<String>()
                 val worker=LibraryReadModel(store,{now},{spans.add(it)},readingStats={stats},
+                    accountState={mapOf("signedIn" to false)},accountStats={null},
                     vocabulary={File(root,"missing-vocabulary")}, personalDevice={DevicePersonalReading(listOf(books),historyFile,open={JdbcSql(it)})},
                     sleepChoices={SleepChoices(at=now,cached=true,collections=emptyList(),tags=emptyList(),scopes=List(10000) { SleepChoices.Item(it.toLong(),"List $it",it) })})
                 requests.chunked(16).forEach { worker.publish(owner,it) }
