@@ -3709,19 +3709,23 @@ end)
 test("reader surface: cold bounded SQLite snapshots work without allowing background reading IO", function()
     local dir,st=fixtureStore()
     st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
-    local owner,reading=RE.LibraryAdapter.owner,RE.reading
+    local owner,reading,decode=RE.LibraryAdapter.owner,RE.reading,RE.Cache.decode
     RE.LibraryAdapter.owner=function() return DBFX.owner end;RE.reading=function() return true end
     local request=RE.Cache.encode({op="reader",path="/books/cold.epub",limit=1,bytes=16384})
     local body=RE.Cache.encode({items={{key="cold-book",title="Cold reader"}}})
     st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,request,body)
     local success,err=pcall(function() withStore(dir,function()
         eq(RE.Library.paint("home"):read("reader",{path="/books/cold.epub",limit=1}).pending,true)
+        local decoded=0
+        RE.Cache.decode=function(raw) decoded=decoded+#raw;return decode(raw) end
+        eq(RE.LibraryAdapter.read(request,"reader",#body-1,"reader-top-panel"),nil)
+        eq(decoded,0,"explicit reader access retains the caller's pre-decode byte allowance")
         local p=RE.Library.paint("reader-top-panel")
         local row=p:widget("reader-progress"):read("reader",{path="/books/cold.epub",limit=1})
         eq(row.items[1].title,"Cold reader");eq(p.metrics.bytes,#body);eq(p.metrics.rows,1)
         eq(RE.reading(),true,"reader panels never relax the reading notification gate")
     end) end)
-    RE.LibraryAdapter.owner,RE.reading=owner,reading
+    RE.LibraryAdapter.owner,RE.reading,RE.Cache.decode=owner,reading,decode
     st:close();os.execute("rm -rf '"..dir.."'");ok(success,err)
 end)
 

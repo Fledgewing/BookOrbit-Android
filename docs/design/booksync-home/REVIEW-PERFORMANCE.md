@@ -47,6 +47,10 @@ job removes its drain and retires any live delivery ticket. Existing owner/gener
 and departure tests still apply. File input remains capped at 512 KiB; real bitmap
 decoding and e-ink paint latency require device acceptance.
 
+Explicit reader surfaces retain their bounded cold SQLite access while reading;
+the regression also verifies that this access rejects an undersized caller byte
+allowance before decoding. Background reads still use the reading-time memo gate.
+
 ## Companion projections: every data-backed screen/widget family
 
 Cells are `logical rows / encoded bytes / host materialization ms`. Each individual
