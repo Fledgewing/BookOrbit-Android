@@ -199,4 +199,3 @@ one-row / 16 KiB budgets; finish has three rows and recommendation review has ei
 Commands, drains and paints log timing spans. No sync is added to Home paint. Heavy capture,
 sidecar processing and statistics stay on the companion. Device targets remain pending
 maintainer confirmation. Firmware enforcement is deferred under the Android-first ruling.
-

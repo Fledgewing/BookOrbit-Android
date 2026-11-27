@@ -5380,12 +5380,12 @@
     },
     {
       "id": "owned-home",
-      "feature": "Default BookSync Home with three pages, starter shelves, Library and Stats",
+      "feature": "Default BookSync Home with two M8C pages, starter shelves and Stats",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: default Home, Library and Stats pages for installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets",
+          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
@@ -5397,7 +5397,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5408,7 +5408,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5419,7 +5419,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5616,7 +5616,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Owned plugin forms, independent encrypted logins, provenance-aware sign-out, provisioning result and sync setup actions",
+          "note": "Owned plugin forms, independent encrypted logins, provenance-aware sign-out, provisioning result and sync setup actions; upgrades atomically adopt existing independent logins in the encrypted vault without changing credentials or catalog identity",
           "reason": "deliberately deferred: browser/OIDC sign-in, firmware phone pairing and real-device acceptance follow; Android-first implementation authorised 2026-11-25.",
           "evidence": [
             {
@@ -5633,7 +5633,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Account login and token storage follow Android",
+          "note": "Account login and token storage follow Android; legacy-login adoption follows with the firmware account model",
           "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {
@@ -5646,7 +5646,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Account login and token storage follow Android",
+          "note": "Account login and token storage follow Android; legacy-login adoption follows with the firmware account model",
           "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {
@@ -5659,7 +5659,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Account login and token storage follow Android",
+          "note": "Account login and token storage follow Android; legacy-login adoption follows with the firmware account model",
           "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {

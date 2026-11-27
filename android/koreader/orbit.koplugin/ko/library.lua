@@ -4,7 +4,8 @@
 -- inspect a server plugin, credentials or protocol records. Tests may inject this interface.
 if not rawget(getfenv(1),"LibraryAdapter") then
 LibraryAdapter={sent={},order={},ready={}}
-function LibraryAdapter.owner() return LibraryAdapter.managed_owner end
+LibraryAdapter.LOCAL_OWNER="device-local"
+function LibraryAdapter.owner() return LibraryAdapter.managed_owner or LibraryAdapter.LOCAL_OWNER end
 function LibraryAdapter.read(request,op)
     if op=="settings.recommendations" and LibraryAdapter.recommendations then
         return LibraryAdapter.recommendations,#Cache.encode(LibraryAdapter.recommendations)

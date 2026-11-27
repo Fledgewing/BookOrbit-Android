@@ -156,9 +156,8 @@ copy, finish and deferred-download queues remain intact; a source-owner claim an
 migration checkpoint prevent cross-account replay and resurrection after acknowledgement.
 Replacement bytes are sampled/verified before atomic rename; an interrupted rename/identity
 handoff resumes from its saved phase. Identity and finish writeback are idempotent, acknowledged
-phases. Finish event tokens reject older events after a newer mark. Native lifecycle/position
-queues and the existing position writer are not replaced. The temporary `EOB` handle preserves
-the parallel sync worker's stale-push/session contract without retaining a second finish sender.
+phases. Finish event tokens reject older events after a newer mark. The owned lifecycle journal remains the sole position writer. The temporary `EOB` handle
+retains cached display/session compatibility without retaining a second finish sender.
 
 `RecommendationPlan` supplies at most eight native-setting descriptors, decisions, review rows,
 labels/counts and backups; only observed native settings are written on the reader, with a
@@ -175,7 +174,7 @@ including the recorded delivery-variant fixture (registry reader moves from Lua 
 Lua tests exercise neutral dispatch, bounded sheets, stale-push holds, gated copy commands,
 callback visibility and budgets. Existing native sync/reading/SQLite-lock/owned UI tests remain.
 The boundary guard rejects copy/finish transport even inside a Lua adapter and checks all four
-retired paths stay absent. Final sync/root transport cleanup belongs to F12-Q and step 5.
+retired paths stay absent. F12-Q is integrated; remaining root/display cleanup belongs to step 5.
 
 Pinned upstream evidence at `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`:
 `koreader-plugin/bookorbit.koplugin/bookorbit_api.lua:705`/`:709` define status/rating writes;

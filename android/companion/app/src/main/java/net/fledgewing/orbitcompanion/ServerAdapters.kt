@@ -12,6 +12,7 @@ import net.fledgewing.orbitcompanion.server.bookorbit.BookOrbitProjection
 import net.fledgewing.orbitcompanion.server.bookorbit.BookOrbitLibrary
 import net.fledgewing.orbitcompanion.server.bookorbit.CacheStore
 import net.fledgewing.orbitcompanion.server.bookorbit.ConnectorPlugin
+import net.fledgewing.orbitcompanion.server.bookorbit.LegacyLoginAdoption
 import net.fledgewing.orbitcompanion.server.bookorbit.SleepChoicesProjection
 
 /** The only production composition root allowed to import an implementation. */
@@ -27,6 +28,9 @@ object ServerAdapters {
     fun session(ctx: Context, id: String = "bookorbit"): ServerAdapter {
         require(id == "bookorbit") { "unknown adapter" }
         val credentials = ServerCredentials(EncryptedAccountVault.android(ctx))
+        LegacyLoginAdoption.run(credentials,
+            java.io.File(android.os.Environment.getExternalStorageDirectory(), "koreader/settings.reader.lua"),
+            java.io.File(android.os.Environment.getExternalStorageDirectory(), "koreader/settings/opds.lua"))
         val account = BookOrbitAccount(credentials.accountVault, AccountHttp, setupOnSignIn = { false })
         return BookOrbitServerAdapter(credentials, account, ConnectorHttp,
             legacyAccount = { net.fledgewing.orbitcompanion.server.bookorbit.LegacyCoverSource.read(
@@ -37,6 +41,7 @@ object ServerAdapters {
                 AdapterWorker.acquireCoverReference(ctx,creds,owner,reference,refresh,done)
             }, coverJob = { creds, owner, key, done -> AdapterWorker.acquireCover(ctx,creds,owner,key,done) })
     }
+    fun projectionStore(root: java.io.File): ProjectionStore = CacheStore(root)
     val cachedLists: CachedListProjection get() = SleepChoicesProjection
     val connector: ConnectorInstaller get() = ConnectorPlugin
     val runtime: ServerRuntime get() = AdapterWorker
