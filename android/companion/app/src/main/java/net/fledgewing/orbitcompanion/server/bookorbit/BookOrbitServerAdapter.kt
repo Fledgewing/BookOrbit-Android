@@ -24,6 +24,133 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     private var dashboardUnavailableOwner: String? = null
     private var dashboard: Pair<String,RemoteReadingStats>? = null
     private val artifacts = linkedMapOf<String, String>()
+    private var sync: BookOrbitSync? = null
+    override fun importLifecycle(queue: LifecycleQueue, settings: File, quiesced: Boolean): Int {
+        check(quiesced)
+        sync = BookOrbitSync(settings, { path, body ->
+            val c=login("sync")
+            fun native(value: Any?): Any? = when(value) {
+                is String -> LuaValue.utf8(value)
+                is Map<*, *> -> value.entries.associate { it.key.toString() to native(it.value) }
+                is List<*> -> value.map { native(it) }
+                else -> value
+            }
+            @Suppress("UNCHECKED_CAST")
+            val reply=transport.request(c.server,path,"POST",native(body) as Map<String,Any?>,headers(c,"sync"))
+            check(reply); reply.value as? Map<*, *> ?: throw ServerFailure("invalid-response")
+        },queue.sql)
+        var legacyOwner: String? = null
+        val stateFiles=settings.listFiles().orEmpty().filter { it.name.matches(Regex("bookorbit_sync_state(?:_[a-f0-9]{32})?\\.lua")) }
+        require(stateFiles.size<=128 && stateFiles.sumOf { it.length() }<=LifecycleQueue.MAX_BYTES)
+        val states=stateFiles.mapNotNull { f -> LegacyLifecycleImport.literal(f)?.let { f to it } }
+        fun namespace(identity: String): String? {
+            val server=identity.substringBeforeLast('|',""); val user=identity.substringAfterLast('|',"")
+            if(server.isBlank() || user.isBlank()) return null
+            val normalized=runCatching { BookOrbitAccount.normalizeServer(LuaValue.utf8(server)) }.getOrNull() ?: return null
+            val current=credentials.login("sync")
+            return if(current?.server==normalized && current.user==LuaValue.utf8(user)) current.owner()
+                else ServerCredentials.Login(normalized,LuaValue.utf8(user),"","user").owner()
+        }
+        val count=LegacyLifecycleImport(queue,settings,{ old ->
+            val server=(old["server_url"] as? String)?.let { runCatching { BookOrbitAccount.normalizeServer(LuaValue.utf8(it)) }.getOrNull() }
+            val user=(old["username"] as? String)?.let(LuaValue::utf8)
+            if(server==null || user.isNullOrBlank()) null else {
+                val current=credentials.login("sync")
+                if(current==null) {
+                    val key=(old["userkey"] as? String)?.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }
+                    if(key!=null) {
+                        // Preserve the proven native catalog namespace when adopting its login.
+                        // Existing managed logins are untouched; their queue provenance stays intact.
+                        val native=legacyAccount()?.takeIf { it.credentials.server.trimEnd('/').equals(server.trimEnd('/'),true) && it.credentials.user==user }
+                        credentials.set("sync",ServerCredentials.Login(server,user,key,"user",native?.owner))
+                    }
+                }
+                val selected=credentials.login("sync")
+                val fallback=if(selected?.server==server && selected.user==user) selected.owner()
+                    else ServerCredentials.Login(server,user,"","user").owner()
+                val snapshot=old["_snapshot"] as? Map<*, *>
+                if(snapshot==null) { legacyOwner=fallback; fallback }
+                else {
+                    val identity=(old["server_url"] as String).trimEnd('/')+"|"+(old["username"] as String)
+                    val namedHash=MessageDigest.getInstance("MD5").digest(identity.toByteArray(Charsets.ISO_8859_1)).joinToString("") { "%02x".format(it) }
+                    val matches=states.filter { (_,state) ->
+                        val book=(state["books"] as? Map<*, *>)?.get(snapshot["digest"]) as? Map<*, *>
+                        book!=null && (book["file"]==null || book["file"]==snapshot["file"])
+                    }
+                    val proven=matches.map { (file,state) -> (state["account_identity"] as? String)
+                        ?: identity.takeIf { file.name=="bookorbit_sync_state_$namedHash.lua" } }.distinct()
+                    when {
+                        matches.size==1 && proven.singleOrNull()!=null -> namespace(proven.single()!!)
+                        matches.isEmpty() && (states.isEmpty() || states.size==1 && states.single().second["account_identity"]==identity) -> fallback
+                        else -> null // Multiple editions/accounts in the legacy store: never guess current credentials.
+                    }
+                }
+            }
+        }).run(true)
+        // This local decision state never contains credentials. Import once; later companion state wins.
+        val root=LegacyLifecycleImport.literal(File(settings.parentFile,"settings.reader.lua"))
+        val old=(root?.get("orbit_android") as? Map<*, *>)?.get("orbismart") as? Map<*, *>
+        val bound=legacyOwner
+        if(bound!=null) queue.sql.transaction {
+            val configured=(root?.get("bookorbit") as? Map<*, *>).orEmpty()
+            val identity=(configured["server_url"] as? String)?.trimEnd('/')+"|"+configured["username"]
+            val namedHash=MessageDigest.getInstance("MD5").digest(identity.toByteArray(Charsets.ISO_8859_1)).joinToString("") { "%02x".format(it) }
+            val selected=states.firstOrNull { it.second["account_identity"]==identity || it.first.name=="bookorbit_sync_state_$namedHash.lua" }?.second
+            val books=(selected?.get("books") as? Map<*, *>).orEmpty()
+            // Queued snapshots can belong to an older account. Preserve its known state too:
+            // null rating/review captures mean explicit clears only with that account's history.
+            for((file,state) in states) {
+                val proven=(state["account_identity"] as? String)
+                    ?: identity.takeIf { file.name=="bookorbit_sync_state_$namedHash.lua" }
+                val stateOwner=proven?.let(::namespace) ?: continue
+                for((doc,book) in (state["books"] as? Map<*, *>).orEmpty()) if(doc is String && book is Map<*, *>) {
+                    queue.sql.exec("INSERT OR IGNORE INTO adapter_sync_books VALUES (?,?,?)",stateOwner,doc,LuaValue.encode(book))
+                }
+            }
+            for((document,value) in old.orEmpty()) {
+                if(document !is String || value !is Map<*, *> || queue.record(id,bound,document).isNotEmpty()) continue
+                if(states.isNotEmpty() && document !in books) continue
+                fun remote(raw: Any?): Map<String,Any?> {
+                    val r=raw as? Map<*, *> ?: return emptyMap()
+                    return mapOf("at" to r["at"],"percentage" to r["pct"],"position" to r["progress"],
+                        "reset" to (r["device_id"]=="bookorbit-web" && (r["pct"] as? Number)?.toDouble()==0.0),"web" to (r["device"]=="web"),"label" to (r["device_name"] ?: r["device"]))
+                }
+                queue.record(id,bound,document,mapOf("marker" to remote(value["m"]),"remote" to remote(value["server"]),
+                    "override" to remote(value["override"]),"declinedAt" to value["declined_at"],"declinedReset" to value["declined_reset"],
+                    "path" to ((books[document] as? Map<*, *>)?.get("file")),"pending" to value["pending"],"rereadAt" to value["reread_at"],"token" to java.util.UUID.randomUUID().toString()))
+            }
+        }
+        return count
+    }
+    override fun positionDirections() = sync?.directions() ?: PositionDirections()
+    override fun captureLifecycle(capture: Map<*, *>) = (sync ?: throw ServerFailure("writer-active")).capture(capture)
+    override fun positionIntent(document: String, update: Map<String,Any?>) = LuaValue.encode(mapOf(
+        "digest" to document,"percentage" to update["percentage"],"progress" to update["position"],"ts" to update["capturedAt"]))
+    override fun lifecyclePosition(payload: ByteArray): CapturedPosition {
+        val raw=LuaValue.parse(payload) as? Map<*, *> ?: throw ServerFailure("invalid")
+        return CapturedPosition((raw["percentage"] as? Number)?.toDouble(),raw["progress"] as? String,
+            (raw["ts"] as? Number)?.toLong() ?: 0L,raw["status"]=="complete")
+    }
+    override fun lifecyclePhase(entry: LifecycleQueue.Entry, phase: String, checkpoint: ByteArray, openPath: String?): SyncPhaseResult {
+        val result=(sync ?: throw ServerFailure("writer-active")).phase(entry,phase,checkpoint,openPath)
+        // Match owns identity; catalog observes its completed result without another writer.
+        if(phase=="match" && result.complete && entry.owner==owner()) {
+            val match=(LuaValue.parse(result.checkpoint) as? Map<*,*>)?.get("match") as? Map<*,*>
+            val snapshot=LuaValue.parse(entry.payload) as? Map<*,*>
+            val c=credentials.login("sync")
+            if(c!=null && match?.get("bookId")!=null && snapshot?.get("file") is String) {
+                actionJob(CacheWorker.Creds(c.server,c.user,c.secret),entry.owner,"local.observe",mapOf(
+                    "reference" to match["bookId"],"file_reference" to match["bookFileId"],"document" to entry.document,"path" to snapshot["file"])) { _,_ -> }
+            }
+        }
+        return result
+    }
+    override fun lifecycleComplete(checkpoint: ByteArray): Boolean =
+        ((LuaValue.parse(checkpoint) as? Map<*, *>)?.get("remote_pending") as? Map<*, *>).isNullOrEmpty()
+    override fun nextSyncVerification(owner: String, document: String) =
+        (sync ?: throw ServerFailure("writer-active")).nextVerification(owner,document)
+    override fun syncVerification(owner: String, document: String, key: String, valid: Boolean, page: Int?) =
+        (sync ?: throw ServerFailure("writer-active")).verification(owner,document,key,valid,page)
     private fun login(kind: String): ServerCredentials.Login {
         val c = credentials.login(kind) ?: throw BookOrbitAccount.Failure("unauthorized")
         if (c.origin == "account" && account.state()["signedIn"] != true) throw BookOrbitAccount.Failure("unauthorized")
@@ -31,8 +158,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     }
     override fun state(): Map<String,Any?> {
         val accountState = account.state()
-        val legacy=if(credentials.login("sync")==null && credentials.login("opds")==null) legacyAccount() else null
         val sourceOwner=owner()
+        val legacy=legacyAccount()?.takeIf { it.owner==sourceOwner }
         fun status(kind: String): Map<String,Any?> {
             val c = credentials.login(kind)
             return credentials.status(kind) + mapOf("server" to c?.server, "username" to c?.user?.let(LuaValue::str),
@@ -115,15 +242,18 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             require(position == null || position.length <= 4096)
             val capturedAt = (it["capturedAt"] as? Number)?.toLong()
             require(capturedAt == null || capturedAt > 0)
-            mapOf("document" to document, "percentage" to percentage, "progress" to position?.let(LuaValue::utf8), "device" to "BookSync") +
+            mapOf("document" to document, "percentage" to percentage, "progress" to position?.let(LuaValue::utf8), "device" to "BookSync", "device_id" to sync?.deviceId()) +
                 (if (capturedAt != null) mapOf("timestamp" to capturedAt) else emptyMap())
         }
         val reply = transport.request(c.server, path, if (body == null) "GET" else "PUT", body, headers(c,"sync"))
+        if(update==null && reply.code==404) return emptyMap()
         check(reply)
         val raw = reply.value as? Map<*, *> ?: emptyMap<Any,Any>()
         val position = raw["progress"] as? String
         require(position == null || position.length <= 4096)
-        return mapOf("position" to position, "percentage" to (raw["percentage"] as? Number), "timestamp" to (raw["timestamp"] as? Number))
+        return mapOf("position" to position, "percentage" to (raw["percentage"] as? Number), "timestamp" to (raw["timestamp"] as? Number),
+            "reset" to (raw["device_id"]=="bookorbit-web" && (raw["percentage"] as? Number)?.toDouble()==0.0),
+            "web" to (raw["device"]=="web"),"label" to ((raw["device_name"] ?: raw["device"]) as? String)?.let { LuaValue.boundedText(LuaValue.utf8(it),100) })
     }
     override fun catalog(page: Int, limit: Int): Map<String, Any?> {
         require(page in 1..10000 && limit in 1..24)

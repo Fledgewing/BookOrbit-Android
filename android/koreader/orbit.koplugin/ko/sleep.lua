@@ -7,6 +7,7 @@
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onSuspend()
+    ReadingSync.queue("suspend",self.ui)
     -- Screen off or another app in front: KOReader isn't being read until Resume.
     if stats_acc.at then
         Stats.send("suspend", nil, false)
@@ -60,7 +61,6 @@ end
 function OrbitAndroid:sleepSync(reason)
     local cap = S.sleep_cap or 20
     local t0 = now_s()
-    local p = serverPlugin(self.ui)
     log(reason .. ": sleep sync start, cap", cap .. "s")
     local held = false
     state.sleep_syncing = true
@@ -79,25 +79,10 @@ function OrbitAndroid:sleepSync(reason)
         Companion.netDone(reason, ok, seconds, detail, restore)
         if held then Wifi.release("sleep", true) end
     end
-    if not p or not Server.signedIn(p) then
-        return done(false, "library plugin missing or signed out")
-    end
     Wifi.acquire("sleep")
-    held = true
-    Net.up(p, { reason = reason, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
-        if not ok then return done(false, res.detail) end
-        -- OrbiSmart: pull first, so the behind-hold judges the snapshot against the server's place.
-        if Server.positionOn() and inBook() and can(p, "reading_sync") then
-            return Server.pullThenDrain(p, "sleep", "orbit_" .. reason, function()
-                Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why) done(synced, why) end)
-            end)
-        end
-        -- The plugin queued its snapshot in its own _onSuspend (main.lua:1340-1351) but drains
-        -- only when already connected (main.lua:411-419). Now we are: drain and wait.
-        if can(p, "outbox") then Server.drain(p, "orbit_" .. reason) end
-        Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
-            done(synced, why)
-        end)
+    held=true
+    Net.up(nil,{reason=reason,cap=cap,wake_lock_s=cap+5},function()
+        ReadingSync.run("sleep",done)
     end)
 end
 
@@ -186,28 +171,13 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
         end
     end
 
-    local p = serverPlugin(self.ui)
-    if not p or not Server.signedIn(p) then
-        finish(false, "library plugin missing or signed out")
-        return true
-    end
     Wifi.acquire("sync_and_sleep")
-    self.sas_held = true
-    Net.up(p, { reason = flow, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
-        if cancelled then return finish(false, "cancelled") end
-        if not ok then return finish(false, res.detail) end
-        if inBook() and can(p, "sleep_snapshot") then
-            -- Exactly what the plugin does on sleep: snapshot the open book into its
-            -- durable outbox and drain it (main.lua:1340-1351).
-            state.force_snapshot = true
-            Server.snapshot(p)
-            state.force_snapshot = nil
-        elseif can(p, "outbox") then
-            Server.drain(p, "orbit_sync_and_sleep", true)
-        end
-        Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
-            if cancelled then return finish(false, "cancelled") end
-            finish(synced, why)
+    self.sas_held=true
+    Net.up(nil,{reason=flow,cap=cap,wake_lock_s=cap+5},function()
+        if cancelled then return finish(false,"cancelled") end
+        ReadingSync.run(stay_awake and "manual" or "sleep",function(ok,why)
+            if cancelled then return finish(false,"cancelled") end
+            finish(ok,why)
         end)
     end)
     return true

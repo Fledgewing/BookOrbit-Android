@@ -67,7 +67,17 @@ end
 
 function LibraryAdapter.fullRefresh() return Library.refreshCatalog("full",true) end
 function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end
-function LibraryAdapter.syncCurrent(done) done(false,"Sync unavailable"); return false end
+function LibraryAdapter.syncCurrent(done)
+    return ReadingSync.run("manual",function(ok,why) done(ok,why or (ok and "Synced" or "Saved · delivery pending")) end)
+end
+-- A successful transport drain may retain closed-sidecar applications. Those do not
+-- delay the finish; transport errors do. SyncOwner remains the sole position writer.
+function LibraryAdapter.finishCurrent(done)
+    return ReadingSync.run("manual",function(ok,why)
+        if why then return done(false,why) end
+        return Library.catalogAction("finish.drain",{manual=true},function(result) done(not result.error,result.error) end)
+    end)
+end
 -- KOReader already computes this on page/position updates, even with its footer hidden.
 -- No document scan, sidecar read or second progress writer on a panel paint.
 function LibraryAdapter.readerPosition(path)
@@ -149,6 +159,7 @@ end
 end
 
 Library = rawget(getfenv(1),"Library") or {}
+if Library.bindLifecycle then Library.bindLifecycle() end
 -- Explicit user command; the existing adapter/worker owns the full-refresh job.
 local function command(id, run)
     local finish = Budgets.span("library." .. id .. ".enqueue", now_s, log)
@@ -306,6 +317,43 @@ function Library:sources(category, offset, limit, caps)
     return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
         allow_lists=not (caps and caps.lists and caps.lists.read==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
+end
+
+-- Position sync owns one local row and a bounded pure preview; all writes remain worker commands.
+function Library.nativeReaderPosition(path) return LibraryAdapter.readerPosition(path) end
+function Library.idle() if LibraryAdapter.idle then return LibraryAdapter.idle() end end
+function Library.networkRestored() if LibraryAdapter.networkRestored then return LibraryAdapter.networkRestored() end end
+function Library.positionCommand(op,args,done)
+    return command(op,function() return LibraryAdapter.command(op,args,done or function() end) end)
+end
+function Library.positionCached(path)
+    local finish=Budgets.span("library.position.cached",now_s,log)
+    local b=Budgets.get("screens","position-consent")
+    local root=require("datastorage"):getSettingsDir() .. "/orbit-cache"
+    local body=Store.readFile(root .. "/position/" .. require("ffi/sha2").md5(path) .. ".lua",b.bytes+1)
+    local value=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    finish()
+    return type(value)=="table" and value.path==path and value or nil
+end
+function Library.positionPreview(args)
+    local finish=Budgets.span("library.position.preview",now_s,log)
+    local encoded=Cache.encode(args); assert(#encoded<=Budgets.MAX_REQUEST,"Position preview exceeds budget")
+    local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SYNC_PREVIEW",{args=encoded})
+    local body=result and result.body
+    local value=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    finish()
+    return value
+end
+
+-- Neutral lifecycle hooks shared with the independently migrating catalog/finish adapter.
+function Library.backgroundCommand(op,...)
+    local args={...}
+    return command(op,function() return LibraryAdapter.backgroundCommand(op,unpack(args)) end)
+end
+function Library.backgroundBusy()
+    local finish=Budgets.span("library.background.busy",now_s,log)
+    local busy=LibraryAdapter.backgroundBusy and LibraryAdapter.backgroundBusy()
+    finish(); return busy
 end
 
 local function storagePath()
@@ -550,4 +598,9 @@ function Library.cachedAccountState() return LibraryAdapter.account_snapshot or 
 function Library.finishCurrent(done)
     if not LibraryAdapter.finishCurrent then done(false,"Sync unavailable");return false end
     return command("finish-current",function() return LibraryAdapter.finishCurrent(done) end)
+end
+
+-- Native catalog compatibility uses neutral references and companion-owned transfer only.
+function Library.catalogDownload(reference,destination,file_reference,done)
+    return Library.catalogAction("finish.download",{reference=reference,destination=destination,file_reference=file_reference},done)
 end

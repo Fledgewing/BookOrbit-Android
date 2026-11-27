@@ -10,7 +10,7 @@ object ServerCommands {
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("device.sleep","storage.free","storage.folder","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
+        require(op in setOf("device.sleep","storage.free","storage.folder","sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -23,6 +23,7 @@ object ServerCommands {
         fun accountDone(error: String?) = finish(mapOf("state" to LibraryAccount.state()),error)
         fun text(key: String) = LuaValue.utf8(args[key] as? String ?: throw IllegalArgumentException("missing"))
         try { when (op) {
+            "sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain" -> LibraryAccount.sync(ctx,op,args,::finish)
             "storage.free", "storage.folder" -> Worker.localCommand(ctx,op,args,::finish)
             "device.sleep" -> DeviceSettings.sleep(ctx,(args["ms"] as? Number)?.toInt() ?: 600000) { finish(mapOf("device" to DeviceSettings.snapshot()),it) }
 

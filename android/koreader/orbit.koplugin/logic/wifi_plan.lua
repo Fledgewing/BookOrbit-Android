@@ -55,7 +55,10 @@ end
 
 -- A flow needs the network. wifi_on: the radio state now (nil = unknown).
 function WifiPlan.acquire(st, name, wifi_on, now)
-    if st.n == 0 then st.restore_off = (wifi_on == false) end
+    -- A fast companion command may finish before a second wake/open lease starts.
+    -- Preserve ownership through the grace window; the companion still rejects auto-off
+    -- if the reader has manually taken ownership of the radio in the meantime.
+    if st.n == 0 and not (st.restore_off and st.release_at) then st.restore_off = (wifi_on == false) end
     st.leases[name] = (st.leases[name] or 0) + 1
     st.n = st.n + 1
     st.release_at = nil

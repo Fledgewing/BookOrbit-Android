@@ -3,6 +3,8 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
+-- Legacy catalog display compatibility, retained for the separate catalog cutover.
+-- No sync/outbox ownership lives in this module.
 -- Local-first Home on Android (docs/design/local-first/DESIGN.md "Item 3"; ROADMAP 3).
 -- BookOrbit Home paints once, from data on the device that already shows what this device
 -- knows; a refresh then repaints only the header stamp and the tiles that changed.
@@ -100,38 +102,6 @@ end
 function LocalState.noteSent(digest)
     local e = LocalState.load().books[digest]
     if e then e.finish_sent = true; LocalState.save() end
-end
-
--- The outbox decides "pending": an entry still waiting for a book keeps it; once gone (acknowledged)
--- pending clears, unless a finish waits in our own queue. Blocked or retrying -> not synced.
-function LocalState.fromOutbox(p)
-    local okm, list, outbox = pcall(function()
-        local o = p:getLifecycleOutbox()
-        return o:listMetadata(), o
-    end)
-    if not okm or type(list) ~= "table" then return end
-    local waiting = {}
-    local now = os.time()
-    for _, e in ipairs(list) do
-        if type(e) == "table" and e.digest then
-            local okb, blocked = pcall(outbox.isBlocked, outbox, e)
-            waiting[e.digest] = { blocked = okb and blocked or false,
-                retrying = e.next_attempt_at ~= nil and e.next_attempt_at > now }
-        end
-    end
-    local changed = false
-    for digest, e in pairs(LocalState.load().books) do
-        local w = waiting[digest]
-        local finish_waits = EOB and EOB.jobs and EOB.jobs[digest] ~= nil
-        local pending = w ~= nil or finish_waits or false
-        local blocked = w and w.blocked or false
-        local retrying = w and w.retrying or false
-        if e.pending ~= pending or (e.blocked or false) ~= blocked or (e.retrying or false) ~= retrying then
-            e.pending, e.blocked, e.retrying = pending, blocked, retrying
-            changed = true
-        end
-    end
-    if changed then LocalState.bump(); LocalState.save() end
 end
 
 -- Sidecars of the board's books on this device, only those whose mtime moved (read in another app
@@ -713,7 +683,6 @@ do
         pcall(Gate.installToast)
         local p = serverPlugin(self.ui)
         if p then
-            pcall(LocalState.fromOutbox, p)
             pcall(EOB.installPluginHooks, p)
         end
         return r
@@ -721,7 +690,6 @@ do
     local base_resume = OrbitAndroid.onResume
     function OrbitAndroid:onResume(...)
         local p = serverPlugin(self.ui)
-        if p then pcall(LocalState.fromOutbox, p) end
         local cat = p and p.catalog_browser
         if cat and cat.current_context and cat.current_context.kind == "dashboard" then
             pcall(LocalState.scanSidecars, cat, boardBookIds(cat.current_context.dashboard))

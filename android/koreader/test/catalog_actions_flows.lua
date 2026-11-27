@@ -74,15 +74,49 @@ test("catalog actions: failed or departed download never reopens a book",functio
 end) end)
 test("catalog actions: recommendation observation unwraps the saved native value and checks compatibility",function()
     local ui,m=t.newUI(false);local p=ui.bookorbit
-    local saved=E.OSM.savedPluginSetting
+    local saved,mode=E.S.osm_saved_plugin,E.S.sync_mode
     p.default_settings={sync_forward=1}
-    E.OSM.savedPluginSetting=function() return {value=3} end
+    E.S.osm_saved_plugin={sync_forward=3};E.S.sync_mode="balanced"
+    p.settings.sync_forward,p.settings.sync_backward=3,3
     local success,why=pcall(function()
         local obs=E.Library.observeSetting({key="sync_forward"});eq(obs.available,true);eq(obs.current,3)
+        E.S.sync_mode="custom";E.S.osm_saved_plugin.sync_forward=2
+        eq(E.Library.observeSetting({key="sync_forward"}).current,2)
+        ok(E.Library.writeSetting({key="sync_forward"},1));eq(E.S.osm_saved_plugin.sync_forward,1);eq(p.settings.sync_forward,3)
         p.default_settings=nil;eq(E.Library.observeSetting({key="sync_forward"}).available,false)
     end)
-    E.OSM.savedPluginSetting=saved
+    E.S.osm_saved_plugin,E.S.sync_mode=saved,mode
     if not success then error(why) end
+end)
+test("catalog actions: finish follows the owned writer even with pending closed-sidecar work",function()
+    local run,action=E.ReadingSync.run,E.Library.catalogAction;local order={}
+    E.ReadingSync.run=function(moment,done) eq(moment,"manual");order[#order+1]="owned-writer";done(false,nil) end
+    E.Library.catalogAction=function(op,args,done) order[#order+1]=op;done({ok=true}) end
+    local success,why=pcall(function()
+        local done
+        E.LibraryAdapter.finishCurrent(function(ok) done=ok end)
+        eq(done,true);eq(order[1],"owned-writer");eq(order[2],"finish.drain")
+        E.ReadingSync.run=function(_,cb) cb(false,"offline") end
+        E.LibraryAdapter.finishCurrent(function(ok) eq(ok,false) end);eq(#order,2)
+    end)
+    E.ReadingSync.run,E.Library.catalogAction=run,action
+    if not success then error(why) end
+end)
+test("catalog actions: native download actions dispatch to companion and never invoke native transport",function()
+    local sent;local download=E.Library.catalogDownload
+    local api={request=function() error("native request") end,requestBlocking=function() error("native blocking request") end,
+        runInSubprocess=function() error("native fork") end,query=function() end,
+        download=function() error("native download") end,downloadBlocking=function() error("native blocking download") end}
+    local cat={downloadFile=function() error("stock transfer") end}
+    E.Library.catalogDownload=function(reference,path,file,done) sent={reference,path,file};done({local_path=path});return true end
+    local success,why=pcall(function()
+        ok(E.Server.installCatalogApi(api,cat));eq(api:download(),nil);eq(api:downloadBlocking(),nil)
+        local reported
+        local instance=setmetatable({},{__index=cat})
+        instance:downloadFile("/books/new.epub",{id=7},{id=70},{finished=function(ok,err,path) reported={ok,err,path} end})
+        eq(sent[1],7);eq(sent[2],"/books/new.epub");eq(sent[3],70);eq(reported[1],true);eq(reported[3],"/books/new.epub")
+    end)
+    E.Library.catalogDownload=download;if not success then error(why) end
 end)
 test("catalog actions: leaving for Home schedules the existing writer after its paint",function() isolated(function()
     local ui,m,b=fixture();local nextTick=t.UIManager.nextTick;local scheduled;local calls=0

@@ -57,7 +57,6 @@ local function wrapTable(t,name)
         end
     end
 end
-for _,name in ipairs({"OrbitAndroid","ReadingStatus","Store","Companion","Jni","Shared","Clicks","Channel","Wifi","Net","Sleep","Stats"}) do
+for _,name in ipairs({"OrbitAndroid","ReadingStatus","Store","Companion","Jni","Shared","Clicks","Channel","Wifi","Net","Sleep","Stats","ReadingSync","Library"}) do
     wrapTable(plugin_env[name],name)
 end
-Server.timeLegacy(wrapTable)

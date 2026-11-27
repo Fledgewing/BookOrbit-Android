@@ -43,8 +43,22 @@ interface ServerAdapter {
     fun owner(): String? = null
     /** Position credentials may belong to a different account from the catalog login. */
     fun positionOwner(): String? = owner()
+    fun positionDirections(): PositionDirections = PositionDirections()
     fun stats(owner: String): Map<*, *>? = null
     fun position(document: String, update: Map<String, Any?>? = null): Map<String, Any?> = unsupported()
+    /** Companion's sole sync owner invokes these on its serial worker, never from rendering. */
+    fun importLifecycle(queue: LifecycleQueue, settings: File, quiesced: Boolean): Int = 0
+    fun captureLifecycle(capture: Map<*, *>): Pair<String,ByteArray> = throw ServerFailure("unsupported")
+    fun positionIntent(document: String, update: Map<String,Any?>): ByteArray = LuaValue.encode(update)
+    fun lifecyclePosition(payload: ByteArray): CapturedPosition {
+        val raw=LuaValue.parse(payload) as? Map<*, *> ?: throw ServerFailure("invalid")
+        return CapturedPosition((raw["percentage"] as? Number)?.toDouble(),raw["position"] as? String,
+            (raw["capturedAt"] as? Number)?.toLong() ?: 0L,raw["finished"]==true)
+    }
+    fun lifecyclePhase(entry: LifecycleQueue.Entry, phase: String, checkpoint: ByteArray, openPath: String?): SyncPhaseResult = throw ServerFailure("unsupported")
+    fun lifecycleComplete(checkpoint: ByteArray): Boolean = true
+    fun nextSyncVerification(owner: String, document: String): Map<String,Any?> = emptyMap()
+    fun syncVerification(owner: String, document: String, key: String, valid: Boolean, page: Int?) {}
     fun catalog(page: Int = 1, limit: Int = 24): Map<String, Any?> = unsupported()
     fun download(key: String, destination: File): Boolean = false
     fun setupCredentials(values: Map<String, String>): Map<String, Any?> = unsupported()
@@ -78,3 +92,8 @@ interface CachedListProjection {
 
 /** Neutral, credential-free failure surfaced by any adapter. */
 open class ServerFailure(val kind: String) : Exception(kind)
+
+data class CapturedPosition(val percentage: Double?, val position: String?, val capturedAt: Long, val finished: Boolean = false)
+
+/** Owned position policy options, translated by adapters from any legacy preference format. */
+data class PositionDirections(val automatic: Boolean=true,val ahead: String="ask",val behind: String="keep")

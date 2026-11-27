@@ -693,15 +693,15 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "BookSync position sync pull/drain and prompt",
+          "note": "BookSync position sync pull/drain and prompt; 0.12 sync runs through the companion single owner with durable lifecycle replay",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
-              "line": 33
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SyncOwner.kt",
+              "line": 66
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (feature branch; device acceptance pending)"
         },
         "x4_pro": {
           "status": "supported",
@@ -760,15 +760,15 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "BookSync position sync override",
+          "note": "BookSync position sync override; 0.12 sync runs through the companion single owner with durable lifecycle replay",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
-              "line": 33
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SyncOwner.kt",
+              "line": 66
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (feature branch; device acceptance pending)"
         },
         "x4_pro": {
           "status": "supported",
@@ -870,19 +870,19 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Reading schedule and BookSync position sync pause",
+          "note": "Reading schedule and BookSync position sync pause; 0.12 sync runs through the companion single owner with durable lifecycle replay",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/reading_sync.lua",
-              "line": 139
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SyncOwner.kt",
+              "line": 66
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
-              "line": 33
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SyncOwner.kt",
+              "line": 66
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (feature branch; device acceptance pending)"
         },
         "x4_pro": {
           "status": "supported",
@@ -929,15 +929,15 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Drains BookOrbit lifecycle outbox",
+          "note": "Drains BookOrbit lifecycle outbox; 0.12 sync runs through the companion single owner with durable lifecycle replay",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
-              "line": 14
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitSync.kt",
+              "line": 127
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (feature branch; device acceptance pending)"
         },
         "x4_pro": {
           "status": "supported",
@@ -988,15 +988,15 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Lifecycle outbox integration",
+          "note": "Lifecycle outbox integration; 0.12 sync runs through the companion single owner with durable lifecycle replay",
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
-              "line": 14
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitSync.kt",
+              "line": 127
             }
           ],
-          "version": "v0.11.3-rc.17"
+          "version": "0.12 (feature branch; device acceptance pending)"
         },
         "x4_pro": {
           "status": "supported",
@@ -1378,7 +1378,7 @@
               "line": 9
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/localfirst.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/local_view.lua",
               "line": 30
             }
           ],
@@ -5833,6 +5833,61 @@
         }
       },
       "deferred": "Device acceptance, firmware renderers and configuration pages."
+    },
+    {
+      "id": "companion-sync-owner",
+      "feature": "Companion-owned Android sync and durable lifecycle upgrade replay",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Server-free plugin sync; checkpointed five-phase import, offline queue and consent",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SyncOwner.kt",
+              "line": 6
+            }
+          ],
+          "version": "0.12 (feature branch; device acceptance pending)"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Existing firmware sync retained; companion cutover is Android-only",
+          "reason": "deliberately deferred: maintainer authorized Android first; firmware adapter migration comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-Q-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Existing firmware sync retained; companion cutover is Android-only",
+          "reason": "deliberately deferred: maintainer authorized Android first; firmware adapter migration comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-Q-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Existing firmware sync retained; companion cutover is Android-only",
+          "reason": "deliberately deferred: maintainer authorized Android first; firmware adapter migration comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-Q-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        }
+      }
     },
     {
       "id": "home-storage",

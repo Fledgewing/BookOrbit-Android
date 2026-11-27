@@ -183,3 +183,15 @@ Pinned upstream evidence at `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`:
 variant precedence; `bookorbit_state_manager.lua:233` defines private account identity;
 `bookorbit_state.lua:34` selects the native account filename. These bindings are now private
 companion adapter concerns. No devices, releases, tags or firmware changes are involved.
+
+## Integration with the merged F12-Q writer
+
+The owned sync writer now precedes finish delivery; pending native-sidecar application does
+not block completed position transport, but a transport error prevents finish delivery.
+Adopting a proven native login preserves its catalog namespace and pending workflow files;
+existing managed login namespaces stay intact. A completed match forwards its local identity
+to the existing catalog ledger, without a second lifecycle writer. Local-only finish preparation
+warms one identity row while reading. Native catalog downloads use the companion command;
+verified cache hits reuse the file and native cache linking is replayable after a restart.
+Saved recommendation choices feed the owned sync settings source. Tests cover the ownership
+handoff, offline match/finish identity, pending native links and native download suppression.

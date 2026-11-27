@@ -11,7 +11,7 @@ OrbitAndroid = WidgetContainer:extend{
 
 function OrbitAndroid:init()
     state.module = self
-    Server.installGrouping("init")
+    Library.backgroundCommand("views.install","init")
     Clicks.install("init")
     keepRotationOnFileBrowser("init")
     if not state.start_patch_checked then
@@ -22,18 +22,13 @@ function OrbitAndroid:init()
     if self.ui and self.ui.menu then self.ui.menu:registerToMainMenu(self) end
     local in_reader = self.ui ~= nil and self.ui.document ~= nil
     self.schedule = Schedule.new(S.reading_schedule, now_s())
-    if in_reader then
-        -- The BookOrbit plugin's instance comes first when both sit in one plugins folder
-        -- (PluginLoader sorts by path); elsewhere it may come later: hook it once it exists.
-        if serverPlugin(self.ui) then self:hookPluginPagePush()
-        else UIManager:nextTick(function() self:hookPluginPagePush() end) end
-    end
     -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
     Shared.onSchedule = function(id)
         self.schedule = Schedule.new(id, now_s())
-        if self.ui and self.ui.document then self:hookPluginPagePush() end
+
     end
 
+    ReadingSync.activate()
     if not state.started then
         state.started = true
         log("start: KOReader started (treated as a wake)", in_reader and "in reader" or "in file browser")

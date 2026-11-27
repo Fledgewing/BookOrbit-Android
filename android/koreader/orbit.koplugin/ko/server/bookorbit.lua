@@ -72,26 +72,6 @@ function inBook()
     return ui ~= nil and ui.document ~= nil
 end
 
-function serverUrl(p)
-    local settings = p and p.settings or G_reader_settings:readSetting("bookorbit")
-    return settings and settings.server_url or nil
-end
-
--- Any HTTP status from the base URL counts: it proves the route and the server, with no login.
--- Blocking primitive: only called by Net.up's background child. Socket timeouts
--- do not bound DNS resolution; Background.run also caps the child's lifetime.
-function probeServer(url, timeout)
-    local http = require("socket.http")
-    local socket = require("socket")
-    local socketutil = require("socketutil")
-    local ltn12 = require("ltn12")
-    timeout = math.min(1.5, timeout)
-    socketutil:set_timeout(timeout, timeout)
-    local code = socket.skip(1, http.request{ url = url, method = "HEAD", sink = ltn12.sink.null() })
-    socketutil:reset_timeout()
-    return type(code) == "number", code
-end
-
 ---------------------------------------------------------------------------------------------
 
 -- One compatibility entry point. Only main.lua loads this implementation.
@@ -108,40 +88,23 @@ end
 
 function Server.signedIn(p) return p ~= nil and p:isLoggedIn() end
 function Server.openLogin(p) return p:promptLogin() end
-function Server.drain(p, ...) return p:requestLifecycleOutboxDrain(...) end
-function Server.pull(p, reason) return p:requestProgressPull(false, false, reason) end
-function Server.snapshot(p) return pcall(p._onSuspend, p) end
-function Server.syncBusy(p)
-    local c = p:getSyncCoordinator()
-    if c:isBusy() or c:queuedCount() > 0 then return true end
-    return outboxPending(p:getLifecycleOutbox():diagnostics()) > 0
-end
-function Server.testReady(p)
-    return hasHandler(p, Server.events.sync) and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)
-end
-function Server.testError(p, err) return p:errorLabel(err) end
-function Server.testSync(p, reader, done)
-    if reader then pluginEvent(liveUI(), p, Server.events.sync, {quiet=true, on_done=done})
-    else p:startSweep({quiet=true, on_progress=function() end, on_done=done}) end
-end
-
 -- Legacy service bridge. Only reviewed lifecycle/sheet modules use this facade.
 function Server.cacheClient() return OC.client() end
+function Server.readerIdle()
+    if Library.copiesTick then pcall(Library.copiesTick,"book closed") end
+    if FinishUI and not reading() and not FinishUI.sending then
+        FinishUI.sending=true
+        Library.finishCurrent(function() FinishUI.sending=nil end)
+    end
+end
 function Server.watchCache() return OC.watchChecks() end
 function Server.cacheBusy() if OC and OC.busy then return OC.busy() end end
 function Server.refreshLibrary(...) return OC.menuFullRefresh(...) end
 function Server.resumeCache(...) if Mirror and Mirror.kick then return Mirror.kick(...) end end
 function Server.fullRefreshNotice() return Mirror and (Mirror.notices or Mirror.fullRunning()) end
 function Server.installGrouping(...) return Server.installGroupViews(...) end
-function Server.positionOn() return OSM and OSM.on() end
-function Server.positionWakeMinimum() return OSM.WAKE_MIN_S end
-function Server.pullThenDrain(...) return OSM.pullThenDrain(...) end
-function Server.readFromHere(...) return OSM.readFromHere(...) end
-function Server.waitOutbox(...) return Sync.waitOutbox(...) end
-function Server.clearPullDebounce(...) return Sync.clearPullDebounce(...) end
 function Server.countStorage(...) if OC and OC.storageCount then return OC.storageCount(...) end end
 function Server.refreshCovers(...) if Mirror and Mirror.coverPass then return Mirror.coverPass(...) end end
-function Server.positionModeChanged(...) if OSM and OSM.modeChanged then return OSM.modeChanged(...) end end
 function Server.reportRecommended(...) if Recommendations then return Recommendations.report(...) end end
 function Server.applyRecommended(...) if Recommendations then return Recommendations.applyChoices(...) end end
 function Server.capabilitiesLost(...) if Recommendations then return Recommendations.pass("caps lost",nil,true) end end
@@ -158,13 +121,14 @@ function Server.quietLegacy(quiet)
     quiet(OC,{"watchChecks","applyEvents","landed","redraw_soon","redraw","storageCount","storageCounted","rechecked"})
     quiet(Mirror,{"tick","kick","poll","ran","finish","coverPass"})
     quiet(LF,{"quiet","paintTiles","quietSwitch"})
-    quiet(OSM,{"pause","pullThenDrain"})
 end
 function Server.timeLegacy(wrap)
-    for _,name in ipairs({"OSM","OC","LF","Sync","Mirror"}) do
+    for _,name in ipairs({"OC","LF","Mirror"}) do
         wrap(getfenv(1)[name],name)
     end
 end
+
+-- Temporary non-transport compatibility for the finish adapter while its parallel cutover lands.
 
 -- Covers have one owner even with legacy catalog caching disabled. Never call the upstream
 -- downloader: these low-level methods can be reached inside an upstream subprocess.
@@ -402,43 +366,8 @@ function Server.installCatalogRuntime()
         Server.catalogChanged({owner=LibraryAdapter.owner()})
         if Library.copiesTick then pcall(Library.copiesTick,"catalog refresh") end
     end
-    LibraryAdapter.syncCurrent=Server.syncCurrent
     Library.watchEvents()
 end
-function Server.syncCurrent(done)
-    local ui = liveUI()
-    local p = serverPlugin(ui)
-    if not (p and ui and ui.document and hasHandler(p, "BookOrbitSyncBook")) then
-        done(false, "Sync unavailable")
-        return false
-    end
-    local document = ui.document
-    Wifi.acquire("reader-panel")
-    Net.up(p, {reason="reader-panel", cap=20, need_server=true}, function(ok)
-        if not ok then
-            Wifi.release("reader-panel")
-            done(false, "Offline · will sync when connected")
-            return
-        end
-        if liveUI() ~= ui or ui.document ~= document then
-            Wifi.release("reader-panel")
-            done(false, "Book closed · your place stays saved")
-            return
-        end
-        local completed = false
-        local function finish(err)
-            if completed then return end
-            completed = true
-            Wifi.release("reader-panel")
-            done(err == nil, err and "Sync failed · your place stays saved" or "Synced")
-        end
-        pluginEvent(ui, p, "BookOrbitSyncBook", {quiet=true, on_done=finish})
-        UIManager:scheduleIn(30, function() finish("timeout") end)
-    end)
-    return true
-end
-
-
 -- Compatibility shapes are assembled from BookSync display records, never HTTP/JSON. The
 -- native compatibility shapes use identifiers only here; catalog queries are worker-owned.
 function Server.installCatalogApi(Api,Catalog)
@@ -499,11 +428,8 @@ function Server.installCatalogApi(Api,Catalog)
         end
         -- A legacy Catalog.fetch closure can only use local catalog reads. Prevent another
         -- operation in that closure from performing transport synchronously on the UI thread.
-        if Compat.callable(Api.download) then
-            wrap(Api,"download",function(stock) return function(self,...)
-                if Server.catalog_paint then return nil,"cancelled" end
-                return stock(self,...)
-            end end,"catalog-local")
+        for _,name in ipairs({"download","downloadBlocking"}) do
+            if Compat.callable(Api[name]) then Api[name]=function() return nil,"companion_owned" end end
         end
         if Compat.callable(Api.request) then
             wrap(Api,"request",function(stock) return function(self,...)
@@ -514,6 +440,19 @@ function Server.installCatalogApi(Api,Catalog)
     end
     if type(Catalog)=="table" and not Catalog._booksync_catalog then
         Catalog._booksync_catalog=true
+        if Compat.callable(Catalog.downloadFile) then
+            Catalog.downloadFile=function(self,path,detail,file,reporter)
+                local generation=self.download_generation
+                if Compat.callable(self.nextDownloadGeneration) then generation=self:nextDownloadGeneration() end
+                return Library.catalogDownload(detail.id,path,file and file.id,function(result)
+                    if self.catalog_closed or self.download_generation~=generation then return end
+                    if reporter and reporter.finished then reporter.finished(not result.error,result.error,result.local_path,not result.error)
+                    elseif result.error and Compat.callable(self.showWriteError) then self:showWriteError(result.error)
+                    elseif Compat.callable(self.refreshCurrent) then self:refreshCurrent() end
+                end)
+            end
+        end
+
         if Compat.callable(Catalog.initialDashboardContext) then
             wrap(Catalog,"initialDashboardContext",function(stock) return function(self,...)
                 local before=Library.catalog_opening;Library.catalog_opening=true
@@ -594,7 +533,19 @@ function Server.installCatalogApi(Api,Catalog)
     return true
 end
 
-Library={connectorReady=function() Server.installCatalogRuntime(); OC.install() end}
+Library={connectorReady=function() Server.installCatalogRuntime(); OC.install() end,
+    bindLifecycle=function()
+    LibraryAdapter.idle=Server.readerIdle
+    LibraryAdapter.networkRestored=function() return Library.refreshCatalog("resume",false) end
+    LibraryAdapter.backgroundBusy=Server.cacheBusy
+    LibraryAdapter.backgroundCommand=function(op,...)
+        local hooks={ ["views.install"]=Server.installGrouping,["cache.resume"]=LibraryAdapter.networkRestored,
+            ["storage.recount"]=Server.countStorage,["covers.refresh"]=function() return Library.refreshCatalog("covers",false) end,
+            ["preferences.report"]=Server.reportRecommended,["preferences.apply"]=Server.applyRecommended,
+            ["capabilities.lost"]=Server.capabilitiesLost,["capabilities.gained"]=Server.capabilitiesGained }
+        return assert(hooks[op],"Unknown lifecycle operation")(...)
+    end
+    end}
 
 function Server.catalogChanged(event)
     local p=serverPlugin(liveUI())
@@ -639,12 +590,18 @@ function Server.bindCatalogActions()
     EOB=FinishUI -- temporary compatibility for F12-Q's lifecycle/push holds; no second outbox
     Library.nativeReader=function(ui)
         local p=ui and ui.bookorbit
-        if not (p and ui.document and ui.doc_settings) then return end
-        local ok,digest=pcall(p.getDocumentDigest,p);if not ok or type(digest)~="string" then return end
+        if not (ui and ui.document and ui.doc_settings) then return end
+        local digest=ui.doc_settings:readSetting("partial_md5_checksum")
+        if type(digest)~="string" and p and type(p.getDocumentDigest)=="function" then
+            local ok,value=pcall(p.getDocumentDigest,p);if ok then digest=value end
+        end
+        if type(digest)~="string" then return end
         local state=Server.loaded("state_manager")
         local b=state and state.getBook and state.getBook(digest)
         local pct=LibraryAdapter.readerPosition(ui.document.file)
-        return {digest=digest,file=ui.document.file,key=b and b.bookId and true,book_id=b and b.bookId,
+        local prepared=FinishUI.reader_key
+        if not prepared or prepared.path~=ui.document.file or prepared.document~=digest or prepared.owner~=LibraryAdapter.owner() then prepared=nil end
+        return {digest=digest,file=ui.document.file,key=prepared and prepared.key or b and b.bookId and true,book_id=prepared and prepared.reference or b and b.bookId,
             percentage=pct,summary=ui.doc_settings:readSetting("summary") or {},doc_settings=ui.doc_settings,plugin=p}
     end
     Library.noteReaderMark=function(b) if LocalState then LocalState.noteMark(b,b.summary.status) end end
@@ -658,59 +615,28 @@ function Server.bindCatalogActions()
         local defaults=p.default_settings
         if type(defaults)~="table" then return {available=false,reason="Connector defaults unavailable"} end
         if item.key=="catalog_auto_open" and not Compat.settable(p.settings,item.key,item.ours) then return {available=false,reason="Connector home setting unavailable"} end
-        if item.key=="auto_sync" and not hasHandler(p,Server.events.auto) then return {available=false,reason="Connector sync action unavailable"} end
         local current=p.settings[item.key]
-        local saved=OSM and OSM.savedPluginSetting and OSM.savedPluginSetting(item.key)
-        if saved~=nil then current=saved.value end
+        if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and p.settings.sync_forward==3 and p.settings.sync_backward==3 and
+            (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then current=S.osm_saved_plugin[item.key] end
         return {available=true,current=current,default=defaults[item.key]}
     end
     Library.writeSetting=function(item,value)
         local p=serverPlugin(liveUI());if not p then return false end
-        if OSM and OSM.setSavedPluginSetting and OSM.setSavedPluginSetting(item.key,value) then G_reader_settings:flush();return true end
-        if item.key=="auto_sync" then
-            if (p.settings.auto_sync==true)~=(value==true) then pluginEvent(liveUI(),p,Server.events.auto,value==true,true,true) end
-        else p.settings[item.key]=value end
+        if type(S.osm_saved_plugin)=="table" and next(S.osm_saved_plugin) and p.settings.sync_forward==3 and p.settings.sync_backward==3 and
+            (item.key=="sync_forward" or item.key=="sync_backward" or item.key=="auto_sync") then
+            S.osm_saved_plugin[item.key]=value;saveSettings();return true
+        end
+        p.settings[item.key]=value
         G_reader_settings:flush();return true
     end
-    Library.installFinishHooks=function(p)
-        local cls=getmetatable(p) and getmetatable(p).__index
-        if type(cls)~="table" then return end
-        if Compat.callable(cls.enqueueLifecycleSnapshot) then wrap(cls,"enqueueLifecycleSnapshot",function(stock) return function(self,snap,reason)
-            if type(snap)=="table" and FinishUI.hold(snap.digest,snap.percentage,snap.status) then snap.percentage,snap.progress=nil,nil end
-            if LocalState and type(snap)=="table" then pcall(LocalState.noteSnapshot,snap) end
-            return stock(self,snap,reason)
-        end end,"finish") end
-        for _,name in ipairs({"updateProgress","pushProgressAfterBookSync"}) do
-            if Compat.callable(cls[name]) then wrap(cls,name,function(stock) return function(self,...)
-                local ui=self.ui;local digest=ui and FinishUI.page_digests[ui] and FinishUI.page_digests[ui].digest
-                local summary=ui and ui.doc_settings and ui.doc_settings:readSetting("summary") or {}
-                if digest and FinishUI.hold(digest,LibraryAdapter.readerPosition(ui.document.file),summary.status) then return end
-                return stock(self,...)
-            end end,"finish") end
-        end
-    end
-    LibraryAdapter.finishCurrent=function(done)
-        return Server.syncCurrent(function(ok,why)
-            if not ok then return done(false,why) end
-            local p=serverPlugin(liveUI())
-            if not p then return done(false,"Book closed") end
-            Sync.waitOutbox(p,20,function(drained,reason) done(drained,reason) end)
-        end)
-    end
-    local stock=Sync.waitOutbox
-    if not Server.finish_wait_bound then
-        Server.finish_wait_bound=true
-        Sync.waitOutbox=function(p,cap,done) return stock(p,cap,function(ok,why,elapsed)
-            if not ok then return done(ok,why,elapsed) end
-            FinishUI.drain(p,false,function() done(ok,why,elapsed) end)
-        end) end
-    end
+
 end
 function Server.applyCatalogEvent(ev)
     if ev.owner~=LibraryAdapter.owner() then return end
     local sm=Server.loaded("state_manager")
     if ev.kind=="copy.identity" and sm and sm.repairFileIdentity then
         sm.repairFileIdentity(ev.path,ev.before,ev.after)
+        if ev.reference and ev.file_reference and sm.linkFile then sm.linkFile(ev.after,ev.file_reference,ev.reference,ev.path) end
         Library.catalogAction("copies.ack",{token=ev.token})
     elseif ev.kind=="download.saved" and sm and sm.linkFile then
         sm.linkFile(ev.document,ev.file_reference,ev.reference,ev.path)

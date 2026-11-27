@@ -124,7 +124,15 @@ for _,name in ipairs({"onCloseWidget","onSuspend","onReaderReady","onPageUpdate"
         if name=="onCloseWidget" or name=="onSuspend" then FinishUI.onLeave(self.ui) end
         if name=="onCloseWidget" then FinishUI.closeSheet() end
         if name=="onReaderReady" then
-            local b=book(self.ui);if b then FinishUI.page_digests[self.ui]={file=b.file,digest=b.digest};dispatch("finish.prepare",b) end
+            local b=book(self.ui)
+            FinishUI.reader_key=nil
+            if b then
+                FinishUI.page_digests[self.ui]={file=b.file,digest=b.digest}
+                local ui=self.ui
+                dispatch("finish.prepare",b,{local_only=true},function(result)
+                    if self.ui==ui and ui.document and ui.document.file==b.file and not result.error then FinishUI.reader_key=result end
+                end)
+            end
         elseif name=="onPageUpdate" then FinishUI.onPage(self.ui,...) end
         return stock(self,...)
     end

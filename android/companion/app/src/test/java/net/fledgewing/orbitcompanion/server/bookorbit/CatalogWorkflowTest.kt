@@ -18,6 +18,7 @@ class CatalogWorkflowTest {
         val hash=File(external,"sample").let { it.writeBytes(replacement);CatalogWorkflow.partial(it).also { _ -> it.delete() } }
         val worker=CacheWorker(root,{_,_,_,_->error("unexpected legacy HTTP")},log={},openSql={JdbcSql(it)},bookRoots=listOf(external))
         var reading=false;var current=true;var code=200;var downloadOk=true;var readStatus="unread";var clock=100L
+        var fileReference=70L
         val calls=mutableListOf<String>()
         val transport=object:BookOrbitServerAdapter.ConnectorTransport {
             override fun request(server:String,path:String,method:String,body:Map<String,Any?>?,headers:Map<String,String>):BookOrbitAccount.Reply {
@@ -30,7 +31,7 @@ class CatalogWorkflowTest {
             }
         }
         fun detail()=mapOf("id" to 7L,"title" to "A synthetic book","authors" to listOf("Example writer"),"readStatus" to readStatus,
-            "files" to listOf(mapOf("id" to 70L,"format" to "EPUB","role" to "primary","fileHash" to hash,"devicePath" to "Fiction/Next.epub","downloadVariant" to "audioless_epub","selection" to "revision")))
+            "files" to listOf(mapOf("id" to fileReference,"format" to "EPUB","role" to "primary","fileHash" to hash,"devicePath" to "Fiction/Next.epub","downloadVariant" to "audioless_epub","selection" to "revision")))
         init {
             worker.store.own(owner)
             File(root.parentFile,"bookorbit_sync_state.lua").writeBytes(LuaValue.encode(mapOf("account_identity" to "https://books.example|reader",
@@ -44,6 +45,25 @@ class CatalogWorkflowTest {
         fun events()=File(root,"events").listFiles().orEmpty().filter { it.extension=="lua" }.mapNotNull { LuaValue.parse(it.readBytes()) as? Map<*,*> }
         fun mark()=run("finish.mark",mapOf("path" to old.path,"document" to CatalogWorkflow.partial(old),"complete" to true,"percentage" to 1.0))
         override fun close() { worker.store.close();external.deleteRecursively() }
+    }
+    @Test fun ownedSyncMatchSurvivesNativeLedgerRefreshAndPreparesOfflineFinish()=World().use { w ->
+        val matched=File(w.external,"books/matched.epub").apply { writeText("matched bytes") }
+        val hash=CatalogWorkflow.partial(matched)
+        w.run("local.observe",mapOf("reference" to 8L,"file_reference" to 80L,"path" to matched.path,"document" to hash))
+        w.run("initialize")
+        w.reading=true
+        val prepared=w.run("finish.prepare",mapOf("path" to matched.path,"document" to hash,"local_only" to true))
+        assertEquals(BookOrbitLibrary.key(w.owner,"book",8),prepared["key"])
+        assertEquals(8L,prepared["reference"]);assertEquals(1,prepared["row_count"])
+        assertTrue(LuaValue.encode(prepared).size<=16384);assertTrue(w.calls.isEmpty())
+        assertTrue(w.events().none { it["kind"]=="download.saved" })
+    }
+    @Test fun ownedSyncObservationRejectsAnOutsideFile()=World().use { w ->
+        val outside=Files.createTempFile("catalog-outside",".epub").toFile()
+        try {
+            try { w.run("local.observe",mapOf("reference" to 8L,"path" to outside.path,"document" to CatalogWorkflow.partial(outside)));fail("outside path") }
+            catch(_:IllegalArgumentException) { }
+        } finally { outside.delete() }
     }
     @Test fun nativeRecommendationLabelsAreProjectedAndAllEightRowsFitTheBudget() {
         val definitions=RecommendedSettings.items
@@ -114,6 +134,14 @@ class CatalogWorkflowTest {
         val counts=LuaValue.parse(snapshot) as Map<*,*>;assertEquals(1L,counts["pending"]);assertEquals(1L,counts["row_count"])
         w.run("copies.ack",mapOf("token" to identity["token"]));assertTrue(w.copies().isEmpty())
     }
+    @Test fun replacementToAnotherPrimaryFilePublishesTheNewHashAndFileReference()=World().use { w ->
+        w.fileReference=71L;w.worker.store.putDetail(7,w.detail(),101)
+        w.run("copies.check")
+        val event=w.events().single { it["kind"]=="copy.identity" }
+        assertEquals(71L,event["file_reference"])
+        val local=BookOrbitLibrary.localEntries(w.worker.store,w.owner)!!.single { it["path"]==w.old.path }
+        assertEquals(w.hash,local["md5"]);assertEquals(71L,local["file_id"])
+    }
     @Test fun failedTransferKeepsOldBytesAndDurableQueue()=World().use { w ->
         val before=w.old.readBytes();w.downloadOk=false;w.run("copies.check")
         assertArrayEquals(before,w.old.readBytes());assertEquals(1,w.copies().size)
@@ -176,6 +204,18 @@ class CatalogWorkflowTest {
         w.run("finish.download",mapOf("key" to key,"later" to true));assertTrue(w.calls.isEmpty())
         w.run("finish.drain");assertTrue(File(w.external,"books/Fiction/Next.epub").isFile)
         assertTrue(w.events().any { it["kind"]=="download.saved" });assertTrue((w.state()["downloads"] as? Map<*,*>).orEmpty().isEmpty())
+    }
+    @Test fun explicitNativeCatalogDestinationUsesNeutralReferenceAndPublishesLocalLedgerImmediately()=World().use { w ->
+        val target=File(w.external,"books/chosen.epub")
+        val result=w.run("finish.download",mapOf("reference" to 7L,"destination" to target.path,"file_reference" to 70L))
+        assertEquals(target.path,result["local_path"]);assertArrayEquals(w.replacement,target.readBytes())
+        assertEquals(target.path,BookOrbitLibrary.localPaths(w.worker.store,w.owner)!![7L])
+        w.run("finish.download",mapOf("reference" to 7L,"destination" to target.path,"file_reference" to 70L))
+        assertEquals(1,w.calls.count { it.startsWith("DOWNLOAD") })
+        // The native event reader can be delayed by foreground reading or a process restart.
+        w.run("initialize")
+        assertTrue(BookOrbitLibrary.localEntries(w.worker.store,w.owner)!!.any { it["path"]==target.path })
+        assertTrue(w.events().any { it["kind"]=="download.saved" && it["path"]==target.path })
     }
     @Test fun finishedSheetReadsOnlyBoundedSnapshotWithNextAndSuggestion()=World().use { w ->
         w.run("initialize")
