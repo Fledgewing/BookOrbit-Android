@@ -11,7 +11,7 @@
 #   --yes     don't ask before flashing
 #
 # It writes only two regions, both read from the reader's own partition table (and checked
-# against the table the build used, .parttable in the artifact): the app image to the first OTA
+# for compatibility with the build's .parttable in the artifact): the app image to the first OTA
 # slot (ota_0, "app0"), and the otadata region reset to blank, so the bootloader starts ota_0.
 # The same as a PlatformIO upload. NVS (Wi-Fi, Tailscale keys, settings), the other app slot,
 # spiffs, coredump, the bootloader, the partition table and the SD card are not touched.
@@ -106,6 +106,41 @@ parse_parttable() {
 
 # Parsed table (stdin), type and subtype -> "<offset> <size> <label>" of the first match.
 part_find() { awk -v t="$1" -v s="$2" '$1 == t && $2 == s { print $3, $4, $5; exit }'; }
+
+# Only these partitions are relied on for an app-only install. Other slots/data
+# may differ (factory versus an older USB install); they are never written.
+compatible_tables() { # parsed reader table, parsed build table, image bytes
+    local kind subtype kind_sub device built off size label
+    for kind_sub in "1 2" "1 0" "0 16"; do
+        read -r kind subtype <<<"$kind_sub"
+        device=$(part_find "$kind" "$subtype" <<<"$1")
+        built=$(part_find "$kind" "$subtype" <<<"$2")
+        [[ -n $device && -n $built ]] || return 1
+        read -r off size label <<<"$device"
+        # Compare offsets; preserve NVS and erase exactly the expected otadata.
+        [[ $off == "${built%% *}" ]] || return 1
+        if [[ $kind == 1 ]]; then
+            [[ $size == "$(awk '{print $2}' <<<"$built")" ]] || return 1
+        else
+            (($3 <= size)) || return 1
+        fi
+    done
+}
+
+# Reject duplicate critical entries, overlapping regions, unaligned erase
+# boundaries and out-of-flash ranges before planning any writes.
+valid_device_table() {
+    awk '
+      { if (NF != 5 || $3 < 36864 || $4 <= 0 || $3 % 4096 || $4 % 4096 ||
+            $3 + $4 > 16777216) bad=1
+        for (i=1; i<NR; i++) if ($3 < ends[i] && $3+$4 > starts[i]) bad=1
+        starts[NR]=$3; ends[NR]=$3+$4
+        if ($1==1 && $2==2) {n++; if ($3!=36864 || $4!=20480) bad=1}
+        if ($1==1 && $2==0) {o++; if ($3!=57344 || $4!=8192) bad=1}
+        if ($1==0 && $2==16) {a++; if ($3!=65536) bad=1}
+      }
+      END {exit (bad || n!=1 || o!=1 || a!=1)}'
+}
 
 hex() { printf '0x%x' "$1"; }
 
@@ -214,14 +249,16 @@ read_device() {
     fi
     say "Checked: the reader is an $FOUND"
     DEVICE_TABLE=$(parse_parttable "$WORK/device.parttable") || die "no partition table at $PT_OFFSET on the reader; flash it fully once instead"
+    valid_device_table <<<"$DEVICE_TABLE" || die "unsafe or incompatible reader partition table; nothing written"
+    BIN_SIZE=$(wc -c <"$BIN" | tr -d ' ')
     if [[ -n $BUILD_PT ]]; then
         local built
         built=$(parse_parttable "$BUILD_PT") || die "$(basename "$BUILD_PT") is not a partition table"
-        [[ $built == "$DEVICE_TABLE" ]] || {
+        compatible_tables "$DEVICE_TABLE" "$built" "$BIN_SIZE" || {
             printf 'reader:\n%s\nbuild:\n%s\n' "$DEVICE_TABLE" "$built" >&2
-            die "the reader's partition table differs from the one this build is for; this script never rewrites it"
+            die "the reader's partition table is incompatible with this build; this script never rewrites it"
         }
-        say "Checked: the reader's partition table is the one the build used"
+        say "Checked: the reader's partition table is compatible with the build"
     else
         say "Note: no .parttable beside the image; using the reader's own table"
     fi

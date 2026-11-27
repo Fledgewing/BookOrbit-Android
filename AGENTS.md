@@ -159,7 +159,7 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   build works too), then `tools/sideload-xteink.sh <run id> --port /dev/cu.usbmodemXXXX --env
   x4-pro|x4|x3`. It checks the image's SHA-256 and chip, refuses a reader whose chip doesn't
   match `--env` or a port another program holds (it stops nothing), reads the offsets from the
-  reader's partition table (checked against the build's `.parttable`), writes the image to
+  reader's partition table (checked for compatibility with the build's `.parttable`), writes the image to
   `ota_0` and blanks `otadata` so `ota_0` boots. NVS (Wi-Fi, Tailscale keys, settings) and the
   SD card are untouched. Through 0.11, the test build's fourth version number is below every later run's.
   From 0.12, its BookSync identity is <version core>-0.test.<run>, below preview/rc/stable,

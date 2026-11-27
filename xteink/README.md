@@ -91,6 +91,8 @@ The rule is `scripts/upstream-line.sh publish`, tested by `test/upstream_line_te
 | X3 / X4 | `default` | ESP32-C3, no PSRAM. Built with English UI only to make room; smaller MicroLink buffers. |
 
 The partition table is never changed (that can only be done over USB).
+Builds target the [factory layouts](partitions.md); app-only sideloads also accept compatible
+older USB layouts when the image fits the reader’s own app0 slot.
 
 ### X3 (v2.0) differences
 

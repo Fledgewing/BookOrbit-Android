@@ -303,13 +303,10 @@ jobs:
       - name: Flash budget (99.5% of the app slot)
         run: |
           set -euo pipefail
-          line="$(grep -a 'Flash: \[' build.log | tail -1)"
-          used="$(printf '%s' "$line" | sed -E 's/.*used ([0-9]+) bytes from ([0-9]+) bytes.*/\1/')"
-          slot="$(printf '%s' "$line" | sed -E 's/.*used ([0-9]+) bytes from ([0-9]+) bytes.*/\2/')"
-          pct="$(awk -v u="$used" -v s="$slot" 'BEGIN { printf "%.2f", 100 * u / s }')"
-          echo "${{ matrix.line.upstream_tag }} ${{ matrix.environment }}: $used of $slot bytes ($pct%), $((slot * 995 / 1000 - used)) bytes under the 99.5% gate" \
+          python3 orbify/xteink/scripts/check-flash-budget.py \
+            "upstream/.pio/build/${{ matrix.environment }}/firmware.bin" \
+            "upstream/.pio/build/${{ matrix.environment }}/partitions.bin" \
             | tee -a "$GITHUB_STEP_SUMMARY"
-          [ "$((used * 1000))" -le "$((slot * 995))" ] || { echo "::error::${{ matrix.environment }} uses $pct% of the app slot (gate 99.5%)"; exit 1; }
 
       # After the build: BookSync's tests compile against the ArduinoJson the build fetched.
       - name: Host tests

@@ -111,10 +111,36 @@ check "run number must be a number" error "$(printf 'v0.1.0\n' | "$tools/android
     check "ota_1 from the table" "6619136 6553600 app1" "$(part_find 0 17 <<<"$table")"
     head -c 3072 /dev/zero | LC_ALL=C tr '\0' '\377' >"$tmp/blank.bin"
     check "blank flash: no table" none "$(parse_parttable "$tmp/blank.bin" || echo none)"
+    s3=$'1 2 36864 20480 nvs\n1 0 57344 8192 otadata\n0 16 65536 8257536 app0\n0 17 8323072 8257536 app1\n1 130 16580608 81920 spiffs\n1 3 16662528 114688 coredump'
+    check "factory S3 table valid" ok "$(valid_device_table <<<"$s3" && echo ok)"
+    check "old C3 table valid" ok "$(valid_device_table <<<"$table" && echo ok)"
+    check "factory S3 accepts old build" ok "$(compatible_tables "$s3" "$table" 6474672 && echo ok)"
+    check "old USB table accepts fitting S3 build" ok "$(compatible_tables "$table" "$s3" 6474672 && echo ok)"
+    check "slot exact fit" ok "$(compatible_tables "$table" "$s3" 6553600 && echo ok)"
+    check "image too big for reader" bad "$(compatible_tables "$table" "$s3" 6553601 || echo bad)"
+    for mutation in 's/36864/40960/' 's/57344/61440/' 's/65536 /131072 /' 's/8192/4096/'; do
+        changed=$(sed "$mutation" <<<"$s3")
+        check "incompatible offset/erase region: $mutation" bad "$(compatible_tables "$changed" "$table" 100 || echo bad)"
+        check "unsafe layout: $mutation" bad "$(valid_device_table <<<"$changed" || echo bad)"
+    done
+    check "missing nvs" bad "$(compatible_tables "$(tail -n +2 <<<"$s3")" "$table" 100 || echo bad)"
+    check "duplicate partition" bad "$(valid_device_table <<<"$s3"$'\n1 0 57344 8192 duplicate' || echo bad)"
+    check "overlapping data" bad "$(valid_device_table <<<"$s3"$'\n1 130 65536 4096 overlap' || echo bad)"
+    check "missing app" bad "$(valid_device_table <<<"$(sed '/^0 16 /d' <<<"$s3")" || echo bad)"
+
+    # Exercise the real read/validate path with an offline esptool stub.
+    port_free() { :; }
+    # shellcheck disable=SC2329 # invoked through ESPTOOL by read_device
+    esptool_mock() { cp "$tmp/table.bin" "$WORK/device.parttable"; echo 'Chip is ESP32-S3'; }
+    ESPTOOL=esptool_mock ESPTOOL_MAJOR=4 CHIP=ESP32-S3 PORT=unused WORK="$tmp"
+    BIN="$tmp/s3.bin" BUILD_PT="$tmp/table.bin"
+    check "read_device accepts compatible table without writes" ok "$(read_device >/dev/null && echo ok)"
     check "hex" 0x10000 "$(hex 65536)"
     check "macOS port aliases" $'/dev/cu.usbmodem101\n/dev/tty.usbmodem101' "$(port_aliases /dev/cu.usbmodem101)"
     check "Linux port" /dev/ttyACM0 "$(port_aliases /dev/ttyACM0)"
 )
+
+python3 "$tools/test/test-flash-budget.py"
 
 passed=$(wc -l <"$tmp/passes" | tr -d ' ')
 failed=$(wc -l <"$tmp/fails" | tr -d ' ')
