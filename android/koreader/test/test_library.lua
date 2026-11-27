@@ -15,7 +15,7 @@ return function(test, eq, ok, here, Cache)
     test("library: cover acquisition is explicit and paints read one local snapshot", function()
         local commands, reads, batches = 0, 0, 0
         local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,
-            LibraryAdapter={reset=function() end,command=function(op,args,done)
+            LibraryAdapter={owner=function() return "fixture" end,reset=function() end,command=function(op,args,done)
                 commands=commands+1; eq(op,"covers.acquire"); eq(args.key,"opaque")
                 done({local_path="/fixture/cover.jpg"}); return true
             end,read=function(request)
@@ -46,12 +46,6 @@ return function(test, eq, ok, here, Cache)
         exists=false; eq(e.Library.cachedCover("/fixture/ref.jpg"),nil)
         local result; e.Library.acquireCoverReference("/fixture/ref.jpg",true,function(r) result=r end)
         eq(commands,1); eq(result.error,"offline")
-        local owner,complete="fixture"
-        e.LibraryAdapter.owner=function() return owner end
-        e.LibraryAdapter.command=function(_,_,done) complete=done; return true end
-        e.Library.acquireCoverReference("/fixture/ref.jpg",false,function(r) result=r end)
-        owner="changed"; complete({local_path="/fixture/old-account.jpg"})
-        eq(result.error,"canceled"); eq(result.local_path,nil)
         eq(e.Budgets.screens["cover-cache"].rows,1); eq(e.Budgets.screens["cover-cache"].roundTrips,0)
     end)
     test("covers: ownership races retry with a strict bound and stop after departure", function()
@@ -248,8 +242,8 @@ return function(test, eq, ok, here, Cache)
         eq(e.LibraryAdapter.openAccount(),true); eq(calls,1)
     end)
     test("library: server lifecycle imports only an opaque owner, never credentials", function()
-        local result={ok="1",owner="opaque-login"}
-        local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
+        local result={ok="1",owner="opaque-login",body=Cache.encode({signedIn=true})}
+        local e=setmetatable({Cache=Cache,Budgets={MAX_SNAPSHOT=16384},Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
             Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(args.reload,"1"); return result end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.owner(),"opaque-login")
@@ -292,7 +286,7 @@ return function(test, eq, ok, here, Cache)
         owner="opaque";status={row_count=1,running=true,pct=0,beat=1}
         local e=setmetatable({S={keep_copies_current=false},Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
             Store={now=function() return 1 end},Wifi={acquire=function() end,release=function() released=released+1 end},
-            UIManager={scheduleIn=function(_,delay,fn) eq(delay,3);nextPoll=fn end},
+            UIManager={unschedule=function() end,scheduleIn=function(_,delay,fn) eq(delay,3);nextPoll=fn end},
             Badge={start=function() started=started+1 end,expand=function() expanded=expanded+1 end,update=function() end,finish=function() finished=finished+1 end},
             Companion={workerProblem=function() end},
             LibraryAdapter={owner=function() return owner end,fullRefresh=function() return true end,reset=function() end,

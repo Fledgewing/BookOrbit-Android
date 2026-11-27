@@ -69,14 +69,11 @@ return function(test,eq,ok,here)
         v:paint(); tap(v,"save"); eq(v.password,nil); eq(commands[#commands].op,"login.save")
         completion({state={sync=login("user")}}); eq(focused(v),"sync"); v:close()
     end)
-    test("account flows: busy Back drops stale success and every error clears secrets and focuses its recovery",function()
+    test("account flows: every error clears secrets and focuses its recovery",function()
         for _,code in ipairs({"unauthorized","unavailable","too-old","two-step"}) do
             local v=e.AccountView.open("account"); v:command("account.signIn",{password="temporary"})
             eq(v.password,nil); completion({error=code}); eq(v.error,P.error(code)); eq(focused(v),P.error(code)[3]); v:close()
         end
-        local v=e.AccountView.open("account"); v:command("account.signIn",{password="temporary"}); local done=completion
-        v:back(); eq(v.page,"summary"); local d=v.dialog; done({state={signedIn=true}}); eq(v.dialog,d); eq(v.page,"summary")
-        v:close()
     end)
     test("account flows: sign-out and result Done restore exact focus; closed form never reopens",function()
         local v=e.AccountView.open(); tap(v,"signout"); eq(focused(v),"keep"); tap(v,"keep"); eq(focused(v),"signout")

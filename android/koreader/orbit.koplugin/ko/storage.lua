@@ -159,7 +159,7 @@ function StorageUI.create(mode,onCollection,onReturn)
     function Page:run(op,args,folder)
         if self.busy then return end
         self.busy=true; self:draw(); UIManager:setDirty(self,"ui")
-        Library.storageCommand(op,args,function(result)
+        local accepted,retire=Library.storageCommand(op,args,function(result)
             if self.closed then return end
             self.busy=false
             result=result or {error="Storage unavailable"}
@@ -169,6 +169,7 @@ function StorageUI.create(mode,onCollection,onReturn)
             else self.pending_result=result end
             Library.retry(); Library.changed({kind="storage"})
         end)
+        self.pending_cancel=retire
     end
     function Page:moveFocus(delta)
         local old=self.controls[self.focus]
@@ -196,6 +197,7 @@ function StorageUI.create(mode,onCollection,onReturn)
     function Page:onSelect() self.controls[self.focus].callback(); return true end
     function Page:onCloseWidget()
         self.closed=true
+        if self.pending_cancel then self.pending_cancel();self.pending_cancel=nil end
         if self.refresh then UIManager:unschedule(self.refresh); self.refresh=nil end
         if StorageUI.active==self then StorageUI.active=nil end
     end

@@ -74,7 +74,9 @@ end
 -- A successful transport drain may retain closed-sidecar applications. Those do not
 -- delay the finish; transport errors do. SyncOwner remains the sole position writer.
 function LibraryAdapter.finishCurrent(done)
+    local owner,epoch=LibraryAdapter.owner(),LibraryAdapter.owner_epoch
     return ReadingSync.run("manual",function(ok,why)
+        if owner~=LibraryAdapter.owner() or epoch~=LibraryAdapter.owner_epoch then return done(false,"canceled") end
         if why then return done(false,why) end
         return Library.catalogAction("finish.drain",{manual=true},function(result) done(not result.error,result.error) end)
     end)
@@ -108,53 +110,108 @@ function LibraryAdapter.openAccount()
     local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE..".call.ACCOUNT_OPEN",{})
     return result and result.ok=="1"
 end
-function LibraryAdapter.accountReturned(attempt)
-    if Companion.workerProblem() then return false end
-    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_STATE", {reload=attempt==nil and "1" or "0"})
-    if result and result.pending == "1" and (attempt or 0) < 3 then
-        UIManager:scheduleIn(1, function() LibraryAdapter.accountReturned((attempt or 0)+1) end)
+-- Current-state reloads share one ordered lifecycle chain. A newer reload retires the
+-- older retry, but inherits its waiters; stored command replies never publish identity.
+function LibraryAdapter.accountReturned(attempt,epoch,done)
+    if not epoch then
+        LibraryAdapter.account_epoch=(LibraryAdapter.account_epoch or 0)+1
+        epoch=LibraryAdapter.account_epoch
+        if LibraryAdapter.account_retry then UIManager:unschedule(LibraryAdapter.account_retry) end
+        LibraryAdapter.account_retry=nil
+    end
+    LibraryAdapter.account_waiters=LibraryAdapter.account_waiters or {}
+    if done then table.insert(LibraryAdapter.account_waiters,done) end
+    if epoch~=LibraryAdapter.account_epoch then return false end
+    local result
+    if not Companion.workerProblem() then
+        result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SERVER_STATE",{reload=attempt==nil and "1" or "0"})
+    end
+    if result and result.pending=="1" and (attempt or 0)<3 then
+        LibraryAdapter.account_retry=function() LibraryAdapter.accountReturned((attempt or 0)+1,epoch) end
+        UIManager:scheduleIn(1,LibraryAdapter.account_retry)
         return false
     end
-    if not result or result.ok ~= "1" then return false end
-    local body=result.body
-    if type(body)=="string" and #body<=Budgets.MAX_SNAPSHOT then
-        LibraryAdapter.account_snapshot=Cache.decode(body)
-        LibraryAdapter.account_bytes=#body
+    LibraryAdapter.account_retry=nil
+    local changed=false
+    local body=result and result.ok=="1" and result.pending~="1" and result.body
+    local state=type(body)=="string" and #body<=Budgets.MAX_SNAPSHOT and Cache.decode(body) or nil
+    if type(state)=="table" then
+        LibraryAdapter.account_snapshot,LibraryAdapter.account_bytes=state,#body
     end
-    local changed = LibraryAdapter.managed_owner ~= result.owner
-    LibraryAdapter.managed_owner = result.owner
-    if changed then LibraryAdapter.reset() end
+    if type(state)=="table" then
+        changed=LibraryAdapter.managed_owner~=result.owner
+        LibraryAdapter.managed_owner=result.owner
+        if changed then
+            LibraryAdapter.owner_epoch=(LibraryAdapter.owner_epoch or 0)+1
+            LibraryAdapter.reset()
+        end
+    end
+    local waiters=LibraryAdapter.account_waiters
+    LibraryAdapter.account_waiters={}
+    for _,waiter in ipairs(waiters) do waiter(type(state)=="table" and state or nil) end
+    if type(state)=="table" then Library.changed({kind="account"}) end
     return changed
 end
 
--- Explicit dispatched commands only; paint reads continue to use the owned SQLite windows.
-function LibraryAdapter.command(op, args, callback)
-    if Companion.workerProblem() then callback({error="unavailable"}); return false end
-    local encoded = Cache.encode(args or {})
-    assert(#encoded <= Budgets.MAX_REQUEST, "Server command exceeds budget")
-    local sent = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_COMMAND", {op=op,args=encoded})
-    if not sent or sent.ok ~= "1" or not sent.id then callback({error="unavailable"}); return false end
-    local deadline = now_s()+120
-    local function poll()
-        local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_RESULT", {id=sent.id})
-        local body = result and result.body
-        if type(body) ~= "string" or #body > Budgets.MAX_SNAPSHOT then callback({error="unavailable"}); return end
-        local decoded = Cache.decode(body)
-        if type(decoded) ~= "table" then callback({error="invalid"}); return end
-        if not decoded.pending then
-            if decoded.state then
-                LibraryAdapter.account_snapshot=decoded.state
-                LibraryAdapter.account_bytes=#Cache.encode(decoded.state)
-                LibraryAdapter.managed_owner=decoded.state.owner
-                LibraryAdapter.reset()
-            end
-            callback(decoded); return
-        end
-        if now_s() >= deadline then callback({error="unavailable"}); return end
-        UIManager:scheduleIn(0.2,poll)
+-- One-shot delivery ticket. Retirement drops presentation and polling, never the
+-- companion's durable job. Named policies belong here, never in UI code.
+function LibraryAdapter.command(op,args,callback,policy)
+    policy=policy or {kind="owner"}
+    local owner,epoch=LibraryAdapter.owner(),LibraryAdapter.owner_epoch
+    local live=true
+    local poll
+    local function retire()
+        if not live then return end
+        live=false
+        if poll then UIManager:unschedule(poll) end
+        callback=nil;policy=nil;poll=nil
     end
-    UIManager:scheduleIn(0.2,poll)
-    return true
+    local function settle(result)
+        if not live then return end
+        local done=callback
+        retire()
+        if done then done(result) end
+    end
+    local function wanted()
+        if not live then return false end
+        if policy.kind=="owner" and (owner~=LibraryAdapter.owner() or epoch~=LibraryAdapter.owner_epoch) then
+            settle({error="canceled"});return false
+        end
+        if policy.wanted and not policy.wanted() then settle({error="canceled"});return false end
+        return true
+    end
+    if Companion.workerProblem() then settle({error="unavailable"});return false,retire end
+    local encoded=Cache.encode(args or {})
+    assert(#encoded<=Budgets.MAX_REQUEST,"Server command exceeds budget")
+    local sent=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SERVER_COMMAND",{op=op,args=encoded})
+    if not sent or sent.ok~="1" or not sent.id then settle({error="unavailable"});return false,retire end
+    local id,deadline=sent.id,now_s()+120
+    poll=function()
+        if not wanted() then return end
+        local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SERVER_RESULT",{id=id})
+        local body=result and result.body
+        if type(body)~="string" or #body>Budgets.MAX_SNAPSHOT then settle({error="unavailable"});return end
+        local decoded=Cache.decode(body)
+        if type(decoded)~="table" then settle({error="invalid"});return end
+        -- 120 seconds bounds pending waits. An overdue ready reply still counts
+        -- while its ticket is live; completion after a settled timeout is ignored.
+        if not decoded.pending then
+            if policy.kind=="account" then
+                decoded.state=nil -- Historical command snapshots never publish account state.
+                LibraryAdapter.accountReturned(nil,nil,function(state)
+                    if not live then return end
+                    decoded.state=state
+                    if not state and not decoded.error then decoded.error="unavailable" end
+                    if wanted() then settle(decoded) end
+                end)
+            else settle(decoded) end
+            return
+        end
+        if now_s()>=deadline then settle({error="unavailable"});return end
+        UIManager:scheduleIn(.2,poll)
+    end
+    UIManager:scheduleIn(.2,poll)
+    return true,retire
 end
 
 end
@@ -164,9 +221,19 @@ if Library.bindLifecycle then Library.bindLifecycle() end
 -- Explicit user command; the existing adapter/worker owns the full-refresh job.
 local function command(id, run)
     local finish = Budgets.span("library." .. id .. ".enqueue", now_s, log)
-    local result = run()
+    local accepted,retire = run()
     finish()
-    return result
+    return accepted,retire
+end
+-- Device effects outlive their initiating page. Retiring this presentation drops
+-- its callback while the device-lifetime ticket still adopts the durable result.
+local function deviceCommand(op,args,effect,done)
+    local accepted=LibraryAdapter.command(op,args,function(result)
+        effect(result)
+        local callback=done;done=nil
+        if callback then callback(result) end
+    end,{kind="device"})
+    return accepted,function() done=nil end
 end
 function Library.fullRefresh() return command("full-refresh", LibraryAdapter.fullRefresh) end
 function Library.syncNow(reader) return command("sync-now", function() return LibraryAdapter.syncNow(reader) end) end
@@ -310,7 +377,7 @@ end
 
 -- Explicit account actions only; credentials are dispatched and immediately released.
 function Library.accountCommand(op,args,done)
-    return command(op,function() return LibraryAdapter.command(op,args,done) end)
+    return command(op,function() return LibraryAdapter.command(op,args,done,{kind="account"}) end)
 end
 
 -- Paged source names/counts, never a catalog delivered to the editor.
@@ -325,7 +392,7 @@ function Library.nativeReaderPosition(path) return LibraryAdapter.readerPosition
 function Library.idle() if LibraryAdapter.idle then return LibraryAdapter.idle() end end
 function Library.networkRestored() if LibraryAdapter.networkRestored then return LibraryAdapter.networkRestored() end end
 function Library.positionCommand(op,args,done)
-    return command(op,function() return LibraryAdapter.command(op,args,done or function() end) end)
+    return command(op,function() return LibraryAdapter.command(op,args,done or function() end,{kind="device"}) end)
 end
 function Library.positionCached(path)
     local finish=Budgets.span("library.position.cached",now_s,log)
@@ -365,12 +432,11 @@ function Library:storage() return self:read("storage.summary",{limit=1,exclude_p
 function Library:collections(offset,limit) return self:read("collections",{offset=offset or 0,limit=limit or 6}) end
 function Library.storageCommand(op,args,done)
     args.exclude_path=storagePath()
-    return command(op,function() return LibraryAdapter.command(op,args,function(result)
+    return command(op,function() return deviceCommand(op,args,function(result)
         if op=="storage.folder" and result and not result.error and result.download_path then
             G_reader_settings:saveSetting("download_dir",result.download_path)
         end
-        done(result)
-    end) end)
+    end,done) end)
 end
 
 -- Companion-materialized Series and grouped catalog windows, including preview row charges.
@@ -407,19 +473,18 @@ function Library:sleepChoices(category, offset)
     return self:read("sleep.choices", {category=category,offset=offset or 0,limit=6})
 end
 function Library.sleepAfter(ms, done)
-    return command("device.sleep",function() return LibraryAdapter.command("device.sleep",{ms=ms},function(result)
+    return command("device.sleep",function() return deviceCommand("device.sleep",{ms=ms},function(result)
         if result.device then Library.device_snapshot=result.device end
-        done(result)
-    end) end)
+    end,done) end)
 end
 
 -- Explicit background acquisition; paints consume local references from their snapshots.
-function Library.acquireCover(key,done)
+function Library.acquireCover(key,done,wanted)
     return command("covers.acquire",function()
         return LibraryAdapter.command("covers.acquire",{key=key},function(result)
-            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
+            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover",owner=LibraryAdapter.owner()}) end
             if done then done(result) end
-        end)
+        end,{kind="owner",wanted=wanted})
     end)
 end
 
@@ -440,11 +505,7 @@ end
 
 -- Explicit download reuses the catalog's validated atomic-file/ledger workflow.
 function Library.downloadCard(row,done)
-    local owner=LibraryAdapter.owner()
-    return Library.catalogAction("finish.download",{key=row.key},function(result)
-        if owner~=LibraryAdapter.owner() then return done({error="canceled"}) end
-        done(result)
-    end)
+    return Library.catalogAction("finish.download",{key=row.key},done)
 end
 
 -- Card cover preparation runs after the first paint. The interface owns cache misses,
@@ -452,6 +513,7 @@ end
 function Library.prepareCardCover(row,done,visible)
     local owner=LibraryAdapter.owner()
     local canceled=false
+    local retire
     local function valid() return not canceled and owner==LibraryAdapter.owner() and not reading() and (not visible or visible()) end
     local function deliver(path)
         if not valid() or type(path)~="string" then return end
@@ -468,10 +530,11 @@ function Library.prepareCardCover(row,done,visible)
         LibraryAdapter.sent[key]=now_s()
         table.insert(LibraryAdapter.order,key)
         if #LibraryAdapter.order>64 then LibraryAdapter.sent[table.remove(LibraryAdapter.order,1)]=nil end
-        Library.acquireCover(row.key,function(result) if valid() then deliver(result.local_path) end end)
+        local accepted
+        accepted,retire=Library.acquireCover(row.key,function(result) deliver(result.local_path) end,valid)
     end
     UIManager:nextTick(task)
-    return function() canceled=true; UIManager:unschedule(task) end
+    return function() canceled=true; UIManager:unschedule(task); if retire then retire();retire=nil end end
 end
 
 -- Cover lookup never schedules work on a paint. The thumbnail host explicitly acquires misses
@@ -487,11 +550,7 @@ function Library.acquireCoverReference(reference,refresh,done)
     local owner=LibraryAdapter.owner()
     return command("covers.acquire",function()
         return LibraryAdapter.command("covers.acquire",{reference=reference,refresh=refresh==true,owner=owner},function(result)
-            if LibraryAdapter.owner()~=owner then
-                if done then done({error="canceled"}) end
-                return
-            end
-            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
+            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover",owner=LibraryAdapter.owner()}) end
             if done then done(result) end
         end)
     end)
@@ -528,6 +587,8 @@ end
 function Library.applyEvents(events)
     for _,event in ipairs(events) do
         if type(event)=="table" then
+            -- Durable account completion reconciles even after its form ticket retired.
+            if event.kind=="account" then Library.accountReturned() end
             if event.kind=="library" or event.kind=="library_source" or event.kind=="account" or event.kind=="checked" or event.kind=="copies" then
                 LibraryAdapter.changed(event)
             end
@@ -557,27 +618,35 @@ function Library.refreshCatalog(action,manual)
         if manual and Badge.running then Badge.expand() end
         return true
     end
+    if Library.catalog_retire then Library.catalog_retire() end
     Library.catalog_owner=owner
     Library.catalog_requested=action
     Library.catalog_generation=generation
     Library.catalog_active=true
     Wifi.acquire("mirror")
     local finished=false
+    local retireCommand,statusPoll
     local deadline=now_s()+120
     local function finish()
         if finished then return end
         finished=true
-        Library.catalog_active=nil
+        if retireCommand then retireCommand() end
+        if statusPoll then UIManager:unschedule(statusPoll) end
+        if Library.catalog_generation==generation then
+            Library.catalog_active=nil
+            Library.catalog_retire=nil
+        end
         Wifi.release("mirror")
     end
+    Library.catalog_retire=finish
     local function accept(result)
-        if Library.catalog_generation~=generation then return end
+        if finished or Library.catalog_generation~=generation then return end
         if LibraryAdapter.owner()~=owner or result.error then finish(); return end
         Library.catalog_status=result
         if manual and action=="full" and Library.catalogStarted then Library.catalogStarted() end
         if manual and action=="full" and not Badge.running and not reading() then Badge.start(true,result) end
         local function poll()
-            if Library.catalog_generation~=generation then return end
+            if finished or Library.catalog_generation~=generation then return end
             if LibraryAdapter.owner()~=owner then finish(); return end
             local status=Library.catalogSnapshot()
             if now_s()>=deadline and (status.pending or result.run and status.run~=result.run) then
@@ -600,9 +669,11 @@ function Library.refreshCatalog(action,manual)
             end
             UIManager:scheduleIn(3,poll)
         end
+        statusPoll=poll
         UIManager:scheduleIn(3,poll)
     end
-    local started=command("catalog.control",function()
+    local started
+    started,retireCommand=command("catalog.control",function()
         return LibraryAdapter.command("catalog.control",{owner=owner,action=action,manual=manual==true},accept)
     end)
     if not started then finish() end
@@ -630,7 +701,7 @@ function Library.recommendations(args,done)
     return command("recommendations",function() return LibraryAdapter.command("settings.recommendations",args,function(result)
         if not result.error and not args.definitions then LibraryAdapter.recommendations=result end
         done(result)
-    end) end)
+    end,{kind="device"}) end)
 end
 function Library.endAction(name,...) return FinishUI.actions[name](...) end
 function Library.openGrouped(title,source,query)

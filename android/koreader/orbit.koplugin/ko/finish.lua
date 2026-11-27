@@ -95,6 +95,7 @@ function FinishUI.actions.book(ui,b,key,title,local_path)
         if not ok then FinishUI.card_state={book_id=key,failure="failed"};FinishUI.refreshSheet(ui,b);return end
         dispatch("finish.download",b,{key=key},function(result)
             if FinishUI.sheet~=sheet then return end
+            if result.error=="canceled" then FinishUI.card_state=nil;return end
             if result.error then
                 FinishUI.card_state={book_id=key,failure="failed"};FinishUI.refreshSheet(ui,b)
             elseif result.local_path then
