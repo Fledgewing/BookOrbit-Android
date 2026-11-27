@@ -542,7 +542,7 @@ end
 
 -- Card cover preparation runs after the first paint. The interface owns cache misses,
 -- account/generation cancellation and retries; widgets see only a bounded local path.
-Library.cardCoverJobs={head=1,tail=0}
+Library.cardCoverJobs={head=1,tail=0,active=0}
 function Library.drainCardCovers()
     local queue=Library.cardCoverJobs
     queue.scheduled=nil
@@ -552,21 +552,36 @@ function Library.drainCardCovers()
         if not ok then log("library.card-covers failed",tostring(err)) end
     end
     finish()
-    if queue.head<=queue.tail and not queue.scheduled then
+    if Library.cardCoverJobs==queue and queue.head<=queue.tail and not queue.scheduled then
         queue.scheduled=true; UIManager:nextTick(Library.drainCardCovers)
     end
 end
 function Library.deferCardCover(task)
     local queue=Library.cardCoverJobs
-    queue.tail=queue.tail+1; queue[queue.tail]=task
+    local live=true
+    queue.active=queue.active+1
+    queue.tail=queue.tail+1
+    queue[queue.tail]=function()
+        if not live then return end
+        live=false; queue.active=queue.active-1
+        task()
+    end
     if not queue.scheduled then
         queue.scheduled=true; UIManager:nextTick(Library.drainCardCovers)
+    end
+    return function()
+        if not live then return end
+        live=false; queue.active=queue.active-1
+        if queue.active==0 and Library.cardCoverJobs==queue then
+            UIManager:unschedule(Library.drainCardCovers)
+            Library.cardCoverJobs={head=1,tail=0,active=0}
+        end
     end
 end
 function Library.prepareCardCover(row,done,visible)
     local owner=LibraryAdapter.owner()
     local canceled=false
-    local retire
+    local retire,cancelDelivery
     local function valid() return not canceled and owner==LibraryAdapter.owner() and not reading() and (not visible or visible()) end
     local function deliver(path)
         if not valid() or type(path)~="string" then return end
@@ -585,11 +600,15 @@ function Library.prepareCardCover(row,done,visible)
         if #LibraryAdapter.order>64 then LibraryAdapter.sent[table.remove(LibraryAdapter.order,1)]=nil end
         local accepted
         accepted,retire=Library.acquireCover(row.key,function(result)
-            if valid() then Library.deferCardCover(function() deliver(result.local_path) end) end
+            if valid() then cancelDelivery=Library.deferCardCover(function() deliver(result.local_path) end) end
         end,valid)
     end
-    Library.deferCardCover(task)
-    return function() canceled=true; if retire then retire();retire=nil end end
+    local cancelTask=Library.deferCardCover(task)
+    return function()
+        canceled=true; cancelTask()
+        if cancelDelivery then cancelDelivery();cancelDelivery=nil end
+        if retire then retire();retire=nil end
+    end
 end
 
 -- Cover lookup never schedules work on a paint. The thumbnail host explicitly acquires misses

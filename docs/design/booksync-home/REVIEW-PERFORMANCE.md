@@ -42,7 +42,8 @@ as a test assertion.
 | Scalar projection accounting | One display row | Summary, Storage, Clock, Battery, Stats and account logged 0 | Each logs 1; same count as Lua |
 
 The cover test also cancels a queued job and delivers a burst of twelve worker
-answers: no bitmap callback runs until a four-job drain. Existing owner/generation
+answers: no bitmap callback runs until a four-job drain. Retiring the last queued
+job removes its drain and retires any live delivery ticket. Existing owner/generation
 and departure tests still apply. File input remains capped at 512 KiB; real bitmap
 decoding and e-ink paint latency require device acceptance.
 

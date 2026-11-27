@@ -71,7 +71,8 @@ return function(test, eq, ok, here, Cache)
     test("card covers: one deferred drain delivers at most four of twelve visible jobs", function()
         local queue,delivered,commands={},0,0
         local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
-            UIManager={nextTick=function(_,fn) queue[#queue+1]=fn end},
+            UIManager={nextTick=function(_,fn) queue[#queue+1]=fn end,
+                unschedule=function(_,fn) for i=#queue,1,-1 do if queue[i]==fn then table.remove(queue,i) end end end},
             LibraryAdapter={owner=function() return "fixture" end,sent={},order={}},
             require=function(name) eq(name,"lfs"); return {attributes=function() return {mode="file",size=100} end} end}, {__index=_G})
         setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
@@ -102,6 +103,9 @@ return function(test, eq, ok, here, Cache)
         e.Library.deferCardCover(function() delivered=delivered+1 end)
         table.remove(queue,1)();eq(delivered,24,"one failed bitmap must not poison the shared drain")
         eq(#queue,0)
+        local stop=e.Library.prepareCardCover({cover_path="retired.jpg"},function() error("retired delivery") end)
+        eq(#queue,1);stop();eq(#queue,0,"retiring the last job removes its drain")
+        eq(e.Library.cardCoverJobs.active,0)
     end)
     test("interface status: file and binder JSON are bounded before decoding",function()
         local body,decoded,closed="{}",0,0
