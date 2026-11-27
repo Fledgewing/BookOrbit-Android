@@ -301,6 +301,15 @@ class Prefs(ctx: Context) {
     var updateChannel: UpdateChannel
         get() = UpdateChannel.fromKey(SettingsStore.get(app, "update_channel"))
         set(v) = SettingsStore.store(app, "update_channel", v.key)
+    var updateWithdrawn: Set<String>
+        get() = set("update_withdrawn")
+        set(v) = setSet("update_withdrawn", v)
+    var updateDownloadVersion: String
+        get() = str("update_download_version")
+        set(v) = setStr("update_download_version", v)
+    var updateDownloadUrl: String
+        get() = str("update_download_url")
+        set(v) = setStr("update_download_url", v)
     var updateCheckedAt by LongPref("update_checked_at")
     var updateStatusAt by LongPref("update_status_at")
     var updateStatus: String

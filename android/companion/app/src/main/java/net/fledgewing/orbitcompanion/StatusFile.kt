@@ -23,6 +23,7 @@ object StatusFile {
         val p = Prefs(ctx)
         val body = ModeLogic.statusFileBody(BuildConfig.VERSION_NAME, p.mode, caps(ctx), p.setupPromptKey, p.setupPromptRows) +
             ",\"setup_needed\":${p.setupNeeded}" +
+            ",\"app_update\":${Updater.readySummary(ctx)?.let(ModeLogic::str) ?: "null"}" +
             // The sleep screen's settings, for a plugin with no /status to ask (Add-on, docs/design/lock-screen.md A2).
             ",\"settings\":{${SleepScreen.settingsJson(ctx)},\"settings_at\":${p.sharedSettingsAt},\"values\":${SettingsStore.valuesJson(ctx)}}" +
             ",\"sleep\":${SleepScreen.statusJson(ctx)},\"want_choices\":${p.wantChoicesAt}"

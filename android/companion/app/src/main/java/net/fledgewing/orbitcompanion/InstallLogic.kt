@@ -8,6 +8,10 @@ import java.security.MessageDigest
  * the downloads and installs are in Installers.kt.
  */
 object KoreaderRelease {
+    const val MANUAL_URL = "https://github.com/koreader/koreader/releases/latest"
+    fun manualInstall(addon: Boolean, canInstall: Boolean, state: State): Boolean =
+        addon && !canInstall && state != State.OTHER_SIGNER
+
     const val API = "https://api.github.com/repos/koreader/koreader/releases/latest"
     /** F-Droid's build: a separate app; KOReader skips user patches on that flavor
      * (frontend/userpatch.lua:27-28 at v2026.07.1: `android.prop.flavor == "fdroid"`). */

@@ -669,6 +669,7 @@ class OrbitService : Service() {
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
+            "\"app_update\":${Updater.readySummary(this)?.let(ModeLogic::str) ?: "null"}," +
             // Clicker buttons: the accessibility service is running (it then takes mapped keys in KOReader too).
             "\"clicker_service\":${ClickerService.connected}," +
             // "Block connections without VPN" as Android reports it (null: unreadable): the

@@ -210,7 +210,7 @@ class RelaunchActivity : Activity() {
  */
 class ModeActivity : EinkActivity() {
     override val pinGuarded get() = Prefs(this).mode != null
-    private val keep = BooleanArray(4) // Wi-Fi switching, Sleep sync, Clicker buttons, Settings PIN
+    private val keep = BooleanArray(5) // Wi-Fi, sleep sync, screen off, clicker, PIN
 
     override fun onResume() {
         super.onResume()
@@ -241,7 +241,7 @@ class ModeActivity : EinkActivity() {
         if (target == OrbitMode.ADDON) {
             root.addView(Ui.gap(this, 12))
             root.addView(Ui.text(this, "Keep helpers", 20f, bold = true))
-            listOf("Wi-Fi switching", "Sleep sync (and screen off after it)", "Clicker buttons", "Settings PIN").forEachIndexed { i, label ->
+            listOf("Wi-Fi switching", "Sleep sync", "Screen off after Sync and sleep", "Clicker buttons", "Settings PIN").forEachIndexed { i, label ->
                 root.addView(Ui.row(this, label, null, Ui.toggle(this, keep[i]), onClick = {
                     keep[i] = !keep[i]
                     render()
@@ -277,7 +277,7 @@ class ModeActivity : EinkActivity() {
 
     private fun switchTo(target: OrbitMode) {
         val p = Prefs(this)
-        val keepH = Helpers(keep[0], keep[1], keep[1], keep[2], keep[3])
+        val keepH = Helpers(keep[0], keep[1], keep[2], keep[3], keep[4])
         val steps = if (target == OrbitMode.ADDON) {
             AddonLogic.toAddon(p.mode, Mode.homeEnabled(this), Mode.otherHome(this), keepH, Net.adminActive(this), ClickerStore.enabled(this), OrbitService.running)
         } else {

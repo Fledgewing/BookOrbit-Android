@@ -74,7 +74,7 @@ design and mockup approval still apply.
 | **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
 | **Discoverable settings**: make equivalent settings easy to find while retaining button navigation ([parity gap 3](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
 | **Persistent crash summary**: retain a deduplicated crash summary across restarts, never uploaded automatically ([parity gap 4](docs/FEATURES.md#prioritised-parity-bugs)). | Android | designing (0.12; [crash summary proposal](docs/design/crash-summary.md), visible controls NEEDS APPROVAL) |
-| **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
+| **Add-on mode and setup checklist** (Next 10, 10a). | Android | building (checklist and permission-free install/download fallbacks, reader update-ready text and helper navigation implemented; menu recommendation integration and device acceptance remain) |
 | **Unified in-book menus** (Later 8b): BookSync reader screens and quick settings match Home, with stock KOReader/plugin escape; TOC, annotations, go to, search, book info, End of book and cached sleep presentation. No KOReader core patches; capability and flash gates per screen. | Android, X4 Pro, X4, X3 | building on Android (top/bottom panels and native action dispatch; Xteink later; [audit and increments](docs/design/booksync-home/DESIGN.md#13-in-book-experience-revision-4-continued)) |
 | **No visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
 

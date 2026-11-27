@@ -78,6 +78,7 @@ object Updater {
         val p = Prefs(ctx)
         p.updateStatus = s
         p.updateStatusAt = System.currentTimeMillis()
+        StatusFile.write(ctx, "update status")
         log("status: $s")
     }
 
@@ -208,6 +209,9 @@ object Updater {
         val feed = AndroidReleaseFeed.load(BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL, ::httpText)
         val releases = feed.releases
         withdrawn = feed.withdrawn
+        p.updateWithdrawn = withdrawn.map { it.toString() }.toSet()
+        p.updateDownloadVersion = ""
+        p.updateDownloadUrl = ""
         // Only a check that reached GitHub counts for the daily timer: a failed one (no network,
         // VPN lockdown) is retried at the next Wi-Fi up instead of 24 h later.
         p.updateCheckedAt = System.currentTimeMillis()
@@ -222,6 +226,13 @@ object Updater {
 
         val apkName = UpdatePolicy.apkName(ver)
         val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no BookSync Companion APK"
+        if (Mode.isAddon(ctx) && !ctx.packageManager.canRequestPackageInstalls()) {
+            // A locator from the verified signed feed, never an unverified release response.
+            if (android.net.Uri.parse(apkUrl).scheme != "https") return "download unavailable"
+            p.updateDownloadUrl = apkUrl
+            p.updateDownloadVersion = ver.toString()
+            return "update ready: v$ver · Download in BookSync Companion"
+        }
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
         val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for the BookSync Companion APK"
         log("${rel.tag}: expecting sha256 $expected for $apkName")
@@ -480,6 +491,20 @@ object Updater {
 
     /** The update ready to install, while it is still allowed by the signed policy (Status shows "Install"). */
     fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillAllowed(it.first) }
+
+    fun readyToDownload(ctx: Context): Pair<String, Intent>? {
+        val p = Prefs(ctx)
+        val policy = withdrawn + p.updateWithdrawn.mapNotNull(Version::parse)
+        if (!Mode.isAddon(ctx) || p.updateDownloadUrl.isEmpty() ||
+            !UpdatePolicy.shouldInstall(Version.parse(p.updateDownloadVersion),Version.parse(BuildConfig.VERSION_NAME),policy) ||
+            !p.updateChannel.allows(Version.parse(p.updateDownloadVersion))) return null
+        val uri = android.net.Uri.parse(p.updateDownloadUrl)
+        if (uri.scheme != "https") return null
+        return p.updateDownloadVersion to Intent(Intent.ACTION_VIEW, uri)
+    }
+
+    fun readySummary(ctx: Context): String? =
+        (readyToInstall()?.first ?: readyToDownload(ctx)?.first)?.let { "BookSync update ready: v$it (open the companion)" }
 
     private fun stillAllowed(version: String): Boolean =
         UpdatePolicy.shouldInstall(Version.parse(version), Version.parse(BuildConfig.VERSION_NAME), withdrawn)

@@ -159,8 +159,25 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
 class StatusActivity : EinkActivity() {
     private var prompted = false
 
+    override fun onNewIntent(next: Intent) {
+        super.onNewIntent(next)
+        intent = next
+        openHelperLink()
+    }
+
+    private fun openHelperLink(): Boolean {
+        if (intent.getStringExtra("booksync_page") == "helpers" && Mode.isAddon(this)) {
+            intent.removeExtra("booksync_page")
+            startActivity(SettingsPage.section(this, "sync", "helper_wifi"))
+            finish()
+            return true
+        }
+        return false
+    }
+
     override fun onResume() {
         super.onResume()
+        if (isFinishing || openHelperLink()) return
         OrbitService.start(this)
         // Back from Android's install prompt: "Android is checking the update…" while it verifies.
         Updater.onPageResumed(this)
@@ -218,6 +235,11 @@ object StatusPanel {
                 root.postDelayed({ if (!a.isFinishing) { if (Worker.progressLine() != line) redraw() else watch() } }, 3_000)
             }
             watch()
+        }
+        Updater.readyToDownload(a)?.let { ready ->
+            root.addView(Ui.row(a, "App version", "Update ready: v${ready.first}", Ui.button(a, "Download", heightDp = 56, sp = 18f) {
+                Pin.run(a) { a.tryStart(ready.second, "BookSync download") }
+            }).apply { tag = "status:download" })
         }
         // A background update is ready: "Install" any time here (the notification waits while reading).
         Updater.readyToInstall()?.let { ready ->
@@ -550,12 +572,15 @@ object Setup {
                     ko == KoreaderRelease.State.MISSING -> "Not installed"
                     else -> KoreaderRelease.explain(ko)
                 },
-                action = if (koOk) null else if (ko == KoreaderRelease.State.OTHER_SIGNER) "Open" else "Install",
+                action = if (koOk) null else if (ko == KoreaderRelease.State.OTHER_SIGNER) "Open"
+                    else if (KoreaderRelease.manualInstall(Mode.isAddon(ctx), canInstall, ko)) "Install it yourself" else "Install",
                 id = "koreader",
                 short = "KOReader${koV?.let { " $it" } ?: ""}",
             ) { a ->
                 if (ko == KoreaderRelease.State.OTHER_SIGNER) {
                     a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${Koreader.PKG}")), "KOReader app info")
+                } else if (KoreaderRelease.manualInstall(Mode.isAddon(a), a.packageManager.canRequestPackageInstalls(), ko)) {
+                    a.tryStart(Intent(Intent.ACTION_VIEW, Uri.parse(KoreaderRelease.MANUAL_URL)), "KOReader download")
                 } else if (!a.packageManager.canRequestPackageInstalls()) {
                     prefs.koreaderInstallStatus = "allow BookSync to install apps first (Install apps)"
                     a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")), "install unknown apps")
