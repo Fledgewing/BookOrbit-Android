@@ -44,6 +44,10 @@ jobs:
           cache-prefix: owned-${{ matrix.environment }}
           extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
 
+      - name: Configure Linux simulator build
+        if: contains(matrix.environment, 'simulator')
+        run: python3 tools/firmware/prepare_simulator.py xteink/firmware
+
       - name: Build pinned firmware
         working-directory: xteink/firmware
         env:

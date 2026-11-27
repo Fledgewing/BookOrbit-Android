@@ -24,6 +24,10 @@ The old overlay is migration/reference material for this rewrite, not its seed.
 `x4-pro-simulator`, `x4-classic-simulator` and `simulator-X3` from the pinned
 submodule on PRs into and pushes to `feature/0.12`. It uploads build artifacts,
 logs and per-device JSON/Markdown size reports, and never publishes releases.
+For Linux simulator builds, `tools/firmware/prepare_simulator.py` translates the
+upstream Clang narrowing-warning flag to its GCC equivalent and pins the fetched
+simulator to the immutable commit in `tools/firmware/simulator.json`. It changes
+only the temporary build configuration, never the committed firmware seed.
 Actions is disabled in the firmware repository and its inherited workflows are
 removed. This foundation changes no reader behavior and is not a release.
 
