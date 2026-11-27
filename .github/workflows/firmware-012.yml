@@ -1,0 +1,92 @@
+name: BookSync 0.12 firmware
+
+on:
+  pull_request:
+    branches: [feature/0.12]
+  push:
+    branches: [feature/0.12]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-012-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  size-parser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 tools/firmware/test_size_report.py
+
+  build:
+    name: owned firmware ${{ matrix.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [x4-pro, x4-classic, default, x4-pro-simulator, x4-classic-simulator, simulator-X3]
+    steps:
+      - name: Check out BookSync and pinned firmware
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: ./.github/actions/pio-setup
+        with:
+          pio-core: '6.1.19'
+          platformio-ini: xteink/firmware/platformio.ini
+          cache-prefix: owned-${{ matrix.environment }}
+          extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
+
+      - name: Pin the device SDK subprocess core
+        if: matrix.environment == 'x4-pro' || matrix.environment == 'x4-classic' || matrix.environment == 'default'
+        working-directory: xteink/firmware
+        env:
+          BUILD_ENV: ${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          pio pkg install -e "$BUILD_ENV" </dev/null
+          uv pip install --python ~/.platformio/penv/bin/python "pioarduino==6.1.19"
+
+      - name: Configure Linux simulator build
+        if: contains(matrix.environment, 'simulator')
+        run: python3 tools/firmware/prepare_simulator.py xteink/firmware
+
+      - name: Build pinned firmware
+        working-directory: xteink/firmware
+        env:
+          BUILD_ENV: ${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          pio run -j 2 -e "$BUILD_ENV" 2>&1 | tee "$BUILD_ENV.log"
+
+      - name: Report size and enforce device budget
+        if: matrix.environment == 'x4-pro' || matrix.environment == 'x4-classic' || matrix.environment == 'default'
+        env:
+          BUILD_ENV: ${{ matrix.environment }}
+        run: |
+          python3 tools/firmware/size_report.py --environment "$BUILD_ENV" \
+            --bin "xteink/firmware/.pio/build/$BUILD_ENV/firmware.bin" \
+            --log "xteink/firmware/$BUILD_ENV.log" --out "reports/$BUILD_ENV"
+          cat "reports/$BUILD_ENV/size.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build artifacts and size reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: owned-firmware-${{ matrix.environment }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            xteink/firmware/.pio/build/${{ matrix.environment }}/firmware.bin
+            xteink/firmware/.pio/build/${{ matrix.environment }}/firmware.elf
+            xteink/firmware/.pio/build/${{ matrix.environment }}/partitions.bin
+            xteink/firmware/.pio/build/${{ matrix.environment }}/program
+            xteink/firmware/${{ matrix.environment }}.log
+            reports/${{ matrix.environment }}/
