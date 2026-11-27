@@ -126,6 +126,9 @@ return function(test,eq,ok,E,W,Widget,withHost)
             for _,control in ipairs(e[1][1]) do if control.text then ok(#control.text<=160,"bounded displayed labels") end end
             local b=E.Budgets.get("screens","editor")
             ok(E.Budgets.check(b,e.metrics)); eq(b.targetMs,100)
+            if os.getenv("BOOKSYNC_PERF_REPORT") then
+                print(string.format("PERF editor-move rows=%d nodes=%d bytes=%d trips=%d spawns=%d network=%d",e.metrics.rows,e.metrics.drawNodes,e.metrics.bytes,e.metrics.roundTrips,e.metrics.spawns,e.metrics.network))
+            end
             for _,field in ipairs({"rows","bytes","spawns","roundTrips","network","snapshotBytes","drawNodes"}) do
                 local bad=E.Layout.copy(e.metrics); bad[field]=b[field]+1
                 eq(E.Budgets.check(b,bad),nil,field)

@@ -131,6 +131,13 @@ Stats widgets share one materialized `reading.stats` row per paint; aggregate an
 server/local precedence and provenance in the companion, never in Lua.
 First-run and upgrade sheets are screens too: declare static row limits and zero-work budgets when they need no library data.
 
+Enforce each caller's remaining row/byte allowance before SQLite returns or Lua decodes a
+snapshot, including status JSON behind interface services. Post-paint cover delivery and
+acquisition yield in windows of four, including bursts of asynchronous answers. Companion
+personal-reading pools belong to one publication batch: read each kind once and calculate
+each Discover candidate's daily rank once, never inside a sort comparator. Keep regression
+fixtures at 10,000+ books and long reading histories; record host timing separately from device acceptance.
+
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Owned Home widgets receive immutable snapshots and a dispatch handle;
 only their host owns the batched read and read-model invalidation. Layout moves validate only

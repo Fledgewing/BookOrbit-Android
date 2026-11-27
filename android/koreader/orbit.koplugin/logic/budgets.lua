@@ -144,3 +144,6 @@ Budgets.screens["copies-state"].roundTrips = 0
 Budgets.screens["book-actions"] = budget(5,0,50)
 Budgets.screens["book-actions"].roundTrips = 0
 Budgets.CARD_COVER_BYTES = 524288
+
+-- Yield between post-paint card cover windows, including local bitmap delivery.
+Budgets.CARD_COVER_BATCH = 4

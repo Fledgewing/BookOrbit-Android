@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
-return function(here, test, ok, eq)
+return function(here, test, ok, eq, audit)
     local function world()
         local W = {shown={}, logs={}, trips=0, syncs=0, reads={}}
         local function class(base)
@@ -60,6 +60,19 @@ return function(here, test, ok, eq)
         end
         local function load(name) local fn=assert(loadfile(here.."/../orbit.koplugin/"..name)); setfenv(fn,E); fn() end
         for _,name in ipairs({"logic/ui_util.lua","logic/cache.lua","logic/budgets.lua","logic/reading_style.lua","logic/settings_ui.lua","logic/sheet_layout.lua","logic/reader_panel.lua","ko/library.lua","ko/library_services.lua","ko/endsheet.lua","ko/reading_style.lua","ko/custom_reading.lua","ko/reader_panel.lua"}) do load(name) end
+        if audit then
+            local paint=E.Library.paint
+            E.Library.paint=function(screen)
+                local context=paint(screen)
+                local flush=context.flush
+                context.flush=function(self,...)
+                    local counts=flush(self,...); audit("screen",screen,counts)
+                    for key,usage in pairs(self.widgets) do audit("widget",key:match("^([^:]+)"),usage) end
+                    return counts
+                end
+                return context
+            end
+        end
         W.ui=ui
         return W,E
     end

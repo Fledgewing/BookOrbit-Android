@@ -10,8 +10,17 @@ interface PersonalReadingSource {
 }
 data class PersonalReadingRecord(val identity: String, val fields: Map<String, Any?>)
 
-class PersonalReading(private val sources: List<PersonalReadingSource>) {
+class PersonalReading(private val sources: List<PersonalReadingSource>,
+    private val discoverRank: (String) -> String = { text ->
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        val hex = "0123456789abcdef"
+        buildString(64) { for (byte in digest) { val n = byte.toInt() and 255; append(hex[n ushr 4]); append(hex[n and 15]) } }
+    }) {
     companion object { val KINDS = setOf("highlight", "yearago", "recommended", "discover") }
+    // One instance belongs to one LibraryReadModel worker batch. Duplicate tiles/picks
+    // share provider reads and ranks; a changed time rebuilds rather than serving stale data.
+    private data class Pool(val now: Long, val records: List<PersonalReadingRecord>, val succeeded: Boolean)
+    private val pools = mutableMapOf<String, Pool>()
     /** Source precedence belongs here; card callers never select a provider. */
     fun card(book: Map<String, Any?>, now: Long, dailySeconds: Long): Map<String, Any?> {
         val fields = linkedMapOf<String, Any?>()
@@ -22,21 +31,26 @@ class PersonalReading(private val sources: List<PersonalReadingSource>) {
     }
     fun window(kind: String, now: Long, pick: Long = 0): Map<String, Any?> {
         require(kind in KINDS)
-        val merged = linkedMapOf<String, PersonalReadingRecord>()
-        var succeeded = false
-        for (source in sources) {
-            if (kind !in source.capabilities) continue
-            try {
-                val records = source.read(kind, now)
-                records.forEach { merged.putIfAbsent(it.identity, it) }
-                succeeded = true
-            } catch (e: Exception) { if (e is InterruptedException) throw e }
-        }
         val day = java.time.Instant.ofEpochSecond(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
-        val records = if (kind == "discover") merged.values.sortedBy {
-            java.security.MessageDigest.getInstance("SHA-256").digest(("$day:" + it.identity).toByteArray())
-                .joinToString("") { b -> "%02x".format(b) }
-        } else merged.values.toList()
+        val pool = pools[kind]?.takeIf { it.now == now } ?: run {
+            val merged = linkedMapOf<String, PersonalReadingRecord>()
+            var succeeded = false
+            for (source in sources) {
+                if (kind !in source.capabilities) continue
+                try {
+                    source.read(kind, now).forEach { merged.putIfAbsent(it.identity, it) }
+                    succeeded = true
+                } catch (e: Exception) { if (e is InterruptedException) throw e }
+            }
+            // Decorate once: sortedBy's selector runs on every comparison. Hashing and
+            // formatting there amplified 10k books into hundreds of thousands of digests.
+            val records = if (kind == "discover") merged.values.map {
+                discoverRank("$day:" + it.identity) to it
+            }.sortedBy { it.first }.map { it.second } else merged.values.toList()
+            Pool(now, records, succeeded).also { pools[kind] = it }
+        }
+        val records = pool.records
+        val succeeded = pool.succeeded
         // Round-robin over a stable pool: no repetition within a complete cycle, no process state.
         val selected = if (records.isEmpty()) null else records[if (kind == "highlight") Math.floorMod(day, records.size.toLong()).toInt() else if (kind == "discover") (pick.coerceIn(0, 1000000000) % records.size).toInt() else 0]
         val result = (selected?.fields ?: emptyMap()) + mapOf("state" to if (selected != null) "ready" else if (succeeded) "empty" else "error",

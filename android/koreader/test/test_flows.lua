@@ -1221,6 +1221,31 @@ end)
 
 local RE = getfenv(Orbit.onSuspend)
 
+-- Optional audit output from the real screen flows below, using the same enforced counters.
+-- No host wall time is a substitute for device paint acceptance.
+local perfReport = os.getenv("BOOKSYNC_PERF_REPORT") and {}
+local perfCollect
+if perfReport then
+    local paint=RE.Library.paint
+    perfCollect=function(kind,id,counts)
+        local key=kind..":"..id
+        local peak=perfReport[key] or {rows=0,bytes=0,snapshotBytes=0,spawns=0,network=0,roundTrips=0}
+        for field,value in pairs(peak) do peak[field]=math.max(value,counts[field] or 0) end
+        perfReport[key]=peak
+    end
+    RE.Library.paint=function(screen)
+        local context=paint(screen)
+        local flush=context.flush
+        context.flush=function(self,...)
+            local metrics=flush(self,...)
+            perfCollect("screen",screen,metrics)
+            for key,counts in pairs(self.widgets) do perfCollect("widget",key:match("^([^:]+)"),counts) end
+            return metrics
+        end
+        return context
+    end
+end
+
 ---------------------------------------------------------------- the companion's signer (security.md)
 test("companion: a missing or stale startup status cannot cache a false version mismatch",function()
     local state,readFile,version,at=RE.Companion.state,RE.Companion.readFile,RE.Companion.version,RE.Companion.version_at
@@ -3186,6 +3211,8 @@ test("library device owner: local SQLite rows survive sign-out without adopting 
         st:run("UPDATE library_views SET body=? WHERE owner=?",string.rep("x",16385),"device-local")
         eq(RE.Store.library("device-local",request),nil); eq(decoded,0,"SQL rejects oversized local snapshots before decoding")
         st:run("UPDATE library_views SET body=? WHERE owner=?",body,"device-local")
+        eq(RE.Store.library("device-local",request,#body-1),nil)
+        eq(decoded,0,"SQL enforces a caller's smaller allowance before decoding")
         local warm=RE.Store.library("device-local",request)
         RE.reading=function() return true end
         RE.Db.conn=function() error("reading must use the already decoded device row") end
@@ -3410,6 +3437,7 @@ test("settings: every group has a budget and neutral screen text; one channel ro
     end
     for _, id in ipairs({"account", "sync", "library", "reading", "home", "sleep", "updates", "about"}) do
         ok(groups[id] and #groups[id] > 0, id)
+        if perfCollect then perfCollect("display","settings-"..id,{rows=#groups[id]}) end
     end
     local channel = 0
     for _, row in ipairs(menuAll(m:menuItems())) do
@@ -3736,7 +3764,7 @@ dofile(here .. "/settings_flows.lua")(test,eq,ok,RE,W,Widget)
 dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
-dofile(here .. "/reader_panel_flows.lua")(here, test, ok, eq)
+dofile(here .. "/reader_panel_flows.lua")(here, test, ok, eq, perfCollect)
 
 if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
     for _, name in ipairs({
@@ -3749,6 +3777,13 @@ end
 dofile(here .. "/catalog_actions_flows.lua")({E=RE,W=W,test=test,eq=eq,ok=ok,newUI=newUI,UIManager=UIManager,store=store})
 dofile(here.."/retirement_flows.lua")(test,eq,ok,RE)
 dofile(here.."/ui_interface_flows.lua")(here,test,eq,ok)
+if perfReport then
+    local keys={};for key in pairs(perfReport) do keys[#keys+1]=key end;table.sort(keys)
+    for _,key in ipairs(keys) do
+        local m=perfReport[key]
+        print(string.format("PERF %s rows=%d bytes=%d snapshot=%d trips=%d spawns=%d network=%d",key,m.rows,m.bytes,m.snapshotBytes,m.roundTrips,m.spawns,m.network))
+    end
+end
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

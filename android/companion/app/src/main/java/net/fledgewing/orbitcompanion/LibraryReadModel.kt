@@ -14,6 +14,7 @@ class LibraryReadModel(
     private val vocabulary: () -> java.io.File = { java.io.File(SleepScreen.dir().parentFile, "vocabulary_builder.sqlite3") },
     private val adapter: ServerAdapter? = null,
     private val personalDevice: (() -> PersonalReadingSource)? = null,
+    private val sleepChoices: () -> SleepChoices? = { SleepChoices.read(SleepScreen.dir()) },
     // Device publication schedules draining on the existing runtime writer queue.
     private val drainEvents: () -> Unit = { EventMailbox(store.root).publish(null) },
     private val changedEvent: (Map<String, Any?>) -> Unit = { event ->
@@ -80,7 +81,7 @@ class LibraryReadModel(
                     "device.clock" -> ClockWidget.snapshot(clock(), power, twelve = args["twelve_hour"] == true)
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
-                    "sleep.choices" -> SleepChoiceWindow.project(SleepChoices.read(SleepScreen.dir()), args)
+                    "sleep.choices" -> SleepChoiceWindow.project(sleepChoices(), args)
                     "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true)
                     else -> projection.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
@@ -103,7 +104,7 @@ class LibraryReadModel(
                     })
                 } else projected
                 val items = result["items"] as? List<*>
-                val measuredRows = items.orEmpty().size + items.orEmpty().sumOf {
+                val measuredRows = (items?.size ?: 1) + items.orEmpty().sumOf {
                     ((it as? Map<*, *>)?.get("books") as? List<*>)?.size ?: 0
                 } + ((result["next_books"] as? List<*>)?.size ?: 0) +
                     (if (args["op"] == "series" && result.containsKey("subtitle")) 1 else 0)

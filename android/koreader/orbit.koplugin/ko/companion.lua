@@ -170,8 +170,9 @@ function Companion.readFile()
     local path = Companion.statusFile()
     local f = path and io.open(path, "rb")
     if not f then return nil end
-    local body = f:read("*a")
+    local body = f:read(Budgets.MAX_SNAPSHOT+1)
     f:close()
+    if type(body)~="string" or #body>Budgets.MAX_SNAPSHOT then return nil end
     local okj, json = pcall(require, "json")
     if not okj then return nil end
     local okd, data = pcall(json.decode, body or "")
@@ -321,7 +322,7 @@ end
 function Companion.status()
     if Companion.state() ~= "ok" then return nil end
     local r = Jni.call(Companion.AUTHORITY, Companion.STATUS, { patch_version = PATCH_VERSION, book = Companion.bookOpen() and "1" or "0" })
-    if not r or r.ok ~= "1" or not r.status then return nil end
+    if not r or r.ok ~= "1" or type(r.status)~="string" or #r.status>Budgets.MAX_SNAPSHOT then return nil end
     local okj, json = pcall(require, "json")
     if not okj then return {} end
     local okd, data = pcall(json.decode, r.status)
