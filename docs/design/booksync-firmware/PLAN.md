@@ -253,6 +253,9 @@ behavior on every reader. Device evidence cannot be replaced by simulator succes
 
 ## 5. Screens blocked on approved mockups
 
+Proposed [firmware gallery](mockups.html) and [screen/state inventory](SCREENS.md)
+cover B1–B5 below. They await maintainer approval; this list remains blocked.
+
 Approved coverage is revision 16's gallery/prototype, including X3's text/button
 mode, not just screenshots with a device filename. Home/editor, lists/filters,
 detail/series/download state, account/connector sign-in/out, reading/Custom,

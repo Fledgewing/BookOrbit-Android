@@ -17,6 +17,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status |
 |---|---|---|
+| Safe connection setup, upgrade/import recovery, verified update recovery and retained device controls through Library, with local diagnostics and first-run guidance. | X4 Pro, X4, X3; Android keeps its approved Home and native system controls | designing ([firmware screen gallery](docs/design/booksync-firmware/mockups.html); B1–B5 approval pending) |
 | Finish the server-free catalog cutover: companion-owned copies, grouping, settings recommendations and end-of-book snapshots/outboxes. | Android (Xteink deferred under Android-first ruling) | implemented on feature/0.12 (F12-Q2 step 5; device acceptance pending) |
 | Open the owned Series page from the end-of-book sheet, including the last book and saved offline membership. | Android; X4 Pro, X4, X3 deferred to firmware | building (F12-endsheet implemented; device acceptance pending) |
 | Recommended and Discover Home widgets select unread saved books through personal-reading providers; daily random pick and Another. | Android; X4 Pro/X4/X3 deferred to firmware | building (implemented; device acceptance and release pending) |
