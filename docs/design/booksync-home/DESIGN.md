@@ -24,6 +24,28 @@ with a pinned KOReader audit and stock-menu escape;
 target by replacing all other Home paths. Revision 2 incorporated the maintainer's cross-platform ruling: owned X4 Home in
 0.12 alongside Android, eventual plain-firmware base, and unified product versions.
 
+### Firmware base decision, 2026-11-27
+
+The maintainer approved a clean owned firmware rewrite for 0.12, seeded from
+CrossInk stable v2.0.0 at `2cdd6117568c8877c3180d5fac8d5b20e55d1ac7`.
+The public [booksync-firmware](https://github.com/Fledgewing/booksync-firmware)
+repository preserves CrossInk history; the main BookSync repository pins its
+BookSync ownership commit at `xteink/firmware` on `feature/0.12`.
+FreeInk SDK remains pinned at `f7fa9b6871192ea27d8aa37a03beaa749462c3ab`.
+The repository/CI foundation is building; Home, Library, Stats, adapters,
+migration and reader integration remain implementation and acceptance work.
+No product behavior or release is added by this foundation. Android is unchanged;
+X4 Pro, X4 Classic and C3 X3 are all firmware build targets, with their three
+simulators and at least 128 KiB free in each 6,553,600-byte app slot
+(`tools/firmware/budgets.json`). Static RAM is reported separately from runtime fit.
+
+This supersedes the earlier requirement below to retain the BookOrbit fork for
+the first slice and seek a later base-selection approval. The old overlay and
+fork are reference/migration sources, not the rewrite seed. Recovery, licensing,
+sole-writer migration, measured-fit and maintainer device acceptance gates still
+apply before release. Selected upstream fixes must record immutable source
+commits and tests; no upstream PRs/issues and no moving-tag builds.
+
 ## 1. Existing behavior and evidence
 
 Local paths below are relative to BookSync. Upstream `B/` means
@@ -751,7 +773,7 @@ There is no basis to call the newly published CrossInk final field-proven, or to
 infer fewer bugs from CrossPoint's older final label. Pin, run our suite and get
 maintainer device acceptance; do not automatically follow either default branch.
 
-**Recommendation: plain CrossInk as the eventual base**, conditional on port and
+**Historical recommendation (superseded by the 2026-11-27 decision above): plain CrossInk as the eventual base**, conditional on port and
 recovery evidence. It preserves more of the user-facing font/theme/settings and
 hardware/simulator shape we already support. CrossPoint is a credible fallback
 if CrossInk maintenance ceases or a measured CP build materially improves fit,
@@ -998,7 +1020,7 @@ from the reversible UI choices. Recommended answers are proposals.
    with BookSync the sole compiled X3 Home and later widgets accepted individually.
    The maintainer directed this scope; measured fit/recovery remain release gates,
    not automatic platform deferral. Grimmory capabilities still require validation.
-5. **Firmware base switch:** approve the staged destination **plain CrossInk +
+5. **Firmware base switch (base approved 2026-11-27 above; release acceptance pending):** historical question: approve the staged destination **plain CrossInk +
    our layer**, removing the CrossInk-Bookorbit layer only after owned sync,
    downloads, credentials/login and all used history features pass acceptance?
    This is a one-way door for support/recovery: the old Home setting cannot restore

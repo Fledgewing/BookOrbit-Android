@@ -1,14 +1,46 @@
-# BookSync for Xteink (CrossInk-Tailnet)
+# BookSync for Xteink
 
-BookSync's Xteink firmware, built as the CrossInk-Tailnet overlay. It lived in
+Through 0.11, BookSync's Xteink firmware is built as the CrossInk-Tailnet overlay. It lived in
 Fledgewing/CrossInk-Tailnet until it moved into BookSync with its history (`xteink/`); that repo is
 archived. Releases are this repo's `xteink-v…` tags (AGENTS.md "Releases").
+
+## 0.12 owned firmware (development)
+
+Maintainer decision, 2026-11-27: 0.12 firmware lives in the public, BookSync-owned
+[booksync-firmware](https://github.com/Fledgewing/booksync-firmware) repository,
+with CrossInk's real history through stable v2.0.0
+(`2cdd6117568c8877c3180d5fac8d5b20e55d1ac7`). It is a plain repository, not a
+GitHub fork. Its `crossink-v2.0.0` tag marks that provenance; FreeInk SDK is pinned
+at `f7fa9b6871192ea27d8aa37a03beaa749462c3ab`.
+
+On `feature/0.12`, `firmware/` is the submodule pinned to the BookSync ownership
+commit. Initialize it with `git submodule update --init --recursive xteink/firmware`.
+Upstream fixes are selected and recorded by immutable source commit; no automatic
+upstream merges or moving-tag builds. See `firmware/BOOKSYNC.md` for ownership and
+licensing. The combined firmware remains GPL-3.0-or-later; retain all notices.
+The old overlay is migration/reference material for this rewrite, not its seed.
+
+`.github/workflows/firmware-012.yml` builds `x4-pro`, `x4-classic`, C3 `default`,
+`x4-pro-simulator`, `x4-classic-simulator` and `simulator-X3` from the pinned
+submodule on PRs into and pushes to `feature/0.12`. It uploads build artifacts,
+logs and per-device JSON/Markdown size reports, and never publishes releases.
+Actions is disabled in the firmware repository and its inherited workflows are
+removed. This foundation changes no reader behavior and is not a release.
+
+`tools/firmware/budgets.json` records the 6,553,600-byte app slot and minimum
+131,072 free bytes for every device. The gate uses actual `firmware.bin` bytes,
+not the linked program total. Static RAM is the final PlatformIO application's
+linked data/BSS total, not runtime heap or PSRAM demand. Run the parser's fixture
+tests with `python3 tools/firmware/test_size_report.py`. Build locally with
+`pio run -d xteink/firmware -e <environment>`; no upload target is needed.
+
+## Legacy overlay (through 0.11)
 
 [CrossInk-Bookorbit](https://github.com/agosez/CrossInk-Bookorbit) firmware with your reader on
 your Tailscale tailnet, using [MicroLink](https://github.com/CamM2325/microlink). BookOrbit sync,
 the catalog, OPDS and downloads can reach servers that are only on your tailnet.
 
-This is an **overlay**, not a fork. CrossInk's source is used as released; the overlay adds:
+The legacy firmware is an **overlay**, not a fork. CrossInk's source is used as released; the overlay adds:
 
 | Piece | Where | What it does |
 |---|---|---|
@@ -34,7 +66,7 @@ line, and CI says so if it stops applying.
 
 shared/version.json supplies the same identity as the Android companion and plugin.
 Firmware tags become xteink-v<version>+crossink.<base>; About shows
-"BookSync 0.12.0 (CrossInk 2.0.0-rc3)". BookSync preview.N → rc.N → stable
+"BookSync 0.12.0 (CrossInk 2.0.0)". BookSync preview.N → rc.N → stable
 decides the channel, independently of the pinned CrossInk base. Android release
 publication dispatches firmware at the same tag. Daily builds keep that pinned base
 and do not publish a new product version.

@@ -2,3 +2,6 @@
 	path = xteink/third_party/microlink
 	url = https://github.com/Fledgewing/microlink
 	branch = crossink
+[submodule "xteink/firmware"]
+	path = xteink/firmware
+	url = https://github.com/Fledgewing/booksync-firmware.git
