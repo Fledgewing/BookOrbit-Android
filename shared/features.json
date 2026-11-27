@@ -6050,6 +6050,58 @@
           ]
         }
       }
+    },
+    {
+      "id": "home-recommended-discover",
+      "feature": "Recommended and Discover Home picker widgets (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Device-first series/history recommendations and daily random unread pick with Another; both picker sizes and explicit states.",
+          "reason": "deliberately deferred: device acceptance and release pending; server recommendations are a future provider.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RECDISC.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Recommended and Discover follow Android.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware comes later.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RECDISC.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Recommended and Discover follow Android.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware comes later.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RECDISC.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Recommended and Discover follow Android.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware comes later. X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RECDISC.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Server recommendation providers, firmware implementation and real-device appearance/latency acceptance."
     }
   ],
   "release_evidence": {

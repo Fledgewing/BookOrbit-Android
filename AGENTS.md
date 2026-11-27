@@ -103,6 +103,8 @@ not authorize catalog work, new subprocesses, network on paint, or additional pa
 
 ## Screen and widget performance budgets
 
+Recommended and Discover inherit one-book/16 KiB budgets; companion personal-reading providers own ranking and daily selection. Another changes only an interface-owned persisted pick, never scans on paint.
+
 Highlight and A year ago also inherit one-row/16 KiB budgets. Companion providers own
 sidecar parsing, calendar selection, aggregation and dedupe; Lua never scans personal data.
 

@@ -37,7 +37,7 @@ class LibraryReadModel(
         val personal by lazy {
             val roots = DeviceStorage.folders.map { java.io.File(store.root.parentFile?.parentFile?.parentFile ?: store.root,it) } + DeviceStorage.downloadRoot(store.root)
             PersonalReading(listOf(personalDevice?.invoke() ?: DevicePersonalReading(roots, java.io.File(store.root.parentFile,"statistics.sqlite3"))) +
-                if (local) emptyList() else projection.personalReadingSources(owner))
+                if (local) emptyList() else listOf(CatalogPersonalReading { projection.personalCatalog(owner) }) + projection.personalReadingSources(owner))
         }
         val localStats by lazy { readingStats() }
         val storage by lazy { DeviceStorage(store, projection) }
@@ -55,7 +55,7 @@ class LibraryReadModel(
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
-                    "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock())
+                    "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock(), (args["pick"] as? Number)?.toLong() ?: 0)
                     "reading.stats" -> stats
                     "local.word" -> LocalWidgets.word(vocabulary(), clock())
                     "local.buddy" -> LocalWidgets.buddy(localStats)
@@ -93,7 +93,7 @@ class LibraryReadModel(
      * Keep unrelated account, reading and battery materializations intact. */
     fun refreshLocalFiles(owner: String): Boolean {
         val operations=setOf("storage.summary","library.summary","window","book","reader","cover","cover.reference",
-            "groups","series","counts","facets","sources")
+            "groups","series","counts","facets","sources","personal.reading")
         val requests=store.db().query("SELECT request FROM library_views WHERE owner=?",LuaValue.utf8(owner)) { it.text(0)!! }
             .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in operations }
         var changed=false

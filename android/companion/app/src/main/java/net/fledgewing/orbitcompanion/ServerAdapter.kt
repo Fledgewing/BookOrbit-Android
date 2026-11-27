@@ -6,6 +6,8 @@ import java.io.File
  * normalize protocol data before returning it; unsupported operations are explicit. Renderers
  * use LibraryReadModel, never this transport-facing interface. */
 interface ServerAdapter {
+    /** Saved neutral catalog for companion-only personal selection. Never acquires data. */
+    fun personalCatalog(owner: String): Map<String, Any?> = unsupported()
     fun personalReadingSources(owner: String): List<PersonalReadingSource> = emptyList()
     fun recommendedSettings(): List<Map<String,Any?>> = emptyList()
     val id: String

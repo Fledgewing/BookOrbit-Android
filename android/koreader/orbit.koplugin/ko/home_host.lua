@@ -209,7 +209,7 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "setup" then AccountView.open()
         elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
-        elseif action == "word-lookup" or action == "light-down" or action == "light-up" then
+        elseif action == "discover-another" or action == "word-lookup" or action == "light-down" or action == "light-up" then
             Library.localWidgetAction(action,row)
             if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()

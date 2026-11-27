@@ -116,7 +116,9 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         }
         return mapOf("items" to categories,"freshness" to freshness(body!=null))
     }
-    override fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
+    override fun personalCatalog(owner: String) = projectSaved(owner, mapOf("op" to "window", "source" to "all"), true)
+    override fun project(owner: String, a: Map<*, *>): Map<String, Any?> = projectSaved(owner, a, false)
+    private fun projectSaved(owner: String, a: Map<*, *>, personal: Boolean): Map<String, Any?> {
         if (store.meta("owner") != owner) return mapOf("error" to "unauthorized", "items" to emptyList<Any>())
         val op = a["op"]
         if (op == "copies.state") {
@@ -369,6 +371,8 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             } else result
             return projected + mapOf("freshness" to freshness(true))
         }
+        // Internal worker input only; UI window requests keep their original row cap.
+        if (personal) return mapOf("items" to selected, "freshness" to freshness(true))
         selected.sortWith(LibraryFilter.comparator(filter))
         val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
         val limit = ((a["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)

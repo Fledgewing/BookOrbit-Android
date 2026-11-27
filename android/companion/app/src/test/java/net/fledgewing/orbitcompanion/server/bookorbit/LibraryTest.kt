@@ -8,6 +8,25 @@ import java.io.File
 import java.nio.file.Files
 
 class LibraryTest {
+    @Test fun personalCatalogReadsWholeSavedGenerationButPublishesOneBook() {
+        store().use { st ->
+            seed(st)
+            for (i in 6L..40L) st.db().exec("INSERT INTO bulk_books(g,id,item) VALUES(1,?,?)",i,
+                LuaValue.encode(mapOf("id" to i,"title" to "Book $i","readStatus" to "unread")))
+            val catalog=BookOrbitProjection(st).personalCatalog(owner)
+            assertEquals(40,(catalog["items"] as List<*>).size)
+            assertEquals(24,(read(st,mapOf("op" to "window","source" to "all","limit" to 24))["items"] as List<*>).size)
+            for(kind in listOf("recommended","discover")) {
+                val result=read(st,mapOf("op" to "personal.reading","kind" to kind,"limit" to 1))
+                assertEquals("ready",result["state"]); assertEquals(1L,result["row_count"])
+                assertTrue(LuaValue.encode(result).size<=16384)
+                assertEquals("unread",(result["book"] as Map<*,*>)["status"])
+                assertNull(result["items"])
+            }
+            assertEquals("unauthorized",BookOrbitProjection(st).personalCatalog("other")["error"])
+        }
+    }
+
     @Test fun localStoragePublishesOneSmallRowWithoutInventingCapacity() {
         store().use { st ->
             val request=String(LuaValue.encode(mapOf("op" to "storage.summary","limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)

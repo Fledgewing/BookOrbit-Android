@@ -31,6 +31,19 @@ References in this table are at the baseline commit, under
 | P2 | `logic/layout.lua:194`: new M8C layouts include the extra Library page from the X4 default. | New/reset layouts use the approved Home + Stats pages. Exact placement regression covers both pages; existing saved layouts are not migrated. |
 | P2 | `ko/home_host.lua:87`: cover shelves use the text-row capacity, collapsing wide shelves to fewer than three covers despite enough columns. | Bound shelf windows by columns; keep list windows bounded by 52 px rows. Regression verifies a 4×2 shelf requests four books within the same batch. |
 
+## F12-recdisc regression evidence
+
+Recommended ranks next-in-series and history-related unread books, starting on the
+reader, then its saved catalog. Discover has a stable daily random unread pick and
+Another. Screens never select sources. The state/size flow sweep covers both picker
+sizes, loading, empty, error and both offline states; each action stays within its
+card with 50 px minimum dimensions. A Home flow verifies one batched paint, one
+book per widget, and Another through the interface. Companion tests cover series
+ordering, author history, excluded read/abandoned books, deterministic restart,
+full shuffle cycle, dedupe, source failure and a toy future provider. The saved
+catalog test verifies a full 40-book pool without widening the 24-row UI window.
+No device appearance or latency acceptance is claimed.
+
 ## Screen and widget comparison ledger
 
 This ledger distinguishes tested implemented behavior from remaining staged work.
@@ -44,7 +57,7 @@ The latter remains on ROADMAP; this review does not label it shipped.
 | Library widget / Storage | Group and device links tested. Compact Library uses one combined count/link band so its targets fit. `ko/storage.lua` now owns real companion-projected storage figures/bar, confirmations and folder selection; the Library widget adds Collections. `DeviceStorage.kt` measures StatFs and the tracked file/cache index. Host regressions cover missing capacity and stale previews; M8C visual/timing acceptance remains pending. |
 | Battery widget and four tabs | Existing learning/missing/error labels, bounded daily windows, actual-level glyphs and charges retained (`test/battery_flows.lua`). Targets fixed. Grouped rates, export/compare and efficiency metrics remain explicitly deferred in `shared/features.json`. No replacement battery model. |
 | This week / Year / When you read / Records | Existing native paint paths and one shared materialization exercised in `test/test_reading_stats.lua` and Home flows. Retain explicit per-field provenance and separate possibly overlapping local-today minutes: more truthful than demo totals. `logic/reading_stats.lua:29` still has simplified calendar/legend, peak and records typography compared with the prototype. |
-| Clock and later picker widgets | Clock now has a snapshot renderer. Word, Reading buddy and Light are installed in both Android picker sizes with local companion projections; see [local widget evidence](F12-G-LOCAL-WIDGETS.md). Highlight and A year ago are installed in both Android picker sizes through the source-aggregating library interface, starting with device data; see [source evidence](F12-G-SOURCES.md). Recommended/Discover remain staged. |
+| Clock and later picker widgets | Clock now has a snapshot renderer. Word, Reading buddy and Light are installed in both Android picker sizes with local companion projections; see [local widget evidence](F12-G-LOCAL-WIDGETS.md). Highlight and A year ago are installed in both Android picker sizes through the source-aggregating library interface, starting with device data; see [source evidence](F12-G-SOURCES.md). Recommended (4×2, 2×2) and Discover (2×1, 2×2) now use the same personal-reading interface, companion-selected saved books and 50 px actions; see [selection evidence](F12-RECDISC.md). |
 | Home editor / Rename / picker / Book list configuration | Existing geometry-only moves, draft cancellation, atomic Done, keyboard Rename and paged source windows retained; Configure touch target fixed. `ko/home_editor.lua:113` draws geometry cards rather than dimmed live previews, preserving the maintainer's zero-read move budget. Tags/toolbar/next-size copy remain visually different from the HTML. |
 | Owned Library / Search / filter sheet / pickers | Existing neutral filters, companion counts, exclusion context, paging and removable chips retained; check `test/booklist_flows.lua` and `test/test_filter_sheet.lua`. Chips enlarged without replacing the settled sheet. The g-series slice adds companion-materialized grouped cover rows, full-Series progress dots and an owned Series destination; cached covers and bulk transfer jobs remain staged. |
 | Reader top / Book info / Details | Bounded progress, missing-data states, native menu escape, async visibility guard and plain bar tested in `test/reader_panel_flows.lua`. Battery and Settings destinations fixed. The reader slice extends the same owner with the header icons, separate bottom scrubber/quick settings panel and native Contents/annotations/Go to/search/bookmark dispatch. See [reader implementation and limits](G-READER-NOTES.md); framebuffer/font fit and device latency remain unverified. |

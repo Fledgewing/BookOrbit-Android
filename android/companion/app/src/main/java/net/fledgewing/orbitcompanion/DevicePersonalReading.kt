@@ -8,8 +8,10 @@ import java.time.ZoneId
 /** Read-only borrowed device data; executed solely on the companion worker. */
 class DevicePersonalReading(private val roots: List<File>, private val statistics: File,
     private val open: (File) -> Sql = { AndroidSql(it, readOnly = true) }) : PersonalReadingSource {
+    private val catalog by lazy { CatalogPersonalReading { DeviceLibrary(roots).personalCatalog(DeviceLibrary.OWNER) } }
     override val capabilities = PersonalReading.KINDS
     override fun read(kind: String, now: Long): List<PersonalReadingRecord> = when(kind) {
+        "recommended", "discover" -> catalog.read(kind, now)
         "highlight" -> highlights()
         "yearago" -> if (!statistics.isFile) emptyList() else open(statistics).use { yearago(it, now) }
         else -> emptyList()
