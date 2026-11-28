@@ -1,0 +1,21 @@
+{
+  "pdf": {
+    "extracted": true,
+    "sidecar": false
+  },
+  "cbz": {
+    "extracted": true,
+    "sidecar": false
+  },
+  "deferred_acquisition": "passed",
+  "reader_stats": "750 min reading time; 12 pages read; Days start to finish: not saved yet",
+  "library": {
+    "books": 60,
+    "embedded_epub_covers": 60,
+    "sidecar_covers": 0,
+    "in_progress": 6,
+    "finished": 5,
+    "recently_added": "New horizons, observed after the initial 59-book scan",
+    "history_days": 50
+  }
+}
