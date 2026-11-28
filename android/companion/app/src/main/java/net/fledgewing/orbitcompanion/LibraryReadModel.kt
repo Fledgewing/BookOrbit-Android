@@ -76,6 +76,7 @@ class LibraryReadModel(
                     "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock(), (args["pick"] as? Number)?.toLong() ?: 0)
                     "reading.stats" -> stats
                     "reading.metrics" -> RetainedMetrics.snapshot(stats,clock(),AccountStats.zone(account))
+                    "local.moon","local.glyph" -> LocalDecor.snapshot(args["op"].toString().removePrefix("local."),clock())
                     "local.word" -> LocalWidgets.word(vocabulary(), clock())
                     "local.buddy" -> LocalWidgets.buddy(localStats)
                     "local.light" -> LocalWidgets.light(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())

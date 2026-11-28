@@ -6522,6 +6522,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-local-decor",
+      "feature": "Retained local Moon and Glyph cards (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Approximate lunar phase/illumination/next change and a daily local-font sample with name/code/source.",
+          "reason": "deliberately deferred: native/physical acceptance and publication remain; approved read-only models and cards are implemented.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LOCAL-DECOR.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Local decor follows the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device/font acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LOCAL-DECOR.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Local decor follows the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device/font acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LOCAL-DECOR.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Local decor follows the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device/font acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LOCAL-DECOR.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Native/physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

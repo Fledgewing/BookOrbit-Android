@@ -1,5 +1,37 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 return function(test,eq,ok,E,W,withHost)
+    test('local decor: bounded immutable cards use the real font probe and explicit missing state',function()
+        withHost(function()
+            local requireSaved=E.require;local probes=0;local present=true
+            E.require=function(name)
+                if name=='ui/font' then return {getFace=function() return {ftsize={hasGlyph=function(_,cp) probes=probes+1;eq(cp,65);return present end,getInfo=function() return {name='Fixture UI'} end}} end} end
+                return requireSaved(name)
+            end
+            local records={moon={state='ready',phase='Waning gibbous',illumination=73,next='Next: Last quarter · ≈ 2 Dec',source='Approximate · local date'},
+                glyph={state='ready',sample='A',codepoint=65,code='U+0041',name='Latin capital letter A',source='KOReader interface font'}}
+            local function labels(node,result)
+                result=result or {};if node.text then result[node.text]=true end
+                for _,child in ipairs(node) do if type(child)=='table' then labels(child,result) end end;return result
+            end
+            for id,data in pairs(records) do
+                for _,size in ipairs(E.WidgetRegistry[id].sizes['android-tablet']) do
+                    local p={widget=id,w=size[1],h=size[2]}
+                    local snapshot=E.HomeHostPlan.immutable({data=data,state='ready',bytes=300})
+                    local card=E.LocalWidgets.render(p,snapshot,function() end,{w=282*size[1]/2,h=156*size[2]/2})
+                    local text=labels(card)
+                    ok(text[E.WidgetRegistry[id].name]);if id=='glyph' then ok(text['A']);ok(text['U+0041 · Fixture UI']) else ok(text['≈ 73% lit']);ok(text['Approximate · local date']) end
+                end
+            end
+            eq(probes,3)
+            present=false
+            local card=E.LocalWidgets.render({widget='glyph',w=2,h=2},{data=records.glyph,state='ready',bytes=300},function() end,{w=282,h=156})
+            ok(labels(card)['Glyph unavailable in the interface font']);eq(probes,4)
+            eq(E.Library.glyphFace(0,60),nil);eq(probes,4)
+            local missing=E.LocalWidgetPlan.build('moon',{data={state='unavailable',reason='Set the reader date'}})
+            eq(missing.message,'Set the reader date');eq(missing.ready,false)
+            E.require=requireSaved
+        end)
+    end)
     test('local widgets: Home owns one batch for all three local projections and Back',function()
         withHost(function(batches)
             local ops={}

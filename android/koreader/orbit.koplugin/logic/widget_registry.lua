@@ -25,6 +25,10 @@ widget("monthly-reading","reading.metrics",{{4,2},{4,3}},{{2,3}})
 WidgetRegistry["monthly-reading"].refreshSeconds=60
 widget("finish-forecast","books.query",{{2,2},{4,2}},{{2,2}})
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
+for _,id in ipairs({"moon","glyph"}) do
+    widget(id,"local."..id,{{2,2},{2,3},{4,2}},{{2,2}})
+    WidgetRegistry[id].localOnly=true;WidgetRegistry[id].refreshSeconds=id=="glyph" and 60 or 3600
+end
 for _,id in ipairs({"word","light","buddy"}) do
     widget(id, "local."..id, {{2,1},{2,2}}, {{2,1}})
     WidgetRegistry[id].localOnly=true
@@ -65,6 +69,8 @@ local descriptions={
     discover={"Discover (random)","A daily unread pick, with Another to choose again."},
     highlight={"Highlight of the day","A daily passage from your saved highlights."},
     yearago={"A year ago","Books and reading from this date last year."},
+    moon={"Moon phase","Approximate local phase, illumination and next primary phase"},
+    glyph={"Glyph of the day","A daily local font sample with name, code point and source"},
     word={"Word of the day","A daily word from your KOReader vocabulary."},
     light={"Light","Control this reader's frontlight."},
     buddy={"Reading buddy","A reading message from activity on this reader."},

@@ -32,3 +32,14 @@ function Library.localWidgetAction(action,value)
     end
     return false
 end
+
+-- Native font metadata and one glyph probe, without a directory scan or document parse.
+function Library.glyphFace(codepoint,size)
+    if type(codepoint)~="number" or codepoint~=math.floor(codepoint) or codepoint<65 or codepoint>90 then return nil end
+    local ok,face,name=pcall(function()
+        local f=require("ui/font"):getFace("cfont",size)
+        if not f or not f.ftsize:hasGlyph(codepoint) then return nil end
+        return f,f.ftsize:getInfo().name
+    end)
+    if ok then return face,name end
+end
