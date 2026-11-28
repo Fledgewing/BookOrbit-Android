@@ -358,12 +358,15 @@ on 2026-11-27 (~18:45 PT): list, add, remove, reset, no space and save failure.
 Keep widget and Keep layout receive initial focus. F35a services, host tests,
 three-profile simulator scenes and maintainer device acceptance remain required.
 
-## F40w Home widget additions — NEEDS APPROVAL
+## F40w compact X4 Home widgets — NEEDS APPROVAL
 
-The [F40w inventory](F40w-widgets.md) and [widget gallery](f40w-widgets.html)
-replace the initial text-template proposal with 38 widget-specific main designs,
-three profile views each and compact state strips. They adapt the Android cards
-and document each firmware difference, including X3 text layouts.
-All additions are **NEEDS APPROVAL**. Existing Home revision-16 and B1–B5
-approvals remain unchanged; placeholder cards do not approve new widget content.
-No firmware implementation or pin update is included.
+The [F40w inventory](F40w-widgets.md) and [compact gallery](f40w-widgets.html)
+replace #241's large main views with the smallest useful cards at 0.11 X4 density.
+Scope matches all 30 installed Android 0.12 registry types exactly. Achievements
+stays; no dedicated Library sources widget is added. Book list presets remain
+configurations of that type. Forecast and Battery stay. All (n) › links live in
+headers at the top-right; larger views are explicitly optional.
+
+Every new scene/state remains **NEEDS APPROVAL**. This is an X4 Pro / Classic
+review; it enables no X3 widget and changes no existing approval, firmware, pin,
+default layout or native reader behavior.
