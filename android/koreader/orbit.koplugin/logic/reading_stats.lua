@@ -5,7 +5,7 @@ local titles = {['year-in-reading']='Year in reading', ['this-week']='This week'
     ['when-you-read']='When you read', ['reading-records']='Reading records'}
 local metricTitles={today="Today",["reading-streak"]="Reading streak",["reading-goal"]="Reading goal",["pages-read"]="Pages read",["monthly-reading"]="Monthly reading"}
 local function metricPlan(id,data,w,h,rows,headerTop)
-    local p={title=metricTitles[id],rects={},labels={}}
+    local p={title=metricTitles[id],rects={},labels={},icons={},dots={}}
     local m=data and data.metrics and data.metrics[id]
     if not m then p.message="Loading reading statistics";return p end
     p.source=m.source=="all your devices" and "All your devices" or m.source=="this reader" and "This reader only" or nil
@@ -56,7 +56,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
     assert(titles[id] and w >= 64 and h >= 64)
     measure=measure or function(text,size,bold,width) return {w=math.min(width or w-32,#tostring(text or '')*size*.6),h=size} end
     local function textHeight(text,size,bold,width) return measure(tostring(text or ''),size,bold,width).h end
-    local p = {title=titles[id], rects={}, labels={}}
+    local p = {title=titles[id], rects={}, labels={},icons={},dots={}}
     local function rect(x,y,rw,rh,level,outline)
         p.rects[#p.rects+1]={x=x,y=y,w=rw,h=rh,level=level,outline=outline}
     end
@@ -79,7 +79,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
         return p
     end
     local d=data.display or {}
-    p.sourceInline=p.source and rows==1 and w>=300
+    p.sourceInline=p.source and ((headerTop and headerTop<48) or rows==1 and w>=300)
     local top=math.max(headerTop or 0,p.source and not p.sourceInline and 48 or 30)
     if id == 'year-in-reading' and not data.year then
         p.message='Reading days unavailable'; return p
@@ -104,8 +104,8 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
             label(16,top,text,16,true);summaryBottom=top+textHeight(text,16,true)
         else
             stat(16,data.year.days_read,'days read',w*.15-8)
-            if r.books_this_year~=nil then stat(16+w*.15,r.books_this_year,'books finished'..(sources.finished=='this reader' and ' · this reader' or ''),w*.17-8) end
-            if r.best_streak~=nil then stat(16+w*.32,r.best_streak,'longest streak'..(sources.streak=='this reader' and ' · this reader' or ''),w*.3-8) end
+            if r.books_this_year~=nil then stat(16+w*.15,r.books_this_year,'books finished'..(p.source=='Days · this reader' and sources.finished=='this reader' and ' · local' or ''),w*.17-8) end
+            if r.best_streak~=nil then stat(16+w*.32,r.best_streak,'longest streak'..(p.source=='Days · this reader' and sources.streak=='this reader' and ' · local' or ''),w*.3-8) end
         end
         local offset=data.year.weekday or 0
         local columns=math.ceil((365+offset)/7)
@@ -149,6 +149,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
         rect(8,bottom,w-16,1,4)
         if separate then label(8,h-18,separate,11) end
     elseif id == 'when-you-read' then
+        if rows>1 then p.icons[#p.icons+1]={name='sunmoon',x=w-32,y=14,w=16} end
         assert(data.hour_levels[24] ~= nil and data.hour_levels[25] == nil and data.hour_intensity[24] ~= nil and data.hour_intensity[25] == nil)
         local strip=rows==1
         local summaryX,summaryY=16,top
@@ -157,7 +158,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
             label(16,top,d.period,14,true)
             local period=measure(tostring(d.period or ''),14,true,w-32)
             summaryX=16+period.w+6
-            if w-summaryX-16<100 then summaryX,summaryY=16,top+period.h+4 end
+            if w<500 or w-summaryX-16<100 then summaryX,summaryY=16,top+period.h+4 end
             summaryBottom=math.max(top+period.h,summaryY+textHeight('Most at',12))
         end
         local peak=d.peak or (data.peak_hour and (data.peak_hour..':00'))
@@ -169,7 +170,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
         local width=(w-32)/24
         for i=1,24 do
             local bh=strip and math.min(22,height) or height*data.hour_levels[i]
-            rect(16+(i-1)*width,bottom-bh,width-(strip and 2 or 0),bh,
+            rect(16+(i-1)*width,bottom-bh,math.max(1,width-1),bh,
                 strip and data.hour_intensity[i] or (i-1==data.peak_hour and 4 or 2),strip and i-1==data.peak_hour)
         end
         if not strip then
@@ -183,8 +184,11 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
         for i=0,3 do label(16+i*6*width,bottom+4,string.format('%02d',i*6),10) end
     else
         local r=data.records or {}
+        local allLocal=true
+        for _,field in ipairs({'records','longest_session_seconds','best_day_pages','finished','streak'}) do if sources[field] and sources[field]~='this reader' then allLocal=false end end
+        if allLocal and sources.records=='this reader' then p.source='This reader only' end
         local function caption(text,field)
-            return text..(sources[field]=='this reader' and ' · this reader' or '')
+            return text..(not allLocal and sources[field]=='this reader' and ' · local' or '')
         end
         -- Measure value/caption pairs as a unit. The first row wins; the second
         -- row and running-streak footer are optional, never squeezed into its space.
@@ -225,12 +229,20 @@ function ReadingStatsPlan.build(id, data, w, h, rows, headerTop, measure)
         local bottom=metricRow(first,y)
         if bottom and not short then
             rect(left,y-12,w-2*pad,1,1)
+            local secondY=bottom+10
             bottom=metricRow({{sx,r.books_this_year,caption('books this year','finished')},
-                {sx+cw,r.streak and (r.streak..' days'),caption('streak · best '..tostring(r.best_streak or '—'),'streak')}},bottom+10) or bottom
+                {sx+cw,r.streak and (r.streak..' days'),caption('streak · best '..tostring(r.best_streak or '—'),'streak')}},secondY) or bottom
+            if r.streak~=nil and bottom+18<=h-pad then
+                for i=1,7 do p.dots[#p.dots+1]={x=sx+cw+(i-1)*13,y=bottom+4,d=8,level=i<=r.streak and 4 or 1} end
+                bottom=bottom+18
+            end
             if rows>=3 and r.streak~=nil then
-                local footer=caption('Reading '..r.streak..' days running','streak')
+                local footer='Reading '..r.streak..' days running'
                 local fh=height(footer,12,true,w-2*pad)
-                if bottom+16+fh<=h-pad then label(left,h-pad-fh,footer,12,true,w-2*pad) end
+                if bottom+4+fh<=h-pad then
+                    label(left+22,h-pad-fh,footer,12,true,w-2*pad-22)
+                    p.icons[#p.icons+1]={name='flame',x=left,y=h-pad-fh,w=16}
+                end
             end
         end
     end

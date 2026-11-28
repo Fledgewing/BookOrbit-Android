@@ -20,8 +20,8 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     local widget=Widget:new{dimen=Geom:new{w=placement.w,h=placement.h}}
     local texts={}
     local function native(value,bold,size,maxWidth)
-        return Text:new{text=tostring(value),face=Font:getFace(bold and 'tfont' or 'cfont',size*scale/nativeScale),
-            bold=bold,fgcolor=bold and BB.COLOR_BLACK or (BB.COLOR_GRAY_5 or BB.COLOR_DARK_GRAY),padding=0,max_width=math.max(1,maxWidth*scale)}
+        return Text:new{text=tostring(value),face=Font:getFace('NotoSans-Regular.ttf',size*scale/nativeScale),
+            bold=bold,fgcolor=bold and BB.COLOR_BLACK or (BB.COLOR_GRAY_5 or BB.COLOR_DARK_GRAY),padding=0,max_width=nil}
     end
     local function measure(value,size,bold,maxWidth)
         local t=native(value,bold,size,maxWidth or width-32)
@@ -34,7 +34,7 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
         local t=native(value,bold,size or 12,math.min(maxWidth or width-32,width-x-8))
         local bounds=t:getSize()
         local box={x=math.floor(x*scale),y=math.floor(y*scale),w=bounds.w,h=bounds.h,widget=t}
-        local fits=box.x>=0 and box.y>=0 and box.x+box.w<=placement.w-4*scale and box.y+box.h<=placement.h-4*scale
+        local fits=bounds.w<=math.max(1,(maxWidth or width-x-8)*scale) and box.x>=0 and box.y>=0 and box.x+box.w<=placement.w-4*scale and box.y+box.h<=placement.h-4*scale
         for _,other in ipairs(texts) do
             if box.x<other.x+other.w+2*scale and other.x<box.x+box.w+2*scale
                 and box.y<other.y+other.h+2*scale and other.y<box.y+box.h+2*scale then fits=false end
@@ -51,7 +51,7 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     if plan.source then
         local source
         local inlineX=title and (title.x+title.w)/scale+12 or width
-        if placement.rows==1 and width-inlineX-16>=100 then
+        if width-inlineX-16>=measure(plan.source,11,false,width).w then
             source=text(inlineX,12,plan.source,false,11,width-inlineX-16)
         else source=text(16,headerBottom+4,plan.source,false,11) end
         if source then headerBottom=math.max(headerBottom,(source.y+source.h)/scale) end
@@ -59,6 +59,12 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     plan=ReadingStatsPlan.build(id,snapshot,width,height,placement.rows,headerBottom+12,measure)
     if plan.message then text(16,headerBottom+12,plan.message,false,12) end
     for _,v in ipairs(plan.labels) do text(v.x,v.y,v.text,v.bold,v.size,v.width) end
+    widget.stats_texts=texts
+    widget.stats_plan=plan
+    local icons={}
+    for _,v in ipairs(plan.icons or {}) do
+        icons[#icons+1]={x=v.x*scale,y=v.y*scale,widget=require('ui/widget/imagewidget'):new{file=SOURCE_DIR..'/ko/ui/icons/'..v.name..'.svg',width=v.w*scale,height=v.w*scale,is_icon=true,alpha=true}}
+    end
     local colors={BB.COLOR_WHITE,BB.COLOR_LIGHT_GRAY,BB.COLOR_GRAY,BB.COLOR_DARK_GRAY,BB.COLOR_BLACK}
     function widget:paintTo(bb,x,y)
         local done=Budgets.span(id..'.paint',now_s,log)
@@ -73,10 +79,14 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
                 bb:paintRect(rx,ry,1,rh,color); bb:paintRect(rx+rw-1,ry,1,rh,color)
             end
         end
+        for _,v in ipairs(plan.dots or {}) do
+            bb:paintRoundedRect(x+v.x*scale,y+v.y*scale,v.d*scale,v.d*scale,colors[v.level+1],v.d*scale/2)
+        end
+        for _,v in ipairs(icons) do v.widget:paintTo(bb,x+v.x,y+v.y) end
         for _,t in ipairs(texts) do t.widget:paintTo(bb,x+math.floor(t.x),y+math.floor(t.y)) end
         done()
     end
-    function widget:free() for _,t in ipairs(texts) do t.widget:free() end end
+    function widget:free() for _,t in ipairs(texts) do t.widget:free() end;for _,v in ipairs(icons) do v.widget:free() end end
     finish()
     return widget
 end

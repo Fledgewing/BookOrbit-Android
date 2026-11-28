@@ -78,7 +78,7 @@ function BookSyncUI.new(scale)
     function K.search(o)
         local options={};for k,v in pairs(o) do options[k]=v end
         options.text=options.text or "Search";options.icon="search";options.iconSize=20
-        options.variant="outline";options.align="left";options.bold=false;options.size="small"
+        options.variant="outline";options.align="left";options.bold=true;options.size="small"
         options.countSuffix=options.countSuffix or " books"
         return K.button(options)
     end

@@ -176,3 +176,11 @@ in to the compiled fixture account and disables the disposable emulator's radios
 Main captures use the fixture companion; the additional next-three Series specimen
 supplies one bounded saved adapter response to exercise remote-only visual states.
 It uses the same native renderer and verifies the real download-card callback.
+
+V1 Stats review: after `home.py`, run `home_stats.py --serial emulator-N --out <home-captures> --statistics-db <synthetic statistics.sqlite3>`.
+It requires 50 distinct history days, copies the DB into the disposable emulator,
+checks all 34 Stats/Battery sizes for native truncation in empty and seeded states,
+and captures both. It stops only the two apps on that explicit emulator before
+replacing its DB and removing its WAL/SHM files. `home_details.py` captures the
+compact local-series card and verifies unavailable end-of-book pace. Both tools
+use the same guarded Emulator and fake ServerAdapter as Home acceptance.

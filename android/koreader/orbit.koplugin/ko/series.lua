@@ -26,7 +26,10 @@ function SeriesUI.paint(host)
         end
         if result.dot_caption then K.label(c,result.dot_caption,edge,p(160),w-2*edge,"caption",{muted=true}) end
         local nextBooks=result.next_books or {};local enabled=host.caps.series and host.caps.series.downloadNext==true and not result.membership_incomplete
-        local card={content=K.canvas(w-2*edge,p(178))}
+        local cardHeight=#nextBooks>0 and 178 or 76
+        top=p(177+cardHeight+10)
+        host.series_card_height=p(cardHeight)
+        local card={content=K.canvas(w-2*edge,p(cardHeight))}
         K.label(card.content,#nextBooks>0 and "Download the next "..#nextBooks or "Series on this device",p(17),p(20),p(360),"body",{bold=true})
         K.label(card.content,result.membership_incomplete and "Saved membership incomplete" or #nextBooks>0 and "Keeps the series ready offline" or result.earlier_pending and "Earlier unread books available" or result.remaining_saved and "Every remaining book is on this device" or result.local_known and "No remaining books" or "Device state not saved",p(17),p(45),w-2*edge-p(34),"caption",{muted=true})
         K.put(card.content,K.button{text=#nextBooks>0 and "Download next "..#nextBooks or "Series downloads…",w=p(204),icon=#nextBooks>0 and "arrowD" or nil,enabled=enabled,
@@ -35,7 +38,7 @@ function SeriesUI.paint(host)
             K.action(card.content,tostring(b.number or i),nil,p(17),p(80+(i-1)*30),p(24),p(24),nil,true,true)
             K.label(card.content,b.title or "Untitled",p(51),p(80+(i-1)*30),w-2*edge-p(85),"small",{bold=true})
         end
-        K.put(c,K.frame(card.content,{w=w-2*edge,h=p(178),border=p(2),radius=p(16)}),edge,p(177))
+        K.put(c,K.frame(card.content,{w=w-2*edge,h=p(cardHeight),border=p(2),radius=p(16)}),edge,p(177))
         for i,b in ipairs(result.items or {}) do
             K.bookRow(c,b,edge,top+(i-1)*row,w-2*edge,row,function() host:dispatch("book",b) end,function() host:dispatch("more",b) end)
         end

@@ -44,6 +44,9 @@ bb:writeToFile("/sdcard/koreader/kit-render.png");bb:free();widget:free();return
         evidence.append({"component": name, "size": result})
     # Callback and edge-value regressions, with the production InputContainer handlers.
     device.command('''local K=BookSyncUI.new(2);local n=0;assert(K.formatCount(2418)=="2,418");assert(K.formatCount(1234567)=="1,234,567")
+local search=K.search{count=2418,w=388};local label,count
+local function labels(w) if w.face and w.text=="Search" then label=w end;if w.face and w.text=="2,418 books" then count=w end;for _,c in ipairs(w) do labels(c) end end
+labels(search);assert(label and label.bold);assert(count and not count.bold and count.fgcolor==K.gray);search:free()
 local b=K.button{text="Disabled",w=200,enabled=false,callback=function() n=n+1 end};b:onKitTap();assert(n==0);b:free()
 b=K.button{text="Enabled",w=200,callback=function() n=n+1 end};local BB=require("ffi/blitbuffer");local bb=BB.new(600,300,BB.TYPE_BB8);b:paintTo(bb,200,100);assert(b.ges_events.KitTap[1]:match{ges="tap",pos={x=250,y=120,w=0,h=0}});assert(not b.ges_events.KitTap[1]:match{ges="tap",pos={x=10,y=10,w=0,h=0}});b:onKitTap();assert(n==1);bb:free();b:free()
 local t=K.toggle{value=false,onChange=function(v) assert(v);n=n+1 end};t:onKitTap();assert(n==2);t:free()

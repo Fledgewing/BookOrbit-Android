@@ -12,7 +12,7 @@ Fixture titles, cover artwork and counts differ; all 59 fixture books are on dev
 
 ![Home · page 2](home-2-pair.png)
 
-V1 owns the header, grid and page indicator. Stats and Battery widget internals, their typography and session data come from the separately integrated X3/X2 work; this pair explicitly records the remaining styling differences.
+X2 synthetic statistics DB: 50 days, 6,600 recorded page visits and real hourly/weekly aggregates. Values differ from the invented mockup; this dataset is concentrated at night. Battery deliberately remains unmeasured.
 
 ![Widget editor](editor-pair.png)
 
@@ -26,16 +26,33 @@ Five illustrated choices, release badges, descriptions, size spans and Add actio
 
 The same native size callback is exercised; free cells and neighbours stay in place.
 
+![Stats · empty history](home-2-empty-pair.png)
+
+Same real renderers with an empty statistics DB: short unknown-value copy, no truncated labels. The approved populated mockup is retained on the left for shape/spacing comparison.
+
+![Series · all books local](series-local-pair.png)
+
+The local-series card contracts from 178 to 76 design pixels; no reserved rows for remote downloads. The approved remote-download state remains on the left.
+
+![End of book · no measured pace](end-empty-pair.png)
+
+No measured reading history yields an em dash for pace. Synthetic title, availability and finish status differ from the mockup.
+
 ![Remote cover badge](remote-cover.png)
 
 Native cover specimen without a local file; the default fixture is fully on device.
 
 ## Validation
 
+- Native `home_stats.py`: all 34 Stats/Battery sizes in both empty and seeded states;
+  every admitted native TextWidget is checked with `isTruncated()` and for literal
+  ellipses. The supplied X2 DB contains exactly 50 distinct history days.
+- Native `home_details.py`: compact local-series card and unavailable finish pace.
+- Native `ui_kit.py`: 15 component renders plus bold Search / muted regular count.
 - Native `home.py`: default spans, ready views/covers, zero-query editor/picker,
   real move and next-fitting-size callbacks, saved layout persistence.
-- Lua flows: 319 passed, 0 failed.
-- Lua logic: 268 passed, 0 failed, plus 13 focused presentation assertions.
+- Lua flows: 320 passed, 0 failed.
+- Lua logic: 270 passed, 0 failed, plus 13 focused presentation assertions.
 - KOReader source-symbol compatibility passed at pinned `9192014` (the optional
   koreader-base FFI static check was skipped); native FFI rendering ran on Android.
 - Feature-matrix checks: 4 passed.
@@ -51,8 +68,9 @@ through the real layout save API, and restores defaults after persistence checks
 
 Noto Serif/Sans substitute for the proprietary mockup faces; native font hinting and
 SVG rasterization differ. Book names, artwork, totals, available-cover state and
-picker page count follow the synthetic fixture/installed registry. Stats/Battery
-widget rendering and production data come from the integrated X3/X2 slices. Their
-remaining styling differences include smaller text, truncated long metric labels, and empty local-session graphs in this fixture. These internals are outside V1; V1 changes page 2's host chrome and
-placement only. This evidence does
-not claim device acceptance or a release.
+picker page count follow the synthetic fixture/installed registry. The supplied
+50-day statistics DB concentrates sessions at night; charts and totals reflect
+those real fixture rows rather than the mockup's invented distribution. Battery
+has no measured charge/rate history, so its short empty state is intentional.
+No truncated Stats/Battery labels remain in either tested state. This evidence
+does not claim device acceptance or a release.

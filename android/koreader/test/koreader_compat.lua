@@ -151,7 +151,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
-    { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free", "setText" } },
+    { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free", "setText", "isTruncated" } },
     { "frontend/ui/widget/imagewidget.lua", { "_render", "paintTo", "free", {"rotation_angle", F} } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
