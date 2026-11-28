@@ -136,7 +136,10 @@ local function class(base)
 end
 local Widget = class()
 Widget.__index = Widget
-function Widget:getSize() return self.dimen or {w=self.width or self.max_width or 0,h=self.height or 20} end
+function Widget:getSize()
+    if self.dimen then return self.dimen end
+    return {w=self.width or self.max_width or 20,h=self.height or 20}
+end
 
 -- A tiny JNI: objects are Lua tables, method ids are names.
 local env_fns = {
@@ -870,7 +873,12 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     ok(#items.bookorbit.sub_item_table == 0, "plugin menu untouched")
     local entry = items.orbit_android
     ok(entry and entry.text == "BookSync" and entry.sorting_hint == "tools", "Tools entry")
-    local sub = entry.sub_item_table_func()
+    local opened,closed=false,false
+    m.showSettings=function() opened=true end
+    entry.callback({closeMenu=function() closed=true end})
+    ok(opened and closed,"Tools routes into the owned settings page")
+    eq(entry.sub_item_table_func,nil,"BookSync has no stock settings submenu")
+    local sub = m:menuItems()
     ok(#sub >= 9, "items " .. #sub)
     local titles = {}
     for _, it in ipairs(sub) do if it.text then titles[it.text] = true end end

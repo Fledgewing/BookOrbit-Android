@@ -10,6 +10,7 @@ return function(here, test, ok, eq, audit)
             return c
         end
         local Widget=class()
+        function Widget:getSize() return {w=self.width or self.max_width or self.dimen and self.dimen.w or 20,h=self.height or self.dimen and self.dimen.h or 20} end
         function Widget:onShowKeyboard() end
         function Widget:getInputText() return self.input or "" end
         W.face={hash="fixture",ftsize={getEmboldenHalfStrength=function(_,factor) return factor end}}
@@ -62,8 +63,10 @@ return function(here, test, ok, eq, audit)
             if name:match("^ui/widget/") then return Widget end
             return require(name)
         end
+        E.SOURCE_DIR=here.."/../orbit.koplugin"
+        E.Device=E.require("device")
         local function load(name) local fn=assert(loadfile(here.."/../orbit.koplugin/"..name)); setfenv(fn,E); fn() end
-        for _,name in ipairs({"logic/ui_util.lua","logic/cache.lua","logic/budgets.lua","logic/reading_style.lua","logic/settings_ui.lua","logic/sheet_layout.lua","logic/reader_panel.lua","ko/library.lua","ko/library_services.lua","ko/endsheet.lua","ko/reading_style.lua","ko/custom_reading.lua","ko/reader_panel.lua"}) do load(name) end
+        for _,name in ipairs({"logic/ui_util.lua","logic/cache.lua","logic/budgets.lua","logic/reading_style.lua","logic/settings_ui.lua","logic/sheet_layout.lua","logic/reader_panel.lua","ko/library.lua","ko/library_services.lua","ko/endsheet.lua","ko/reading_style.lua","ko/ui/kit.lua","ko/ui/settings_page.lua","ko/custom_reading.lua","ko/reader_panel.lua"}) do load(name) end
         if audit then
             local paint=E.Library.paint
             E.Library.paint=function(screen)
