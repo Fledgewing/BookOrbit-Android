@@ -66,7 +66,9 @@ opening, top/bottom reader panels, live Custom value edits with native setting
 assertions, position consent/acceptance,
 end sheet → Series, Full Refresh, and offline Library. It saves PNGs and a small
 `review.json` outside the repository. Projection readiness is polled; an assertion
-failure ends the run. There are no scenario retries.
+failure ends the run. Home readiness includes every visible widget snapshot;
+covered widgets and stale list/Series roles do not hold a different screen open.
+The per-screen deadline stays 20 seconds. There are no scenario retries.
 
 For upgrade/fresh-install checks, use another disposable emulator. Supply an
 external `git archive origin/main` snapshot containing `android/`, `shared/`,

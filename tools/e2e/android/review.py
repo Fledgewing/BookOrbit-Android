@@ -24,10 +24,8 @@ def review(device, out):
     def step(name,code,check=None):
         result=device.command(code)
         time.sleep(1)
-        deadline=time.monotonic()+20
-        while device.command('local h=HomeHost.active;local front=top();local pending=AccountView.active and AccountView.active.busy or h and front==h and ((h.list_result and h.list_result.pending) or (h.series_result and h.series_result.pending));return pending and "pending" or "ready"')=="pending":
-            if time.monotonic()>deadline: raise TimeoutError(name+" did not publish its projection")
-            time.sleep(.2)
+        try:device.wait_projection()
+        except TimeoutError as error:raise TimeoutError(name+" did not publish its projection") from error
         if check: device.command(check)
         device.shot(out/(name+".png"))
         evidence.append({"screen":name,"result":result})

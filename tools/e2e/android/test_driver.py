@@ -30,6 +30,20 @@ class EmulatorSafetyTest(unittest.TestCase):
         with patch('run.uuid.uuid4',return_value=Mock(hex=request)),patch('time.sleep'):
             with self.assertRaisesRegex(RuntimeError,'fixture failure'):device.command('error("fixture failure")')
 
+    def test_visible_projection_wait_does_not_advance_past_loading_home_widgets(self):
+        device=object.__new__(Emulator);device.command=Mock(side_effect=["pending","pending","ready"])
+        with patch("time.sleep"):device.wait_projection()
+        self.assertEqual(3,device.command.call_count)
+        for call in device.command.call_args_list:
+            code=call.args[0]
+            self.assertIn("h.signatures",code);self.assertIn("h.series_key",code);self.assertIn("h.list_layout",code)
+            self.assertNotIn("HomeHost.show",code);self.assertNotIn("Library.retry",code)
+
+    def test_visible_projection_wait_keeps_the_existing_twenty_second_deadline(self):
+        device=object.__new__(Emulator);device.command=Mock(return_value="pending")
+        with patch("time.monotonic",side_effect=[0,21]):
+            with self.assertRaises(TimeoutError):device.wait_projection()
+
     def test_color_notice_dismissal_matches_only_the_specific_native_first_run_notice(self):
         device=object.__new__(Emulator);device.command=Mock(return_value="absent")
         self.assertEqual("absent",device.dismiss_color_notice())
