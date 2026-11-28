@@ -18,6 +18,39 @@ its full message still go through the gate.
 Another: BookSync position sync's Yes / No popup when another reader's place turns up after the page rendered
 (`ko/orbismart.lua`, [position-sync.md](position-sync.md) ruling 1): one draw, no animation, one at a time.
 
+## Approved reminder exception (2026-11-27)
+
+[Bedtime and Rest your eyes](reminders.md) share one narrowly typed reminder
+exception. A service-owned, claimed, unexpired occurrence authorizes one initial
+draw immediately on the main loop, against the current visible lifetime. Generic
+messages, `UserOpened`, position consent, boolean consent and background callbacks
+cannot exercise it. A hidden, sleeping, retired or A→B→A lifetime cannot revive a
+permit. One sheet owns presentation at a time; reminders wait for position consent
+and other modals rather than replacing or stacking on them.
+
+Time kind requires proven clock provenance and its inclusive 60-minute missed
+window; it may appear on the current page, Home or a reader-opened menu. Unknown
+clock invalidates undrawn time grants. Interval kind uses monotonic active reading
+and only a still-visible page in the current session; menus, modals, hidden views
+and a five-minute idle break retire undrawn thresholds. Unknown wall time does
+not block interval kind. Bedtime wins simultaneous arbitration. A visible sheet
+has no countdown, automatic expiry, animation or timer-driven repaint.
+
+Initial focus is Got it (time) or Done (interval). Opening/held/repeated input is
+drained. Back, page-turn mappings/gestures and outside taps dismiss and consume
+input. Only a fresh explicit action can snooze, turn off or request Sleep. Sleep
+is a Library response after durable occurrence and position checkpoints, then the
+existing native sleep path; failures keep the page and safe initial focus. No
+claim wakes a device, starts an activity, foregrounds an app, enables a helper,
+closes a book or authorizes a notification, update or network operation.
+
+Firmware's `ReadingGate` uses a move-only one-use reminder permit and checks it
+immediately before drawing. Durable device-effect completion is independent of
+view lifetime and never paints. Explicit focus/input and visible action errors may
+redraw the already owned sheet; background work cannot piggyback on that draw.
+The firmware gate and its guard tests change together; Android's plugin and
+companion guards remain part of the parallel Android implementation acceptance.
+
 ## The gate
 
 **Plugin.** `reading()` (`ko/home.lua`) is true when a document is open, KOReader is in front
