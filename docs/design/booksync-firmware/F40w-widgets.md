@@ -59,13 +59,14 @@ future blank cells agree; the week total includes only its six known days.
 
 Every row and all three profile views are **NEEDS APPROVAL**. A main size is a
 reviewed composition, not approval of all registry spans. Later alternate sizes
-need their own fit review. X3 may use the full text column inside the proposed
-main allocation; it does not inherit a spatial editor or touch target.
+need their own fit review. Also reading and Lists explicitly use X3 class overrides of 2×2 and 2×3,
+respectively, for the full text column. They do not inherit a spatial editor
+or touch target. Battery uses a 2×3 main view to retain its full estimate block.
 
 | Priority | Widget | Main size | Visual treatment |
 |---|---|---|---|
 | 01 | [Continue reading](f40w-widgets.html#continue-reading) | 2×2 | Reverse cover hero; X3 chapter, large percentage and resume ledger. |
-| 02 | [Also reading](f40w-widgets.html#also-reading) | 1×2 | Two cover/progress rows; X3 numbered progress rows. |
+| 02 | [Also reading](f40w-widgets.html#also-reading) | X4 1×2; X3 2×2 | Two cover/progress rows; X3 numbered progress rows. |
 | 03 | [Recently added](f40w-widgets.html#recently-added) | 2×2 | Three covers with added-date captions; X3 dated title rows. |
 | 04 | [Book list](f40w-widgets.html#booklist) | 2×3 | Cover stamps, position bars and reading metadata; X3 ruled title rows. |
 | 05 | [This week](f40w-widgets.html#week) | 2×2 | Seven daily bars; X3 two-column day/minute ledger. |
@@ -78,8 +79,8 @@ main allocation; it does not inherit a spatial editor or touch target.
 | 12 | [Finish forecast](f40w-widgets.html#forecast) | 2×2 | Current title, large time left, position bar and finish-date ledger. |
 | 13 | [Monthly reading](f40w-widgets.html#monthly-rings) | 2×3 | Twelve monthly bars; X3 twelve labelled values in two columns. |
 | 14 | [Pages read](f40w-widgets.html#pages-turned) | 2×2 | Monospaced daily odometer and separate lifetime count. |
-| 15 | [Battery](f40w-widgets.html#battery) | 2×2 | Level glyph, usual/reading/standby estimates, two rates and weekly use. |
-| 16 | [Lists](f40w-widgets.html#lists) | 1×3 | Icon/name/count rows; X3 full-width ruled list. |
+| 15 | [Battery](f40w-widgets.html#battery) | 2×3 | Level glyph, usual/reading/standby estimates, two rates and weekly use. |
+| 16 | [Lists](f40w-widgets.html#lists) | X4 1×3; X3 2×3 | Icon/name/count rows; X3 full-width ruled list. |
 | 17 | [Library](f40w-widgets.html#library) | 2×2 | Account/device headline totals, patterned storage bar and browse rows. |
 | 18 | [Want to read](f40w-widgets.html#want-to-read) | 2×2 | Cover shelf with saved-pick captions; X3 saved-title list. |
 | 19 | [Pick back up](f40w-widgets.html#pick-back-up) | 2×2 | Cover shelf with older-last-read captions; X3 dated progress list. |
