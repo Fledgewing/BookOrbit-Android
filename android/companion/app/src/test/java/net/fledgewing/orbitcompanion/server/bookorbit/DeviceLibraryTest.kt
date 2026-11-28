@@ -8,6 +8,24 @@ import java.io.File
 import java.nio.file.Files
 
 class DeviceLibraryTest {
+    @Test fun localPickBackUpRemovesTheLatestReaderBeforeApplyingItsQuery() {
+        val root=Files.createTempDirectory("local-pick-back-up").toFile()
+        try {
+            for(i in 1..3) {
+                File(root,"book-$i.epub").writeText("fixture")
+                val dir=File(root,"book-$i.sdr").apply { mkdirs() }
+                File(dir,"metadata.epub.lua").apply {
+                    writeText("return "+String(LuaValue.encode(mapOf("doc_props" to mapOf("title" to "Book $i"),"summary" to mapOf("status" to "reading"))),Charsets.ISO_8859_1))
+                    setLastModified(1_700_000_000_000L+i*100_000L)
+                }
+            }
+            val adapter=DeviceLibrary(listOf(root))
+            fun window(query:Map<String,Any?> = emptyMap())=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "window","source" to "pick-back-up","query" to query))
+            assertEquals(listOf("Book 1","Book 2"),(window()["items"] as List<*>).map { (it as Map<*,*>)["title"] })
+            assertEquals(listOf("Book 2"),(window(mapOf("q" to "Book 2"))["items"] as List<*>).map { (it as Map<*,*>)["title"] })
+            assertEquals(2,window()["total"])
+        } finally { root.deleteRecursively() }
+    }
     @Test fun localSeriesAndEndSheetUseTheSameBoundedNeutralRows() {
         val root=Files.createTempDirectory("local-series").toFile()
         try {

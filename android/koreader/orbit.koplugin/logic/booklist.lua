@@ -3,8 +3,9 @@
 BookList = {PAGE_SIZE=6, categories={"builtin","lists","series","authors","collections","libraries"},
     captions={"None","Date added","Progress","Author"}, styles={"Cover shelf","Rows with progress"},
     sorts={"List order","Title","Author","Last read"},
-    names={custom="Custom filter",recent="Recently added",wtr="Want to read",reading="Reading now",finished="Finished",device="On this device"},
+    names={pickup="Pick back up",custom="Custom filter",recent="Recently added",wtr="Want to read",reading="Reading now",finished="Finished",device="On this device"},
     presets={
+        pickup={title="Pick back up",src="pickup",style=0,sort=0,cap=3},
         also={title="Also reading",src="reading",style=1,sort=3,cap=2},
         recent={title="Recently added",src="recent",style=0,sort=0,cap=1},
         wtr={title="Want to read",src="wtr",style=0,sort=0,cap=0},
@@ -36,6 +37,7 @@ function BookList.choose(cfg, option)
     local next=Layout.copy(cfg)
     local automatic=not cfg.renamed and (cfg.title==BookList.name(cfg) or cfg.title=="Book list" or cfg.title=="Also reading" or cfg.title=="On device")
     next.src=option.src; next.source_title=option.title
+    if option.default_sort~=nil then next.sort=option.default_sort end
     next.offset=nil
     if cfg.src~=option.src then next.source=nil; next.exclude_current=nil end
     if automatic then next.title=option.title end
@@ -58,5 +60,5 @@ end
 function BookList.source(cfg)
     local kind,key=cfg.src:match("^(%a+):(.+)$")
     if kind then return {kind=kind,key=key} end
-    return cfg.source or ({recent="recently-added",wtr="want-to-read",reading="reading",finished="finished",device="on-device",custom="library/all"})[cfg.src]
+    return cfg.source or ({pickup="pick-back-up",recent="recently-added",wtr="want-to-read",reading="reading",finished="finished",device="on-device",custom="library/all"})[cfg.src]
 end

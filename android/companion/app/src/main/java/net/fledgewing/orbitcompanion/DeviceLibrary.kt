@@ -59,12 +59,12 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
             "status" to mapOf("read" to true,"write" to false))
         if(op in setOf("lists","collections")) return rows(emptyList<Any>())
         if(op=="sources") {
-            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","Finished",books.count { it["status"]=="finished" }))
+            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","Finished",books.count { it["status"]=="finished" }),Triple("pickup","Pick back up",(books.count { it["status"] in setOf("reading","rereading") }-1).coerceAtLeast(0)))
             val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
             val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
             val category=request["category"] as? String ?: "builtin"
             val available=when(category) {
-                "builtin" -> definitions.map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count) }
+                "builtin" -> definitions.map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count,"default_sort" to 0.takeIf { src=="pickup" }) }
                 "authors","series" -> {
                     val kind=if(category=="authors") "author" else "series"
                     val counts=books.flatMap { book -> (book[if(category=="authors") "authors" else "series"] as? List<*>)?.filterIsInstance<String>().orEmpty().distinct() }.groupingBy { it }.eachCount()
@@ -120,11 +120,14 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         LibraryFilter.validate(filter)
         val source=request["source"]
         val context=source as? Map<*,*>
-        val sourceFilter=if(context?.get("kind")=="author") mapOf("author" to listOf(context["key"])) else if(context?.get("kind")=="series") mapOf("series" to listOf(context["key"])) else when(source) { "reading" -> mapOf("show" to "reading"); "finished" -> mapOf("show" to "finished"); "want-to-read" -> mapOf("wtr" to true); else -> emptyMap() }
-        var selected=if(source !in setOf("all","library/all","on-device","reading","finished","search") && context?.get("kind") !in setOf("author","series")) emptyList() else books.filter { LibraryFilter.matches(it,sourceFilter) && LibraryFilter.matches(it,filter) }
-        val sort=if(filter["sort"]==null && source=="reading") filter+mapOf("sort" to "last","dir" to "desc") else filter
+        val sourceFilter=if(context?.get("kind")=="author") mapOf("author" to listOf(context["key"])) else if(context?.get("kind")=="series") mapOf("series" to listOf(context["key"])) else when(source) { "reading","pick-back-up" -> mapOf("show" to "reading"); "finished" -> mapOf("show" to "finished"); "want-to-read" -> mapOf("wtr" to true); else -> emptyMap() }
+        var selected=if(source !in setOf("all","library/all","on-device","reading","pick-back-up","finished","search") && context?.get("kind") !in setOf("author","series")) emptyList() else books.filter { LibraryFilter.matches(it,sourceFilter) && LibraryFilter.matches(it,filter) }
+        val sort=if(filter["sort"]==null && source in setOf("reading","pick-back-up")) filter+mapOf("sort" to "last","dir" to if(source=="pick-back-up") "asc" else "desc") else filter
         selected=selected.sortedWith(LibraryFilter.comparator(sort))
-        if(request["exclude_current"]==true && source=="reading") selected=selected.drop(1)
+        if((request["exclude_current"]==true || source=="pick-back-up") && source in setOf("reading","pick-back-up")) {
+            val current=books.filter { LibraryFilter.matches(it,mapOf("show" to "reading")) }.minWithOrNull(LibraryFilter.comparator(mapOf("sort" to "last","dir" to "desc")))?.get("key")
+            selected=selected.filter { it["key"]!=current }
+        }
         val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
         val limit=((request["limit"] as? Number)?.toInt() ?: 24).coerceIn(1,24)
         if(op=="groups") return SeriesPresentation.groups(selected,filter,offset,limit.coerceAtLeast(5),
