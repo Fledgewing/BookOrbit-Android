@@ -18,7 +18,13 @@ function ReaderPanelPlan.model(result, battery)
     local stats = b.stats or {}
     local battery_text=battery and battery.display and battery.display.page_estimate
         or "Battery estimate not available yet"
-    return { key=b.key, title=b.title or "Book info not saved yet",
+    local series=b.series_line
+    if not series then
+        local name=type(b.series)=="table" and b.series[1] or b.series
+        if type(name)=="string" then series=name..(b.series_position and " · Book "..tostring(b.series_position) or "") end
+    end
+    return { key=b.key, time_left=b.time_left, chapter_time_left=b.chapter_time_left, cover_path=b.cover_path, description=b.description, series_line=series,
+        total_pages=b.total_pages, started=b.started, stats=stats, title=b.title or "Book info not saved yet",
         author=table.concat(b.authors or {}, ", "), progress=pct and pct/100,
         progress_text=pct and (string.format("%d%% read", math.floor(pct+0.5))) or "Progress not saved yet",
         battery=battery_text,
@@ -43,4 +49,20 @@ function ReaderPanelPlan.sizeDots(current)
     local dots={}
     for i=1,#FONT_SIZES do dots[i]=i<=selected and "●" or "○" end
     return table.concat(dots)
+end
+
+-- Number entry is bounded before parsing; invalid keys and oversized values never
+-- escape into the document engine. Range validation remains Library.readerGo's.
+function ReaderPanelPlan.keypad(value,key)
+    value=tostring(value or "")
+    if key=="back" then return value:sub(1,-2) end
+    if type(key)~="string" or not key:match("^%d$") or #value>=6 then return value end
+    return (value=="0" and "" or value)..key
+end
+function ReaderPanelPlan.segment(cell)
+    local text=cell.display_text or cell.text or ""
+    local selected=text:sub(1,#"✓ ")=="✓ "
+    text=text:gsub("^✓ ",""):gsub(" ✎$","")
+    local name,detail=text:match("^(Custom) · (.*)$")
+    return name or text,detail,selected
 end

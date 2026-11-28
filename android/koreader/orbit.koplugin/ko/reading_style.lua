@@ -351,10 +351,10 @@ end
 -- list never loads a TOC, parses a sidecar, filters the full annotation table or
 -- asks the document engine to search on the UI thread.
 local function navigationText(value,maximum)
-    local text=type(value)=="string" and value:gsub("[%c]"," ") or tostring(value or "")
+    local text=type(value)=="string" and value or tostring(value or "")
     local cut=math.min(#text,maximum)
     while cut>0 and text:byte(cut+1) and text:byte(cut+1)>=128 and text:byte(cut+1)<192 do cut=cut-1 end
-    return text:sub(1,cut)
+    return (text:sub(1,cut):gsub("[%c]"," "))
 end
 local function navigationList(ui,kind)
     if kind=="contents" then return ui.toc and ui.toc.toc
@@ -364,12 +364,12 @@ local function navigationList(ui,kind)
         if search and search.document==ui.document and search.file==ui.document.file then return search.results end
     end
 end
-function Library.readerWindow(ui,kind,offset,limit)
+function Library.readerWindow(ui,kind,offset,limit,current)
     local finish=span("navigation-window")
     local document=ui and ui.document
     local list=document and navigationList(ui,kind)
     if type(list)~="table" then finish();return {items={},unavailable=true,total=0} end
-    limit=math.max(1,math.min(8,math.floor(limit or 8)))
+    limit=math.max(1,math.min(kind=="contents" and 11 or 8,math.floor(limit or 8)))
     offset=math.max(0,math.min(math.floor(offset or 0),math.max(0,#list-1)))
     local serial=(ui.booksync_navigation_serial or 0)+1;ui.booksync_navigation_serial=serial
     local session={document=document,file=document.file,list=list,kind=kind,serial=serial,refs={}}
@@ -379,23 +379,37 @@ function Library.readerWindow(ui,kind,offset,limit)
         if type(item)=="table" then
             session.refs[#rows+1]={index=index,item=item}
             local title,location,depth
+            local display={}
             if kind=="contents" then
+                display.page=item.page
                 title=item.title or "Chapter";depth=math.max(0,math.min(5,(tonumber(item.depth) or 1)-1))
                 location=item.page
                 if ui.annotation and ui.annotation.getPageRef then location=ui.annotation:getPageRef(item.xpointer or item.page,item.page) or location end
             elseif kind=="annotations" then
-                title=(item.drawer and "Highlight · " or "Bookmark · ")..(item.text or item.notes or "Saved position")
+                title=(item.drawer and "Highlight · " or "Bookmark · ")..navigationText(item.text or item.notes or "Saved position",240)
+                display.annotation_kind=item.drawer and "highlight" or "bookmark"
+                display.quote=navigationText(item.text or "Saved position",360)
+                display.note=navigationText(item.note,180)
+                display.chapter=navigationText(item.chapter,120)
                 location=ui.bookmark and ui.bookmark.getBookmarkPageString and ui.bookmark:getBookmarkPageString(item.page) or item.page
             else
                 title=(item.prev_text or "").." "..(item.matched_text or "Match").." "..(item.next_text or "")
-                location=type(item.start)=="number" and item.start or nil
+                display.before=navigationText(item.prev_text,240)
+                display.match=navigationText(item.matched_text or "Match",160)
+                display.after=navigationText(item.next_text,240)
+                location=item.page or type(item.start)=="number" and item.start or nil
             end
-            rows[#rows+1]={title=navigationText(title,240),location=navigationText(location,48),depth=depth or 0,index=index}
+            display.title=navigationText(title,240);display.location=navigationText(location,48);display.depth=depth or 0;display.index=index
+            rows[#rows+1]=display
         end
     end
     ui.booksync_navigation=session
     local result={items=rows,total=#list,offset=offset,next=(offset+limit<#list) and offset+limit or nil,token=serial,
         query=kind=="search" and navigationText(ui.booksync_search.query,160) or nil,error=kind=="search" and ui.booksync_search.error or nil}
+    if kind=="contents" and type(current)=="number" then
+        result.current=current
+        for _,row in ipairs(rows) do row.current=row.index==current;row.finished=row.index<current end
+    end
     local bytes=#UIUtil.encode(result)
     assert(Budgets.check(Budgets.get("screens","reader-navigation"),{rows=#rows+1,bytes=bytes,snapshotBytes=bytes,network=0,spawns=0,roundTrips=0}))
     finish();return result
@@ -466,7 +480,12 @@ function Library.readerSearch(ui,query,info,done)
                 if type(item)~="table" or not (type(item.start)=="number" or type(item.start)=="string" and #item.start<=4096)
                     or type(item["end"])=="string" and #item["end"]>4096 then return {ok=false} end
                 local boxes={};for j=1,math.min(64,#(item.boxes or {})) do boxes[j]=item.boxes[j] end
-                rows[#rows+1]={start=item.start,["end"]=item["end"],boxes=boxes,
+                local page=type(item.start)=="number" and item.start or nil
+                if not page and document.getPageFromXPointer then
+                    local resolved,value=pcall(document.getPageFromXPointer,document,item.start)
+                    if resolved and type(value)=="number" and value>=1 then page=value end
+                end
+                rows[#rows+1]={start=item.start,["end"]=item["end"],boxes=boxes,page=page,
                     prev_text=navigationText(item.prev_text,160),matched_text=navigationText(item.matched_text,160),next_text=navigationText(item.next_text,160)}
             end
             local result={ok=true,items=rows}

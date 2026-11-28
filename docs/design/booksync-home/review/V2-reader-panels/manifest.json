@@ -1,0 +1,25 @@
+{
+  "serial": "emulator-5590",
+  "resolution": "1404x1872",
+  "dpi": 300,
+  "library_books": 60,
+  "covers": 60,
+  "in_progress": 7,
+  "finished": 5,
+  "history_days": 58,
+  "native_annotations": 5,
+  "book_info_supplied_model": "Supplemental screenshot supplies display-only description and stats; real worker unavailable state is captured separately.",
+  "fake_server": "tools/e2e/android/E2eServerAdapters.kt",
+  "physical_devices": false,
+  "reading_settings_supplied_model": "Supplemental capture supplies warmth and pace display fields; the generic emulator supports front light but not natural light. The primary capture is actual hardware capability.",
+  "kit_commit": "80ef0255",
+  "pairs": 11,
+  "validation": {
+    "reader_tests": 42,
+    "companion_reader_controls_tests": 7,
+    "native_navigation_checks": 13,
+    "lintDebug": "passed",
+    "features": "4 tests passed",
+    "koreader_symbols": "passed; ffi checks skipped because base checkout was not supplied"
+  }
+}

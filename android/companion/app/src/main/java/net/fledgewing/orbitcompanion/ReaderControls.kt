@@ -17,9 +17,9 @@ object ReaderControls {
             ?: fraction?.let { f -> if (chapterTotal <= 64) chapters.count { it <= f }.coerceAtLeast(1) else null }
         val title = (native["chapter_title"] as? String)?.take(256)?.takeIf { it.isNotBlank() }
         return mapOf("items" to listOf(mapOf("progress" to fraction,
-            "position" to if (page != null) "p. $page of $total · ${(fraction!!*100+.5).toInt()}%" else "Position not available yet",
+            "position" to if (page != null) LuaValue.str("p. $page of $total · ${(fraction!!*100+.5).toInt()}%") else "Position not available yet",
             "chapter" to if (chapter != null && chapters.isNotEmpty()) "Chapter $chapter of $chapterTotal" else "Chapters not available yet",
-            "chapter_title" to title?.let { "$chapter · $it" },
+            "chapter_title" to title?.let { LuaValue.str("$chapter · ${LuaValue.utf8(it)}") },
             "markers_reduced" to (chapterTotal > 64), "chapters" to chapters, "bookmarks" to markers("bookmarks"), "marked" to (native["marked"] == true))))
     }
 }

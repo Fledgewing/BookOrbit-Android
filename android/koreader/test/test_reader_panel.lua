@@ -35,4 +35,24 @@ return function(test,eq,ok,here)
         eq(R.fontSize(23,1),24); eq(R.fontSize(100,-1),24)
         eq(R.sizeDots(16),"●○○○○○"); eq(R.sizeDots(22),"●●●●○○"); eq(R.sizeDots(27),"●●●●●●")
     end)
+    test("reader keypad: replaces leading zero, backspaces and bounds entry",function()
+        eq(R.keypad("0","2"),"2");eq(R.keypad("12","back"),"1")
+        eq(R.keypad("","back"),"");eq(R.keypad("123456","7"),"123456")
+        eq(R.keypad("12","-"),"12");eq(R.keypad("12","42"),"12")
+    end)
+    test("reader segments: selection and custom value are separate display fields",function()
+        local name,detail,selected=R.segment{display_text="✓ Custom · 46 px ✎"}
+        eq(name,"Custom");eq(detail,"46 px");eq(selected,true)
+        name,detail,selected=R.segment{text="Literary"}
+        eq(name,"Literary");eq(detail,nil);eq(selected,false)
+    end)
+    test("book info: passes available cover, metadata and stats without creating values",function()
+        local m=R.model({items={{title="Fixture",authors={"A"},cover_path="/fixture/cover.png",description="Description",
+            series_line="Series · Book 2",total_pages=341,started="9 days ago",stats={reading_seconds=120}}}})
+        eq(m.cover_path,"/fixture/cover.png");eq(m.description,"Description");eq(m.series_line,"Series · Book 2")
+        eq(m.total_pages,341);eq(m.started,"9 days ago");eq(m.time,"2 min reading time")
+        eq(R.model({items={}}).total_pages,nil)
+        eq(R.model({items={{series={"Fixture series"},series_position=2}}}).series_line,"Fixture series · Book 2")
+    end)
+
 end
