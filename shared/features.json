@@ -6791,7 +6791,7 @@
         "android": {
           "status": "partial",
           "note": "Conservative local opening-record absence, daily file pick, age/count/size and persistent Next.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-UNOPENED.md",

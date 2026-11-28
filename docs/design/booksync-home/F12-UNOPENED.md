@@ -61,3 +61,8 @@ regression fails before this repair and verifies recovery, bounds, covering dial
 and explicit Retry. The native fixture flushes its existing synthetic history
 before the pool scenario. Shape probes stayed in disposable fixture builds and
 were removed from the source.
+
+Verification: **914 JVM tests**, zero failures/errors, four skips; shared-version,
+debug APK and lint pass. **262 Lua logic / 299 flows**, boundary guards **12/6**,
+feature matrix **4**, emulator driver **10**. Five native pool/list/Next/restart/Open
+checks pass, with screenshots inspected at the minimum card span.
