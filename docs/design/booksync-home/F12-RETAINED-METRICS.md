@@ -25,11 +25,11 @@ protocol, scan, sidecar parse or subprocess enters widget paint.
 
 ## Verification
 
-Companion: 880 tests, zero failures/errors, four skipped; shared-version verification,
+Companion after rebase: 883 tests, zero failures/errors, four skipped; shared-version verification,
 debug build and lint pass. Four new model tests cover precedence/source separation,
 goal year/unknown states, compact budgets and leap-day calendar totals. Existing
 native-statistics tests also verify Today visit-start counting across midnight/DST.
-Lua: 258 logic tests and 272 flows. Added checks cover all permitted sizes,
+Lua: 258 logic tests and 286 flows. Added checks cover all permitted sizes,
 independent provenance, missing values, immutable snapshots and a mixed page sharing
 one row per operation. Server/UI boundary suites: 12/6.
 
@@ -39,6 +39,13 @@ using Lua's length operator on immutable proxy arrays (length zero). The planner
 checks bounded indices, regression tests use nested immutable proxies and the native
 flow rejects error fallback cards. Failed evidence is retained; acceptance requires
 the corrected native run and full registered-widget review.
+
+The corrected native flow passes 19 checks across every permitted card span,
+including the real companion projection and explicit missing-state presentation.
+Visual review also found the compact monthly chart needed more vertical room and
+the streak strip needed footer clearance; both have small-viewport regressions.
+The final full review passes all 63 screens, including all 23 registered widgets.
+Feature matrix: four tests; emulator driver safety: eight tests.
 
 Reproduce after fixture setup:
 
