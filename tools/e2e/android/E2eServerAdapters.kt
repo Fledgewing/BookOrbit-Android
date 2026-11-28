@@ -51,6 +51,7 @@ object ServerAdapters {
         }
         override fun signOut() { prefs.edit().putBoolean("signedIn", false).commit() }
         override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
+            HomeFixture.project(books,request)?.let { return it }
             if(request["op"]=="catalog.state") return mapOf("running" to false,"state" to "complete","phase" to "finished","why" to "finished","freshness" to mapOf("saved" to true))
             if(RetainedFixture.handles(request)) return RetainedFixture.project(root,owner,request)
             if(request["op"]=="sources" && (request["category"] ?: "builtin")=="builtin") {

@@ -1,19 +1,29 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 return function(test,eq,ok,E,W,Widget)
+    local function find(node,key,value)
+        if type(node)~="table" then return end
+        if node[key]==value then return node end
+        for _,child in ipairs(node) do local match=find(child,key,value);if match then return match end end
+    end
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,height=E.Device.screen.getHeight,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            width=E.Device.screen.getWidth,problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,height=E.Device.screen.getHeight,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.Library.layout.codec,news=E.S.news_012_pending,path=E.Library.layout.path,loaded=E.Library.layout.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.FinishUI.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
+        E.Device.screen.getWidth=function() return 702 end
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
         Widget.free=function() end
-        local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
+        local U={Font={getFace=function() return {} end},BB={Color8=function(n) return n end,COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
         U.Text.getSize=function(self) return {w=self.max_width or 0,h=20} end
         Widget.paintTo=function(self,bb,x,y)
             for _,child in ipairs(self) do if child.paintTo then child:paintTo(bb,x,y) end end
         end
         E.require=function(name)
+            if name=="ui/font" then return U.Font end
+            if name=="ui/widget/container/framecontainer" then return U.Frame end
+            if name=="ui/widget/overlapgroup" then return U.Overlap end
+            if name=="ui/widget/progresswidget" then return U.Progress end
             if name=="ui/widget/textwidget" then return U.Text end
             if name=="ffi/blitbuffer" then return U.BB end
             if name=="ui/size" then return {padding={buttontable=0}} end
@@ -75,7 +85,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Shared.pin_locked,E.Shared.refresh=saved.pin,saved.refresh
         E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
-        E.Device.screen.getHeight=saved.height
+        E.Device.screen.getHeight=saved.height;E.Device.screen.getWidth=saved.width
         ok(success,err)
     end
     test("owned card status: Undo and dismiss release one intent and stale replies never show",function() withHost(function()
@@ -274,10 +284,10 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function()
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:turn(2); local index=h.index
-            eq(h[1][1][1].text,"Stats")
-            ok(h[1][1][1].max_width<=h.dimen.w-220,"page title leaves room for Edit and Close")
+            eq(find(h,"text","Stats").text,"Stats")
+            ok(find(h,"text","Stats").max_width<=h.dimen.w-220,"page title leaves room for Search and menu")
             h:showList("Want to read","want-to-read")
-            h:onClose(); eq(h.index,index); eq(h[1][1][1].text,"Stats")
+            h:onClose(); eq(h.index,index); eq(find(h,"text","Stats").text,"Stats")
             local old=E.state.module
             local opened=0
             E.state.module={showSettings=function() opened=opened+1 end}
@@ -422,7 +432,7 @@ return function(test,eq,ok,E,W,Widget)
             local success,err=pcall(function()
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
-                local boundary=canvas[6] -- header, Close, Search, menu, Edit, first widget
+                local boundary=find(canvas,"instance","resume")
                 local failed=boundary[1]
                 local Frame=E.HomeWidgets.ui().Frame
                 Frame.paintTo=function() end
@@ -488,14 +498,10 @@ return function(test,eq,ok,E,W,Widget)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext(); h:onNext()
-            local card=h[1][1][7][1][1]
-            local level,estimate,glyph
-            for _,child in ipairs(card) do
-                if child.text=="78%" then level=true end
-                if child.text=="≈ 2 d 6 h at your usual use" then estimate=true end
-                if child.percentage==.78 then glyph=true end
-            end
-            ok(level and estimate and glyph)
+            local card=find(h,"instance","battery")[1][1]
+            ok(find(card,"text","78%"))
+            ok(find(card,"text","≈ 2 d 6 h at your usual use"))
+            ok(find(card,"percentage",.78))
             local count=0
             for _,a in ipairs(reads) do if a.op=="battery" then count=count+1 end end
             eq(count,1); eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
@@ -527,7 +533,7 @@ return function(test,eq,ok,E,W,Widget)
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             E.Device.screen.getHeight=oldHeight
             h:onNext()
-            local tile=h[1][1][6][1][1]
+            local tile=find(h,"instance","summary")[1][1]
             local links={}; for _,child in ipairs(tile) do if child.callback then links[child.text]=child end end
             ok(links["2 on device ›"]); ok(links["Authors ›"]); ok(links["Series ›"]); ok(links["Collections ›"])
             for _,child in ipairs(tile) do if child.height then
@@ -762,12 +768,13 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function(_,_,U)
             U.Text.getSize=function() return {w=100,h=60} end
             local cover=E.HomeWidgets.cover
-            local y,height
-            E.HomeWidgets.cover=function(_,_,_,top,_,h) y,height=top,h end
+            local y,height,right
+            E.HomeWidgets.cover=function(_,_,x,top,w,h) y,height,right=top,h,x+w end
             local snapshot=E.HomeHostPlan.snapshot({items={{key="fixture",title="Fixture"}},freshness={saved=true}})
-            E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},snapshot,function() end,{w=600,h=280})
+            local card=E.HomeWidgets.card({widget="continue-reading",w=4,h=2,settings={}},snapshot,function() end,{w=600,h=280})
             E.HomeWidgets.cover=cover
-            ok(y>=14+60+4,"cover border must not strike through the heading")
+            ok(y>=14,"cover keeps its top inset")
+            ok(find(card,"text","Fixture").overlap_offset[1]>right,"title and cover occupy separate columns")
             ok(y+height<=278-14,"cover stays within the tile")
         end)
     end)
@@ -775,6 +782,7 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function(_,_,U)
             local b={key="opaque",title="The Moon",authors={"A"},progress=25,local_path="book.epub",series_key="series-key",
                 series_line="Moon · Book 2",time_left="50 m left",finish_forecast="Done by Tuesday"}
+            b.added_label="Yesterday";eq(E.HomeWidgets.caption({cap=1},b),"Yesterday","worker-provided date caption")
             local snap=E.HomeHostPlan.snapshot({items={b},freshness={saved=true}})
             local actions={}
             local card=E.HomeWidgets.card({widget="continue-reading",w=4,h=4,settings={}},snap,
@@ -1007,13 +1015,13 @@ return function(test,eq,ok,E,W,Widget)
             local success,err=pcall(function()
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
-                eq(canvas[2].text,"Not signed in · Sign in"); canvas[2].callback(); eq(kind,"summary")
+                local setup=find(canvas,"text","Not signed in · Sign in");eq(setup.text,"Not signed in · Sign in"); setup.callback(); eq(kind,"summary")
                 for _,control in ipairs(canvas) do if control.text=="Search" then
-                    ok(canvas[2].overlap_offset[1]>=control.overlap_offset[1]+control.width,"setup subtitle does not overlap Search")
+                    ok(setup.overlap_offset[1]+setup.width<=control.overlap_offset[1],"setup subtitle does not overlap Search")
                 end end
                 state={signedIn=true,sync={available=false},opds={available=false}}
                 h:rebuild(); canvas=h[1][1]
-                eq(canvas[2].text,"No sync login · Set up"); canvas[2].callback(); eq(kind,"sync")
+                local setup=find(canvas,"text","No sync login · Set up");eq(setup.text,"No sync login · Set up"); setup.callback(); eq(kind,"sync")
                 eq(h.changed_rects[1].y,0); ok(h.changed_rects[1].h>0)
                 h:dispatch("book",{key="remote-only"})
                 eq(h.download_prompt.title,"No OPDS login, so it can't download")
@@ -1021,7 +1029,7 @@ return function(test,eq,ok,E,W,Widget)
                 state={signedIn=true,sync={available=true},opds={available=true}}
                 h:rebuild()
                 eq(h.account_status,nil)
-                ok(h.changed_rects[1].h>=104 and h.changed_rects[1].h<h.dimen.h,"removing setup action invalidates its header region")
+                ok(h.changed_rects[1].h>=76 and h.changed_rects[1].h<h.dimen.h,"removing setup action invalidates its header region")
             end)
             E.LibraryAdapter.read,E.AccountView.open=read,open
             ok(success,err)

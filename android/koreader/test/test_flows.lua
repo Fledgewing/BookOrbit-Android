@@ -452,7 +452,7 @@ package.preload["ui/geometry"] = function() return { new = plain } end
 package.preload["ui/gesturerange"] = function() return { new = plain } end
 package.preload["ui/font"] = function() return { getFace = function() return {} end } end
 package.preload["ui/size"] = function() return { padding = { large = 10 }, radius = { button = 0 }, line = { thick = 3 } } end
-package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1 } end
+package.preload["ffi/blitbuffer"] = function() return { Color8=function(n) return n end, COLOR_BLACK = 0, COLOR_WHITE = 1 } end
 table.insert(package.loaders, 2, function(name)
     if type(name) == "string" and name:match("^ui/widget/") and not package.preload[name] then
         return function() return Widget:extend{} end

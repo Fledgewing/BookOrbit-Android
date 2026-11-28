@@ -154,3 +154,16 @@ protected settings and book/session departure. It captures native PNGs and
 `reader-companion.json`; synthetic mode/helper preferences are restored afterward.
 The Android 14 fixture uses the explicit Device admin Settings component for
 revocation because that image does not export the generic settings action.
+
+
+Home V1: after the ordinary fixture setup, run `python3 tools/e2e/android/home.py
+--serial emulator-N --out <evidence>`. It requires Pillow for deterministic raster
+cover fixtures and uses a marker in the disposable Books directory to opt into
+`HomeFixture.kt`; other emulator scenarios retain the original adapter behavior.
+The fixture provides synthetic reading/recent/Want to read windows and saved lists,
+while production projections remain unchanged. It seeds 59 books with covers,
+series, three saved in-progress positions and finished history. Native captures
+wait for published views, expected cached covers and a completed repaint. It checks
+that editor/picker previews make no queries and that move/size/save use their real
+callbacks. The size action cycles to the next span that fits, preserving neighbours.
+`--skip-seed` reuses an already seeded disposable AVD.

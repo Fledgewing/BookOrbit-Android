@@ -5389,8 +5389,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets. Fresh same-version startup avoids stale mismatch caching; revealed Home resumes pending updates and hero covers clear measured headings.",
-          "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
+          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets. Fresh same-version startup avoids stale mismatch caching; revealed Home resumes pending updates and hero covers clear measured headings. V1 uses the shared native UI kit for the approved freshness/Search header, serif hero, two-row Also reading, icon-well Lists, counts, three-cover shelves and tab-dot footer; Stats internals remain in their separate slice.",
+          "reason": "deliberately deferred: real-device acceptance and the separate production-data/Stats integration remain; this Android presentation is unreleased",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
@@ -5401,8 +5401,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5412,8 +5412,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5423,8 +5423,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5568,7 +5568,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Opt-in BookSync Home: add/remove, arrow move, allowed-size resize, page names/order, reset and atomic save",
+          "note": "V1 uses cached host snapshots for illustrated editor/picker previews, dimmed/dashed selection, five choices per picker page, next-fitting-size cycling, page actions and the existing atomic save; editor/picker issue no catalog queries",
           "reason": "deliberately deferred: device visual/performance acceptance; Android implementation is unreleased",
           "evidence": [
             {
@@ -5580,8 +5580,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Firmware editor follows",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "note": "Firmware editor follows V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5591,8 +5591,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Firmware editor follows",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "note": "Firmware editor follows V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5602,8 +5602,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Firmware editor follows",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows",
+          "note": "Firmware editor follows V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; Xteink implementation follows; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
               "path": "ROADMAP.md",

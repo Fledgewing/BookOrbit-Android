@@ -152,7 +152,7 @@ local NEEDS = {
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
-    { "frontend/ui/widget/imagewidget.lua", { "_render", "paintTo", "free" } },
+    { "frontend/ui/widget/imagewidget.lua", { "_render", "paintTo", "free", {"rotation_angle", F} } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
@@ -183,7 +183,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRoundedRect", "paintRect", "writeToFile", "free", {"Color8", T} } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRoundedRect", "paintBorder", "lightenRect", "paintRect", "writeToFile", "free", {"Color8", T} } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
