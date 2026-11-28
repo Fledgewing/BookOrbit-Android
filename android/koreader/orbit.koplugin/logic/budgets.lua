@@ -132,8 +132,9 @@ Budgets.screens["settings-sleep-choices"].displayRows = 10
 Budgets.screens["catalog-refresh"] = budget(1,16384,50)
 Budgets.screens["catalog-refresh"].roundTrips = 0
 
--- One finish summary plus two selected cards; recommendation review has ten settings.
-Budgets.screens["end-of-book"] = budget(3,16384,50)
+-- Finish summary + two selected cards, current reader and optional local next cover.
+-- All five materialized rows share one bounded worker batch.
+Budgets.screens["end-of-book"] = budget(5,16384,50)
 Budgets.widgets["end-of-book"] = budget(3,16384,50)
 Budgets.screens["settings-recommendations"] = budget(10,16384,50)
 Budgets.screens["settings-recommendations"].displayRows=18

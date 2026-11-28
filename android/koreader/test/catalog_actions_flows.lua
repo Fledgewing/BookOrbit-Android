@@ -49,13 +49,24 @@ end) end)
 test("catalog actions: finish snapshot paint is bounded and contains no catalog algorithms",function() isolated(function()
     local ui,m,b=fixture();local adapter=E.LibraryAdapter;local requests={}
     E.LibraryAdapter={read=function(raw)
-        local args=E.Cache.decode(raw);eq(args.op,"reader.finish");eq(args.limit,3)
-        return {title="Synthetic",status="Saved",row_count=3,next={book_id="opaque-next"},suggestion={book_id="opaque-suggestion"}},300
+        local args=E.Cache.decode(raw)
+        if args.op=="reader" then eq(args.limit,1);return {items={{cover_path="saved-cover.png",stats={pages_read=341}}}},100 end
+        eq(args.op,"reader.finish");eq(args.limit,3)
+        return {title="Synthetic",status="Saved",row_count=3,next={book_id="opaque-next",local_path="next.epub"},suggestion={book_id="opaque-suggestion"}},300
     end,request=function(batch) requests[#requests+1]=batch;return true end}
     local success,why=pcall(function()
-        local model=E.FinishUI.model(b);eq(model.title,"Synthetic");eq(#requests,1);eq(#requests[1],1)
+        local model=E.FinishUI.model(b);eq(model.title,"Synthetic");eq(#requests,1);eq(#requests[1],3);eq(model.book.cover_path,"saved-cover.png");eq(model.next.book.cover_path,"saved-cover.png");eq(model.stats.pages_read,341)
     end)
     E.LibraryAdapter=adapter;if not success then error(why) end
+end) end)
+test("catalog actions: closing a pending finish sheet cancels polling and stale callbacks stay inert",function() isolated(function()
+    local model=E.FinishUI.model;local calls=0
+    E.FinishUI.model=function() calls=calls+1;error("closed sheet must not request data") end
+    local sheet={model={pending=true}};E.FinishUI.sheet=sheet
+    E.FinishUI.pollSheet(sheet);local pending=E.FinishUI.sheet_retry;ok(pending)
+    E.FinishUI.closeSheet();eq(E.FinishUI.sheet_retry,nil)
+    pending();eq(calls,0);eq(E.FinishUI.sheet,nil)
+    E.FinishUI.model=model
 end) end)
 test("catalog actions: queued copies dispatch once outside reading with open path protection",function() isolated(function()
     local ui,m,b=fixture();local calls={};local enabled=E.S.keep_copies_current
