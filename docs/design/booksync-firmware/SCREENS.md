@@ -388,3 +388,13 @@ of each relevant header. Lists, Details handoffs and transfer states retain
 Android 0.12 behavior; no new destinations are proposed. Preparing/errors stay
 inline and completion updates the originating row. This remains **NEEDS APPROVAL**
 after a docs-only merge; private photographs are not included.
+
+## F36c Series additions — NEEDS APPROVAL
+
+The [F36c state inventory](F36c-series.md) and
+[three-profile gallery](f36c-series.html) propose the missing X3 Series view,
+offline/back states, next-N preview/count/file review and download queue/error
+scenes. **All additions are NEEDS APPROVAL.** Home revision-16 normal X4 Series
+examples and existing B1–B5 approvals remain unchanged. Firmware F36c stays off
+pending these approvals and the Library service dependencies. No firmware or
+submodule pin is changed here; F36a/F36b are separate surfaces.

@@ -1,0 +1,1037 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BookSync · F36c Series · NEEDS APPROVAL</title><style>
+:root{--serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;--sans:"Avenir Next","Helvetica Neue",Helvetica,Arial,sans-serif}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#e7e6e3;color:#1d1d1d;font:15px/1.5 var(--sans)}main{max-width:1140px;padding:32px 26px;margin:auto}h1{font:600 38px/1.15 var(--serif);margin:12px 0}h2{font:600 29px/1.2 var(--serif)}h3{font-size:20px;margin-bottom:6px}a{color:inherit;text-underline-offset:3px}.intro{max-width:880px}.eyebrow{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}nav{position:sticky;top:0;z-index:3;padding:12px;background:#e7e6e3;border-block:1px solid #aaa;display:flex;gap:22px;flex-wrap:wrap}article{padding:26px 0 38px;border-bottom:1px solid #aaa;scroll-margin-top:68px}.provenance{font-size:13px;max-width:960px}.devices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:20px}figure{margin:0;min-width:0}figcaption{margin-top:12px;font-size:13px;line-height:1.4}figcaption p{margin:5px 0}.frame{background:#262626;border-radius:30px;padding:22px 18px 24px;width:516px;zoom:.62;box-shadow:0 1px 0 #fff inset,0 18px 40px #0002}.screen{width:480px;height:800px;background:#fff;color:#000;position:relative;overflow:hidden;font:16px/1.3 var(--sans);display:flex;flex-direction:column}.hdr{height:58px;border-bottom:1px solid #000;display:flex;align-items:center;gap:14px;padding:5px 12px;flex:none}.back{border:1.5px solid #000;border-radius:28px;padding:12px 16px;font-size:14px;font-weight:700}.hdr strong{font-size:18px}.hdr small{font-size:12px;display:block}.content{padding:26px 18px;flex:1;min-height:0}.cap{font-size:12px;letter-spacing:.09em;text-transform:uppercase;font-weight:700}.title{font:700 28px/1.16 var(--serif);margin:12px 0 16px}.body{font-size:18px;line-height:1.45;margin:0 0 22px}.row{min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 10px;border-bottom:1px solid #c0c0c0;font-size:17px}.row span{font-size:14px;text-align:right}.actions{margin-top:22px;display:flex;flex-direction:column;gap:14px}.action{border:1.5px solid #000;border-radius:25px;min-height:50px;padding:13px 18px;font-weight:700;text-align:center;background:#fff}.action.primary{color:#fff;background:#000}.buttons .action.primary{background:#fff;color:#000;box-shadow:0 0 0 2px #fff,0 0 0 5px #000}.buttons .row:first-child{outline:3px solid #000;outline-offset:-3px;border-radius:9px}.foot{margin-top:auto;height:50px;flex:none;border-top:1px solid #000;display:flex;justify-content:space-between;align-items:center;padding:10px 18px;font-size:12px}.hardware{color:#fff;display:flex;justify-content:space-around;font-size:13px;letter-spacing:.03em;padding-top:15px}.hardware span{border-radius:8px;background:#333;padding:8px 15px}.x3 .title{font:700 25px/1.2 var(--sans)}.x3 .row{border-radius:0}.x3 .action{border-radius:0;text-align:left;min-height:44px;padding:10px 12px}.x3 .action.primary{box-shadow:none;outline:2px solid #000;outline-offset:3px}.x3 .action.primary:before{content:'› ';font-weight:700}.x3 .content{padding:22px 18px}.x3 .row:first-child{outline:none}.progress{height:12px;border:1.5px solid #000;margin:24px 0 8px}.progress b{display:block;height:100%;background:#000}.number{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}.keys{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin:18px 0}.keys span{border:1px solid #000;border-radius:5px;height:36px;display:grid;place-items:center;font-size:15px}.buttons .keys span:first-child{outline:3px solid #000;outline-offset:2px}.keys.pin{grid-template-columns:repeat(3,1fr);max-width:280px;margin:16px auto}.keys.pin span{height:42px}.keys.digits{grid-template-columns:repeat(4,1fr);max-width:none}.buttons.has-entry .action.primary,.buttons.has-list .action.primary{box-shadow:none;outline:none}.buttons .row.focused{outline:3px solid #000;outline-offset:-3px;border-radius:9px}.x3 .row.focused{outline:2px solid #000;border-radius:0}.qr{height:190px;width:190px;border:8px solid #fff;outline:2px solid #000;margin:16px auto;background:repeating-conic-gradient(#000 0 25%,#fff 0 50%) 0/22px 22px;display:grid;place-items:center}.qr span{background:#fff;border:3px solid #000;padding:10px;font-size:14px;font-weight:700}.edge{border:2px dashed #000;padding:10px;margin:14px 0;font-size:14px;text-align:center}.state{font-size:13px;border:1px solid #aaa;border-radius:20px;padding:3px 10px;margin-left:10px;vertical-align:middle}details{margin-top:22px}summary{cursor:pointer;font-weight:700}.index{columns:3;line-height:1.8;font-size:13px}@media(max-width:1050px){.devices{grid-template-columns:1fr}.frame{zoom:.8}.index{columns:2}}@media(max-width:500px){main{padding:20px 12px}.frame{zoom:.64}.index{columns:1}}@media print{nav{position:static}.devices{break-inside:avoid}.frame{box-shadow:none}article{break-before:page}}
+/* Touch entry reserves space above a keyboard docked at the screen bottom. */
+.pro > .keys{flex:none;width:100%;max-width:none;margin:0;padding:12px 18px;border-top:1px solid #000}
+.pro > .keys.pin{grid-template-columns:repeat(3,90px);justify-content:center}
+
+/* Scoped F36c tokens; original approved gallery remains unchanged. */
+.series-row{display:flex;gap:12px;align-items:center;border-bottom:1px solid #bbb;padding:10px 0;min-height:76px}.cover{width:42px;height:60px;border:1px solid #000;display:grid;place-items:center;font:700 12px var(--serif);flex:none;background:#efefed}.series-row b{display:block;font-size:17px}.series-row small{display:block;margin-top:5px;font-size:14px}.x3 .cover{display:none}.proposal{padding:12px 16px;border:2px solid #000;max-width:900px}.count-value{font-size:38px;text-align:center;border:2px solid #000;padding:12px}.keys.pin{margin:8px auto;flex:none;width:280px}.keys.pin span{height:40px}.content.count{padding-bottom:8px}.content.count .actions{flex-direction:row}.content.count .action{flex:1}.content.count .body{margin-bottom:14px}.count-hint{font-size:16px;margin:14px 0}.action.disabled{color:#666;border-style:dashed}.content .body{font-size:17px;margin-bottom:16px}.content .actions{margin-top:16px;gap:10px}.content .row{min-height:56px}.content .title{margin-top:8px}.content .action{min-height:48px;padding:11px 14px}.no-focus .row:first-child{outline:none}.action:first-child{scroll-margin:10px}
+nav{position:static}.buttons .series-row.focused{outline:3px solid #000;outline-offset:-3px;padding-left:6px}.x3.has-list .action.primary,.buttons .content.count .action.primary{outline:none;box-shadow:none}.x3.has-list .action.primary:before,.x3 .content.count .action.primary:before{content:none}.buttons .count-value{outline:3px solid #000;outline-offset:3px}</style></head><body><main><div class="eyebrow">BookSync 0.12 · Proposal</div><h1>Series and download next N</h1><p class="proposal"><strong>NEEDS APPROVAL</strong> · 27 November 2026. All F36c additions below are unapproved. Existing Home revision-16 and firmware B1–B5 approvals are unchanged. This gallery adds no firmware, pin update or release.</p><p><a href="F36c-series.md">State inventory and Android evidence</a> · <a href="SCREENS.md">Screen gates</a> · <a href="mockups.html">Approved firmware gallery</a></p><p>The Lantern Cycle and Example Press are synthetic. Every state has touch, button and bounded X3 text views. Layout uses the existing 480 × 800 design viewport; measured device fit remains an acceptance gate.</p><nav>
+<a href="#series-ready">The Lantern Cycle</a>
+<a href="#series-offline">The Lantern Cycle</a>
+<a href="#series-loading">Series</a>
+<a href="#series-not-saved">Series</a>
+<a href="#series-empty">Series</a>
+<a href="#series-error">Series</a>
+<a href="#series-incomplete">The Lantern Cycle</a>
+<a href="#series-unsupported">Series</a>
+<a href="#series-saved">The Lantern Cycle</a>
+<a href="#series-unknown">The Lantern Cycle</a>
+<a href="#series-preview">Download next 3</a>
+<a href="#series-preview-pages">Download next 10</a>
+<a href="#series-count">Download how many?</a>
+<a href="#series-count-invalid">Download how many?</a>
+<a href="#series-offline-preview">Download next 3</a>
+<a href="#series-connect-failed">Could not connect</a>
+<a href="#series-gap">Download next 3</a>
+<a href="#series-no-eligible">Download next 3</a>
+<a href="#series-files">Choose file · Stone Path</a>
+<a href="#series-file-unavailable">Stone Path</a>
+<a href="#series-review">Download 3 books?</a>
+<a href="#series-stale">Series preview unavailable</a>
+<a href="#series-queue">Series downloads</a>
+<a href="#series-paused">Series downloads paused</a>
+<a href="#series-auth">Series downloads paused</a>
+<a href="#series-resume">Series downloads paused</a>
+<a href="#series-file-error">Series downloads</a>
+<a href="#series-validation-error">Series downloads</a>
+<a href="#series-format-error">Series downloads</a>
+<a href="#series-row-canceled">Series downloads</a>
+<a href="#series-canceled">Series downloads canceled</a>
+<a href="#series-complete">Series downloads complete</a>
+<a href="#series-departure">Back to the caller</a>
+</nav>
+<article id="series-ready"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>The Lantern Cycle</h2><p>Rows open their existing book action. Contextual indexes include secondary membership. Read, reading and device state are independent.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: The Lantern Cycle"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Example Press · Saved membership · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First book row. Tap to choose.</p><p>Back: Return to the caller at its saved page and focus; a reader caller retains its exact position.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Example Press · Saved membership · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller at its saved page and focus; a reader caller retains its exact position.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Example Press · Saved membership · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller at its saved page and focus; a reader caller retains its exact position.</p></figcaption></figure>
+</div></article>
+<article id="series-offline"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>The Lantern Cycle</h2><p>Saved local rows remain openable. Bulk action opens the saved preview; this screen starts no connection.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: The Lantern Cycle"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Offline · saved library · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First book row. Tap to choose.</p><p>Back: Return to the caller without connecting.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Offline · saved library · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller without connecting.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Offline · saved library · Page 1 of 3</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Download next…</div>
+<div class="action  ">Next page</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller without connecting.</p></figcaption></figure>
+</div></article>
+<article id="series-loading"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series</h2><p>No blocking wait, fabricated count or automatic network call.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Loading…</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to the caller; retire the request.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Loading…</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller; retire the request.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Loading…</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller; retire the request.</p></figcaption></figure>
+</div></article>
+<article id="series-not-saved"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series</h2><p>Absence of saved data is distinct from a complete empty series.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Not saved yet</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Retry. Tap to choose.</p><p>Back: Return to the caller; no download is queued.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Not saved yet</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Retry. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller; no download is queued.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Not saved yet</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Retry. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller; no download is queued.</p></figcaption></figure>
+</div></article>
+<article id="series-empty"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series</h2><p>Only a complete accessible membership may be called empty.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">No books</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">No books</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">No books</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-error"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series</h2><p>Retry requests another bounded Library result; keep a prior saved window when it exists.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Couldn’t load this page</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Retry. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Couldn’t load this page</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Retry. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Couldn’t load this page</p>
+<div class="actions">
+<div class="action primary ">Retry</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Retry. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-incomplete"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>The Lantern Cycle</h2><p>Bulk downloads are disabled with the displayed reason. Previous complete membership remains visible; eligible single-book actions still work.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: The Lantern Cycle"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Saved membership incomplete</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First book row. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Saved membership incomplete</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Saved membership incomplete</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>2 · Stone Path</b><small>Example Press · Unread · Server only</small></div></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-unsupported"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series</h2><p>Capability failure never starts a fallback transport or claims an empty library.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Series unavailable for this source</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Series unavailable for this source</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series</div><p class="body">Series unavailable for this source</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-saved"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>The Lantern Cycle</h2><p>The local-state claim is made only when known; the queue action can find retained paused work.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: The Lantern Cycle"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Every remaining book is on this device.</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Series downloads…</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First book row. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Every remaining book is on this device.</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Series downloads…</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Every remaining book is on this device.</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="series-row "><span class="cover">BOOK</span><div><b>1.5 · River Glass</b><small>Example Press · Reading 42% · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Series downloads…</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-unknown"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>The Lantern Cycle</h2><p>Unknown device state must not be treated as server-only eligibility.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: The Lantern Cycle"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Device state not saved</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First book row. Tap to choose.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Device state not saved</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: The Lantern Cycle"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">The Lantern Cycle</div><p class="body">Device state not saved</p>
+<div class="series-row focused"><span class="cover">BOOK</span><div><b>1 · First Light</b><small>Example Press · Read · On device</small></div></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First book row. Previous/Next moves focus; Select activates.</p><p>Back: Return to the caller.</p></figcaption></figure>
+</div></article>
+<article id="series-preview"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download next 3</h2><p>No job starts here. Requested number and actual available count are separate.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download next 3"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">3 available · exact selection</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Review files. Tap to choose.</p><p>Back: Close the preview and return to the Series page.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download next 3"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">3 available · exact selection</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Review files. Previous/Next moves focus; Select activates.</p><p>Back: Close the preview and return to the Series page.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download next 3"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">3 available · exact selection</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Review files. Previous/Next moves focus; Select activates.</p><p>Back: Close the preview and return to the Series page.</p></figcaption></figure>
+</div></article>
+<article id="series-preview-pages"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download next 10</h2><p>Use bounded pages for up to ten titles. Page controls never change the frozen selection; final page retains Review files and Cancel.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download next 10"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 10</div><p class="body">10 available · Preview page 1 of 4</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Next page. Tap to choose.</p><p>Back: Close the preview; retain the Series page.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download next 10"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 10</div><p class="body">10 available · Preview page 1 of 4</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Next page. Previous/Next moves focus; Select activates.</p><p>Back: Close the preview; retain the Series page.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download next 10"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 10</div><p class="body">10 available · Preview page 1 of 4</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Next page</div>
+<div class="action  ">Review files</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Next page. Previous/Next moves focus; Select activates.</p><p>Back: Close the preview; retain the Series page.</p></figcaption></figure>
+</div></article>
+<article id="series-count"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download how many?</h2><p>Touch keypad docks at the bottom; Classic and X3 use digit adjustment. No job starts when editing.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download how many?"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Choose 1–10 books.</p>
+<div class="count-value">3</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  ">Review</div>
+</div></div>
+<div class="keys pin"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>⌫</span><span>0</span><span>✓</span></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Number. Tap to choose.</p><p>Back: Discard the edit and restore the previous preview.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download how many?"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Choose 1–10 books.</p>
+<div class="count-value">3</div>
+<div class="count-hint">Previous / Next adjusts the digit.<br>Select confirms · Back cancels.</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  ">Review</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Number. Previous/Next moves focus; Select activates.</p><p>Back: Discard the edit and restore the previous preview.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download how many?"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Choose 1–10 books.</p>
+<div class="count-value">3</div>
+<div class="count-hint">Previous / Next adjusts the digit.<br>Select confirms · Back cancels.</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  ">Review</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Number. Previous/Next moves focus; Select activates.</p><p>Back: Discard the edit and restore the previous preview.</p></figcaption></figure>
+</div></article>
+<article id="series-count-invalid"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download how many?</h2><p>Invalid input stays in the editor and cannot request a preview.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download how many?"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Enter a whole number from 1 to 10.</p>
+<div class="count-value">0</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  disabled">Review unavailable</div>
+</div></div>
+<div class="keys pin"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>⌫</span><span>0</span><span>✓</span></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Number. Tap to choose.</p><p>Back: Discard the invalid edit; keep the previous number.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download how many?"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Enter a whole number from 1 to 10.</p>
+<div class="count-value">0</div>
+<div class="count-hint">Previous / Next adjusts the digit.<br>Select confirms · Back cancels.</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  disabled">Review unavailable</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Number. Previous/Next moves focus; Select activates.</p><p>Back: Discard the invalid edit; keep the previous number.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download how many?"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content count"><div class="cap">NEEDS APPROVAL</div><div class="title">Download how many?</div><p class="body">Enter a whole number from 1 to 10.</p>
+<div class="count-value">0</div>
+<div class="count-hint">Previous / Next adjusts the digit.<br>Select confirms · Back cancels.</div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+<div class="action  disabled">Review unavailable</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Number. Previous/Next moves focus; Select activates.</p><p>Back: Discard the invalid edit; keep the previous number.</p></figcaption></figure>
+</div></article>
+<article id="series-offline-preview"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download next 3</h2><p>Only the explicit connect action admits a connection; file review still precedes Start downloads.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download next 3"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">Offline · 3 available from saved membership</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Connect and download 3</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Connect and download 3. Tap to choose.</p><p>Back: Close without connecting or queuing.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download next 3"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">Offline · 3 available from saved membership</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Connect and download 3</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Connect and download 3. Previous/Next moves focus; Select activates.</p><p>Back: Close without connecting or queuing.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download next 3"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">Offline · 3 available from saved membership</p>
+<div class="row "><b>2 · Stone Path</b><span>1.2 MB</span></div>
+<div class="row "><b>3 · Far Shore</b><span>Size unknown</span></div>
+<div class="row "><b>4 · Winter Gate</b><span>0.8 MB</span></div>
+<div class="actions">
+<div class="action primary ">Connect and download 3</div>
+<div class="action  ">Change number (1–10)</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Connect and download 3. Previous/Next moves focus; Select activates.</p><p>Back: Close without connecting or queuing.</p></figcaption></figure>
+</div></article>
+<article id="series-connect-failed"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Could not connect</h2><p>Connection cancellation follows the same safe return path.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Could not connect"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Could not connect</div><p class="body">Try again. No downloads started.</p>
+<div class="actions">
+<div class="action primary ">Try again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Try again. Tap to choose.</p><p>Back: Return to Series without queuing.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Could not connect"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Could not connect</div><p class="body">Try again. No downloads started.</p>
+<div class="actions">
+<div class="action primary ">Try again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Try again. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series without queuing.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Could not connect"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Could not connect</div><p class="body">Try again. No downloads started.</p>
+<div class="actions">
+<div class="action primary ">Try again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Try again. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series without queuing.</p></figcaption></figure>
+</div></article>
+<article id="series-gap"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download next 3</h2><p>Earlier gaps require explicit selection and another preview; never silently wrap.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download next 3"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="row "><b>1 · First Light</b><span>Earlier unread gap</span></div>
+<div class="actions">
+<div class="action primary ">Start at earlier gap</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Start at earlier gap. Tap to choose.</p><p>Back: Return without selecting earlier books.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download next 3"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="row "><b>1 · First Light</b><span>Earlier unread gap</span></div>
+<div class="actions">
+<div class="action primary ">Start at earlier gap</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Start at earlier gap. Previous/Next moves focus; Select activates.</p><p>Back: Return without selecting earlier books.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download next 3"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="row "><b>1 · First Light</b><span>Earlier unread gap</span></div>
+<div class="actions">
+<div class="action primary ">Start at earlier gap</div>
+<div class="action  ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Start at earlier gap. Previous/Next moves focus; Select activates.</p><p>Back: Return without selecting earlier books.</p></figcaption></figure>
+</div></article>
+<article id="series-no-eligible"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download next 3</h2><p>Finished, local and active or recoverable jobs are skipped by Library policy.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download next 3"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to Series.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download next 3"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download next 3"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download next 3</div><p class="body">No eligible books after this position. Nothing will wrap to the beginning.</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series.</p></figcaption></figure>
+</div></article>
+<article id="series-files"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Choose file · Stone Path</h2><p>Select a file row to continue. Xteink offers EPUB only; one supported option can be selected without a chooser.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Choose file · Stone Path"><div class="frame"><div class="screen pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Choose file · Stone Path</div><p class="body">Choose one supported file.</p>
+<div class="row focused"><b>EPUB · Standard</b><span>1.2 MB</span></div>
+<div class="row "><b>EPUB · Large print</b><span>1.6 MB</span></div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: First file row. Tap to choose.</p><p>Back: Cancel file resolution and return to Series.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Choose file · Stone Path"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Choose file · Stone Path</div><p class="body">Choose one supported file.</p>
+<div class="row focused"><b>EPUB · Standard</b><span>1.2 MB</span></div>
+<div class="row "><b>EPUB · Large print</b><span>1.6 MB</span></div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: First file row. Previous/Next moves focus; Select activates.</p><p>Back: Cancel file resolution and return to Series.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Choose file · Stone Path"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Choose file · Stone Path</div><p class="body">Choose one supported file.</p>
+<div class="row focused"><b>EPUB · Standard</b><span>1.2 MB</span></div>
+<div class="row "><b>EPUB · Large print</b><span>1.6 MB</span></div>
+<div class="actions">
+<div class="action primary ">Cancel</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: First file row. Previous/Next moves focus; Select activates.</p><p>Back: Cancel file resolution and return to Series.</p></figcaption></figure>
+</div></article>
+<article id="series-file-unavailable"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Stone Path</h2><p>Expired access or manifest failure never substitutes an unreviewed file.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Stone Path"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Stone Path</div><p class="body">File choices unavailable · Try again</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to Series; no job has started.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Stone Path"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Stone Path</div><p class="body">File choices unavailable · Try again</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; no job has started.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Stone Path"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Stone Path</div><p class="body">File choices unavailable · Try again</p>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; no job has started.</p></figcaption></figure>
+</div></article>
+<article id="series-review"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Download 3 books?</h2><p>Destination is a synthetic label, not a path policy. Library owns safe resolution. Ten-book reviews use bounded pages with the same actions.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Download 3 books?"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download 3 books?</div><p class="body">Review files and destination · Page 1 of 1</p>
+<div class="row "><b>Stone Path · EPUB</b><span>1.2 MB</span></div>
+<div class="row "><b>Far Shore · EPUB</b><span>Size unknown</span></div>
+<div class="row "><b>Winter Gate</b><span>No supported file · will fail</span></div>
+<div class="row "><b>Destination</b><span>Configured Books folder</span></div>
+<div class="actions">
+<div class="action primary ">Start downloads</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Start downloads. Tap to choose.</p><p>Back: Return to the exact preview; start nothing.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Download 3 books?"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download 3 books?</div><p class="body">Review files and destination · Page 1 of 1</p>
+<div class="row "><b>Stone Path · EPUB</b><span>1.2 MB</span></div>
+<div class="row "><b>Far Shore · EPUB</b><span>Size unknown</span></div>
+<div class="row "><b>Winter Gate</b><span>No supported file · will fail</span></div>
+<div class="row "><b>Destination</b><span>Configured Books folder</span></div>
+<div class="actions">
+<div class="action primary ">Start downloads</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Start downloads. Previous/Next moves focus; Select activates.</p><p>Back: Return to the exact preview; start nothing.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Download 3 books?"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Download 3 books?</div><p class="body">Review files and destination · Page 1 of 1</p>
+<div class="row "><b>Stone Path · EPUB</b><span>1.2 MB</span></div>
+<div class="row "><b>Far Shore · EPUB</b><span>Size unknown</span></div>
+<div class="row "><b>Winter Gate</b><span>No supported file · will fail</span></div>
+<div class="row "><b>Destination</b><span>Configured Books folder</span></div>
+<div class="actions">
+<div class="action primary ">Start downloads</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Start downloads. Previous/Next moves focus; Select activates.</p><p>Back: Return to the exact preview; start nothing.</p></figcaption></figure>
+</div></article>
+<article id="series-stale"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series preview unavailable</h2><p>Start validates the account, generation and exact selection token before creating jobs.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series preview unavailable"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series preview unavailable</div><p class="body">The saved selection changed. Review the books again.</p>
+<div class="actions">
+<div class="action primary ">Review again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Review again. Tap to choose.</p><p>Back: Return to Series; no substitute queue is created.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series preview unavailable"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series preview unavailable</div><p class="body">The saved selection changed. Review the books again.</p>
+<div class="actions">
+<div class="action primary ">Review again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Review again. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; no substitute queue is created.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series preview unavailable"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series preview unavailable</div><p class="body">The saved selection changed. Review the books again.</p>
+<div class="actions">
+<div class="action primary ">Review again</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Review again. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; no substitute queue is created.</p></figcaption></figure>
+</div></article>
+<article id="series-queue"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads</h2><p>No percentage for unknown total. Row Cancel affects that job only. Back stops presentation polling; completion never opens a book.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>384 KB received · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Close the queue sheet; downloads continue under the sole worker.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>384 KB received · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the queue sheet; downloads continue under the sole worker.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>384 KB received · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the queue sheet; downloads continue under the sole worker.</p></figcaption></figure>
+</div></article>
+<article id="series-paused"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads paused</h2><p>Reconnect never resumes automatically. After connection, explicit resume uses the retained destinations and files.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads paused"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Connection lost · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Connect and resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Connect and resume remaining. Tap to choose.</p><p>Back: Close the sheet; keep paused work for explicit resume.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads paused"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Connection lost · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Connect and resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Connect and resume remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; keep paused work for explicit resume.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads paused"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Connection lost · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Connect and resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Connect and resume remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; keep paused work for explicit resume.</p></figcaption></figure>
+</div></article>
+<article id="series-auth"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads paused</h2><p>User can sign in through the approved account flow, then reopen this queue and explicitly resume.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads paused"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Sign-in needed · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Return without opening account UI automatically.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads paused"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Sign-in needed · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Return without opening account UI automatically.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads paused"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Sign-in needed · completed books stay</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Return without opening account UI automatically.</p></figcaption></figure>
+</div></article>
+<article id="series-resume"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads paused</h2><p>Restart does not auto-open or silently resume. Account ownership is revalidated by Library.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads paused"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Saved queue · ready to resume</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Resume remaining. Tap to choose.</p><p>Back: Keep the queue paused.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads paused"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Saved queue · ready to resume</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Resume remaining. Previous/Next moves focus; Select activates.</p><p>Back: Keep the queue paused.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads paused"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads paused</div><p class="body">Saved queue · ready to resume</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Paused · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Resume remaining</div>
+<div class="action  ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Resume remaining. Previous/Next moves focus; Select activates.</p><p>Back: Keep the queue paused.</p></figcaption></figure>
+</div></article>
+<article id="series-file-error"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads</h2><p>Format, validation and storage errors stay per book; later eligible items continue when possible. Detailed error examples follow.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Card is full</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Close the sheet and retain results.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Card is full</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet and retain results.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Card is full</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet and retain results.</p></figcaption></figure>
+</div></article>
+<article id="series-validation-error"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads</h2><p>Digest/edition failures do not replace a complete existing copy.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Validation failed</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Close the sheet; no unverified file opens.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Validation failed</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; no unverified file opens.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · Validation failed</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; no unverified file opens.</p></figcaption></figure>
+</div></article>
+<article id="series-format-error"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads</h2><p>Unsupported files are explicit per-book failures and do not become successful downloads.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · No supported file</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Close the sheet; retain complete files.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · No supported file</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; retain complete files.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">Requested 3 · Saved 1 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Failed · No supported file</span></div>
+<div class="row "><b>Winter Gate</b><span>Queued · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; retain complete files.</p></figcaption></figure>
+</div></article>
+<article id="series-row-canceled"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads</h2><p>Only the canceled job’s staging can be discarded; completed files remain.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">One download canceled</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Downloading 25% · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Tap to choose.</p><p>Back: Close the sheet; leave later items running.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">One download canceled</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Downloading 25% · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; leave later items running.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads</div><p class="body">One download canceled</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Downloading 25% · Cancel</span></div>
+<div class="actions">
+<div class="action primary ">Cancel remaining</div>
+<div class="action  ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Cancel remaining. Previous/Next moves focus; Select activates.</p><p>Back: Close the sheet; leave later items running.</p></figcaption></figure>
+</div></article>
+<article id="series-canceled"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads canceled</h2><p>Cancel remaining preserves complete books and never opens them.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads canceled"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads canceled</div><p class="body">Requested 3 · Saved 1 · Skipped 2 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Canceled</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to Series with saved availability updated.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads canceled"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads canceled</div><p class="body">Requested 3 · Saved 1 · Skipped 2 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Canceled</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series with saved availability updated.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads canceled"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads canceled</div><p class="body">Requested 3 · Saved 1 · Skipped 2 · Failed 0</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Canceled</span></div>
+<div class="row "><b>Winter Gate</b><span>Canceled</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series with saved availability updated.</p></figcaption></figure>
+</div></article>
+<article id="series-complete"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Series downloads complete</h2><p>All-success uses the same layout with Saved 3 and Failed 0; no auto-open or background completion popup.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Series downloads complete"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads complete</div><p class="body">Requested 3 · Saved 2 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Saved</span></div>
+<div class="row "><b>Winter Gate</b><span>Failed · No supported file</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Back. Tap to choose.</p><p>Back: Return to Series; open a book only on a later explicit selection.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Series downloads complete"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads complete</div><p class="body">Requested 3 · Saved 2 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Saved</span></div>
+<div class="row "><b>Winter Gate</b><span>Failed · No supported file</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; open a book only on a later explicit selection.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Series downloads complete"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Series downloads complete</div><p class="body">Requested 3 · Saved 2 · Skipped 0 · Failed 1</p>
+<div class="row "><b>Stone Path</b><span>Saved</span></div>
+<div class="row "><b>Far Shore</b><span>Saved</span></div>
+<div class="row "><b>Winter Gate</b><span>Failed · No supported file</span></div>
+<div class="actions">
+<div class="action primary ">Back</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Back. Previous/Next moves focus; Select activates.</p><p>Back: Return to Series; open a book only on a later explicit selection.</p></figcaption></figure>
+</div></article>
+<article id="series-departure"><div class="eyebrow">F36c · NEEDS APPROVAL</div><h2>Back to the caller</h2><p>Acceptance storyboard: leave Series, then deliver late progress or account change. No Series page, queue sheet or book may reopen. This card is a docs storyboard, not a new firmware screen.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Back to the caller"><div class="frame"><div class="screen pro no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Back to the caller</div><p class="body">Same page, focus and reading position.</p>
+<div class="actions">
+<div class="action primary ">Continue</div>
+</div></div>
+<div class="foot"><span>Tap a row or action</span><span>BookSync 0.12</span></div></div>
+</div><figcaption><strong>X4 Pro · touch</strong><p>NEEDS APPROVAL. Initial focus: Continue. Tap to choose.</p><p>Back: Return normally from the caller.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Back to the caller"><div class="frame"><div class="screen buttons classic no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Back to the caller</div><p class="body">Same page, focus and reading position.</p>
+<div class="actions">
+<div class="action primary ">Continue</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>NEEDS APPROVAL. Initial focus: Continue. Previous/Next moves focus; Select activates.</p><p>Back: Return normally from the caller.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Back to the caller"><div class="frame"><div class="screen buttons x3 no-focus"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Series</small></div></div><div class="content "><div class="cap">NEEDS APPROVAL</div><div class="title">Back to the caller</div><p class="body">Same page, focus and reading position.</p>
+<div class="actions">
+<div class="action primary ">Continue</div>
+</div></div>
+<div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
+<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
+</div><figcaption><strong>X3 · text / buttons</strong><p>NEEDS APPROVAL. Initial focus: Continue. Previous/Next moves focus; Select activates.</p><p>Back: Return normally from the caller.</p></figcaption></figure>
+</div></article>
+</main></body></html>
