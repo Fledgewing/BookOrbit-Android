@@ -519,21 +519,25 @@ class OrbitService : Service() {
         }
     }
 
-    private fun sleepNow(reason: String) {
+    internal fun reminderSleepNow(): String = sleepNow("reminder") ?: "ok"
+
+    private fun sleepNow(reason: String): String? {
         if (!sleepLimiter.tryAcquire(SystemClock.elapsedRealtime())) {
             OLog.i("SLEEP_NOW ignored: another one under 5 s ago")
-            return
+            return "busy"
         }
         if (!Net.adminActive(this)) {
             OLog.i("SLEEP_NOW reason=$reason: no device admin, the screen stays on (Setup › Allow lock screen)")
-            return
+            return "unavailable"
         }
         try {
             (getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).lockNow()
             OLog.i("SLEEP_NOW reason=$reason: lockNow() called")
         } catch (e: SecurityException) {
             OLog.w("SLEEP_NOW lockNow() refused", e)
+            return "unavailable"
         }
+        return null
     }
 
     // Wake lock

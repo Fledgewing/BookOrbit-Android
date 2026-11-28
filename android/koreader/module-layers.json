@@ -155,12 +155,23 @@
       "Library"
     ]
   },
+  "ko/library_reminders.lua": {
+    "layer": "interface",
+    "public": [
+      "Library"
+    ],
+    "purpose": "Library reminder service: bounded local command delivery, native activity scalars and typed claim gate."
+  },
   "ko/library_services.lua": {
     "layer": "interface",
     "purpose": "BookSync interface implementation.",
     "public": [
       "Library"
     ]
+  },
+  "ko/local_reading_settings.lua": {
+    "layer": "ui",
+    "purpose": "Bounded device-local completion and yearly goal Settings presentation through Library."
   },
   "ko/local_widgets.lua": {
     "layer": "ui",
@@ -477,9 +488,5 @@
     "layer": "internal",
     "kind": "service",
     "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
-  },
-  "ko/local_reading_settings.lua": {
-    "layer": "ui",
-    "purpose": "Bounded device-local completion and yearly goal Settings presentation through Library."
   }
 }

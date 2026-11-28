@@ -785,3 +785,27 @@ menu and reader session still match. A new book/session, departure from that men
 closing the sheet or a superseding request retires presentation. Background
 permission changes never create a ticket or open a sheet. Existing external
 Companion routes remain available for recovery.
+
+## Local reminders (0.12, contract version 1)
+
+The reader UI calls only `Library.reminders`. The Library uses trusted
+`SERVER_COMMAND`/`SERVER_RESULT` delivery for the `reminders.*` operations listed
+in `shared/contract/companion.json`. Inputs and results are neutral Lua values,
+limited to 8 KiB. Only the local source registers; no server credentials or routes
+are used. `booksync-reminders.sqlite3` belongs to the device and survives sign-out.
+
+List/mutation results contain at most eight bedtime rows plus the eye-rest singleton,
+ready labels, revision/source/editability and kind-specific capabilities. Mutations
+carry expected revision and an idempotency key. They succeed only after commit.
+Runtime ticks send coalesced visibility, owner, page/modal/presentation and input
+scalars; input and page turns do not make companion calls. Evaluations run on the
+reminders worker, never during paint. Ordinary event delivery stays gated while
+reading; this bounded reminder channel alone may supply a due value.
+
+A claim durably consumes a time occurrence before returning a one-use grant.
+The Library rechecks the visible lifetime and modal state on the main loop before
+`Gate.reminder` can draw. Interval claims are session scoped and memory only.
+Responses accept only their kind's actions. Explicit Sleep checkpoints the occurrence
+and current position before a separate one-use intent invokes the existing
+`SLEEP_NOW` implementation. Capability/permission failure stays in the initiating
+sheet; reminders never start an Activity, request permission, notify or wake a reader.
