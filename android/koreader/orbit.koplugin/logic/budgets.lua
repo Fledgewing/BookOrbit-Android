@@ -21,9 +21,10 @@ Budgets.screens.editor.drawNodes = 208
 Budgets.screens.editor.rows = 128
 Budgets.screens.editor.bytes = 0
 Budgets.screens.editor.roundTrips = 0
-Budgets.screens["editor-picker"] = budget(3, 0, 100)
+Budgets.screens["editor-picker"] = budget(5, 0, 100)
 Budgets.screens["editor-picker"].roundTrips = 0
-Budgets.screens["editor-picker"].drawNodes = 24
+-- Retained editor background plus five bounded illustrated choices.
+Budgets.screens["editor-picker"].drawNodes = 208
 -- Picker pages inherit the same filter screen limits, including one worker round-trip.
 Budgets.screens["filter-picker"] = budget(24, 16384, 50)
 Budgets.libraryBootstrap = budget(1,16384,50)

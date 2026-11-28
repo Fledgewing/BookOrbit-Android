@@ -35,11 +35,11 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
     local u=HomeWidgets.ui()
     local boxes={}
     local function text(value,x,y,width,size,bold)
-        local t=u.Text:new{text=tostring(value or "—"),face=u.Font:getFace(bold and "tfont" or "cfont",faceSize(size)),
-            bold=bold,fgcolor=bold and u.BB.COLOR_BLACK or (u.BB.COLOR_GRAY_5 or u.BB.COLOR_DARK_GRAY),padding=0,max_width=math.max(1,width)}
+        local t=u.Text:new{text=tostring(value or "—"),face=u.Font:getFace("NotoSans-Regular.ttf",faceSize(size)),
+            bold=bold,fgcolor=bold and u.BB.COLOR_BLACK or (u.BB.COLOR_GRAY_5 or u.BB.COLOR_DARK_GRAY),padding=0,max_width=nil}
         local bounds=t:getSize()
-        local box={x=x,y=y,w=bounds.w,h=bounds.h}
-        local fits=x>=0 and y>=0 and x+bounds.w<=w-s(8) and y+bounds.h<=h-s(8)
+        local box={x=x,y=y,w=bounds.w,h=bounds.h,widget=t}
+        local fits=bounds.w<=math.max(1,width) and x>=0 and y>=0 and x+bounds.w<=w-s(8) and y+bounds.h<=h-s(8)
         for _,other in ipairs(boxes) do
             if x<other.x+other.w+s(2) and other.x<x+bounds.w+s(2)
                 and y<other.y+other.h+s(2) and other.y<y+bounds.h+s(2) then fits=false end
@@ -81,7 +81,7 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
     y=contentBottom+s(10)
     if not narrow and not short then
         local d=BatteryWidgetPlan.display(data)
-        local rates={d.reading_rate,d.standby_rate,d.used_week}
+        local rates={BatteryWidgetPlan.compact(d.reading_rate,"reading_rate"),BatteryWidgetPlan.compact(d.standby_rate,"standby_rate"),BatteryWidgetPlan.compact(d.used_week,"used_week")}
         local cw=(w-s(24))/3
         local bottom=y
         for i=1,3 do
@@ -89,7 +89,7 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
                 -- These are companion-formatted display strings, only split into
                 -- typographic runs here; no battery estimate/rate is calculated.
                 local caption,value=rates[i]:match("^(.-) · (.+)$")
-                if i==3 then value=rates[i]:match("^(.-) used this week$");caption="used this week" end
+                if i==3 then value=rates[i]:match("^(.-) used this week$") or rates[i];caption="used this week" end
                 if value then
                     local last=text(value,s(12)+(i-1)*cw,y,cw-s(8),p.w>=4 and 19 or 16,true)
                     if last then
@@ -103,10 +103,14 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
             end
         end
         y=bottom+s(8)
-        if d.last_charge then text(d.last_charge,s(12),y,w-s(24),11,false) end
+        if d.last_charge then
+            local value=BatteryWidgetPlan.compact(d.last_charge,"last_charge")
+            local last=text(value,s(34),y,w-s(46),11,false)
+            if last then HomeWidgets.put(c,require("ui/widget/imagewidget"):new{file=SOURCE_DIR.."/ko/ui/icons/charge.svg",width=s(18),height=s(18),is_icon=true,alpha=true},s(12),y) end
+        end
     end
     finish()
-    return u.Frame:new{padding=0,margin=0,bordersize=1,radius=s(16),color=u.BB.COLOR_DARK_GRAY,c}
+    local frame=u.Frame:new{padding=0,margin=0,bordersize=1,radius=s(16),color=u.BB.COLOR_DARK_GRAY,c};frame.stats_texts=boxes;return frame
 end
 function BatteryUI.create()
     local Input=require("ui/widget/container/inputcontainer")

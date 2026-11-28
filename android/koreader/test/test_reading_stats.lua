@@ -1,5 +1,5 @@
 return function(test,eq,ok,here,Cache)
-    local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
+    local e=setmetatable({SOURCE_DIR='.',Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
     local root=here..'/../orbit.koplugin/'
     for _,p in ipairs({'logic/ui_util.lua','logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
@@ -34,16 +34,16 @@ return function(test,eq,ok,here,Cache)
             function c:new(o) if o and o.text then textAlloc=textAlloc+1 end;return setmetatable(o or {},{__index=self}) end
             function c:getSize() return self.dimen or {w=100,h=self.bold and 28 or 18} end
             function c:paintTo(_,x,y) paints=paints+1;if self.text then positions[self.text]={x=x,y=y} end end
-            function c:free() frees=frees+1 end
+            function c:free() if self.text then frees=frees+1 end end
             return c
         end
         local colors={COLOR_WHITE=0,COLOR_LIGHT_GRAY=1,COLOR_GRAY=2,COLOR_DARK_GRAY=3,COLOR_BLACK=4}
         local modules={['ui/widget/widget']=class(),['ui/geometry']=class(),
-            ['ui/font']={getFace=function() return {} end},['ui/widget/textwidget']=class(),['ffi/blitbuffer']=colors}
+            ['ui/font']={getFace=function() return {} end},['ui/widget/textwidget']=class(),['ui/widget/imagewidget']=class(),['ffi/blitbuffer']=colors}
         e.require=function(name) return assert(modules[name],name) end
         e.log=function() logs=logs+1 end
         local rects=0
-        local bb={paintBorder=function() end,paintRect=function(_,x,y,w,h,color)
+        local bb={paintBorder=function() end,paintRoundedRect=function() end,paintRect=function(_,x,y,w,h,color)
             ok(w>=0 and h>=0 and x>=10 and y>=10 and x+w<=610 and y+h<=310)
             ok(color~=nil); rects=rects+1
         end}
@@ -55,8 +55,8 @@ return function(test,eq,ok,here,Cache)
         local sourced={state='not-saved',sources={hours='this reader'}}
         local w=e.ReadingStatsWidgets.render('when-you-read',sourced,{w=600,h=300,rows=2})
         w:paintTo(bb,10,10);w:free()
-        ok(positions['This reader only'].y>=positions['When you read'].y+28+4,'badge clears the measured title')
-        ok(positions['Enable KOReader statistics'].y>=positions['This reader only'].y+18+4,'empty message clears the measured badge')
+        ok(positions['This reader only'].x>=positions['When you read'].x+100+12,'inline source clears the measured title')
+        ok(positions['Enable KOReader statistics'].y>=positions['When you read'].y+28+4,'empty message clears the measured header')
     end)
     test('stats and battery: every registered size paints disjoint measured text within the card',function()
         local boxes,scale={},1
@@ -90,7 +90,7 @@ return function(test,eq,ok,here,Cache)
         local U={Font={getFace=function(_,name,size) return {size=size,name=name} end},BB=colors}
         for _,k in ipairs({'Text','Button','Frame','Progress','Overlap'}) do U[k]=class() end
         local modules={['ui/widget/widget']=class(),['ui/geometry']=class(),
-            ['ui/font']=U.Font,['ui/widget/textwidget']=U.Text,['ffi/blitbuffer']=colors}
+            ['ui/font']=U.Font,['ui/widget/textwidget']=U.Text,['ui/widget/imagewidget']=class(),['ffi/blitbuffer']=colors}
         local env=setmetatable({now_s=function() return 0 end,log=function() end,
             Device={screen={scaleBySize=function(_,n) return n*scale end}},
             require=function(name) return assert(modules[name],name) end},{__index=e})
@@ -98,7 +98,7 @@ return function(test,eq,ok,here,Cache)
             setfenv(assert(loadfile(root..file)),env)()
         end
         env.HomeWidgets._ui=U
-        local bb={paintBorder=function() end,paintRect=function() end}
+        local bb={paintBorder=function() end,paintRoundedRect=function() end,paintRect=function() end}
         local ready={}
         for k,v in pairs(data) do ready[k]=v end
         ready.metrics={today={state='ready',value='1 h 20 m',separate='10 m · this reader, separate'},
@@ -137,6 +137,16 @@ return function(test,eq,ok,here,Cache)
                 end
             end
         end
+    end)
+    test('stats: hourly chart uses independent rectangular bars and records include owned icons',function()
+        local levels=data.hour_levels;data.hour_levels={}
+        for i=1,24 do data.hour_levels[i]=i%2==0 and .8 or .1 end
+        local chart=e.ReadingStatsPlan.build('when-you-read',data,330,192,2)
+        for i=2,24 do eq(chart.rects[i].h/chart.rects[1].h,i%2==0 and 8 or 1) end
+        ok(chart.rects[1].x+chart.rects[1].w<chart.rects[2].x,'hour bars retain a gap')
+        data.hour_levels=levels
+        local records=e.ReadingStatsPlan.build('reading-records',data,330,292,3)
+        eq(#records.dots,7);eq(records.icons[1].name,'flame')
     end)
     test('stats: measured plans, hour bars and short strip, immutable snapshot',function()
         local before=Cache.encode(data)
@@ -199,9 +209,9 @@ return function(test,eq,ok,here,Cache)
         eq(e.ReadingStatsPlan.build('when-you-read',data,600,300,2).source,'This reader only')
         local records=e.ReadingStatsPlan.build('reading-records',data,600,300,2)
         eq(records.source,'Pages · this reader')
-        ok(has(records,'best day · this reader')); ok(not has(records,'longest session · this reader'))
+        ok(has(records,'best day · local')); ok(not has(records,'longest session · this reader'))
         data.sources.streak='this reader'
-        ok(has(e.ReadingStatsPlan.build('reading-records',data,600,300,2),'streak · best 4 · this reader'))
+        ok(has(e.ReadingStatsPlan.build('reading-records',data,600,300,2),'streak · best 4 · local'))
         data.hours_available=false
         eq(e.ReadingStatsPlan.build('when-you-read',data,600,300,2).message,'Enable KOReader statistics')
         data.records_available=false; data.records.books_this_year=17

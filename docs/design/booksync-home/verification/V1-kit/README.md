@@ -24,3 +24,8 @@ headers use bold title/All labels with a separate owned chevron; rows have a
 light-grey rounded icon well, bold count and chevron. Progress uses a rounded,
 outlined track with endpoint clipping. Existing factory names and arguments stay
 valid; `search`, `inverted`, `trailingIcon`, `align`, `bold` and `count` are additive.
+
+Home review round 1: Search now uses the approved bold label and muted regular count.
+Native `ui_kit.py` checks both styles explicitly; all 15 component renders pass.
+
+![Revised Search](search-pair.png)

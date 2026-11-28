@@ -3781,7 +3781,7 @@ test("reader surface: cold bounded SQLite snapshots work without allowing backgr
     st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
     local owner,reading,decode=RE.LibraryAdapter.owner,RE.reading,RE.Cache.decode
     RE.LibraryAdapter.owner=function() return DBFX.owner end;RE.reading=function() return true end
-    local request=RE.Cache.encode({op="reader",path="/books/cold.epub",limit=1,bytes=16384})
+    local request=RE.Cache.encode({op="reader",path="/books/cold.epub",projection=2,limit=1,bytes=16384})
     local body=RE.Cache.encode({items={{key="cold-book",title="Cold reader"}}})
     st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,request,body)
     local success,err=pcall(function() withStore(dir,function()

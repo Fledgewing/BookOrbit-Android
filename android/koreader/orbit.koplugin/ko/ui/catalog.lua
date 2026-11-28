@@ -179,6 +179,12 @@ function CatalogUI.storage(page)
     back.text="Back";page.controls[#page.controls+1]=back
     CatalogUI.install(page,K,c,page.metrics)
 end
+function CatalogUI.readingPace(stats)
+    stats=stats or {}
+    local seconds,pages=tonumber(stats.reading_seconds),tonumber(stats.pages_read)
+    if stats.available==false or not seconds or seconds<=0 or not pages or pages<=0 then return "—" end
+    return tostring(math.floor(pages*3600/seconds)).." pp/h"
+end
 function CatalogUI.finish(sheet)
     local K=CatalogUI.kit();local p=K.px;local m=sheet.model or {}
     local w,h=sheet.screen_w,sheet.screen_h
@@ -218,7 +224,7 @@ function CatalogUI.finish(sheet)
     local metrics={{stats.days_start_to_finish and tostring(stats.days_start_to_finish).." days" or "—","start to finish"},
         {seconds and string.format("%d h %02d m",math.floor(seconds/3600),math.floor(seconds%3600/60)) or "—","reading time"},
         {stats.pages_read and tostring(stats.pages_read) or "—","pages"},
-        {seconds and seconds>0 and stats.pages_read and tostring(math.floor(stats.pages_read*3600/seconds)).." pp/h" or "—","reading pace"}}
+        {CatalogUI.readingPace(stats),"reading pace"}}
     for i,v in ipairs(metrics) do
         local cell=math.floor(inner/4);local x=p(24)+(i-1)*cell
         local value=K.text{text=v[1],w=cell,size=24,bold=true}

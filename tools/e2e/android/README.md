@@ -155,6 +155,19 @@ protected settings and book/session departure. It captures native PNGs and
 The Android 14 fixture uses the explicit Device admin Settings component for
 revocation because that image does not export the generic settings action.
 
+
+Home V1: after the ordinary fixture setup, run `python3 tools/e2e/android/home.py
+--serial emulator-N --out <evidence>`. It requires Pillow for deterministic raster
+cover fixtures and uses a marker in the disposable Books directory to opt into
+`HomeFixture.kt`; other emulator scenarios retain the original adapter behavior.
+The fixture provides synthetic reading/recent/Want to read windows and saved lists,
+while production projections remain unchanged. It seeds 59 books with covers,
+series, three saved in-progress positions and finished history. Native captures
+wait for published views, expected cached covers and a completed repaint. It checks
+that editor/picker previews make no queries and that move/size/save use their real
+callbacks. The size action cycles to the next span that fits, preserving neighbours.
+`--skip-seed` reuses an already seeded disposable AVD.
+
 Catalog and finish presentation: `catalog_ui.py --serial emulator-N --out <evidence>`
 checks the five-column Library, paging, filter counts/selection, grouped shelves,
 Series, Storage, saved finish covers, rating and stale-poll cancellation. Configure
@@ -163,3 +176,11 @@ in to the compiled fixture account and disables the disposable emulator's radios
 Main captures use the fixture companion; the additional next-three Series specimen
 supplies one bounded saved adapter response to exercise remote-only visual states.
 It uses the same native renderer and verifies the real download-card callback.
+
+V1 Stats review: after `home.py`, run `home_stats.py --serial emulator-N --out <home-captures> --statistics-db <synthetic statistics.sqlite3>`.
+It requires 50 distinct history days, copies the DB into the disposable emulator,
+checks all 34 Stats/Battery sizes for native truncation in empty and seeded states,
+and captures both. It stops only the two apps on that explicit emulator before
+replacing its DB and removing its WAL/SHM files. `home_details.py` captures the
+compact local-series card and verifies unavailable end-of-book pace. Both tools
+use the same guarded Emulator and fake ServerAdapter as Home acceptance.

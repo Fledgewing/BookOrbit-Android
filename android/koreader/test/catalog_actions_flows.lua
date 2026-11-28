@@ -1,6 +1,12 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 return function(t)
 local E,W,test,eq,ok=t.E,t.W,t.test,t.eq,t.ok
+    test('End of book: pace requires measured pages and time',function()
+        for _,stats in ipairs({{}, {available=false,pages_read=0,reading_seconds=3600}, {pages_read=0,reading_seconds=3600}, {pages_read=12,reading_seconds=0}}) do
+            eq(E.CatalogUI.readingPace(stats),'—')
+        end
+        eq(E.CatalogUI.readingPace{available=true,pages_read=45,reading_seconds=1800},'90 pp/h')
+    end)
 local function isolated(fn)
     local action,native,position,reading=E.Library.catalogAction,E.Library.nativeReader,E.Library.finishCurrent,E.reading
     E.Library.finishCurrent=function(done) done(true) end

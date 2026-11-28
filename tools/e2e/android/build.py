@@ -32,6 +32,7 @@ def build(out: Path):
     fixture=Path(__file__).parent/"server/bookorbit/RetainedFixture.kt"
     if fixture.is_file(): shutil.copyfile(fixture,sources/"server/bookorbit/RetainedFixture.kt")
     shutil.copyfile(Path(__file__).with_name("CrashFixture.kt"), sources / "CrashFixture.kt")
+    shutil.copyfile(Path(__file__).with_name("HomeFixture.kt"), sources / "HomeFixture.kt")
     manifest=destination / "app/src/main/AndroidManifest.xml"
     manifest.write_text(manifest.read_text().replace("</application>", '<receiver android:name=".CrashFixtureReceiver" android:exported="true" android:process=":crash_fixture" /><activity android:name=".CrashFixtureActivity" android:exported="true" android:process=":crash_fixture" /></application>'))
     subprocess.run(["./gradlew", "assembleDebug"],cwd=destination,check=True)
