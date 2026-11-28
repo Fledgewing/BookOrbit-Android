@@ -129,3 +129,8 @@ cannot authorize a show. The old dialog closes inside the approved operation, so
 suppressing a replacement leaves the existing control intact. Source pickers also
 wait while covered and retire their observer/timers on close. This does not change
 the rule while a book is in the reading foreground.
+
+For initial entry to that existing control, the explicit editor action supplies
+its visible origin. The same frontmost/not-reading checks apply; catalog notice
+suppression cannot disable a control the user is opening from the editor. An
+automatic job has no such visible originating action.

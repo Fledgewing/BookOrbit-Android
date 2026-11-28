@@ -3,7 +3,7 @@
 BookListConfig = {}
 function BookListConfig.new(context)
     return setmetatable({cfg=Layout.copy(context.cfg),onDone=context.onDone,onSave=context.onSave,
-        caps=context.caps or {},classic=context.classic,category="builtin",offset=0,alive=true}, {__index=BookListConfig})
+        caps=context.caps or {},origin=context.origin,classic=context.classic,category="builtin",offset=0,alive=true}, {__index=BookListConfig})
 end
 function BookListConfig:close()
     self.alive=false
@@ -129,7 +129,7 @@ function BookListConfig:paint(attempt)
             if previous then UIManager:close(previous) end
             UIManager:show(dialog) -- gate: Gate.show, explicit Configure or visible owned replacement
         end
-    end,nil,previous)
+    end,nil,previous or self.origin)
     if result and result.pending and (attempt or 0)<20 then
         local retry
         retry=function()

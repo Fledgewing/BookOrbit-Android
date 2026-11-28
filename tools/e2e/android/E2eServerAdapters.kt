@@ -12,7 +12,13 @@ import net.fledgewing.orbitcompanion.server.bookorbit.SeriesTransfers
 object ServerAdapters {
     private var context: Context? = null
     private val root get() = Worker.root()
-    private val books get() = DeviceLibrary(listOf(File(android.os.Environment.getExternalStorageDirectory(), "Books")))
+    private val deviceSnapshot=ThreadLocal<DeviceLibrary>()
+    private fun newBooks()=DeviceLibrary(listOf(File(android.os.Environment.getExternalStorageDirectory(), "Books")))
+    private val books get() = deviceSnapshot.get() ?: newBooks()
+    private fun <T> readBatch(block:()->T):T {
+        val previous=deviceSnapshot.get();deviceSnapshot.set(newBooks())
+        try { return block() } finally { if(previous==null) deviceSnapshot.remove() else deviceSnapshot.set(previous) }
+    }
     private val prefs get() = requireNotNull(context).getSharedPreferences("e2e", Context.MODE_PRIVATE)
     private val signedIn get() = context != null && prefs.getBoolean("signedIn", false)
     private const val OWNER = "emulator-fixture"
@@ -45,6 +51,7 @@ object ServerAdapters {
         }
         override fun signOut() { prefs.edit().putBoolean("signedIn", false).commit() }
         override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
+            if(request["op"]=="catalog.state") return mapOf("running" to false,"state" to "complete","phase" to "finished","why" to "finished","freshness" to mapOf("saved" to true))
             if(RetainedFixture.handles(request)) return RetainedFixture.project(root,owner,request)
             if(request["op"]=="sources" && (request["category"] ?: "builtin")=="builtin") {
                 val options=(books.project(DeviceLibrary.OWNER,mapOf("op" to "sources","category" to "builtin","limit" to 6))["items"] as List<*>).filterNotNull()+RetainedFixture.options(root,owner)
@@ -59,7 +66,19 @@ object ServerAdapters {
         override fun personalCatalog(owner: String) = books.personalCatalog(DeviceLibrary.OWNER)
         override fun localFiles(owner: String) = books.localFiles(DeviceLibrary.OWNER)
         override fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
-            done(mapOf("state" to "complete", "freshness" to mapOf("saved" to true)), null)
+            val scope=owner()
+            if(scope==null) { done(null,"unauthorized");return }
+            BulkWork.executor.execute {
+                try {
+                    if(owner()!=scope) throw ServerFailure("canceled")
+                    projectionStore(root).use { store ->
+                        store.db().exec("INSERT OR REPLACE INTO meta(k,v) VALUES ('owner',?)",scope)
+                        val request=String(LuaValue.encode(mapOf("op" to "catalog.state","limit" to 1L,"bytes" to 16384L)),Charsets.ISO_8859_1)
+                        LibraryReadModel(store,adapter=this).publish(scope,listOf(request))
+                    }
+                    done(mapOf("state" to "complete","freshness" to mapOf("saved" to true)),null);event()
+                } catch(e:Exception) { done(null,if(e is ServerFailure) e.kind else "unavailable") }
+            }
         }
         override fun catalogAction(owner:String,action:String,args:Map<*,*>,done:(Map<String,Any?>?,String?)->Unit) {
             try {
@@ -141,6 +160,11 @@ object ServerAdapters {
         override fun nativeFooterRepair(before: String, after: String, token: String) {}
         override fun onIntent(ctx: Context, i: Intent) {
             context=ctx.applicationContext
+            if(i.getStringExtra("drain_events")=="1") {
+                val ack=i.getStringExtra("events_ack")
+                BulkWork.executor.execute { EventMailbox(root).publish(ack) }
+                return
+            }
             val raw=i.getStringExtra("library_batch") ?: return
             val owner=i.getStringExtra("owner") ?: return
             BulkWork.executor.execute {
@@ -148,7 +172,7 @@ object ServerAdapters {
                     val requests=LuaValue.parse(LuaValue.str(raw).toByteArray(Charsets.ISO_8859_1)) as List<*>
                     projectionStore(root).use { store ->
                         store.db().exec("INSERT OR REPLACE INTO meta(k,v) VALUES ('owner',?)", OWNER)
-                        LibraryReadModel(store, adapter=adapter).publish(owner,requests)
+                        readBatch { LibraryReadModel(store, adapter=adapter).publish(owner,requests) }
                     }
                     event()
                 }.onFailure { OLog.w("emulator fixture projection failed",it) }
@@ -156,8 +180,10 @@ object ServerAdapters {
         }
     }
     private fun event() {
-        root.mkdirs()
-        File(root,"events-batch.lua").writeBytes(LuaValue.encode(mapOf("id" to java.util.UUID.randomUUID().toString(),
-            "events" to listOf(mapOf("kind" to "library", "owner" to OWNER)))))
+        val spool=File(root,"events").also { it.mkdirs() }
+        val file=File(spool,"fixture-${java.util.UUID.randomUUID()}.lua")
+        val temp=File(spool,file.name+".part")
+        temp.writeBytes(LuaValue.encode(mapOf("kind" to "library","owner" to OWNER)))
+        check(temp.renameTo(file));EventMailbox(root).publish(null)
     }
 }

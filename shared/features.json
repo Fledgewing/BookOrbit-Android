@@ -5789,7 +5789,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "One Book list renderer with friendly presets, settings, paged counted sources and local Custom filters; visible source pickers also repaint on late Library updates",
+          "note": "One Book list renderer with friendly presets, settings, paged counted sources and local Custom filters; visible source pickers also repaint on late Library updates; explicit editor controls stay available during catalog refresh",
           "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
           "evidence": [
             {

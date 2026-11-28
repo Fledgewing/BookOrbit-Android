@@ -28,3 +28,27 @@ inside `Gate.show`: the central gate verifies that the previous owned modal is
 frontmost and nobody is reading, then replaces it as one operation. A suppressed
 replacement leaves the old dialog intact. The regression executes the ready
 callback in background scope and asserts that the actual dialog stays visible.
+
+The native fixture also rebuilt its local catalog for every field and cover lookup.
+It now retains one worker-thread snapshot per read batch, as the shipping local
+read model does (`DeviceLibrary.kt:27`, `LibraryReadModel.kt:51`). The snapshot is
+released between batches so subsequent file changes remain observable.
+
+The fixture previously overwrote mailbox batches and ignored acknowledgements,
+leaving 625 synthetic invalidations queued during repeated reviews. It now emits
+through the existing bounded EventMailbox and handles its acknowledgements, with
+no bespoke batch overwrite. Native tests assert that the explicit picker is in
+front before waiting for its cold page.
+
+The initial explicit control was also suppressed while a catalog refresh muted
+notices. The editor now supplies its visible origin to the same central gate;
+the gate still requires that origin to be frontmost and `reading()` false. The
+regression opens the picker with catalog refresh active. The fixture now publishes
+the canonical completed catalog-status row, so its completed fake refresh no
+longer leaves the client waiting for an unpublished status.
+
+Verification: **914 JVM tests**, zero failures/errors, four skips; shared-version,
+debug APK and lint pass. **262 Lua logic / 300 flows**, boundary guards **12/6**,
+feature matrix **4**, emulator driver **10**. The real cold-cache year flow passes
+all five checks. Eight native Library/source checks also pass, including the actual
+editor Configure origin, counted roots, named paging and unknown counts.

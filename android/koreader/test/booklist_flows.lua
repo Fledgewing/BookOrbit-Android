@@ -35,8 +35,11 @@ return function(test,eq,ok,E,W,Widget,withHost)
                 return read(raw,...)
             end
             local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h};local listener=E.Library.listener
-            local view=E.BookListConfig.new{cfg=E.BookList.preset('year'),caps=h.caps,onDone=function() return true end}
-            view.sources=true;view:paint()
+            local view=E.BookListConfig.new{cfg=E.BookList.preset('year'),origin=h,caps=h.caps,onDone=function() return true end}
+            view.sources=true
+            local active=E.Library.catalog_active;E.Library.catalog_active=true
+            local opened,openErr=pcall(view.paint,view);E.Library.catalog_active=active;ok(opened,openErr)
+            eq(W.shown[#W.shown],view.dialog,'explicit editor controls stay available during catalog refresh')
             if view.retry then E.UIManager:unschedule(view.retry);view.retry=nil end
             ready=true;E.Library.changed({kind='library'})
             ok(view.eventPaint,'late ready events must survive the bounded polling window')
