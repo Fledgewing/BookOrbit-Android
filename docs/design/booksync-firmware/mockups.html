@@ -4,13 +4,13 @@
 .pro > .keys{flex:none;width:100%;max-width:none;margin:0;padding:12px 18px;border-top:1px solid #000}
 .pro > .keys.pin{grid-template-columns:repeat(3,90px);justify-content:center}
 </style></head><body><main>
-<div class="eyebrow">BookSync · 0.12 firmware · approved mockups</div><h1>The screens around reading</h1><div class="intro"><p>Static review gallery for plan groups B1–B5: connections, upgrade safety, updates, device controls and recovery. Every state is shown on X4 Pro touch, X4 Classic buttons and X3 text. <strong>Approved by the maintainer on 27 Nov 2026 (PR #202), with the change: “On screen keyboard should always be on the bottom for touch”. Implementation remains subject to plan slice dependencies.</strong></p>
+<div class="eyebrow">BookSync · 0.12 firmware · B2 revision NEEDS APPROVAL</div><h1>The screens around reading</h1><div class="intro"><p>Static review gallery for plan groups B1–B5: connections, upgrade safety, updates, device controls and recovery. Every state is shown on X4 Pro touch, X4 Classic buttons and X3 text. <strong>Approved by the maintainer on 27 Nov 2026 (PR #202), with the change: “On screen keyboard should always be on the bottom for touch”. B2’s slim upgrade revision (2026-11-27) NEEDS APPROVAL; all other gallery groups are unchanged and retain approval. Implementation remains subject to plan slice dependencies.</strong></p>
 <p>Uses revision 16’s grayscale screen, 480 × 800 design viewport, serif headings, outlined rows, rounded actions and visible button focus. X3 keeps bounded text and numbered navigation; hardware capabilities are explicit. Frames follow the approved <a href="../booksync-home/prototype.html">Home prototype</a>. All content is synthetic; no external fonts, scripts, network or accounts.</p>
 <p>All captions name the owning Library service: these are proposed value/intent groups, not frozen method names. UI renders immutable Library snapshots and sends intents only. Services own network, files, verification, persistence and hardware. A finished job never opens a screen, book or stale view.</p>
 <p><strong>Reading gate:</strong> unsolicited news, errors, progress, restarts and installation wait until no book is in the foreground. Dictionary/search and a connection-refused panel are user-opened in-book actions; Back preserves the exact reading position. The approved position prompt and end-of-book sheet are unchanged. No diagnostic upload, automatic reset or forced reconnect.</p></div>
-<nav aria-label="Gallery groups"><a href="#B1">B1 Connections</a><a href="#B2">B2 Migration</a><a href="#B3">B3 Updates</a><a href="#B4">B4 Device controls</a><a href="#B5">B5 Recovery</a><a href="#questions">Recorded decisions</a></nav>
+<nav aria-label="Gallery groups"><a href="#B1">B1 Connections</a><a href="#B2">B2 Upgrade</a><a href="#B3">B3 Updates</a><a href="#B4">B4 Device controls</a><a href="#B5">B5 Recovery</a><a href="#questions">Recorded decisions</a></nav>
 
-<details><summary>All 126 screen states · 378 device views</summary><div class="index">
+<details><summary>All 117 screen states · 351 device views</summary><div class="index">
 <div><a href="#wifi-list">B1 · Wi-Fi · normal</a></div>
 <div><a href="#wifi-empty">B1 · No networks found · empty</a></div>
 <div><a href="#wifi-scan">B1 · Looking for networks · progress</a></div>
@@ -39,20 +39,11 @@
 <div><a href="#pair-checking">B1 · Checking approval · progress</a></div>
 <div><a href="#pair-unapproved">B1 · Not approved yet · waiting</a></div>
 <div><a href="#pair-no-wifi">B1 · Connect to Wi-Fi first · recovery</a></div>
-<div><a href="#import-intro">B2 · Keep your reading history · confirmation</a></div>
-<div><a href="#import-progress">B2 · Keeping your reading history · progress</a></div>
-<div><a href="#import-resume">B2 · Continue the upgrade · recovery</a></div>
-<div><a href="#import-corrupt">B2 · Some saved records could not be read · error</a></div>
-<div><a href="#import-newer">B2 · These records need a newer version · error</a></div>
-<div><a href="#import-conflict">B2 · Which copy is this? · unresolved</a></div>
-<div><a href="#import-anchor">B2 · Your place needs review · unresolved</a></div>
-<div><a href="#import-ready">B2 · Reading history kept · normal</a></div>
+<div><a href="#upgrade-notice">B2 · Welcome to BookSync 0.12 · NEEDS APPROVAL</a></div>
 <div><a href="#queue-status">B2 · Saved changes · normal</a></div>
 <div><a href="#queue-near">B2 · Saved changes are nearly full · warning</a></div>
 <div><a href="#queue-full">B2 · No room for more saved changes · error</a></div>
 <div><a href="#queue-reconcile">B2 · Checking saved changes · recovery</a></div>
-<div><a href="#migration-space">B2 · More card space needed · error</a></div>
-<div><a href="#migration-recovery">B2 · Upgrade recovery · recovery</a></div>
 <div><a href="#reset-confirm">B2 · Reset BookSync settings? · confirmation</a></div>
 <div><a href="#downgrade">B2 · Older software may miss changes · warning</a></div>
 <div><a href="#reset-done">B2 · Settings restored · normal</a></div>
@@ -788,203 +779,13 @@
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
 </div><figcaption><strong>X3 · text / buttons</strong><p>Pairing needs Wi-Fi. Your saved books remain available. Actions: Choose network, Cancel.</p><p>Library Device / network intents (F10–F12, F43).</p></figcaption></figure>
 </div></article>
-<h2 id="B2">B2 · Migration and saved changes</h2>
-<article id="import-intro"><div class="eyebrow">B2 · import-intro</div><h3>Keep your reading history <span class="state">confirmation</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Keep your reading history"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Keep your reading history</div><p class="body">BookSync will copy your settings, books and saved changes. Original records stay untouched.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">Later</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>BookSync will copy your settings, books and saved changes. Original records stay untouched. Actions: Continue, Later.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Keep your reading history"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Keep your reading history</div><p class="body">BookSync will copy your settings, books and saved changes. Original records stay untouched.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">Later</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>BookSync will copy your settings, books and saved changes. Original records stay untouched. Actions: Continue, Later.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Keep your reading history"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Keep your reading history</div><p class="body">BookSync will copy your settings, books and saved changes. Original records stay untouched.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">Later</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>BookSync will copy your settings, books and saved changes. Original records stay untouched. Actions: Continue, Later.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-progress"><div class="eyebrow">B2 · import-progress</div><h3>Keeping your reading history <span class="state">progress</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Keeping your reading history"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Please wait</div><div class="title">Keeping your reading history</div><p class="body">Copying saved reading positions.</p>
-<div class="row "><b>Settings</b><span>Ready</span></div>
-<div class="row "><b>Reading history</b><span>32 of 48</span></div>
-<div class="row "><b>Saved changes</b><span>Waiting</span></div>
-<div class="number">67%</div><div class="progress"><b style="width:67%"></b></div><div class="actions">
-<div class="action primary">View details</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Copying saved reading positions. Actions: View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Keeping your reading history"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Please wait</div><div class="title">Keeping your reading history</div><p class="body">Copying saved reading positions.</p>
-<div class="row "><b>Settings</b><span>Ready</span></div>
-<div class="row "><b>Reading history</b><span>32 of 48</span></div>
-<div class="row "><b>Saved changes</b><span>Waiting</span></div>
-<div class="number">67%</div><div class="progress"><b style="width:67%"></b></div><div class="actions">
-<div class="action primary">View details</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Copying saved reading positions. Actions: View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Keeping your reading history"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Please wait</div><div class="title">Keeping your reading history</div><p class="body">Copying saved reading positions.</p>
-<div class="row "><b>1. Settings</b><span>Ready</span></div>
-<div class="row "><b>2. Reading history</b><span>32 of 48</span></div>
-<div class="row "><b>3. Saved changes</b><span>Waiting</span></div>
-<div class="number">67%</div><div class="progress"><b style="width:67%"></b></div><div class="actions">
-<div class="action primary">View details</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Copying saved reading positions. Actions: View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-resume"><div class="eyebrow">B2 · import-resume</div><h3>Continue the upgrade <span class="state">recovery</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Continue the upgrade"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Continue the upgrade</div><p class="body">The last upgrade stopped before it finished. Original records are still here.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">View details</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The last upgrade stopped before it finished. Original records are still here. Actions: Continue, View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Continue the upgrade"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Continue the upgrade</div><p class="body">The last upgrade stopped before it finished. Original records are still here.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">View details</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The last upgrade stopped before it finished. Original records are still here. Actions: Continue, View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Continue the upgrade"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Continue the upgrade</div><p class="body">The last upgrade stopped before it finished. Original records are still here.</p>
-<div class="actions">
-<div class="action primary">Continue</div>
-<div class="action ">View details</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The last upgrade stopped before it finished. Original records are still here. Actions: Continue, View details.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-corrupt"><div class="eyebrow">B2 · import-corrupt</div><h3>Some saved records could not be read <span class="state">error</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Some saved records could not be read"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Some saved records could not be read</div><p class="body">Readable records are kept. The unreadable originals are preserved for recovery.</p>
-<div class="row "><b>Reading positions</b><span>2 need attention</span></div>
-<div class="actions">
-<div class="action primary">Review</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Readable records are kept. The unreadable originals are preserved for recovery. Actions: Review, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Some saved records could not be read"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Some saved records could not be read</div><p class="body">Readable records are kept. The unreadable originals are preserved for recovery.</p>
-<div class="row "><b>Reading positions</b><span>2 need attention</span></div>
-<div class="actions">
-<div class="action primary">Review</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Readable records are kept. The unreadable originals are preserved for recovery. Actions: Review, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Some saved records could not be read"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Some saved records could not be read</div><p class="body">Readable records are kept. The unreadable originals are preserved for recovery.</p>
-<div class="row "><b>1. Reading positions</b><span>2 need attention</span></div>
-<div class="actions">
-<div class="action primary">Review</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Readable records are kept. The unreadable originals are preserved for recovery. Actions: Review, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-newer"><div class="eyebrow">B2 · import-newer</div><h3>These records need a newer version <span class="state">error</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: These records need a newer version"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">These records need a newer version</div><p class="body">BookSync cannot safely use this saved format. Nothing will be sent from these records.</p>
-<div class="actions">
-<div class="action primary">View recovery</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>BookSync cannot safely use this saved format. Nothing will be sent from these records. Actions: View recovery, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: These records need a newer version"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">These records need a newer version</div><p class="body">BookSync cannot safely use this saved format. Nothing will be sent from these records.</p>
-<div class="actions">
-<div class="action primary">View recovery</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>BookSync cannot safely use this saved format. Nothing will be sent from these records. Actions: View recovery, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: These records need a newer version"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">These records need a newer version</div><p class="body">BookSync cannot safely use this saved format. Nothing will be sent from these records.</p>
-<div class="actions">
-<div class="action primary">View recovery</div>
-<div class="action ">Use saved books</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>BookSync cannot safely use this saved format. Nothing will be sent from these records. Actions: View recovery, Use saved books.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-conflict"><div class="eyebrow">B2 · import-conflict</div><h3>Which copy is this? <span class="state">unresolved</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Which copy is this?"><div class="frame"><div class="screen  pro has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Which copy is this?</div><p class="body">The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet.</p>
-<div class="row focused"><b>Copy on this reader</b><span>Available</span></div>
-<div class="row "><b>Other saved copy</b><span>Needs review</span></div>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">View copies</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet. Actions: Keep unresolved, View copies.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Which copy is this?"><div class="frame"><div class="screen buttons classic has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Which copy is this?</div><p class="body">The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet.</p>
-<div class="row focused"><b>Copy on this reader</b><span>Available</span></div>
-<div class="row "><b>Other saved copy</b><span>Needs review</span></div>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">View copies</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet. Actions: Keep unresolved, View copies.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Which copy is this?"><div class="frame"><div class="screen buttons x3 has-list"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Which copy is this?</div><p class="body">The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet.</p>
-<div class="row focused"><b>1. Copy on this reader</b><span>Available</span></div>
-<div class="row "><b>2. Other saved copy</b><span>Needs review</span></div>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">View copies</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The Lantern Room matches more than one saved copy. Nothing from this record will be sent yet. Actions: Keep unresolved, View copies.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-anchor"><div class="eyebrow">B2 · import-anchor</div><h3>Your place needs review <span class="state">unresolved</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Your place needs review"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Your place needs review</div><p class="body">The Lantern Room changed since this place was saved. The original place is kept.</p>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">Open saved copy</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The Lantern Room changed since this place was saved. The original place is kept. Actions: Keep unresolved, Open saved copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Your place needs review"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Your place needs review</div><p class="body">The Lantern Room changed since this place was saved. The original place is kept.</p>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">Open saved copy</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The Lantern Room changed since this place was saved. The original place is kept. Actions: Keep unresolved, Open saved copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Your place needs review"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs review</div><div class="title">Your place needs review</div><p class="body">The Lantern Room changed since this place was saved. The original place is kept.</p>
-<div class="actions">
-<div class="action primary">Keep unresolved</div>
-<div class="action ">Open saved copy</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The Lantern Room changed since this place was saved. The original place is kept. Actions: Keep unresolved, Open saved copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="import-ready"><div class="eyebrow">B2 · import-ready</div><h3>Reading history kept <span class="state">normal</span></h3><p class="provenance">B2 import proposal. New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved. <a href="../../../docs/design/booksync-firmware/PLAN.md#L158">Source: docs/design/booksync-firmware/PLAN.md:158</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Reading history kept"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Reading history kept</div><p class="body">Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass.</p>
-<div class="row "><b>Records kept</b><span>48</span></div>
-<div class="row "><b>Needs review</b><span>2</span></div>
-<div class="actions">
-<div class="action primary">Go Home</div>
-<div class="action ">Review remaining</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass. Actions: Go Home, Review remaining.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Reading history kept"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Reading history kept</div><p class="body">Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass.</p>
-<div class="row "><b>Records kept</b><span>48</span></div>
-<div class="row "><b>Needs review</b><span>2</span></div>
-<div class="actions">
-<div class="action primary">Go Home</div>
-<div class="action ">Review remaining</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass. Actions: Go Home, Review remaining.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Reading history kept"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Reading history kept</div><p class="body">Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass.</p>
-<div class="row "><b>1. Records kept</b><span>48</span></div>
-<div class="row "><b>2. Needs review</b><span>2</span></div>
-<div class="actions">
-<div class="action primary">Go Home</div>
-<div class="action ">Review remaining</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Your saved books and settings are ready. Reviewed changes can be sent after the upgrade checks pass. Actions: Go Home, Review remaining.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+<h2 id="B2">B2 · Slim upgrade and saved changes <span class="state">NEEDS APPROVAL · 2026-11-27</span></h2>
+<p>The slim upgrade notice replaces the former reading/settings/queue import and migration-recovery screens. Existing saved-change capacity, settings-reset and downgrade views below remain as drawn; they describe normal 0.12 operation, not legacy queue import. Only credentials, Wi-Fi and Tailnet identity activate from 0.11. No originals or native reader files are deleted. The last 0.11 bridge drains pending work before offering 0.12 (or allows the offer when signed out); F31 already routes old → bridge → 0.12.</p>
+<p>Once only after a 0.11 upgrade, at Home with no book open. Either action durably dismisses the notice; reboot cannot show it again. “Later” keeps saved books available and leaves restoration to normal sync. “Sync from BookOrbit now” sends a Library intent for the normal F16 catalog / F18 lifecycle; match-by-identity reuses existing SD files where possible. Data absent from BookOrbit cannot come back from that sync; originals stay on the card. The approved B5 Home-news scene is unchanged; for 0.11 upgrades this B2 notice supplies the carry-over explanation and avoids duplicate upgrade notices.</p>
+<article id="upgrade-notice"><div class="eyebrow">B2 · upgrade-notice · NEEDS APPROVAL</div><h3>Welcome to BookSync 0.12 <span class="state">once-only upgrade notice</span></h3><p class="provenance">Slim decision, 2026-11-27. Library upgrade values and intents: F26b/F26c → F29; F12 quiet delivery, F16/F18 normal sync. <a href="PLAN.md#slim-upgrade-decision--2026-11-27">Plan decision</a>.</p><div class="devices">
+<figure aria-label="X4 Pro · touch: Welcome to BookSync 0.12"><div class="frame"><div class="screen pro"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Upgrade from 0.11</small></div></div><div class="content"><div class="title">Welcome to BookSync 0.12</div><div class="cap">What carried over</div><p class="body">Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card.</p><div class="cap">What starts fresh</div><p class="body">BookSync settings reset to defaults.</p><div class="cap">Get your reading back</div><p class="body">Reading history, highlights and stats come back from BookOrbit when you sync.</p><div class="actions"><div class="action primary">Sync from BookOrbit now</div><div class="action">Later</div></div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div></div><figcaption><strong>X4 Pro · touch</strong><p>Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card. BookSync settings reset to defaults. Reading history, highlights and stats come back from BookOrbit when you sync. Actions: Sync from BookOrbit now, Later.</p><p>Library upgrade values/intents (F29), normal catalog/lifecycle sync (F16/F18). Tap either action. NEEDS APPROVAL.</p></figcaption></figure>
+<figure aria-label="X4 Classic · buttons: Welcome to BookSync 0.12"><div class="frame"><div class="screen buttons classic"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Upgrade from 0.11</small></div></div><div class="content"><div class="title">Welcome to BookSync 0.12</div><div class="cap">What carried over</div><p class="body">Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card.</p><div class="cap">What starts fresh</div><p class="body">BookSync settings reset to defaults.</p><div class="cap">Get your reading back</div><p class="body">Reading history, highlights and stats come back from BookOrbit when you sync.</p><div class="actions"><div class="action primary">Sync from BookOrbit now</div><div class="action">Later</div></div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div><div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div></div><figcaption><strong>X4 Classic · buttons</strong><p>Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card. BookSync settings reset to defaults. Reading history, highlights and stats come back from BookOrbit when you sync. Actions: Sync from BookOrbit now, Later.</p><p>Library upgrade values/intents (F29), normal catalog/lifecycle sync (F16/F18). Initial focus: Sync from BookOrbit now; Previous/Next moves focus, Select activates; Back acts as Later. NEEDS APPROVAL.</p></figcaption></figure>
+<figure aria-label="X3 · text / buttons: Welcome to BookSync 0.12"><div class="frame"><div class="screen buttons x3"><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Upgrade from 0.11</small></div></div><div class="content"><div class="title">Welcome to BookSync 0.12</div><div class="cap">What carried over</div><p class="body">Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card.</p><div class="cap">What starts fresh</div><p class="body">BookSync settings reset to defaults.</p><div class="cap">Get your reading back</div><p class="body">Reading history, highlights and stats come back from BookOrbit when you sync.</p><div class="actions"><div class="action primary">Sync from BookOrbit now</div><div class="action">Later</div></div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div><div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div></div><figcaption><strong>X3 · text / buttons</strong><p>Wi-Fi, sign-in and Tailscale pairing. Your books and CrossInk’s own place in each book stay on the card. BookSync settings reset to defaults. Reading history, highlights and stats come back from BookOrbit when you sync. Actions: Sync from BookOrbit now, Later.</p><p>Library upgrade values/intents (F29), normal catalog/lifecycle sync (F16/F18). Initial focus: Sync from BookOrbit now; Previous/Next moves focus, Select activates; Back acts as Later. NEEDS APPROVAL.</p></figcaption></figure>
 </div></article>
 <article id="queue-status"><div class="eyebrow">B2 · queue-status</div><h3>Saved changes <span class="state">normal</span></h3><p class="provenance">B2 capacity proposal. New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI. <a href="../../../docs/design/booksync-firmware/PLAN.md#L139">Source: docs/design/booksync-firmware/PLAN.md:139</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Saved changes"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes</div><p class="body">Changes wait here until the library confirms they arrived.</p>
@@ -994,7 +795,7 @@
 <div class="action primary">Sync now</div>
 <div class="action ">Review</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Saved changes"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes</div><p class="body">Changes wait here until the library confirms they arrived.</p>
 <div class="row "><b>Waiting to send</b><span>18</span></div>
 <div class="row "><b>Needs review</b><span>2</span></div>
@@ -1003,7 +804,7 @@
 <div class="action ">Review</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Saved changes"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes</div><p class="body">Changes wait here until the library confirms they arrived.</p>
 <div class="row "><b>1. Waiting to send</b><span>18</span></div>
 <div class="row "><b>2. Needs review</b><span>2</span></div>
@@ -1012,7 +813,7 @@
 <div class="action ">Review</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Changes wait here until the library confirms they arrived. Actions: Sync now, Review.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 </div></article>
 <article id="queue-near"><div class="eyebrow">B2 · queue-near</div><h3>Saved changes are nearly full <span class="state">warning</span></h3><p class="provenance">B2 capacity proposal. New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI. <a href="../../../docs/design/booksync-firmware/PLAN.md#L139">Source: docs/design/booksync-firmware/PLAN.md:139</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Saved changes are nearly full"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Saved changes are nearly full</div><p class="body">Connect soon to send confirmed changes. Unsent changes will not be removed to make room.</p>
@@ -1020,21 +821,21 @@
 <div class="action primary">Connect</div>
 <div class="action ">Back</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Saved changes are nearly full"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Saved changes are nearly full</div><p class="body">Connect soon to send confirmed changes. Unsent changes will not be removed to make room.</p>
 <div class="actions">
 <div class="action primary">Connect</div>
 <div class="action ">Back</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Saved changes are nearly full"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Saved changes are nearly full</div><p class="body">Connect soon to send confirmed changes. Unsent changes will not be removed to make room.</p>
 <div class="actions">
 <div class="action primary">Connect</div>
 <div class="action ">Back</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Connect soon to send confirmed changes. Unsent changes will not be removed to make room. Actions: Connect, Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 </div></article>
 <article id="queue-full"><div class="eyebrow">B2 · queue-full</div><h3>No room for more saved changes <span class="state">error</span></h3><p class="provenance">B2 capacity proposal. New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI. <a href="../../../docs/design/booksync-firmware/PLAN.md#L139">Source: docs/design/booksync-firmware/PLAN.md:139</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: No room for more saved changes"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">No room for more saved changes</div><p class="body">Existing changes are kept. New changes cannot be queued for sending. Saved books still open.</p>
@@ -1042,90 +843,40 @@
 <div class="action primary">View recovery</div>
 <div class="action ">Use saved books</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: No room for more saved changes"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">No room for more saved changes</div><p class="body">Existing changes are kept. New changes cannot be queued for sending. Saved books still open.</p>
 <div class="actions">
 <div class="action primary">View recovery</div>
 <div class="action ">Use saved books</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: No room for more saved changes"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">No room for more saved changes</div><p class="body">Existing changes are kept. New changes cannot be queued for sending. Saved books still open.</p>
 <div class="actions">
 <div class="action primary">View recovery</div>
 <div class="action ">Use saved books</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Existing changes are kept. New changes cannot be queued for sending. Saved books still open. Actions: View recovery, Use saved books.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 </div></article>
 <article id="queue-reconcile"><div class="eyebrow">B2 · queue-reconcile</div><h3>Checking saved changes <span class="state">recovery</span></h3><p class="provenance">B2 capacity proposal. New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI. <a href="../../../docs/design/booksync-firmware/PLAN.md#L139">Source: docs/design/booksync-firmware/PLAN.md:139</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Checking saved changes"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Checking saved changes</div><p class="body">The library may already have received some changes. BookSync is checking before sending again.</p>
 <div class="actions">
 <div class="action primary">Back</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Checking saved changes"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Checking saved changes</div><p class="body">The library may already have received some changes. BookSync is checking before sending again.</p>
 <div class="actions">
 <div class="action primary">Back</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Checking saved changes"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Checking saved changes</div><p class="body">The library may already have received some changes. BookSync is checking before sending again.</p>
 <div class="actions">
 <div class="action primary">Back</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
-</div></article>
-<article id="migration-space"><div class="eyebrow">B2 · migration-space</div><h3>More card space needed <span class="state">error</span></h3><p class="provenance">B2 recovery proposal. New recovery presentation. No source retirement, fabricated acknowledgment or automatic deletion. <a href="../../../docs/design/booksync-firmware/PLAN.md#L161">Source: docs/design/booksync-firmware/PLAN.md:161</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: More card space needed"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">More card space needed</div><p class="body">The upgrade needs room for a safe copy. Original records have not been replaced.</p>
-<div class="actions">
-<div class="action primary">Storage</div>
-<div class="action ">Try again</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The upgrade needs room for a safe copy. Original records have not been replaced. Actions: Storage, Try again.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: More card space needed"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">More card space needed</div><p class="body">The upgrade needs room for a safe copy. Original records have not been replaced.</p>
-<div class="actions">
-<div class="action primary">Storage</div>
-<div class="action ">Try again</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The upgrade needs room for a safe copy. Original records have not been replaced. Actions: Storage, Try again.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: More card space needed"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">More card space needed</div><p class="body">The upgrade needs room for a safe copy. Original records have not been replaced.</p>
-<div class="actions">
-<div class="action primary">Storage</div>
-<div class="action ">Try again</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The upgrade needs room for a safe copy. Original records have not been replaced. Actions: Storage, Try again.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-</div></article>
-<article id="migration-recovery"><div class="eyebrow">B2 · migration-recovery</div><h3>Upgrade recovery <span class="state">recovery</span></h3><p class="provenance">B2 recovery proposal. New recovery presentation. No source retirement, fabricated acknowledgment or automatic deletion. <a href="../../../docs/design/booksync-firmware/PLAN.md#L161">Source: docs/design/booksync-firmware/PLAN.md:161</a></p><div class="devices">
-<figure aria-label="X4 Pro · touch: Upgrade recovery"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Upgrade recovery</div><p class="body">Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader.</p>
-<div class="row "><b>Original records</b><span>Kept</span></div>
-<div class="row "><b>Sending</b><span>Paused</span></div>
-<div class="actions">
-<div class="action primary">Try again</div>
-<div class="action ">Save recovery copy</div>
-</div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader. Actions: Try again, Save recovery copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X4 Classic · buttons: Upgrade recovery"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Upgrade recovery</div><p class="body">Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader.</p>
-<div class="row "><b>Original records</b><span>Kept</span></div>
-<div class="row "><b>Sending</b><span>Paused</span></div>
-<div class="actions">
-<div class="action primary">Try again</div>
-<div class="action ">Save recovery copy</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader. Actions: Try again, Save recovery copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
-<figure aria-label="X3 · text / buttons: Upgrade recovery"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Next steps</div><div class="title">Upgrade recovery</div><p class="body">Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader.</p>
-<div class="row "><b>1. Original records</b><span>Kept</span></div>
-<div class="row "><b>2. Sending</b><span>Paused</span></div>
-<div class="actions">
-<div class="action primary">Try again</div>
-<div class="action ">Save recovery copy</div>
-</div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
-<div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Keep originals while you retry or save a recovery copy. Unresolved changes stay on this reader. Actions: Try again, Save recovery copy.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>The library may already have received some changes. BookSync is checking before sending again. Actions: Back.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 </div></article>
 <article id="reset-confirm"><div class="eyebrow">B2 · reset-confirm</div><h3>Reset BookSync settings? <span class="state">confirmation</span></h3><p class="provenance">B2 scoped reset proposal. New settings-only reset proposal; it does not discard queued work or reset pairing. Broader reset is not offered. <a href="../../../docs/design/booksync-firmware/PLAN.md#L267">Source: docs/design/booksync-firmware/PLAN.md:267</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Reset BookSync settings?"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Reset BookSync settings?</div><p class="body">Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged.</p>
@@ -1133,21 +884,21 @@
 <div class="action primary">Keep settings</div>
 <div class="action ">Reset settings</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Reset BookSync settings?"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Reset BookSync settings?</div><p class="body">Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged.</p>
 <div class="actions">
 <div class="action primary">Keep settings</div>
 <div class="action ">Reset settings</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Reset BookSync settings?"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Your choice</div><div class="title">Reset BookSync settings?</div><p class="body">Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged.</p>
 <div class="actions">
 <div class="action primary">Keep settings</div>
 <div class="action ">Reset settings</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Reading files, original upgrade records and unsent changes will be kept. Sign-ins and private pairing stay unchanged. Actions: Keep settings, Reset settings.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 </div></article>
 <article id="downgrade"><div class="eyebrow">B2 · downgrade</div><h3>Older software may miss changes <span class="state">warning</span></h3><p class="provenance">B2 downgrade warning proposal. New warning; older software cannot reverse remote writes or guarantee that new saved records are readable. <a href="../../../docs/design/booksync-firmware/PLAN.md#L291">Source: docs/design/booksync-firmware/PLAN.md:291</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Older software may miss changes"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Older software may miss changes</div><p class="body">The older version may not read new saved changes. Returning to it cannot undo changes already sent.</p>
@@ -1155,40 +906,40 @@
 <div class="action primary">Stay here</div>
 <div class="action ">View recovery</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Older software may miss changes"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Older software may miss changes</div><p class="body">The older version may not read new saved changes. Returning to it cannot undo changes already sent.</p>
 <div class="actions">
 <div class="action primary">Stay here</div>
 <div class="action ">View recovery</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Older software may miss changes"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Before you continue</div><div class="title">Older software may miss changes</div><p class="body">The older version may not read new saved changes. Returning to it cannot undo changes already sent.</p>
 <div class="actions">
 <div class="action primary">Stay here</div>
 <div class="action ">View recovery</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>The older version may not read new saved changes. Returning to it cannot undo changes already sent. Actions: Stay here, View recovery.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 </div></article>
 <article id="reset-done"><div class="eyebrow">B2 · reset-done</div><h3>Settings restored <span class="state">normal</span></h3><p class="provenance">B2 scoped reset proposal. New settings-only reset proposal; it does not discard queued work or reset pairing. Broader reset is not offered. <a href="../../../docs/design/booksync-firmware/PLAN.md#L267">Source: docs/design/booksync-firmware/PLAN.md:267</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Settings restored"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Settings restored</div><p class="body">BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept.</p>
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Settings restored"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Settings restored</div><p class="body">BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept.</p>
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Settings restored"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Settings restored</div><p class="body">BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept.</p>
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>BookSync settings are back to their defaults. Your books, sign-ins and saved changes are kept. Actions: Done.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 </div></article>
 <article id="reset-failed"><div class="eyebrow">B2 · reset-failed</div><h3>Settings could not be restored <span class="state">error</span></h3><p class="provenance">B2 scoped reset proposal. New settings-only reset proposal; it does not discard queued work or reset pairing. Broader reset is not offered. <a href="../../../docs/design/booksync-firmware/PLAN.md#L267">Source: docs/design/booksync-firmware/PLAN.md:267</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Settings could not be restored"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Settings could not be restored</div><p class="body">Your previous saved settings are still in use.</p>
@@ -1196,21 +947,21 @@
 <div class="action primary">Try again</div>
 <div class="action ">Cancel</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Settings could not be restored"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Settings could not be restored</div><p class="body">Your previous saved settings are still in use.</p>
 <div class="actions">
 <div class="action primary">Try again</div>
 <div class="action ">Cancel</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Settings could not be restored"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Needs attention</div><div class="title">Settings could not be restored</div><p class="body">Your previous saved settings are still in use.</p>
 <div class="actions">
 <div class="action primary">Try again</div>
 <div class="action ">Cancel</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library migration/recovery values and intents (F26–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Your previous saved settings are still in use. Actions: Try again, Cancel.</p><p>Library settings/recovery values and intents (F29, F38k).</p></figcaption></figure>
 </div></article>
 <article id="queue-recovered"><div class="eyebrow">B2 · queue-recovered</div><h3>Saved changes have room again <span class="state">normal</span></h3><p class="provenance">B2 capacity proposal. New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI. <a href="../../../docs/design/booksync-firmware/PLAN.md#L139">Source: docs/design/booksync-firmware/PLAN.md:139</a></p><div class="devices">
 <figure aria-label="X4 Pro · touch: Saved changes have room again"><div class="frame"><div class="screen  pro "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes have room again</div><p class="body">Confirmed changes have been delivered. Unconfirmed changes remain saved here.</p>
@@ -1218,21 +969,21 @@
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Tap a choice</span><span>BookSync 0.12</span></div></div>
-</div><figcaption><strong>X4 Pro · touch</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Pro · touch</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X4 Classic · buttons: Saved changes have room again"><div class="frame"><div class="screen buttons classic "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes have room again</div><p class="body">Confirmed changes have been delivered. Unconfirmed changes remain saved here.</p>
 <div class="row "><b>Waiting to send</b><span>2</span></div>
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X4 Classic · buttons</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X4 Classic · buttons</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 <figure aria-label="X3 · text / buttons: Saved changes have room again"><div class="frame"><div class="screen buttons x3 "><div class="hdr"><span class="back">‹ Back</span><div><strong>BookSync</strong><small>Migration and saved changes</small></div></div><div class="content"><div class="cap">Ready</div><div class="title">Saved changes have room again</div><p class="body">Confirmed changes have been delivered. Unconfirmed changes remain saved here.</p>
 <div class="row "><b>1. Waiting to send</b><span>2</span></div>
 <div class="actions">
 <div class="action primary">Done</div>
 </div></div><div class="foot"><span>Back · Select · Previous · Next</span><span>BookSync 0.12</span></div></div>
 <div class="hardware"><span>Back</span><span>Select</span><span>‹</span><span>›</span></div>
-</div><figcaption><strong>X3 · text / buttons</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17, F28–F29).</p></figcaption></figure>
+</div><figcaption><strong>X3 · text / buttons</strong><p>Confirmed changes have been delivered. Unconfirmed changes remain saved here. Actions: Done.</p><p>Library SyncOwner / saved-change status (F07, F17).</p></figcaption></figure>
 </div></article>
 <h2 id="B3">B3 · Installing and recovering updates</h2>
 <article id="update-ready"><div class="eyebrow">B3 · update-ready</div><h3>Update ready <span class="state">normal</span></h3><p class="provenance">B3 update restyle and recovery. Existing check, offer, progress, failure and completion screens are restyled. Signed trust, deferred installation and rollback recovery add plan-defined states. <a href="https://github.com/uxjulia/CrossInk/blob/2cdd6117568c8877c3180d5fac8d5b20e55d1ac7/src/activities/settings/OtaUpdateActivity.cpp#L120">Source: src/activities/settings/OtaUpdateActivity.cpp:120</a></p><div class="devices">
@@ -3065,7 +2816,7 @@
 <section id="questions"><h2>Recorded coordinator decisions</h2><p>Q1–Q7 are coordinator calls; the maintainer approved the mockups after seeing them on 27 Nov 2026.</p>
 <p><strong>Q1 · Pairing on button readers.</strong> Keep the existing QR, live link and manual Check; no phone-assisted handoff.</p>
 <p><strong>Q2 · Queue at capacity.</strong> Read-only saved-books path at capacity; operations that can't record durably are blocked with a message; never evict unacknowledged work.</p>
-<p><strong>Q3 · Unresolved imports.</strong> Keep ambiguous imports unresolved for later review; no guessed match and no outgoing replay.</p>
+<p><strong>Q3 · Retained imports (slim revision, 2026-11-27).</strong> Only credentials/Wi-Fi and Tailnet identity activate. Preserve unreadable originals; no reading-record or queue replay on 0.12. The B2 revision needs approval.</p>
 <p><strong>Q4 · Reset and forgotten code.</strong> Approve settings-only reset, one-boot basic settings and a separate verified forgot-code recovery; nothing erases books or sign-ins.</p>
 <p><strong>Q5 · Rollback admission.</strong> Offer Return to previous only for versions proven compatible after F29/F32; otherwise show Previous version unavailable.</p>
 <p><strong>Q6 · Diagnostic scope and retention.</strong> Local redacted export to SD, keep the last 5 reports, user can delete them; X3 gets a bounded summary.</p>

@@ -1,8 +1,9 @@
 # BookSync 0.12 firmware plan
 
 27 November 2026. Implementation authorized by the maintainer; Home revision 16 is
-approved. Firmware B1–B5 mockups are approved on 27 Nov 2026 with the touch
-keyboard change recorded in [SCREENS.md](SCREENS.md). This plan schedules work,
+approved. Firmware B1–B5 mockups were approved on 27 Nov 2026 with the touch
+keyboard change recorded in [SCREENS.md](SCREENS.md). The revised slim B2
+upgrade notice is **NEEDS APPROVAL**; all other gallery groups retain their approval. This plan schedules work,
 not a release or permission to invent screens.
 Android 0.12 remains the semantic reference. X4 Pro, X4 Classic and X3/C3 X4 ship
 the same Library, durable state and widget meanings; X3 draws bounded text views.
@@ -23,6 +24,29 @@ Reference: [approved design](../booksync-home/DESIGN.md),
 This supersedes the older Home design's incremental-overlay/base-switch sequence
 only where the 27 November rewrite ruling does so. It does not widen UI approval.
 No BookSync server, second backend, SQLite port or generic plugin runtime is required.
+
+## Slim upgrade decision — 2026-11-27
+
+Maintainer: “Go slim — don't bother with anything that should be synced to BookOrbit.
+On upgrade from 0.11 explain what didn't sync over and how to get it back
+(sync from BookOrbit, basically).”
+
+Remove settings import (former F26a), reading-record imports (former F27a–d:
+positions, annotations, stats and download IDs) and pending-queue imports (former
+F28a–d). Keep F26b credentials/Wi-Fi and F26c Tailnet/NVS identity, already in flight.
+BookSync settings start at defaults. CrossInk's native reader files on the SD card
+stay untouched: books and CrossInk's own place in each book keep working because
+the reader is unchanged. No legacy records or queues are deleted.
+
+Before upgrading, F28 drains the 0.11 queues to BookOrbit in the last 0.11 Xteink
+bridge. F31's legacy-bridge ordering already routes **old → bridge → 0.12**; the
+bridge additionally gates the 0.12 offer on empty queues or no signed-in account.
+On 0.12, the first sync re-pulls positions, annotations (including bookmarks), stats
+and book matches from BookOrbit through the normal F18 lifecycle and F16 catalog.
+Match-by-identity handles existing SD files without re-downloading where possible;
+there is no separate legacy download-ID importer. Data absent from BookOrbit cannot
+be restored by that sync; originals remain on the card. F29's once-only B2 notice
+explains the retained items, defaults and “Sync from BookOrbit now” / “Later”.
 
 ## 1. Components and reuse
 
@@ -48,12 +72,12 @@ owner. UI never receives adapter DTOs, credentials, mutable stores or job object
 | Transport/system integration | `tailnet/`, `system/Transport.*` | Pinned MicroLink; `tailnet/shim/Tailnet.{h,cpp}`, `TailnetResolver.cpp`, `TailnetStacks.c`, `TailnetLwipLock.c`, `TailnetWifiMem.c`, `TailnetTlsMem.c`, `TailnetSysSwitches.h`, `ml_priority.c`, `TailnetLog.cpp`, `ml_config.h`, `tailnet_build.py`; audit every build edit against stable SDK |
 | C3 network/display ownership | `system/NetworkPhase.*`, neutral lease API in `tailnet/` | Rewrite `tailnet/shim/TailnetNetPhase.h` and `tailnet/ui/TailnetNetPhase.cpp`: remove backend activity IDs/auth boots. Reuse framebuffer admission rules, never restart/park foreground reading |
 | Signed updates/version/recovery | `system/Update.*`, `Feed.*`, `Version.*` | `orbify/OtaManifest.h`, `UpdateChannel.h`, `OtaReturn.{h,cpp}`, `core/UpdateSignature.{h,cpp}`, `Ed25519Verify.{h,cpp}`; `ServerTrust.{h,cpp}` and `ServerTrustNet.{h,cpp}` transport trust with protocol parts kept private |
-| Legacy retirement/import | `import/Inventory.*`, `Settings.*`, `Credentials.*`, `Reading.*`, `Queues.*`, `Activation.*` | Legacy readers extracted from the above stores/queues plus old download/annotation formats; read-only, versioned, fingerprinted; no old network writer |
+| Legacy retirement/import | `import/Inventory.*`, `Credentials.*`, `Identity.*`, `Activation.*` | Read-only, versioned credentials/Wi-Fi import and Tailnet/NVS identity audit only; native SD files untouched; legacy queue drain stays in the integration repo’s 0.11 overlay |
 
 All `.h/.cpp` pairs above are selected source references, not promises to copy them
 unchanged. For example `CopyQueue` currently has numeric server IDs and drops damaged
 parse lines: neither behavior becomes the new journal contract. Preserve unreadable
-source bytes and expose unresolved import status. `BookOrbitBackgroundSync.*`, old
+source bytes and report retained-import failures. `BookOrbitBackgroundSync.*`, old
 Home/catalog/settings/sync activities, `Tailnet*Activity.*`, UI routing patches and
 old global writers are excluded. Keep SPDX/license notices on extracted code.
 
@@ -157,10 +181,10 @@ include Tailnet/TLS/import code even before UI is complete.
 | F23 | Verified resumable download to same SD path; `services/DownloadJobs.*`, `storage/FilePublish.*` | F16/F21; parallel F22 | Wrong digest/edition, no space, cancel, power cut; download/restart/open only if originating view lives | 5–14 |
 | F24 | Copy replacement and sidecar preservation; `services/CopyJobs.*` | F08/F18a/F23 | Current/old/ambiguous copies, atomic rollback; updated EPUB retains reading/annotation state | 3–8 |
 | F25 | Revision/account-scoped cover references; `services/CoverJobs.*` | F12/F21/F23; parallel F24 | Bounded decode/input, cache invalidation, retired ticket; post-paint acquisition, no late redraw | 3–8 / 1–4 |
-| F26a–c | **Each** import: settings (including enum/PIN/raw backup), credentials/Wi-Fi, Tailnet/NVS identity audit; `import/{Settings,Credentials,Identity}.*` | F03/F06/F08/F15; parallel after F14; credentials stay private | Old/unknown/corrupt formats retained, no key rederivation; two boots preserve sign-in/pairing/paths | 2–8 each |
-| F27a–d | **Each** legacy record format within: positions, highlights/bookmarks/tombstones, stats/global/daily/sessions, download IDs/path aliases; `import/Reading<Kind>.*` | F03/F08/F09/F17; parallel F26 and each other | Raw anchors, BOD1/BOD2, backups/watermarks/provenance, idempotency; synthetic upgrade inventory unchanged | 2–10 each |
-| F28a–d | **Each** pending queue format within: stats, annotations/bookmarks, finish/state, progress/copy/refresh; `import/Queue<Kind>.*` | F17/F18a–e/F20/F24; parallel families | Source fingerprint/proof, unknown outcomes not acked, corrupt sources retained; crash/restart before retirement | 2–8 each |
-| F29 | Atomic cutover and recovery; `import/Activation.*`, `system/Bootstrap.*` | F26a–c/F27a–d/F28a–d/F05 | Cut every backup/import/proof/activation boundary; repeated upgrade boots, exactly one writer, no destructive fallback | 3–8 |
+| F26b | Retained credentials/Wi-Fi import (already in flight); `import/Credentials.*` | F03/F06/F08/F15; after F14; parallel F26c; credentials stay private | Old/unknown/corrupt formats retained, secrets never exposed; two boots preserve sign-in/Wi-Fi | 2–8 |
+| F26c | Tailnet/NVS identity audit (already in flight); `import/Identity.*` | F03/F06/F08/F10; after F14; parallel F26b | Identical NVS keys, no key rederivation; two boots preserve pairing/device identity | 2–8 |
+| F28 | **0.11 bridge drain**: last 0.11 Xteink update sends every pending progress, stats, annotations/bookmarks and finish/state queue item to BookOrbit; offers 0.12 only with empty queues or no signed-in account; nothing deleted. Files in **BookSync integration repo: `xteink/` overlay on `main`**, not owned firmware | Legacy queues/writers and F31 old→bridge→0.12 ordering; independent of 0.12 import implementation; release later through normal test/device/release flow, never by this docs change | Per-queue failures/unknown outcomes retain pending items; restart/offline drain, signed-out exception preserves queues, no offer while any signed-in queue is pending | 0 on 0.12; 2–8 on 0.11 bridge |
+| F29 | Activate retained credentials/Wi-Fi/Tailnet imports only and once-only upgrade notice; `import/Activation.*`, `system/Bootstrap.*`; leave native reader SD files untouched | F26b/F26c/F05/F12; revised B2 notice NEEDS APPROVAL; F28 bridge precedes deployed upgrade; sync action uses F16/F18 | Cut every retained-import/activation/notice checkpoint; repeated boots preserve sign-in/pairing and native SD bytes, no duplicate notice; Now starts normal sync, Later keeps offline reading available | 3–8 |
 | F30 | Signed OTA/feed parser and trust port; `system/Feed.*`, `UpdateVerify.*` | F02/F10/F14; parallel imports | Existing signature/root/withdrawal/redirect/chunk/reset cases; fake feed rejects corrupt/wrong-device app | 8–24 |
 | F31 | Unified version/bridge/source identity; `system/Version.*`, `UpdatePick.*`, packaging tests | F30 | All three asset stems, stable/preview/RC/test and legacy bridge ordering; old→bridge→0.12 simulated install choice | 2–6 |
 | F32 | Install/return admission and diagnostics; `system/Update.*`, `Diagnostics.*` | F11/F12/F29/F31 | Wrong board/map, incomplete image, no install while reading; deferred fake OTA return/recovery | 3–8 |
@@ -169,13 +193,13 @@ include Tailnet/TLS/import code even before UI is complete.
 | F35a–c | **Each** editor increment: add/remove/reset; move/resize/focus; page create/name/reorder; `ui/Editor<Part>.*` | F34; a then b then c; parallel services | Atomic edits, focus/geometry invariants; Pro touch, Classic buttons, X3 approved Settings list equivalents | 2–7 each / 1–3 each |
 | F36a–c | **Each** approved catalog surface: Library/lists; detail/actions; series/download-next; `ui/<Surface>.*` | F22/F23/F25/F34; parallel surfaces | Neutral snapshot/action tests; approved offline/back/download/error scenes in each profile | 3–9 each / 2–5 each |
 | F37a–c | **Each** account surface: server/account; independent sync/OPDS logins; sign-out/origin confirmation; `ui/account/<Surface>.*` | F12/F15/F29/F34; a then b then c | Capabilities and account epochs; approved manual/phone sign-in states, closed form never repaints | 2–6 each |
-| F38k | **Each** approved Settings control, separate service then UI slice; `services/Settings<Kind>.*`, `reader/SettingsBridge.*`, `ui/settings/<Kind>.*` | F26a/F29/F34; independent families; B4 approved; control dependencies apply | Enum mapping/roundtrip/Undo; approved reading/Custom, sync/power, Library/storage, About/channel scenes | 1–3 per half |
-| F39 | Personal provider precedence and stats coverage/watermarks; `services/PersonalReading.*`, `ReadingStats.*` | F09/F18b/F27c/F21; parallel UI | No aggregate/session double count, deterministic picks, absent versus zero; offline/local/account coverage | 3–10 |
+| F38k | **Each** approved Settings control, separate service then UI slice; `services/Settings<Kind>.*`, `reader/SettingsBridge.*`, `ui/settings/<Kind>.*` | F29/F34; independent families; B4 approved; control dependencies apply | Enum mapping/roundtrip/Undo; approved reading/Custom, sync/power, Library/storage, About/channel scenes | 1–3 per half |
+| F39 | Personal provider precedence and stats coverage/watermarks; `services/PersonalReading.*`, `ReadingStats.*` | F09/F18b/F21; parallel UI | No aggregate/session double count, deterministic picks, absent versus zero; offline/local/account coverage | 3–10 |
 | F40w | **Each** remaining widget, one provider projection then one renderer slice; `services/widgets/<Id>.*`, `ui/widgets/<Id>.*` | F34/F39, relevant adapter/system capability; parallel widget IDs | Independent known/empty/off/unsupported/stale/oversize fixture; approved widget scene and X3 text action | 1–4 per half |
 | F41r | **Each** approved reader panel, separate intent seam then presentation slice; `reader/<Panel>.*`, `ui/reader/<Panel>.*` | F09/F12/F19/F20/F22/F38k; parallel panel IDs | Engine invocation/locator preserved, capability and cancel; approved panel/Back/read-position scenario | 1–5 per half |
 | F42 | Cached sleep presentation and bounded sleep/wake drain; `services/Sleep.*`, `ui/Sleep.*`, reader sleep seam | F11/F12/F19/F29/F34 | Deadline/capture before sleep, cached-only draw, wake ownership; sleep/reboot/resume no network during paint | 3–8 |
 | F43 | Device/control projections and diagnostics recovery; `services/Device.*`, `Battery.*`, `system/Diagnostics.*` | F11/F12/F29/F38k; parallel F40/F41; B1/B4/B5 approved; slice dependencies apply | Hardware capability truth, crash dedup, storage ownership; approved battery/light/rotate actions, no unsolicited overlay | 3–10 |
-| F44 | Full cutover/fault/reader regression gate; `test/host/`, `test/simulator/`, `tools/ci/*` | All applicable slices, including essential B1–B5 presentations | Lost power/full SD/unknown delivery/account isolation; six builds, three full scenarios, maps/heap/time reports | 0 |
+| F44 | Full cutover/fault/reader regression gate; `test/host/`, `test/simulator/`, `tools/ci/*` | All applicable 0.12 slices, including essential B1–B5 presentations; F28 bridge drain/offer evidence for deployed upgrade | Lost power/full SD/unknown delivery/account isolation; six builds, three full scenarios, maps/heap/time reports | 0 |
 | F45 | Maintainer device acceptance gate; BookSync integration repo acceptance record and feature/roadmap evidence | F44; no parallel promotion | Passing host/simulator receipts supplied; maintainer alone checks devices and records acceptance | 0 |
 
 F38k control groups (one slice per control per half): Reading/Custom; Sync/Wi-Fi/power policy; Library/storage; About/update
@@ -201,11 +225,35 @@ These template expansions are independent worker-day units, not a claim the whol
 rewrite takes 45 days. Estimate again after F14; no schedule justifies data loss.
 
 Parallel lanes after F14: adapter/lifecycle (F15–F25), read-only imports
-(F26–F28 as dependencies become ready), OTA (F30–F31), and host/layout
-(F33–F35). Cutover joins imports and lifecycle at F29. UI joins proven services,
+(F26b/F26c as dependencies become ready), OTA (F30–F31), and host/layout
+(F33–F35). F29 joins retained imports and the quiet notice; its sync action uses F16/F18.
+F28 runs on main in the 0.11 overlay, before deployed cutover; F31 supplies the
+old→bridge→0.12 ordering. There is no 0.12 legacy-reading/queue-import lane. UI joins proven services,
 not provisional direct clients. Resource-sensitive builds serialize within one
 checkout and use isolated PlatformIO package homes. This plan describes future
 parallel assignments; it does not start additional workers.
+
+Slim upgrade dependency graph (service implementation may precede UI approval;
+bridge release/device evidence is required before a deployed upgrade):
+
+```mermaid
+flowchart LR
+  F26b["F26b credentials / Wi-Fi"] --> F29["F29 retained activation + once-only B2 notice"]
+  F26c["F26c Tailnet / NVS identity"] --> F29
+  F12["F12 quiet gate"] --> F29
+  B2["B2 revision approval"] --> F29
+  F29 --> Sync["Normal first sync: F16 catalog + F18 lifecycle"]
+  F31["F31 old → bridge → 0.12 ordering"] --> F28["F28 drain on 0.11 main overlay"]
+  F28 --> Offer["Offer 0.12: empty queues OR signed out"]
+  Offer --> Upgrade["Deployed 0.12 upgrade"]
+  Upgrade --> F29
+```
+
+Import estimates now cover two 2–8 KiB retained slices (4–16 KiB total),
+rather than eleven 2–8/2–10 KiB import slices (22–96 KiB total). Nine import
+slices are removed and one 0.11 bridge slice added: eight fewer half-to-one
+worker-day units before expansion. F29 remains 3–8 KiB; the static notice is
+included. These are planning estimates, not measured savings or device evidence.
 
 F14 stops growth if a target misses the physical margin. Strip unreachable native
 product code, bound buffers and review map deltas; do not remove retained reader
@@ -254,12 +302,13 @@ devices/serial ports; only the maintainer sideloads and checks typography, ancho
 reading stats, SD/NVS migration, Tailnet identity, sleep/wake, OTA and e-ink/input
 behavior on every reader. Device evidence cannot be replaced by simulator success.
 
-## 5. Approved firmware screens (B1–B5)
+## 5. Firmware screen gates (B1–B5)
 
 The maintainer approved the [firmware gallery](mockups.html) and
 [screen/state inventory](SCREENS.md) on **27 Nov 2026** (PR #202), with one
 change, verbatim: "On screen keyboard should always be on the bottom for touch".
-B1–B5 no longer have a blocked-screens approval gate. Each approved UI slice may
+B1/B3/B4/B5 retain approval; the slim B2 revision is **NEEDS APPROVAL**.
+Retained service work may continue. Each approved UI slice may
 proceed when its corresponding service, test and slice dependencies are satisfied.
 The Q1–Q7 coordinator decisions are recorded in SCREENS.md.
 
@@ -272,8 +321,8 @@ dock at the bottom, with content and fields visible above; button views are unch
 | ID | Approved presentation coverage | Required service/test dependencies |
 |---|---|---|
 | B1 | Wi-Fi selection/password/join recovery; Tailnet pairing/status/route/logout/re-pair; C3 network wait/refusal/recovery | F10/F11 transport, NVS retention and leases; F12/F43 and fake-hardware tests |
-| B2 | Upgrade/import progress, corrupt/unsupported state, unresolved conflicts, queue capacity, migration recovery, settings-only reset and downgrade warning | F26–F29 read-only import/proofs and safe activation; durable capacity policy |
-| B3 | Firmware download/install/restart, trust/board rejection, interrupted update/recovery and compatible return controls | F30–F32 parser/trust/bridge, F29 compatibility proof and deferred-install tests |
+| B2 | **NEEDS APPROVAL (2026-11-27 revision):** once-only slim upgrade notice, retained Wi-Fi/sign-in/Tailscale pairing and native books/place, BookSync defaults, server restore with Sync from BookOrbit now / Later; existing queue/reset/downgrade views retained | F26b/F26c/F29 activation and notice checkpoint; F12 quiet gate; F16/F18 normal sync; F28 deployed bridge drain and F31 ordering; durable capacity policy |
+| B3 | Firmware download/install/restart, trust/board rejection, interrupted update/recovery and compatible return controls | F30–F32 parser/trust/bridge, F29 retained-import activation proof and deferred-install tests |
 | B4 | Calibration, ruled lines/fonts, hardware shortcuts/frontlight schedules, PIN/security, USB/SD ownership and dictionary/search recovery | F38k/F41r/F43 service seams, retained engine/settings/data and native escape |
 | B5 | Persistent crash summary, local diagnostics export, recovery/reset confirmations, optional first-run and once-only Home upgrade news | F43 capture/dedup/read model; F29 for upgrade news; no automatic upload or presentation |
 
@@ -292,11 +341,11 @@ X3 text parity, partitions/paths/NVS identity, trust/asset/bridge compatibility 
 Two durable-contract gates remain before F29 enables real outgoing delivery:
 
 - Freeze canonical identities, edition/source-locator mapping, event/tombstone and
-  dedup/ack semantics only after legacy round trips, ambiguous editions, cross-account
-  tests and shared Android/firmware cases pass. Keep raw legacy values and unknown
-  fields. This does not freeze a server/export protocol or promise missing history.
-- Review the import/activation proof and recovery record before source retirement
-  or first external replay. Unknown deliveries reconcile; they are never invented
+  dedup/ack semantics only after normal lifecycle round trips, ambiguous editions, cross-account
+  tests and shared Android/firmware cases pass. Keep raw locators and unknown fields; native legacy files stay untouched. This does not freeze a server/export protocol or promise missing history.
+- Review the retained-import/activation proof and recovery record before first
+  0.12 outgoing delivery. F28 drains legacy work on 0.11; 0.12 never replays a
+  legacy queue. Unknown deliveries reconcile; they are never invented
   acknowledgments. Originals/backups remain; deleting them is separate future work.
   An older app cannot undo remote writes or understand every new journal: no promise
   of bidirectional downgrade compatibility. New schema versions remain readable by

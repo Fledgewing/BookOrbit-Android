@@ -3,7 +3,8 @@
 Status: **approved — 27 Nov 2026**, with the keyboard change. The maintainer
 approved [the firmware mockups](mockups.html) on `feature/0.12` (PR #202), with
 one change, verbatim: "On screen keyboard should always be on the bottom for touch".
-This approves the presentation inventory for PLAN B1–B5, subject to slice dependencies.
+B1/B3/B4/B5 retain that approval. The slim **B2 revision (2026-11-27) NEEDS
+APPROVAL**; prior B2 import presentation is superseded, subject to slice dependencies.
 [Gallery](mockups.html) · [plan](PLAN.md) · [approved Home revision 16](../booksync-home/DESIGN.md).
 Each row below links one screen/state, with all three device views and captions.
 Implementation expands per state/control into the plan’s small UI slices; service work
@@ -32,9 +33,8 @@ Paths beginning `src/` refer to that stable commit, not the working checkout.
 - **B1 route restyle** — [`xteink/tailnet/ui/TailnetSettingsActivity.cpp:349`](../../../xteink/tailnet/ui/TailnetSettingsActivity.cpp#L349). Existing automatic, match-library and fixed-region choices are restyled. Region names here are synthetic; actual names come from Library.
 - **B1 connection restyle** — [`xteink/tailnet/ui/TailnetSettingsActivity.cpp:95`](../../../xteink/tailnet/ui/TailnetSettingsActivity.cpp#L95). Existing enable, logout confirmation and re-pair behaviour is restyled; library sign-in stays separate.
 - **B1 network recovery proposal** — [`xteink/tailnet/ui/TailnetNetPhase.cpp:1`](../../../xteink/tailnet/ui/TailnetNetPhase.cpp#L1). New quiet recovery replaces legacy C3 activity/restart routing. A connection never parks or restarts foreground reading.
-- **B2 import proposal** — [`docs/design/booksync-firmware/PLAN.md:158`](../../../docs/design/booksync-firmware/PLAN.md#L158). New presentation over the planned read-only import and activation proof. Originals and unresolved records remain preserved.
+- **B2 slim upgrade proposal — NEEDS APPROVAL (2026-11-27)** — [plan decision](PLAN.md#slim-upgrade-decision--2026-11-27). F26b/F26c retain credentials/Wi-Fi and Tailnet/NVS identity; F29 activates only these and presents the once-only notice. CrossInk native SD files remain untouched; F16/F18 restore server data through normal sync.
 - **B2 capacity proposal** — [`docs/design/booksync-firmware/PLAN.md:139`](../../../docs/design/booksync-firmware/PLAN.md#L139). New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI.
-- **B2 recovery proposal** — [`docs/design/booksync-firmware/PLAN.md:161`](../../../docs/design/booksync-firmware/PLAN.md#L161). New recovery presentation. No source retirement, fabricated acknowledgment or automatic deletion.
 - **B2 scoped reset proposal** — [`docs/design/booksync-firmware/PLAN.md:267`](../../../docs/design/booksync-firmware/PLAN.md#L267). New settings-only reset proposal; it does not discard queued work or reset pairing. Broader reset is not offered.
 - **B2 downgrade warning proposal** — [`docs/design/booksync-firmware/PLAN.md:291`](../../../docs/design/booksync-firmware/PLAN.md#L291). New warning; older software cannot reverse remote writes or guarantee that new saved records are readable.
 - **B3 update restyle and recovery** — [`src/activities/settings/OtaUpdateActivity.cpp:120`](https://github.com/uxjulia/CrossInk/blob/2cdd6117568c8877c3180d5fac8d5b20e55d1ac7/src/activities/settings/OtaUpdateActivity.cpp#L120). Existing check, offer, progress, failure and completion screens are restyled. Signed trust, deferred installation and rollback recovery add plan-defined states.
@@ -55,7 +55,7 @@ Paths beginning `src/` refer to that stable commit, not the working checkout.
 - **B5 recovery proposal** — [`docs/design/booksync-firmware/PLAN.md:270`](../../../docs/design/booksync-firmware/PLAN.md#L270). New one-boot basic-settings proposal; permanent saved values and security protection remain unchanged.
 - **B5 report-removal proposal** — [`docs/design/booksync-firmware/PLAN.md:270`](../../../docs/design/booksync-firmware/PLAN.md#L270). New report-only removal confirmation; this does not clear reading state, upgrade originals or saved changes.
 - **B5 first-run proposal** — [`docs/design/booksync-firmware/PLAN.md:270`](../../../docs/design/booksync-firmware/PLAN.md#L270). New firmware welcome, shown only with no book open. Existing Home remains the approved revision-16 design.
-- **B5 service choice proposal** — [`docs/design/booksync-firmware/PLAN.md:169`](../../../docs/design/booksync-firmware/PLAN.md#L169). Library Account provides available services. Only this service picker names BookOrbit; adapter details never enter other UI.
+- **B5 service choice proposal** — [`docs/design/booksync-firmware/PLAN.md:169`](../../../docs/design/booksync-firmware/PLAN.md#L169). Library Account provides available services. This service picker and the slim B2 restore action name BookOrbit; adapter protocol details never enter UI.
 - **B5 news proposal** — [`docs/design/booksync-firmware/PLAN.md:270`](../../../docs/design/booksync-firmware/PLAN.md#L270). New once-only firmware upgrade news; it waits for Home and never appears over a book.
 
 Additional stable evidence: `WifiSelectionActivity.cpp:1384` saves a password after
@@ -108,10 +108,45 @@ budgeted/tested under F41r; a renderer must not scan a book.
 - USB drive remains exclusive host ownership. A sleeping computer has not ejected.
   Explicit forced disconnect warns about unfinished computer writes; safe restart
   remounts and rebuilds projections behind Library. X3 powers off for card removal.
-- First-run can skip sign-in. Upgrade progress resumes idempotently; unknown format,
-  unreadable originals, uncertain delivery and ambiguous anchors never become empty
-  success or guessed acknowledgments. At pending-queue capacity, saved books
+- First-run can skip sign-in. Retained credential/identity activation resumes
+  idempotently and preserves unreadable originals. No 0.12 reading-record or
+  pending-queue importer runs; the 0.11 bridge drains work before the update offer
+  (empty queues or no signed-in account). Unknown deliveries never become guessed acknowledgments. At pending-queue capacity, saved books
   remain read-only; operations that cannot record durably are blocked with a message (Q2). Never evict unacknowledged work.
+
+## B2 slim upgrade revision — NEEDS APPROVAL
+
+The 2026-11-27 slim decision removes the former import progress/conflict/anchor and
+migration-recovery scenes. The [new notice](mockups.html#upgrade-notice) has all
+three device views and says:
+
+- **What carried over:** Wi-Fi, sign-in and Tailscale pairing. Your books and
+  CrossInk's own place in each book stay on the card.
+- **What starts fresh:** BookSync settings reset to defaults.
+- **Get your reading back:** Reading history, highlights and stats come back from
+  BookOrbit when you sync.
+- Actions: **Sync from BookOrbit now**, **Later**.
+
+Show once at Home after a 0.11 upgrade, never over a book. F29 durably checkpoints
+dismissal for either action (Back means Later); repeated boots do not show it again.
+Now invokes normal F16 catalog / F18 lifecycle sync through Library, re-pulling
+positions, annotations/bookmarks, stats and book matches. Match-by-identity reuses
+existing SD files without re-downloading where possible. Later leaves saved books
+usable and normal sync can restore the data afterwards. Data absent from BookOrbit
+cannot be restored by that sync; original files and queues are never deleted.
+Pro offers touch actions; Classic and X3 start focus on Sync from BookOrbit now,
+Previous/Next changes focus and Select activates. X3 uses text with no touch controls.
+Static notice paint performs zero library reads, network, parsing or file work;
+services own activation, dismissal and sync.
+
+Existing B2 queue-capacity/reset/downgrade views remain drawn for normal 0.12 use,
+not legacy import. B1/B3/B4/B5 are unchanged. B5's approved Home-news illustration
+is retained; the 0.11 upgrade uses this B2 explanation without duplicate notices.
+F28 belongs to this repo's `xteink/` overlay on main: the last 0.11 bridge sends
+all pending progress, stats, annotations/bookmarks and finish/state work to
+BookOrbit, then offers 0.12 only with empty queues or no signed-in account.
+F31 already provides old → bridge → 0.12 ordering. Implementation and release of
+that bridge follow later through the normal flow; this PR changes docs only.
 
 ## Screens and plan slices
 
@@ -145,25 +180,16 @@ budgeted/tested under F41r; a renderer must not scan a book.
 | [pair-checking — Checking approval](mockups.html#pair-checking) | progress; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
 | [pair-unapproved — Not approved yet](mockups.html#pair-unapproved) | waiting; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
 | [pair-no-wifi — Connect to Wi-Fi first](mockups.html#pair-no-wifi) | recovery; X4 Pro / X4 Classic / X3 | B1: F10/F11 → F43 | Library Device / network intents (F10–F12, F43) |
-| [import-intro — Keep your reading history](mockups.html#import-intro) | confirmation; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-progress — Keeping your reading history](mockups.html#import-progress) | progress; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-resume — Continue the upgrade](mockups.html#import-resume) | recovery; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-corrupt — Some saved records could not be read](mockups.html#import-corrupt) | error; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-newer — These records need a newer version](mockups.html#import-newer) | error; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-conflict — Which copy is this?](mockups.html#import-conflict) | unresolved; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-anchor — Your place needs review](mockups.html#import-anchor) | unresolved; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [import-ready — Reading history kept](mockups.html#import-ready) | normal; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [queue-status — Saved changes](mockups.html#queue-status) | normal; X4 Pro / X4 Classic / X3 | B2: F07/F17/F28a–d → F29 | Library SyncOwner / saved-change status (F07, F17, F28–F29) |
-| [queue-near — Saved changes are nearly full](mockups.html#queue-near) | warning; X4 Pro / X4 Classic / X3 | B2: F07/F17/F28a–d → F29 | Library SyncOwner / saved-change status (F07, F17, F28–F29) |
-| [queue-full — No room for more saved changes](mockups.html#queue-full) | error; X4 Pro / X4 Classic / X3 | B2: F07/F17/F28a–d → F29 | Library SyncOwner / saved-change status (F07, F17, F28–F29) |
-| [queue-reconcile — Checking saved changes](mockups.html#queue-reconcile) | recovery; X4 Pro / X4 Classic / X3 | B2: F07/F17/F28a–d → F29 | Library SyncOwner / saved-change status (F07, F17, F28–F29) |
-| [migration-space — More card space needed](mockups.html#migration-space) | error; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [migration-recovery — Upgrade recovery](mockups.html#migration-recovery) | recovery; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [reset-confirm — Reset BookSync settings?](mockups.html#reset-confirm) | confirmation; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [downgrade — Older software may miss changes](mockups.html#downgrade) | warning; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [reset-done — Settings restored](mockups.html#reset-done) | normal; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [reset-failed — Settings could not be restored](mockups.html#reset-failed) | error; X4 Pro / X4 Classic / X3 | B2: F26a–c/F27a–d/F28a–d → F29 | Library migration/recovery values and intents (F26–F29) |
-| [queue-recovered — Saved changes have room again](mockups.html#queue-recovered) | normal; X4 Pro / X4 Classic / X3 | B2: F07/F17/F28a–d → F29 | Library SyncOwner / saved-change status (F07, F17, F28–F29) |
+| [upgrade-notice — Welcome to BookSync 0.12](mockups.html#upgrade-notice) | once-only upgrade; X4 Pro touch / X4 Classic buttons / X3 text | B2 revision **NEEDS APPROVAL**: F26b/F26c → F29; F12 quiet gate; F16/F18 sync | Library upgrade values and normal sync intents |
+| [queue-status — Saved changes](mockups.html#queue-status) | normal; X4 Pro / X4 Classic / X3 | B2: F07/F17 | Library SyncOwner / saved-change status (F07, F17) |
+| [queue-near — Saved changes are nearly full](mockups.html#queue-near) | warning; X4 Pro / X4 Classic / X3 | B2: F07/F17 | Library SyncOwner / saved-change status (F07, F17) |
+| [queue-full — No room for more saved changes](mockups.html#queue-full) | error; X4 Pro / X4 Classic / X3 | B2: F07/F17 | Library SyncOwner / saved-change status (F07, F17) |
+| [queue-reconcile — Checking saved changes](mockups.html#queue-reconcile) | recovery; X4 Pro / X4 Classic / X3 | B2: F07/F17 | Library SyncOwner / saved-change status (F07, F17) |
+| [reset-confirm — Reset BookSync settings?](mockups.html#reset-confirm) | confirmation; X4 Pro / X4 Classic / X3 | B2: F29/F38k | Library settings/recovery values and intents (F29, F38k) |
+| [downgrade — Older software may miss changes](mockups.html#downgrade) | warning; X4 Pro / X4 Classic / X3 | B2: F29/F38k | Library settings/recovery values and intents (F29, F38k) |
+| [reset-done — Settings restored](mockups.html#reset-done) | normal; X4 Pro / X4 Classic / X3 | B2: F29/F38k | Library settings/recovery values and intents (F29, F38k) |
+| [reset-failed — Settings could not be restored](mockups.html#reset-failed) | error; X4 Pro / X4 Classic / X3 | B2: F29/F38k | Library settings/recovery values and intents (F29, F38k) |
+| [queue-recovered — Saved changes have room again](mockups.html#queue-recovered) | normal; X4 Pro / X4 Classic / X3 | B2: F07/F17 | Library SyncOwner / saved-change status (F07, F17) |
 | [update-ready — Update ready](mockups.html#update-ready) | normal; X4 Pro / X4 Classic / X3 | B3: F30/F31 → F32 | Library update values and intents (F30–F32) |
 | [update-download — Downloading update](mockups.html#update-download) | progress; X4 Pro / X4 Classic / X3 | B3: F30/F31 → F32 | Library update values and intents (F30–F32) |
 | [update-check — Checking update](mockups.html#update-check) | progress; X4 Pro / X4 Classic / X3 | B3: F30/F31 → F32 | Library update values and intents (F30–F32) |
@@ -251,7 +277,7 @@ them on 27 Nov 2026; the maintainer's requested change is recorded above.
 
 - **Q1 — Pairing on button readers:** Keep the existing QR, live link and manual Check; no phone-assisted handoff.
 - **Q2 — Queue at capacity:** Read-only saved-books path at capacity; operations that can't record durably are blocked with a message; never evict unacknowledged work.
-- **Q3 — Unresolved imports:** Keep ambiguous imports unresolved for later review; no guessed match and no outgoing replay.
+- **Q3 — Retained imports (slim revision, 2026-11-27):** Only credentials/Wi-Fi and Tailnet identity activate; preserve unreadable originals. No reading-record or queue replay on 0.12. B2 revision NEEDS APPROVAL.
 - **Q4 — Reset and forgotten code:** Approve settings-only reset, one-boot basic settings and a separate verified forgot-code recovery; nothing erases books or sign-ins.
 - **Q5 — Rollback admission:** Offer Return to previous only for versions proven compatible after F29/F32; otherwise show Previous version unavailable.
 - **Q6 — Diagnostic scope and retention:** Local redacted export to SD, keep the last 5 reports, user can delete them; X3 gets a bounded summary.
@@ -272,7 +298,7 @@ ownership and no unacknowledged eviction. Firmware size/margin and real-device
 sideload acceptance remain PLAN gates; this document measures neither. Essential
 recovery UI remains a cutover blocker until its implementation passes these gates.
 
-Review validation for this documentation change: headless-browser inspection of all
+Historical validation of the original approved gallery (before the slim B2 revision): headless-browser inspection of all
 126 states / 378 device views found no content clipping, broken internal anchors,
 page errors or horizontal overflow at 1200 px and 390 px widths. Representative
 password, pairing, import conflict, install, calibration, code-entry, USB ownership
@@ -283,3 +309,10 @@ Approval-change validation: all six X4 Pro text/keypad views dock the keyboard a
 the screen bottom with fields and actions visible above it. All 252 button-device
 views are unchanged. The 378-view clipping/anchor/overflow checks pass at 1200 px
 and 390 px widths; password and code-entry renders were visually inspected.
+
+Slim B2 revision validation (2026-11-27): all 117 states / 351 device views have
+no clipped content, broken gallery anchors, page errors or horizontal overflow at
+1200 px and 390 px widths. The three new notice views were rendered and visually
+inspected. All 107 articles outside B2 are byte-for-byte unchanged; existing frame
+styles are unchanged. Branding and feature-reference checks pass. This verifies
+the documentation rendering, not firmware behavior, device fit or B2 approval.
