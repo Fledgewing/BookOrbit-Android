@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BookSync F20 recovery — NEEDS APPROVAL</title>
+<style>
+body{font:18px system-ui,sans-serif;background:#e8e8e8;color:#111;margin:24px}h1{font-size:26px}.notice{border:3px solid;padding:16px;background:white;max-width:960px}.row{display:flex;gap:24px;flex-wrap:wrap;margin:24px 0}.device{width:280px;min-height:420px;background:#fff;border:3px solid #111;padding:20px;box-sizing:border-box}.device h3{border-bottom:3px solid;padding-bottom:12px}.device p{line-height:1.5}.action{border:2px solid;padding:10px;margin:12px 0}.focused{background:#111;color:white}.hints{font-size:14px;border-top:1px solid;padding-top:12px;margin-top:30px}.text{font-family:monospace}small{display:block;margin:12px 0}
+</style>
+<h1>BookSync F20 finish recovery</h1>
+<p class="notice"><b>NEEDS APPROVAL — docs only.</b> All proposed firmware UI stays off. Illustrative fit only; native dimensions and typography require simulator and maintainer acceptance.</p>
+<p><a href="F20-FINISH-RECOVERY.md">Behavior contract</a> · <a href="../end-of-book/mockups.html">Existing approved finish / Undo / rating</a></p>
+<div id="gallery"></div>
+<script>
+const scenes=[['Result unknown','Finish saved on this reader. Waiting to confirm the server result.',['Undo','Back to book']],['Undo pending','Undo saved on this reader. Waiting to confirm the earlier finish before restoring your previous choice.',['Back to book']],['Previous value unknown','Your earlier choice is not available. Keep reading while the finish result is checked.',['Back to book']]];
+const gallery=document.getElementById('gallery');
+for(const [title,message,actions] of scenes){
+ const section=document.createElement('section');section.innerHTML='<h2>'+title+' — NEEDS APPROVAL</h2>';const row=document.createElement('div');row.className='row';
+ for(const device of ['X4 Pro','X4 Classic','X3']){const panel=document.createElement('article');panel.className='device'+(device==='X3'?' text':'');panel.innerHTML='<small>'+device+' · proposed</small><h3>BookSync · Finish</h3><h4>'+title+'</h4><p>'+message+'</p>'+actions.map(a=>'<div class="action '+(a==='Back to book'?'focused':'')+'">'+a+'</div>').join('')+'<p class="hints">'+(device==='X4 Pro'?'Tap a row · Back returns to book':'Previous / Next · Select · Back')+'</p>';row.append(panel)}
+ section.append(row);gallery.append(section);
+}
+</script>
+</html>
