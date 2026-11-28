@@ -1087,7 +1087,7 @@ function Library.prepareLocalCompletion(ui)
     local b=Library.nativeReader(ui); if not b then return end
     local event=ui.doc_settings:readSetting("booksync_local_completion")
     if type(event)=="table" then Library.sendLocalCompletion(event,ui.doc_settings)
-    else deviceCommand("reading.local.prepare",{document=b.digest,summary=b.summary},function(result)
+    else deviceCommand("reading.local.prepare",{document=b.digest,summary={status=b.summary.status,modified=b.summary.modified}},function(result)
         if result.revision then ui.doc_settings:saveSetting("booksync_local_completion_revision",result.revision) end
         Library.retry()
     end) end

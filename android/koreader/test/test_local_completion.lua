@@ -17,6 +17,11 @@ return function(test,eq,ok,here,Cache)
         local revision=events[1].args.revision
         e.Library.prepareLocalCompletion(ui);eq(#events,2);eq(events[2].args.revision,revision)
         status='reading';e.Library.localCompletion(ui);eq(events[3].args.revision,revision+1);eq(events[3].args.complete,false)
+        saved.booksync_local_completion=nil
+        e.Library.nativeReader=function() return {digest=string.rep('a',32),summary={status='complete',modified='2026-11-27',note=string.rep('x',20000)}} end
+        e.Library.prepareLocalCompletion(ui)
+        eq(events[4].op,'reading.local.prepare');eq(events[4].args.summary.modified,'2026-11-27')
+        ok(#Cache.encode(events[4].args)<8192,'large native notes must not exhaust the command budget')
     end)
     test('local completion settings: one materialized local row within settings batch',function()
         local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
@@ -28,4 +33,32 @@ return function(test,eq,ok,here,Cache)
         local p=e.Library.paint('settings-reading-statistics');eq(p:localReading().target,12)
         local m=p:flush();eq(calls,1);eq(m.rows,1);eq(m.bytes,128);eq(m.spawns,0);eq(m.network,0)
     end)
+    test('local goal: late results cannot redraw a departed Settings form',function()
+        local top,form,pending,paints
+        paints=0
+        local view={alive=true,dialog={},paint=function() paints=paints+1 end}
+        local e=setmetatable({Library={},SettingsView={},UIManager={}},{__index=_G})
+        e.Library.paint=function() return {localReading=function() return {year=2026,goal_label='Off'} end,flush=function() end} end
+        e.Library.localReadingGoal=function(_,done) pending=done end
+        e.SettingsView.open=function(_,make) view.make=make;top=view.dialog;return view end
+        e.UIManager.getTopmostVisibleWidget=function() return top end
+        e.UIManager.show=function(_,d) top=d;form=d end
+        e.UIManager.close=function(_,d) if top==d then top=view.dialog end end
+        e.require=function(name)
+            eq(name,'ui/widget/inputdialog')
+            return {new=function(_,o) o.getInputText=function() return '12' end;o.onShowKeyboard=function() end;return o end}
+        end
+        setfenv(assert(loadfile(root..'ko/local_reading_settings.lua')),e)()
+        e.LocalReadingSettings.open();view.make()[1].callback();form.buttons[1][3].callback()
+        eq(top,view.dialog)
+        local reader={};top=reader
+        pending({goal_label='2026 · 12 books · This reader only',target=12})
+        eq(top,reader);eq(paints,0)
+        top=view.dialog;view.make()[1].callback();form.buttons[1][2].callback()
+        pending({goal_label='Off · This reader only'})
+        eq(paints,1)
+        view.make()[1].callback();form.buttons[1][3].callback();pending({error='invalid'})
+        eq(paints,2);eq(view.notice,'Enter a number from 1 to 999.')
+    end)
+
 end

@@ -3,21 +3,25 @@
 LocalReadingSettings={}
 function LocalReadingSettings.open()
     local view,saved
+    local function apply(result)
+        if not result.error then saved=result end
+        -- The mutation outlives its form; presentation never outlives visibility.
+        if not view.alive or UIManager:getTopmostVisibleWidget()~=view.dialog then return end
+        view.notice=result.error=="invalid" and "Enter a number from 1 to 999."
+            or result.error and "Not available · try again" or nil
+        view:paint()
+    end
     local function edit(snapshot)
         local dialog
         dialog=require("ui/widget/inputdialog"):new{title="Local reading goal · "..tostring(snapshot.year or ""),
             input=snapshot.target and tostring(snapshot.target) or "",input_type="number",
             description="1–999 books · This reader only. Goal carries over each year.",buttons={{
                 {text="Cancel",callback=function() UIManager:close(dialog) end},
-                {text="Off",callback=function() UIManager:close(dialog);Library.localReadingGoal(nil,function(result) saved=result; if view.alive then view:paint() end end) end},
+                {text="Off",callback=function() UIManager:close(dialog);Library.localReadingGoal(nil,apply) end},
                 {text="Save",callback=function()
                     local value=dialog:getInputText()
-                    Library.localReadingGoal(value,function(result)
-                        if result.error then return end
-                        saved=result
-                        UIManager:close(dialog)
-                        if view.alive then view:paint() end
-                    end)
+                    UIManager:close(dialog)
+                    Library.localReadingGoal(value,apply)
                 end}}}}
         UIManager:show(dialog) -- gate: user action (local reading goal input)
         dialog:onShowKeyboard()
