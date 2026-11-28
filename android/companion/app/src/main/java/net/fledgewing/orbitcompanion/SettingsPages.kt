@@ -44,7 +44,7 @@ abstract class SettingsPage : EinkActivity() {
     protected fun lockedBar(root: LinearLayout) {
         if (!locked) return
         root.addView(Ui.card(this).apply {
-            addView(Ui.text(this@SettingsPage, "Settings are locked. You can look; changes need the PIN.", 18f))
+            addView(Ui.text(this@SettingsPage, "Settings are locked. You can look; changes need the PIN.", CompanionStyle.BODY))
             addView(Ui.gap(this@SettingsPage, 8))
             addView(Ui.button(this@SettingsPage, "Unlock", heightDp = 56, sp = 20f) { Pin.run(this@SettingsPage) { render() } })
         })
@@ -56,7 +56,7 @@ abstract class SettingsPage : EinkActivity() {
     }
 
     protected fun subhead(root: LinearLayout, title: String) {
-        root.addView(Ui.text(this, title, 21f, bold = true).apply { setPadding(0, Ui.dp(this@SettingsPage, 14), 0, Ui.dp(this@SettingsPage, 6)) })
+        root.addView(Ui.text(this, title.uppercase(), CompanionStyle.CAPTION, bold = true).apply { setPadding(0, Ui.dp(this@SettingsPage, 14), 0, Ui.dp(this@SettingsPage, 6)) })
     }
 
     /** A changed shared key: stored with its time, told to the plugin, the page redrawn once. */
@@ -82,12 +82,13 @@ abstract class SettingsPage : EinkActivity() {
 
     /** [title]: null when the page's own title already names it (no doubled titles). */
     protected fun <T> segmented(root: LinearLayout, title: String?, sub: String?, options: List<Pair<T, String>>, current: T, pick: (T) -> Unit) {
-        if (title != null) root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SettingsPage, 10), 0, Ui.dp(this@SettingsPage, 6)) })
+        if (title != null) root.addView(Ui.text(this, title, CompanionStyle.LABEL, bold = true).apply { setPadding(0, Ui.dp(this@SettingsPage, 10), 0, Ui.dp(this@SettingsPage, 6)) })
         val rows = if (options.size == 4) options.chunked(2) else listOf(options)
         rows.forEach { row ->
             val seg = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 background = Ui.box(this@SettingsPage, Ui.PAPER)
+                clipToOutline = true
                 val pad = Ui.dp(this@SettingsPage, 2)
                 setPadding(pad, pad, pad, pad)
             }
@@ -217,14 +218,17 @@ class SettingsActivity : SleepPickerPage() {
         val q = query.trim()
         if (q.isEmpty()) {
             schema.sections.forEach { s ->
-                out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.open(this, s.id)) }).apply { tag = "section:${s.id}" })
+                out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.open(this, s.id)) }, left = CompanionStyle.icon(this, s.id)).apply { tag = "section:${s.id}" })
             }
-            out.addView(Ui.row(this, "Your server", "Account, sync and OPDS logins", Ui.value(this, "›"), onClick = {
-                startActivity(Intent(this, AccountActivity::class.java))
-            }).apply { tag = "server" })
-            out.addView(Ui.row(this, "About", "Credits and legal notices", Ui.value(this, "›"), onClick = {
-                startActivity(Intent(this, AboutActivity::class.java))
-            }).apply { tag = "about" })
+            out.addView(Ui.gap(this, 8))
+            out.addView(Ui.weightRow(this,
+                Ui.row(this, "Your server", onClick = {
+                    startActivity(Intent(this, AccountActivity::class.java))
+                }, left = CompanionStyle.icon(this, "server")).apply { tag = "server" },
+                Ui.row(this, "About", onClick = {
+                    startActivity(Intent(this, AboutActivity::class.java))
+                }, left = CompanionStyle.icon(this, "about")).apply { tag = "about" },
+            ))
             out.addView(note("BookSync ${BuildConfig.VERSION_NAME}" + prefs.patchVersionSeen.takeIf { it.isNotEmpty() }?.let { " · plugin $it" }.orEmpty()))
             return
         }

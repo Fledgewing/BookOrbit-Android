@@ -7,6 +7,8 @@ import android.text.InputType
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.view.ViewGroup
 
 /** Presentation calls only the Library service. No account data or filesystem on paint. */
 class LocalReadingSettingsActivity : SettingsPage() {
@@ -38,20 +40,37 @@ class LocalReadingSettingsActivity : SettingsPage() {
         lockedBar(root)
         val data=snapshot
         if(editing && !locked) {
-            root.addView(note(data?.get("year").toString()))
+            root.addView(Ui.text(this, data?.get("year").toString(), 30f, bold = true).apply {
+                typeface = CompanionStyle.serif
+                setPadding(0, Ui.dp(this@LocalReadingSettingsActivity, 18), 0, Ui.dp(this@LocalReadingSettingsActivity, 20))
+            })
+            root.addView(Ui.text(this, "Books to finish on this reader", CompanionStyle.BODY))
             val typed=input?.text?.toString()
             input=EditText(this).apply {
                 inputType=InputType.TYPE_CLASS_NUMBER
                 setSingleLine()
-                hint="Books to finish on this reader"
+                hint=""
                 setText(typed ?: data?.get("target")?.toString().orEmpty())
+                textSize = CompanionStyle.LABEL
+                typeface = CompanionStyle.sans
+                minHeight = Ui.dp(this@LocalReadingSettingsActivity, 56)
+                background = Ui.box(this@LocalReadingSettingsActivity, Ui.PAPER, radiusDp = 0)
+                val pad = Ui.dp(this@LocalReadingSettingsActivity, 12)
+                setPadding(pad, pad, pad, pad)
                 tag="local-goal-target"
             }
-            root.addView(input)
-            root.addView(note("1–999 books. This reader only. Goal carries over each year."))
+            root.addView(input, LinearLayout.LayoutParams(Ui.dp(this, 96), ViewGroup.LayoutParams.WRAP_CONTENT))
+            root.addView(note("1–999 books. This reader only. Your account goal stays separate."))
             notice?.let { root.addView(note(it)) }
-            root.addView(Ui.button(this,"Off") { input=null;call("reading.local.goal",emptyMap<Any,Any>()) })
-            root.addView(Ui.button(this,"Save") { call("reading.local.goal",mapOf("target" to input!!.text.toString())) })
+            root.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(Ui.button(this@LocalReadingSettingsActivity, "Off", heightDp = 56, sp = CompanionStyle.ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
+                    input=null;call("reading.local.goal",emptyMap<Any,Any>())
+                })
+                addView(Ui.button(this@LocalReadingSettingsActivity, "Save", heightDp = 56, sp = CompanionStyle.ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
+                    call("reading.local.goal",mapOf("target" to input!!.text.toString()))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = Ui.dp(this@LocalReadingSettingsActivity, 8) })
+            })
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             input!!.requestFocus()
             input!!.post { (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input,InputMethodManager.SHOW_IMPLICIT) }

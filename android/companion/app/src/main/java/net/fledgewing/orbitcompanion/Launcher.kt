@@ -180,7 +180,7 @@ open class LauncherActivity : EinkActivity() {
             root.addView(Ui.gap(this, 8))
         }
         val koFirst = !HomeApp.isApp(choice)
-        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 96 else 80, sp = if (koFirst) 26f else 22f) {
+        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 128 else 80, sp = if (koFirst) 26f else 22f) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
             } else {
@@ -210,8 +210,8 @@ open class LauncherActivity : EinkActivity() {
         root.addView(
             Ui.weightRow(
                 this,
-                Ui.button(this, "⋯  Other apps", heightDp = 72) { startActivity(Intent(this, AppsActivity::class.java)) },
-                Ui.button(this, "⚙  Settings", heightDp = 72) { startActivity(Intent(this, SettingsActivity::class.java)) },
+                Ui.launcherTile(this, "⋯", "Other apps") { startActivity(Intent(this, AppsActivity::class.java)) },
+                Ui.launcherTile(this, "⚙", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) },
             ),
         )
         root.addView(Ui.gap(this, 12))
