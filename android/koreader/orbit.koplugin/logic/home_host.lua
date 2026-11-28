@@ -29,7 +29,7 @@ function HomeHostPlan.cardGeometry(p,rect,scale)
         or math.max(0,math.floor(available/rowH))
     return {w=w,h=h,compact=compact,pad=pad,shelf=shelf,rowH=rowH,capacity=capacity}
 end
-local sources = {recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
+local sources = {pickup="pick-back-up",recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
 function HomeHostPlan.need(p)
     local s=p.settings or {}
     if p.widget == "library" then return {op="library.summary",limit=1} end
@@ -52,7 +52,7 @@ function HomeHostPlan.need(p)
     end
     local offset=s.offset or 0
     -- Reading now shares the hero identity; exclusion belongs to the companion.
-    local exclude=s.src == "reading" or s.exclude_current
+    local exclude=s.src == "reading" or s.src=="pickup" or s.exclude_current
     -- The companion removes the hero before applying the chosen query/sort.
     return {op="window",source=source,query=query,offset=offset,limit=s.limit or 4,exclude_current=exclude or nil}
 end

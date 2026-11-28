@@ -204,11 +204,11 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             val definitions=listOf(Triple("custom","Custom filter","library/all"),Triple("recent","Recently added","recently-added"),
                 Triple("wtr","Want to read","want-to-read"),Triple("reading","Reading now","reading"),
-                Triple("finished","Finished","finished"),Triple("device","On this device","on-device"))
+                Triple("finished","Finished","finished"),Triple("device","On this device","on-device"),Triple("pickup","Pick back up","pick-back-up"))
                 .filter { (src,_,_) -> !(src=="wtr" && a["allow_wtr"]==false || src=="device" && a["allow_device"]==false) }
             val rows=definitions.drop(offset).take(limit).map { (src,title,source) ->
                 val count=project(owner,mapOf("op" to "counts","source" to source,"exclude_current" to (src=="reading")))
-                mapOf("src" to src,"title" to title,"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
+                mapOf("src" to src,"title" to title,"default_sort" to 0.takeIf { src=="pickup" },"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
             }
             return mapOf("items" to rows,"total" to definitions.size,"next" to (offset+rows.size).takeIf { it<definitions.size },
                 "freshness" to freshness(store.meta("bulk_active")!=null))
@@ -267,7 +267,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         val source = if (op == "library.summary") "library/all" else if (op in setOf("series","series.preview")) mapOf("kind" to "series", "key" to a["key"]) else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
-        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "library", "series", "author", "search", "selection"))
+        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "pick-back-up", "on-device", "list", "collection", "library", "series", "author", "search", "selection"))
         val activeGeneration = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
         val completeGeneration=store.meta("bulk_complete")?.toLongOrNull()
         val incomplete=completeGeneration!=activeGeneration
@@ -311,8 +311,10 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         }
         val filter = f.entries.associate { it.key.toString() to it.value }.toMutableMap()
         val sourceFilter = mutableMapOf<String, Any?>()
+        val excludeCurrent=a["exclude_current"]==true || kind=="pick-back-up"
         when (kind) {
             "reading" -> { sourceFilter["show"] = "reading"; if (filter["sort"] == null) { filter["sort"] = "last"; filter["dir"] = "desc" } }
+            "pick-back-up" -> { sourceFilter["show"]="reading";if(filter["sort"]==null) { filter["sort"]="last";filter["dir"]="asc" } }
             "want-to-read" -> sourceFilter["wtr"] = true
             "finished" -> sourceFilter["show"] = "finished"
             "recently-added" -> if (filter["sort"] == null) { filter["sort"] = "added"; filter["dir"] = "desc" }
@@ -339,8 +341,12 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 b["match"] = when { title == q -> 0; title.startsWith(q) -> 1; q in title -> 2; else -> 3 }
-                if (a["exclude_current"]==true && kind=="reading" && LibraryFilter.matches(b,mapOf("show" to "reading")) &&
-                    (current==null || currentOrder.compare(b,current!!)<0)) current=b
+                if (excludeCurrent && kind in setOf("reading","pick-back-up") && LibraryFilter.matches(b,mapOf("show" to "reading")) &&
+                    (current==null || currentOrder.compare(b,current!!)<0)) current=b.toMap()
+                if(kind=="pick-back-up" && (b["last_read"]==null || (b["last_read"] as? String)?.isBlank()==true)) {
+                    b["last_read"]=null // the shared comparator keeps unknowns after dated rows
+                    b["status_note"]=(b["status_note"] as? String)?.let { "$it; last read unknown" } ?: "Last read unknown"
+                }
                 if ((membership == null || id in membership) && LibraryFilter.matches(b, sourceFilter)) {
                     facet?.include(b)
                     if (LibraryFilter.matches(b, filter)) selected.add(b)
@@ -348,7 +354,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             after = batch.last().first
         }
-        if (a["exclude_current"]==true && kind=="reading" && current!=null) {
+        if (excludeCurrent && kind in setOf("reading","pick-back-up") && current!=null) {
             selected.removeAll { it["key"]==current!!["key"] }
             facet?.include(current!!,-1)
         }

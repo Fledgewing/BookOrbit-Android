@@ -685,8 +685,8 @@ provider. Existing layouts and default pages are unchanged.
 
 ### Retained Library roots and named shortcuts (0.12)
 
-Library requests for `library.summary` / `sources` carry `projection=2` so ready
-pre-upgrade views cannot mask the expanded neutral shape.
+Library summary requests carry `projection=2`; source requests carry `projection=3`
+(including Pick back up), so ready pre-upgrade views cannot mask the expanded shape.
 
 `library.summary` adds `in_progress`, a bounded `browse` count record and a plain
 `coverage` label. `browse.complete=false` means secondary counts are unknown;

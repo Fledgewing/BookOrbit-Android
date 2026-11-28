@@ -6470,6 +6470,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-pick-back-up-shelf",
+      "feature": "Distinct Pick back up shelf (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Older-in-progress Book list preset, provider order, current-book exclusion and counted See all.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; unit and native emulator flows verify the distinct source and preset.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-PICK-BACK-UP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "The retained shelf follows Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-PICK-BACK-UP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "The retained shelf follows Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-PICK-BACK-UP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "The retained shelf follows Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-PICK-BACK-UP.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

@@ -87,6 +87,27 @@ class LibraryTest {
             assertNull(incomplete["libraries"]);assertNull(incomplete["collections"])
         }
     }
+    @Test fun pickBackUpUsesOldestInProgressExcludesHeroBeforeFilteringAndPreservesCounts() {
+        store().use { st ->
+            seed(st)
+            for((id,date) in listOf(1L to "2026-11-27",2L to "2026-09-01",3L to "2026-01-01")) st.db().exec("UPDATE bulk_books SET item=? WHERE g=1 AND id=?",LuaValue.encode(mapOf("id" to id,"title" to "Book $id","readStatus" to if(id==2L) "rereading" else "reading","lastReadAt" to date)),id)
+            fun window(extra:Map<String,Any?> = emptyMap()):Map<*,*> = read(st,mapOf("op" to "window","source" to "pick-back-up","limit" to 6)+extra)
+            val page=window();assertEquals(2L,(page["total"] as Number).toLong())
+            assertEquals(listOf("Book 3","Book 2"),(page["items"] as List<*>).map { (it as Map<*,*>)["title"] })
+            assertEquals(listOf("Book 2"),(window(mapOf("query" to mapOf("q" to "Book 2")))["items"] as List<*>).map { (it as Map<*,*>)["title"] })
+            for(i in 6L..7L) st.db().exec("INSERT INTO bulk_books(g,id,item) VALUES(1,?,?)",i,LuaValue.encode(mapOf("id" to i,"title" to "Book $i","readStatus" to "reading","lastReadAt" to if(i==7L) "" else null)))
+            val datedThenUnknown=window()["items"] as List<*>
+            assertEquals(listOf("Book 3","Book 2","Book 6","Book 7"),datedThenUnknown.map { (it as Map<*,*>)["title"] })
+            assertEquals("Last read unknown",(datedThenUnknown[2] as Map<*,*>)["status_note"])
+            val sources=read(st,mapOf("op" to "sources","category" to "builtin","offset" to 6,"limit" to 6))
+            val choice=(sources["items"] as List<*>).single() as Map<*,*>
+            assertEquals("pickup",choice["src"]);assertEquals(4L,(choice["count"] as Number).toLong());assertEquals(0L,(choice["default_sort"] as Number).toLong())
+            // Even with every date unknown, exclusion must match Reading now's hero.
+            for(i in 1L..3L) st.db().exec("UPDATE bulk_books SET item=? WHERE g=1 AND id=?",LuaValue.encode(mapOf("id" to i,"title" to "Book $i","readStatus" to "reading")),i)
+            val hero=((read(st,mapOf("op" to "window","source" to "reading","limit" to 1))["items"] as List<*>).first() as Map<*,*>)["key"]
+            assertFalse((window()["items"] as List<*>).any { (it as Map<*,*>)["key"]==hero })
+        }
+    }
     private val owner = "fixture|https://library.invalid"
     private val book = mapOf<String, Any?>("key" to "b", "title" to "The Moon", "authors" to listOf("A", "B"), "series" to listOf("Orbit"),
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,
@@ -285,7 +306,7 @@ class LibraryTest {
             assertEquals(1L,rows.first { it["src"]=="wtr" }["count"])
             assertNull(rows.first { it["src"]=="device" }["count"])
             val gated=read(st,mapOf("op" to "sources","category" to "builtin","allow_wtr" to false,"allow_device" to false))
-            assertEquals(4,(gated["items"] as List<*>).size)
+            assertEquals(5,(gated["items"] as List<*>).size)
             assertTrue((read(st,mapOf("op" to "sources","category" to "lists","allow_lists" to false))["items"] as List<*>).isEmpty())
             for (category in listOf("series","lists")) {
                 val page=read(st,mapOf("op" to "sources","category" to category,"offset" to 6,"limit" to 24))
