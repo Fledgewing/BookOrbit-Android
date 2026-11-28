@@ -360,8 +360,9 @@ three-profile simulator scenes and maintainer device acceptance remain required.
 ## F40w Home widget additions — NEEDS APPROVAL
 
 The [F40w inventory](F40w-widgets.md) and [widget gallery](f40w-widgets.html)
-propose the missing ready/state/size and X3 text presentations for the remaining
-Home widgets, plus Android registry entries requiring separate firmware scenes.
+replace the initial text-template proposal with 38 widget-specific main designs,
+three profile views each and compact state strips. They adapt the Android cards
+and document each firmware difference, including X3 text layouts.
 All additions are **NEEDS APPROVAL**. Existing Home revision-16 and B1–B5
 approvals remain unchanged; placeholder cards do not approve new widget content.
 No firmware implementation or pin update is included.
