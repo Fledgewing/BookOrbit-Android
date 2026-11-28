@@ -45,3 +45,9 @@ capability restrictions. Native review uses synthetic files outside the fixed
 59-book library and real worker projections, plus the native Next/Open controls.
 
 Physical acceptance, firmware implementation and publication remain pending.
+
+Native review caught an indexed-history normalization bug: KOReader dumps `[1]`
+keys, while the companion literal parser represents map keys as strings. The
+initial positional-only fixtures missed it. A native-format regression fails
+before the repair; the reader now accepts only contiguous canonical numeric keys,
+rejecting gaps and alternate spellings. Parsing remains literal-only and read-only.

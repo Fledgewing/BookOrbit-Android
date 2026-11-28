@@ -18,7 +18,16 @@ class UnopenedLibrary(private val roots:List<File>,private val readerRoot:File,p
     }
     private val history by lazy {
         val value=runCatching { text(File(readerRoot,"history.lua")) }.getOrNull()
-        val entries=when(value) { is List<*> -> value;is Map<*,*> -> if(value.isEmpty()) emptyList<Any>() else if(value.keys.all { it is Number && it.toLong() in 1..value.size.toLong() }) value.values.toList() else null;else -> null }
+        val entries=when(value) {
+            is List<*> -> value
+            // Native dump uses [1] = {...}; LuaValue intentionally normalizes map
+            // keys to strings. Accept only a contiguous canonical array shape.
+            is Map<*,*> -> if(value.keys.all { key ->
+                val index=key.toString().toLongOrNull()
+                index!=null && key.toString()==index.toString() && index in 1..value.size.toLong()
+            }) value.values.toList() else null
+            else -> null
+        }
         entries?.takeIf { rows -> rows.all { val path=(it as? Map<*,*>)?.get("file") as? String;path!=null && path.startsWith("/") && path.length<=4096 && '\u0000' !in path } }?.map { File(LuaValue.utf8((it as Map<*,*>)["file"].toString())).canonicalPath }?.toSet()
     }
     private fun hash(file:File):String {

@@ -52,7 +52,10 @@ def review(device,out):
         device.shot(out/'choice-after-restart.png')
         device.command('HomeHost.active:dispatch("book",Cache.decode('+json.dumps(open_row,ensure_ascii=False)+'));return true')
         wait('local ui=require("apps/reader/readerui").instance;return ui and ui.document and ui.document.file:find('+json.dumps(query)+',1,true) and "ready" or "pending"')
-        device.shot(out/'explicit-open.png');show()
+        device.shot(out/'explicit-open.png')
+        time.sleep(1)
+        device.command('if PositionPrompt.current then click("Yes") end;return true')
+        show()
         wait('local r=Cache.decode(HomeHost.active.signatures.u);return r and not r.pending and r.total==2 and "ready" or "pending"')
         print('5 native unopened checks passed (real pool, counted list, Next, restart, explicit Open exclusion)',flush=True)
     except Exception:

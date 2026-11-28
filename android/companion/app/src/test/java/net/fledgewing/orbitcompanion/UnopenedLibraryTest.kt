@@ -25,6 +25,19 @@ class UnopenedLibraryTest {
         assertEquals(0,library.window(mapOf("exclude_path" to LuaValue.str(never.path)))["total"])
         assertTrue(unknown.exists())
     }
+    @Test fun nativeDumpIndexedHistoryAndHeaderPreserveOpeningEvidence()=fixture { books,reader ->
+        val opened=book(books,"Opened");book(books,"Candidate")
+        val entry=mapOf("time" to now,"file" to LuaValue.str(opened.canonicalPath))
+        val history=File(reader,"history.lua")
+        history.writeBytes("-- native history\nreturn ".toByteArray()+LuaValue.encode(mapOf(1 to entry)))
+        val result=UnopenedLibrary(listOf(books),reader,now).window(emptyMap<Any,Any>())
+        assertEquals(true,(result["freshness"] as Map<*,*>)["saved"])
+        assertEquals(listOf("Candidate"),rows(result).map { it["title"] })
+        for(keys in listOf(mapOf("01" to entry),mapOf("1" to entry,"3" to entry))) {
+            history.writeBytes("return ".toByteArray()+LuaValue.encode(keys))
+            assertEquals("unavailable",UnopenedLibrary(listOf(books),reader,now).dust(emptyMap<Any,Any>())["state"])
+        }
+    }
     @Test fun centralHashAndLegacySidecarsAllExcludeFiles()=fixture { books,reader ->
         val central=book(books,"Central");val hashed=book(books,"Hashed");val legacy=book(books,"Legacy");book(books,"Candidate")
         File(reader,"docsettings${central.canonicalPath.substringBeforeLast('.')}.sdr").mkdirs()
