@@ -29,7 +29,9 @@ object LibraryLocalReading {
         // existing native sync adapter; cache-write roots are deliberately narrower.
         val roots=listOf(settings.parentFile!!.parentFile!!)
         for((document,raw) in (legacy(settings)?.get("jobs") as? Map<*,*>).orEmpty()) {
-            BulkWork.checkpoint()
+            // Never wait for reading to end under the ledger lock: native intent
+            // uses this owner too. This bounded, cached local import has no transfer.
+            if(Thread.currentThread().isInterrupted) throw InterruptedException()
             val job=raw as? Map<*,*> ?: continue
             val path=(job["file"] as? String)?.let(LuaValue::utf8) ?: continue
             val data=DeviceLibrary.metadata(File(path),roots) ?: continue

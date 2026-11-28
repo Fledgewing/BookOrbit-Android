@@ -17,6 +17,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLooper
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
@@ -47,6 +48,42 @@ class LocalReadingSettingsTest {
         texts(b).first {it.text.toString()=="Off"}.performClick()
         waitFor(b,"Off · This reader only")
         second.pause().stop().destroy()
+    }
+    @Test fun legacyImportCannotBlockNativeIntentWhileReading() {
+        val app=RuntimeEnvironment.getApplication()
+        val settings=ledger.parentFile!!
+        settings.mkdirs()
+        val source=File(settings,"orbit-finish-queue.lua")
+        val original=source.takeIf {it.isFile}?.readBytes()
+        val book=File(Environment.getExternalStorageDirectory(),"ledger-gate-fixture/book.epub")
+        book.parentFile!!.mkdirs();book.writeText("synthetic")
+        val metadata=File(book.parentFile,"book.sdr/metadata.epub.lua");metadata.parentFile!!.mkdirs()
+        val digest="c".repeat(32);val now=System.currentTimeMillis()/1000
+        val day=java.time.LocalDate.now().toString()
+        metadata.writeBytes("return ".toByteArray()+LuaValue.encode(mapOf("partial_md5_checksum" to digest,"summary" to mapOf("status" to "complete","modified" to day))))
+        source.writeBytes("return ".toByteArray()+LuaValue.encode(mapOf("jobs" to mapOf(digest to mapOf("hash" to digest,"file" to book.path,"finished_on" to day,"created_at" to now)))))
+        // Warm native SQLite/class loading before the liveness assertion. A changed
+        // source stamp forces the same proven import to run again under the reading gate.
+        LibraryLocalReading.snapshot(settings)
+        source.appendText("\n")
+        org.robolectric.Shadows.shadowOf(app.getSystemService(android.os.PowerManager::class.java)).setIsInteractive(true)
+        Prefs(app).readingAt=System.currentTimeMillis();BulkWork.attach(app);BulkWork.changed()
+        val imported=CountDownLatch(1);val persisted=CountDownLatch(1)
+        val thread=Thread { try { LibraryLocalReading.snapshot(settings) } finally { imported.countDown() } }
+        thread.start()
+        try {
+            assertTrue("local import must not wait for reading under the ledger lock",imported.await(2,TimeUnit.SECONDS))
+            val document="d".repeat(32)
+            LibraryLocalReading.command("reading.local.event",mapOf("document" to document,"revision" to 1L,"token" to "$document:1","complete" to true,"at" to now)) { value,error ->
+                assertNull(error);assertEquals(2L,value!!["books_this_year"]);persisted.countDown()
+            }
+            assertTrue("native intent must checkpoint during reading",persisted.await(2,TimeUnit.SECONDS))
+            assertTrue(Reading.now(app))
+        } finally {
+            Prefs(app).readingAt=0;BulkWork.changed();thread.interrupt();thread.join(2000)
+            if(original==null) source.delete() else source.writeBytes(original)
+            book.parentFile!!.deleteRecursively()
+        }
     }
     @Test fun lockedStatisticsShowLocalValuesWithoutAnEditor() {
         SettingsPage.forceLocked=true

@@ -231,3 +231,9 @@ checks and 4 upgrade checks pass. See the [bottom-docked numeric keyboard](evide
 [offline local pair](evidence/local-completion/offline-local-summary.png), and
 [proven 0.11 upgrade count](evidence/local-completion/upgrade-local-count.png).
 The upgrade checks compare the source queue and sidecar byte-for-byte.
+
+The local import never waits on the bulk reading pause while holding the ledger
+owner: native mark/Undo persistence shares that owner. A warmed Robolectric
+liveness regression fails against the prior blocking wait and passes with the
+bounded local import, with the reading gate still engaged throughout. This is a
+persistence guarantee, not a device latency measurement.
