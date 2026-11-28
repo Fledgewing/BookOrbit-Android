@@ -150,7 +150,7 @@ return function(here, test, ok, eq, audit)
         ok(#sheet.focus_controls>=10,"kit controls participate in focus traversal")
         ok(#W.logs>=5,"call, paint and draw timing spans")
         row(E,"Book info").action()
-        ok(row(E,"3 days start to finish")); ok(row(E,"61 min reading time")); ok(row(E,"120 pages read"))
+        ok(row(E,"3 days start to finish")); ok(row(E,"1 h 01 m")); ok(row(E,"120 pages read"))
         row(E,"Details").action(); eq(E.ReaderPanel.sheet.screen,"details"); eq(W.reads[#W.reads-1],"reader","in-book Details keeps the native reader context")
         row(E,"Back to book").action(); eq(E.ReaderPanel.sheet,nil); eq(W.ui.document.file,"/books/fixture.epub")
         E.ReaderPanel.details("opaque"); eq(W.reads[#W.reads-1],"book")
@@ -197,7 +197,7 @@ return function(here, test, ok, eq, audit)
         poll(); eq(#W.shown,shown,"cold completion never reopens the book overlay")
         E.ReaderPanel.show(W.ui,"book-info"); local sheet=E.ReaderPanel.sheet
         W.missing=false; W.poll(); eq(E.ReaderPanel.sheet,sheet)
-        ok(row(E,"61 min reading time"),"cold projection updates the existing user-opened surface")
+        ok(row(E,"1 h 01 m"),"cold projection updates the existing user-opened surface")
     end)
     test("reader panel: native escape, close lifecycle and enforced surface/widget budgets",function()
         local W,E=world()
@@ -240,6 +240,7 @@ return function(here, test, ok, eq, audit)
             else
                 local input=W.shown[#W.shown]
                 eq(input.screen,pair[1]=="Search" and "reader-search" or "reader-goto")
+                if pair[1]=="Search" then ok(input.is_always_active,"input remains interactive below the native keyboard") end
                 E.ReaderPanel.close()
                 E.Library.readerNativeAction(W.ui,pair[1]=="Search" and "search" or "goto")
             end
@@ -646,7 +647,7 @@ return function(here, test, ok, eq, audit)
         local trap={wrap=function(_,work) pending=work end,dismissableRunInSubprocess=function(_,work) return completed,completed and work() or nil end}
         E.require=function(name) if name=="ui/trapper" then return trap end;return original(name) end
         ui.document.findAllText=function(_,query,caseInsensitive,context,maximum,regex,flags)
-            eq(query,"needle");eq(caseInsensitive,true);eq(context,8);eq(maximum,128);eq(regex,false);eq(flags,255)
+            eq(query,"needle");eq(caseInsensitive,true);eq(context,8);eq(maximum,129);eq(regex,false);eq(flags,255)
             return {{start="match-xp",["end"]="match-end",matched_text="needle",prev_text="before",next_text="after"}}
         end
         local resolutions=0
@@ -746,6 +747,34 @@ return function(here, test, ok, eq, audit)
         local result=E.Library.readerWindow(ui,"annotations",0,100)
         eq(#result.items,8);eq(#result.items[1].quote,360);eq(#result.items[1].note,180);eq(#result.items[1].chapter,120)
         ok(#E.UIUtil.encode(result)<=16384,"quoted display fields fit their declared native snapshot cap")
+    end)
+
+    test("reader search revision: whole-word literal, exact cap and chapter are worker-owned",function()
+        local W,E=world();local ui=W.ui;local original=E.require
+        E.require=function(name)
+            if name=="ui/trapper" then return {wrap=function(_,fn) fn() end,dismissableRunInSubprocess=function(_,fn) return true,fn() end} end
+            return original(name)
+        end
+        ui.toc={toc={{page=1},{page=20},{page=40}}}
+        ui.document.getPageFromXPointer=function() return 42 end
+        local count=128
+        ui.document.findAllText=function(_,query,case,context,limit,regex)
+            eq(query,"\\ba\\+b\\b");eq(limit,129);eq(regex,true)
+            local rows={};for i=1,count do rows[i]={start="xp",matched_text="a+b",prev_text="before",next_text="after"} end
+            return rows
+        end
+        E.Library.readerSearch(ui,"a+b",{},function(done) ok(done) end,true)
+        local result=E.Library.readerWindow(ui,"search",0,8)
+        eq(result.total,128);eq(result.capped,false);eq(result.whole_words,true);eq(result.items[1].chapter,"Chapter 3")
+        count=129;E.Library.readerSearch(ui,"a+b",{},function(done) ok(done) end,true)
+        result=E.Library.readerWindow(ui,"search",0,8);eq(result.total,128);eq(result.capped,true)
+        ui.paging={}
+        ui.document.findAllText=function(_,query,case,context,limit,regex)
+            eq(query," a+b ");eq(regex,false);return {}
+        end
+        E.Library.readerSearch(ui,"a+b",{},function(done) ok(done) end,true)
+        ui.doc_props={description="Native EPUB description"}
+        local m=E.Library.readerMetadata(ui);eq(m.total_pages,200);eq(m.description,"Native EPUB description")
     end)
 
 end

@@ -174,4 +174,20 @@ class DeviceLibraryTest {
             assertEquals("unauthorized",adapter.project("other",mapOf("op" to "window"))["error"])
         } finally { root.deleteRecursively(); outside.deleteRecursively() }
     }
+    @Test fun readerSeriesCountComesFromTheLastCatalogSnapshotWithoutRescanning() {
+        val root=Files.createTempDirectory("reader-series").toFile()
+        try {
+            val cache=File(root,"cache").apply { mkdirs() };val books=File(root,"Books").apply { mkdirs() }
+            for(i in 1..5) {
+                File(books,"$i.epub").writeText("fixture")
+                File(books,"$i.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs();writeText("return "+String(LuaValue.encode(mapOf("doc_props" to mapOf("series" to "Tidewright","series_index" to i))),Charsets.ISO_8859_1)) }
+            }
+            DeviceLibrary(listOf(books),cache).personalCatalog(DeviceLibrary.OWNER)
+            val noScan=object:File(books.path) { override fun listFiles():Array<File>? = error("reader must not scan") }
+            val result=DeviceLibrary(listOf(noScan),cache).project(DeviceLibrary.OWNER,mapOf("op" to "reader","path" to File(books,"2.epub").path))
+            val row=(result["items"] as List<*>).single() as Map<*,*>
+            assertEquals(5,row["series_total"]);assertEquals(2L,row["series_position"])
+        } finally { root.deleteRecursively() }
+    }
+
 }

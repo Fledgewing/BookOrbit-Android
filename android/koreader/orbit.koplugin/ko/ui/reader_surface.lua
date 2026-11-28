@@ -140,16 +140,14 @@ function Surface.build(sheet)
         local summary=rows[3].text
         local native=sheet.native or {}
         summary=summary:gsub(" read$","").." · "..(native.time_left or sheet.model.time_left or "Time left unknown")
-        label(summary,30,190,345,"caption",{muted=true})
-        for _,status in ipairs(rows) do
-            if status.kind=="label" and status.action and status.text~="Sync" then label(status.text,126,64,350,"caption",{muted=true}) end
-        end
+        local summaryText=K.text{text=summary,w=p(345),size="caption",muted=true}
+        put(summaryText,math.max(18,362-summaryText:getSize().w/K.scale),190)
         local battery=find(sheet.model.battery)
         local strip=K.canvas(p(294),p(38))
         local symbol=K.canvas(p(16),p(10));K.put(symbol,K.frame(K.canvas(p(8),p(4)),{w=p(8),h=p(4),ink=true}),p(3),p(3))
         K.put(strip,K.frame(symbol,{w=p(16),h=p(10),border=p(1.5),radius=p(2)}),p(4),p(14))
         K.put(strip,K.frame(K.canvas(p(2),p(4)),{w=p(2),h=p(4),ink=true}),p(21),p(17))
-        K.label(strip,sheet.model.battery,p(29),p(10),p(260),"caption",{bold=true})
+        K.label(strip,sheet.model.battery_short or sheet.model.battery,p(29),p(10),p(260),"caption",{bold=true})
         put(track(K.hit(strip,{w=p(294),h=p(38),text=sheet.model.battery,callback=battery})),366,181)
         -- Keep hardware-key shortcuts without adding unapproved rows to the card.
         track{ text="Reading settings",callback=function() ReaderPanel.show(sheet.ui,"reader-bottom-panel") end }
@@ -308,24 +306,37 @@ function Surface.build(sheet)
         button("",552,14,52,function() close();Library.readerNativeAction(sheet.ui,"search") end,{icon="more",variant="ghost"})
         local field=K.canvas(p(634),p(52))
         K.put(field,K.icon{name="search",w=p(24)},p(14),p(14))
-        sheet.search_input=require("ui/widget/inputtext"):new{text=sheet.search_query or "",hint="Search this book…",width=p(548),height=p(40),
-            padding=0,margin=0,bordersize=0,face=K.text{text="",size="body",w=p(548)}.face,parent=sheet,enter_callback=sheet.search_submit}
+        sheet.search_input=require("ui/widget/inputtext"):new{text=sheet.search_query or "",hint="Search this book…",width=p(410),height=p(40),
+            padding=0,margin=0,bordersize=0,face=K.text{text="",size="body",w=p(410)}.face,parent=sheet,enter_callback=sheet.search_submit}
         K.put(field,sheet.search_input,p(54),p(7))
+        local option=K.canvas(p(140),p(52))
+        K.label(option,sheet.search_whole and "Whole words" or "Any text",p(8),p(16),p(128),"caption",{muted=true})
+        K.put(field,track(K.hit(option,{w=p(140),h=p(52),text="Whole words",callback=function()
+            sheet.search_whole=not sheet.search_whole
+            sheet.search_query=sheet.search_input:getText();sheet.search_input:onCloseKeyboard()
+            sheet:build();sheet.search_input:onShowKeyboard();UIManager:setDirty(sheet,"ui")
+        end})),p(486),0)
         put(K.frame(field,{w=p(634),h=p(52),border=p(2),radius=p(12)}),22,94)
         button("Search",22,162,156,sheet.search_submit,{icon="search",variant="solid"})
     elseif sheet.navigation then
         local result=sheet.navigation;local kind=sheet.navigation_kind
         local summary=rows[2].text
         if kind=="contents" and result.current then summary=result.total.." chapters · you're in chapter "..result.current end
-        if search and result.query then summary=(result.total==128 and "First 128" or result.total)..' matches for “'..result.query..'”' end
+        if search and result.query then summary=(result.capped and "First 128" or result.total)..' matches for “'..result.query..'”' end
         header(rows[1].text,summary)
         local y=92
         if search then
             local field=K.canvas(p(634),p(52))
             K.put(field,K.icon{name="search",w=p(22)},p(14),p(15))
-            K.label(field,result.query or "Search this book…",p(40),p(15),p(560),"body",{bold=true})
-            put(track(K.hit(K.frame(field,{w=p(634),h=p(52),radius=p(12),border=p(2)}),
-                {w=p(634),h=p(52),text="Search this book",callback=function() ReaderPanel.searchDialog(sheet.ui) end})),22,94)
+            K.label(field,result.query or "Search this book…",p(40),p(15),p(430),"body",{bold=true})
+            put(K.frame(field,{w=p(634),h=p(52),radius=p(12),border=p(2)}),22,94)
+            put(track(K.hit(K.canvas(p(480),p(52)),
+                {w=p(480),h=p(52),text="Search this book",callback=function() ReaderPanel.searchDialog(sheet.ui) end})),22,94)
+            local option=K.canvas(p(140),p(52))
+            K.label(option,result.whole_words and "Whole words" or "Any text",p(8),p(16),p(128),"caption",{muted=true})
+            put(track(K.hit(option,{w=p(140),h=p(52),text="Whole words",callback=function()
+                ReaderPanel.search(sheet.ui,result.query or "",not result.whole_words)
+            end})),508,94)
             y=164
         elseif kind=="annotations" then
             put(segments{w=p(634),h=p(54),items={"Highlights","Bookmarks","Notes"},selected=sheet.annotation_tab=="Highlights" and 1 or sheet.annotation_tab=="Bookmarks" and 2 or 3,
@@ -356,7 +367,7 @@ function Surface.build(sheet)
                     local TB=require("ui/widget/textboxwidget")
                     if search and item.match and TB.PTF_HEADER then
                         local function plain(value) return (value or ""):gsub("[\239][\191][\177-\179]","") end
-                        quote=TB.PTF_HEADER..plain(item.before).." "..TB.PTF_BOLD_START..plain(item.match)..TB.PTF_BOLD_END.." "..plain(item.after)
+                        quote=TB.PTF_HEADER.."…"..plain(item.before).." "..TB.PTF_BOLD_START..plain(item.match)..TB.PTF_BOLD_END.." "..plain(item.after).."…"
                     end
                     local face=K.text{text="",w=p(610),size=16,serif=true}.face
                     local quoteWidget=TB:new{text=quote,width=p(610),height=p(51),height_adjust=true,
@@ -390,7 +401,12 @@ function Surface.build(sheet)
         put(K.cover{w=p(132),h=p(198),title=m.title,author=m.author,file=m.cover_path},22,96)
         label(m.title,170,96,480,"title",{serif=true,bold=true})
         label(m.author,170,133,480,"body")
-        if m.series_line then label(m.series_line,170,166,480,"small",{bold=true}) end
+        if m.series_line then
+            local link=K.canvas(p(480),p(36));local text=K.text{text=m.series_line,w=p(448),size="small",bold=true}
+            K.put(link,K.icon{name="stack",w=p(16)},0,p(8));K.put(link,text,p(22),p(5))
+            K.put(link,K.frame(K.canvas(text:getSize().w,p(1)),{w=text:getSize().w,h=p(1),ink=true}),p(22),p(27))
+            put(track(K.hit(link,{w=p(480),h=p(36),text=m.series_line,callback=find("View series")})),170,161)
+        end
         local stats={{"PAGES",m.total_pages},{"READ",m.progress_text},{"STARTED",m.started},{"TIME READ",m.time}}
         for i,pair in ipairs(stats) do
             local x=170+((i-1)%2)*250;local y=198+math.floor((i-1)/2)*44

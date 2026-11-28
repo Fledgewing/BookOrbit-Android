@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Opt-in owned reader sheets; all data and native actions stay behind Library.
 ReaderPanel = {}
-local ReaderSheet = EndSheet:extend{ name="booksync_reader_panel", min_button=50, alpha=.6 }
+local ReaderSheet = EndSheet:extend{ name="booksync_reader_panel", is_always_active=true, min_button=50, alpha=.6 }
 
 function ReaderSheet:init()
     EndSheet.init(self)
@@ -136,7 +136,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
     local native=controls and controls.items and controls.items[1] or {}
     local caps = not bottom and paint:read("capabilities", {limit=1}) or {}
     local account=caps.account or {}
-    local m = ReaderPanelPlan.model(result, battery)
+    local m = ReaderPanelPlan.model(result, battery,ui and ui.document and Library.readerMetadata(ui))
     paint:flush()
     local rows = {
         {kind="title", text=m.title}, {kind="label", text=m.author},
@@ -437,29 +437,33 @@ function ReaderPanel.goDialog(ui)
     UIManager:show(sheet) -- gate: user action (owned Go to keypad)
     return true
 end
+function ReaderPanel.search(ui,query,wholeWords)
+    if not (ui and ui.document) or #query==0 or #query>512 then return false end
+    local document=ui.document
+    ReaderPanel.close()
+    local info=require("ui/widget/infomessage"):new{text="Searching… (tap to cancel)"}
+    UIManager:show(info) -- gate: user action (native cancelable search worker)
+    UIManager:forceRePaint()
+    local accepted=Library.readerSearch(ui,query,info,function(completed)
+        local visible=UIManager:getTopmostVisibleWidget()==info
+        info.dismiss_callback=nil;UIManager:close(info)
+        if completed and visible and ui.document==document then ReaderPanel.navigation(ui,"search") end
+    end,wholeWords)
+    if not accepted then UIManager:close(info);Library.readerNativeAction(ui,"search") end
+    return accepted
+end
 function ReaderPanel.searchDialog(ui)
     if not (ui and ui.document) then return false end
     local document=ui.document
+    local previous=Library.readerWindow(ui,"search",0,1)
     local dialog
     local function search()
-        local query=dialog.search_input:getText()
-        if #query==0 or #query>512 then return end
-        ReaderPanel.close()
-        if ui.document~=document then return end
-        local info=require("ui/widget/infomessage"):new{text="Searching… (tap to cancel)"}
-        UIManager:show(info) -- gate: user action (native cancelable search worker)
-        UIManager:forceRePaint()
-        local accepted=Library.readerSearch(ui,query,info,function(completed)
-            local visible=UIManager:getTopmostVisibleWidget()==info
-            info.dismiss_callback=nil
-            UIManager:close(info)
-            if completed and visible and ui.document==document then ReaderPanel.navigation(ui,"search") end
-        end)
-        if not accepted then UIManager:close(info);Library.readerNativeAction(ui,"search") end
+        if ui.document~=document then ReaderPanel.close();return end
+        ReaderPanel.search(ui,dialog.search_input:getText(),dialog.search_whole)
     end
     ReaderPanel.close()
     dialog=ReaderSheet:new{ui=ui,screen="reader-search",model={},display_rows={},search_submit=search,
-        search_query=Library.readerWindow(ui,"search",0,1).query}
+        search_whole=previous.query==nil or previous.whole_words,search_query=previous.query}
     if dialog.too_small then
         if dialog.free then dialog:free() end
         return Library.readerNativeAction(ui,"search")
@@ -467,5 +471,6 @@ function ReaderPanel.searchDialog(ui)
     ReaderPanel.sheet=dialog
     UIManager:show(dialog) -- gate: user action (owned query sheet, native keyboard)
     dialog.search_input:onShowKeyboard()
+    UIManager:setDirty(dialog,"ui")
     return true
 end

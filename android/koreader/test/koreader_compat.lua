@@ -136,6 +136,7 @@ local NEEDS = {
     { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus", {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
     { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F}, {"padding", F}, "getSize", "paintTo" } },
     { "frontend/ui/widget/iconwidget.lua", { {"icon", F} } },
+    { "frontend/apps/reader/readerui.lua", { {"doc_props", T} } },
     -- V2 reader sheets: native input, dimmed book backdrop and contextual matches.
     { "frontend/ui/widget/container/alphacontainer.lua", { "paintTo", {"alpha", F} } },
     { "frontend/ui/widget/inputtext.lua", { "getText", "onShowKeyboard", "onCloseKeyboard", {"enter_callback", T}, {"parent", F} } },

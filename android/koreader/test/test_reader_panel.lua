@@ -20,7 +20,7 @@ return function(test,eq,ok,here)
                 {display={page_estimate="Learning your usual use"},hours_usual_use=999})
             eq(m.title,"Fixture"); eq(m.author,"Fixture author"); eq(m.progress,.62)
             eq(m.progress_text,"62% read"); eq(m.battery,"Learning your usual use")
-            eq(m.pages,"120 pages read"); eq(m.time,"60 min reading time"); eq(m.days,"3 days start to finish")
+            eq(m.pages,"120 pages read"); eq(m.time,"1 h 00 m"); eq(m.days,"3 days start to finish")
         end
         eq(R.model({items={{progress=200}}},{}).progress,1)
         eq(R.model({items={{progress=-1}}},{}).progress,0)
@@ -52,7 +52,20 @@ return function(test,eq,ok,here)
         eq(m.cover_path,"/fixture/cover.png");eq(m.description,"Description");eq(m.series_line,"Series · Book 2")
         eq(m.total_pages,341);eq(m.started,"9 days ago");eq(m.time,"2 min reading time")
         eq(R.model({items={}}).total_pages,nil)
-        eq(R.model({items={{series={"Fixture series"},series_position=2}}}).series_line,"Fixture series · Book 2")
+        eq(R.model({items={{series={"Fixture series"},series_position=2}}}).series_line,"Book 2 · Fixture series")
+    end)
+
+    test("reader revision: native metadata and recorded stats populate Book info",function()
+        local m=R.model({items={{series={"The Tidewright Cycle"},series_position=2,series_total=5,
+            stats={started_days=9,reading_seconds=14700}}}},{display={page_estimate="Learning · estimate available after measured use"}},
+            {total_pages=341,description="EPUB description"})
+        eq(m.total_pages,341);eq(m.description,"EPUB description");eq(m.started,"9 days ago");eq(m.time,"4 h 05 m")
+        eq(m.series_line,"Book 2 of 5 · The Tidewright Cycle");eq(m.battery_short,"Learning your usage")
+    end)
+    test("reader whole words: escape literal regex metacharacters and preserve ordinary search",function()
+        eq(R.searchPattern("lantern",true),"\\blantern\\b")
+        eq(R.searchPattern("a+b.c",true),"\\ba\\+b\\.c\\b")
+        eq(R.searchPattern("a+b.c",false),"a+b.c")
     end)
 
 end

@@ -82,7 +82,7 @@ class LibraryReadModel(
                     localUnopened!=null -> localUnopened
                     else -> when (args["op"]) {
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
-                    "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
+                    "reader.controls" -> ReaderControls.read(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>(),java.io.File(store.root.parentFile,"statistics.sqlite3"),clock())
 
                     "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock(), (args["pick"] as? Number)?.toLong() ?: 0)
                     "reading.local" -> localCompletion

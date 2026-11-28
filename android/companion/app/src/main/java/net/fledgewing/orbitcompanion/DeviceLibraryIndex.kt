@@ -20,6 +20,17 @@ class DeviceLibraryIndex(private val file: File?, private val clock: () -> Long)
         }
         return Instant.ofEpochMilli(at).toString()
     }
+    private fun seriesKey(name:String)="series:"+MessageDigest.getInstance("SHA-256").digest(name.toByteArray()).joinToString("") { "%02x".format(it) }
+    /** Remember counts only during an existing catalog scan. Reader panels do no scan. */
+    fun rememberSeries(books:List<Map<String,Any?>>) {
+        val counts=books.mapNotNull { it["series_key"] as? String }.groupingBy { it }.eachCount()
+        val next=counts.mapKeys { seriesKey(it.key) }.mapValues { it.value.toString() }
+        val previous=values.stringPropertyNames().filter { it.startsWith("series:") }.associateWith { values.getProperty(it) }
+        if(next!=previous) {
+            previous.keys.forEach { values.remove(it) };next.forEach { (key,value) -> values.setProperty(key,value) };dirty=true
+        }
+    }
+    fun seriesCount(name:String?):Int?=name?.let { values.getProperty(seriesKey(it))?.toIntOrNull() }
     /** One atomic index write per scan, rather than rewriting it for every book. */
     fun flush() {
         val target=file ?: return

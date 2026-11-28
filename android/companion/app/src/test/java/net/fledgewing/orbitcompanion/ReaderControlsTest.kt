@@ -87,4 +87,12 @@ class ReaderControlsTest {
         assertEquals("p. 12 of 20 · 60%",LuaValue.utf8(parsed["position"] as String))
     }
 
+    @Test fun measuredPacePopulatesBothReaderPanelsWithoutInventingMissingPace() {
+        val native=mapOf("page" to 211,"total" to 341,"next_page" to 228,"chapter_index" to 14,"chapter_total" to 22)
+        val item=(ReaderControls.project(native,mapOf("seconds_per_fraction" to 31700.0))["items"] as List<*>).single() as Map<*,*>
+        assertEquals("3 h 22 m left in book",LuaValue.utf8(item["time_left"] as String))
+        assertEquals("27 m left in chapter",LuaValue.utf8(item["chapter_time_left"] as String))
+        assertNull(row(native)["time_left"]);assertNull(row(native)["chapter_time_left"])
+    }
+
 }

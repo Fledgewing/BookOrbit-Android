@@ -5497,7 +5497,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Kit-based opt-in reader panels: Home pill, serif title/author, round action tiles, compact progress/battery summary, chapter scrubber and two-column preset controls with status toggles and supported hardware sliders. Cover-led Book info renders supplied metadata and stats. Existing companion read budgets and clean_menus default stay unchanged.",
+          "note": "Kit-based opt-in reader panels: Home pill, serif title/author, round action tiles, compact progress/battery summary, chapter scrubber and two-column preset controls with status toggles and supported hardware sliders. Cover-led Book info reads open-document pages and EPUB description, per-book Started/Time read and the saved series count; measured native pace drives chapter/book time left. Search includes whole-word matching, centred snippets and chapter/page locations. Existing companion read budgets and clean_menus default stay unchanged.",
           "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery estimates need measured rates and 24 h of observed use, while reading stats require saved KOReader records plus the tracked-file ledger.",
           "evidence": [
             {
