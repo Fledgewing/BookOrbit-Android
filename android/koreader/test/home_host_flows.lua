@@ -61,6 +61,7 @@ return function(test,eq,ok,E,W,Widget)
                 for i=1,24 do d.hour_levels[i]=0; d.hour_intensity[i]=0 end
                 return d,#E.Cache.encode(d)
             end
+            if a.op == "counts" then return {total=2,freshness={saved=true}},80 end
             if a.op == "facets" then return {items=a.field and {{value="unread",label="Unread",count=2}} or {},total=2,freshness={saved=true}},150 end
             if a.op == "lists" then return {items={{key="opaque-list",title="Favourites",count=3}},freshness={saved=true}},150 end
             return {items={{key="opaque-book",title="The Moon",authors={"A"},progress=25,local_path="/fixture/book.epub"}},freshness={saved=true}},200
@@ -391,10 +392,10 @@ return function(test,eq,ok,E,W,Widget)
             end
             local h=E.HomeHost.create();E.HomeHost.active=h
             h:showList("Library","library/all")
-            eq(h.list_limit,5);eq(#h.list_result.items,5)
-            eq(h.list_result.items[1].title,"Book 1");eq(h.list_result.items[5].title,"Book 5")
+            eq(h.list_limit,15);eq(#h.list_result.items,15)
+            eq(h.list_result.items[1].title,"Book 1");eq(h.list_result.items[15].title,"Book 15")
             h:listPage(1)
-            eq(h.list_result.items[1].title,"Book 6");eq(h.list_result.items[5].title,"Book 10")
+            eq(h.list_result.items[1].title,"Book 16");eq(h.list_result.items[15].title,"Book 30")
             h:listPage(-1);eq(h.list_result.items[1].title,"Book 1")
         end)
     end)
@@ -549,9 +550,7 @@ return function(test,eq,ok,E,W,Widget)
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:dispatch("all",nil,E.S.home_layout.pages[1].placements[5])
             eq(h.filter.model.source,"recently-added")
-            local canvas=h[1][1]
-            eq(canvas[3].text,"Search"); eq(canvas[4].text,"Filter")
-            canvas[4].callback()
+            h.filter:header(h.list_result.total).callback()
             local filter=h.filter
             ok(filter.alive)
             filter.dialog.buttons[1][1].callback() -- Show picker
@@ -583,7 +582,7 @@ return function(test,eq,ok,E,W,Widget)
             local input=W.shown[#W.shown]; input.buttons[1][2].callback()
             eq(h.filter.model.source,"search"); eq(h.filter.model.query.q,"Moon")
             eq(h.filter.model.query.sort,"match")
-            eq(h[1][1][4].text,"Filter")
+            ok(h.filter:header(h.list_result.total).callback)
         end)
     end)
     test("Home wiring: filter dialogs over Home keep cached reads available above an open book",function()

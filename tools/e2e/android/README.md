@@ -167,3 +167,12 @@ wait for published views, expected cached covers and a completed repaint. It che
 that editor/picker previews make no queries and that move/size/save use their real
 callbacks. The size action cycles to the next span that fits, preserving neighbours.
 `--skip-seed` reuses an already seeded disposable AVD.
+
+Catalog and finish presentation: `catalog_ui.py --serial emulator-N --out <evidence>`
+checks the five-column Library, paging, filter counts/selection, grouped shelves,
+Series, Storage, saved finish covers, rating and stale-poll cancellation. Configure
+1404×1872 at 300 dpi and seed the 59-book fixture's sidecar covers first. It signs
+in to the compiled fixture account and disables the disposable emulator's radios.
+Main captures use the fixture companion; the additional next-three Series specimen
+supplies one bounded saved adapter response to exercise remote-only visual states.
+It uses the same native renderer and verifies the real download-card callback.
