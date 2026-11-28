@@ -192,4 +192,56 @@ test("catalog actions: every added screen and widget has strict deterministic bu
     end
     for _,id in ipairs({"end-of-book","recommendations"}) do E.Budgets.get("widgets",id) end
 end)
+local function recommendationPass(case)
+    local saved={recommendations=E.Recommendations,call=E.Library.recommendations,menus=E.Library.setReaderMenus,live=E.liveUI,
+        record=E.S.recommended,backup=E.S.recommended_backup,clean=E.S.clean_menus,save=E.saveSettings,silent=E.silentWifiOn,report=E.Library.report.send}
+    local state={calls=0,writes=0,saves=0,flushes=0}
+    local default={toggle_page_flipping=true}
+    local ui={gestures={default_settings={data={gesture_reader={tap_top_left_corner=default}}},data={gesture_reader={tap_top_left_corner=default}}}}
+    ui.gestures.onFlushSettings=function() ok(E.S.recommended_backup);state.flushes=state.flushes+1 end
+    local definitions={{id="g.no_flip",kind="gesture",key="tap_top_left_corner",ours={}},{id="o.clean_menus",kind="owned",key="clean_menus",ours=true,untouched_only=true}}
+    E.liveUI=function() return ui end;E.S.recommended=nil;E.S.recommended_backup=nil;E.S.clean_menus=case=="undo" and true or nil
+    E.saveSettings=function() state.saves=state.saves+1 end
+    E.Library.setReaderMenus=function(_,value) ok(E.S.recommended_backup,"backup precedes native mutation");E.S.clean_menus=value;state.writes=state.writes+1 end
+    E.Library.report.send=function() end
+    local filename=(arg[0]:match("^(.*)/") or ".").."/../orbit.koplugin/ko/recommendations_backend.lua"
+    local fn=assert(loadfile(filename));setfenv(fn,E);fn()
+    E.Library.recommendations=function(args,done)
+        state.calls=state.calls+1;ok(E.Recommendations.pending)
+        if args.definitions then done({items=definitions});return end
+        if args.ack then
+            state.failed=args.failed
+            done({items={},record=args.record,backup=args.backup});return
+        end
+        eq(args.observations["g.no_flip"].available,true)
+        local writes={}
+        if case=="defaults" or case=="race" then
+            writes={{id="g.no_flip",expected=default,value={}},{id="o.clean_menus",value=true,guard_untouched=true}}
+        elseif case=="explicit" then
+            ui.gestures.data.gesture_reader.tap_top_left_corner={custom=true}
+            writes={{id="o.clean_menus",value=true,guard_untouched=false}}
+        else writes={{id="o.clean_menus",expected=true,value=nil}} end
+        if case=="race" then ui.gestures.data.gesture_reader.tap_top_left_corner={custom=true} end
+        done({writes=writes,record={items={["g.no_flip"]="applied",["o.clean_menus"]="applied"},unseen=2},
+            backup={["g.no_flip"]={prior=default,ours={}},["o.clean_menus"]={ours=true}}})
+    end
+    local success,why=pcall(function()
+        E.Recommendations.pass("test",nil,false,function() state.done=true end)
+        eq(state.calls,3,"definitions lead to evaluation and acknowledgement");ok(state.done);eq(E.Recommendations.pending,nil)
+        if case=="race" then eq(state.writes,0);eq(E.S.clean_menus,nil);eq(#state.failed,2);ok(ui.gestures.data.gesture_reader.tap_top_left_corner.custom)
+        elseif case=="undo" then eq(state.writes,1);eq(E.S.clean_menus,nil)
+        else eq(state.writes,1);eq(E.S.clean_menus,true);eq(#state.failed,0)
+            if case=="defaults" then eq(next(ui.gestures.data.gesture_reader.tap_top_left_corner),nil);eq(state.flushes,1) end
+        end
+    end)
+    E.Recommendations,E.Library.recommendations,E.Library.setReaderMenus,E.liveUI=saved.recommendations,saved.call,saved.menus,saved.live
+    E.S.recommended,E.S.recommended_backup,E.S.clean_menus=saved.record,saved.backup,saved.clean
+    E.saveSettings,E.silentWifiOn,E.Library.report.send=saved.save,saved.silent,saved.report
+    if not success then error(why) end
+end
+test("recommendations: first definition fetch applies and acknowledges without a pending deadlock",function() recommendationPass("defaults") end)
+test("recommendations: an intervening customized gesture defeats automatic menu takeover",function() recommendationPass("race") end)
+test("recommendations: explicit menu opt-in works on a customized reader",function() recommendationPass("explicit") end)
+test("recommendations: Undo restores the absent owned setting",function() recommendationPass("undo") end)
+
 end

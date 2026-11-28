@@ -61,6 +61,38 @@ class RecommendationPlanTest {
     @Test fun snapshotAndDefinitionCountAreBounded() {
         val result=plan(mapOf("local" to obs(),"gesture" to obs()))
         assertTrue(LuaValue.encode(result).size<=16384)
-        try { RecommendationPlan.evaluate(List(9){items[0]},emptyMap<Any,Any>());fail("missing budget") } catch(_:IllegalArgumentException) { }
+        try { RecommendationPlan.evaluate(List(11){items[0]},emptyMap<Any,Any>());fail("missing budget") } catch(_:IllegalArgumentException) { }
     }
+    @Test fun cleanMenusAreAutomaticOnlyForUntouchedReadersRegardlessOfDefinitionOrder() {
+        val clean=mapOf("id" to "clean","kind" to "owned","key" to "clean_menus","ours" to true,"untouched_only" to true)
+        for(defs in listOf(items+clean,listOf(clean)+items)) {
+            val defaults=mapOf("local" to obs("prompt"),"gesture" to obs(),"clean" to obs())
+            val fresh=RecommendationPlan.evaluate(defs,mapOf("observations" to defaults))
+            assertTrue((fresh["writes"] as List<*>).any { (it as Map<*,*>)["id"]=="clean" && it["guard_untouched"]==true })
+            val custom=RecommendationPlan.evaluate(defs,mapOf("observations" to defaults+mapOf("gesture" to obs(mapOf("custom" to true)))))
+            assertFalse((custom["writes"] as List<*>).any { (it as Map<*,*>)["id"]=="clean" })
+            assertEquals("conflict",((custom["record"] as Map<*,*>)["items"] as Map<*,*>)["clean"])
+            val explicit=RecommendationPlan.evaluate(defs,mapOf("observations" to defaults,"record" to custom["record"],"backup" to custom["backup"],"choices" to mapOf("clean" to "ours")))
+            assertTrue((explicit["writes"] as List<*>).any { (it as Map<*,*>)["id"]=="clean" && it["guard_untouched"]==false })
+        }
+    }
+    @Test fun priorKeptSettingsAndExplicitMenuDisableAreNeverSilentlyOverwritten() {
+        val defs=items+mapOf("id" to "clean","kind" to "owned","key" to "clean_menus","ours" to true,"untouched_only" to true)
+        val values=mapOf("local" to obs("prompt"),"gesture" to obs(),"clean" to obs())
+        val result=RecommendationPlan.evaluate(defs,mapOf("observations" to values,"record" to mapOf("items" to mapOf("gesture" to "kept"))))
+        assertEquals("conflict",((result["record"] as Map<*,*>)["items"] as Map<*,*>)["clean"])
+        val disabled=RecommendationPlan.evaluate(defs,mapOf("observations" to values+mapOf("clean" to obs(false))))
+        assertFalse((disabled["writes"] as List<*>).any { (it as Map<*,*>)["id"]=="clean" })
+    }
+
+    @Test fun cleanMenuUndoRestoresUnsetAndIsNotReappliedOnTheNextPass() {
+        val clean=listOf(mapOf("id" to "clean","kind" to "owned","key" to "clean_menus","ours" to true,"untouched_only" to true))
+        val first=RecommendationPlan.evaluate(clean,mapOf("observations" to mapOf("clean" to obs())))
+        val undone=RecommendationPlan.evaluate(clean,mapOf("observations" to mapOf("clean" to obs(true)),"record" to first["record"],"backup" to first["backup"],"choices" to mapOf("clean" to "undo")))
+        val write=(undone["writes"] as List<*>).single() as Map<*,*>
+        assertEquals(true,write["expected"]);assertNull(write["value"])
+        val next=RecommendationPlan.evaluate(clean,mapOf("observations" to mapOf("clean" to obs()),"record" to undone["record"],"backup" to undone["backup"]))
+        assertTrue((next["writes"] as List<*>).isEmpty())
+    }
+
 }

@@ -585,8 +585,8 @@ The owned lifecycle journal remains the sole position writer. Its completed matc
 Screen/widget budgets are declared in `logic/budgets.lua`; paints use zero network/forks and
 at most one batched materialization request, with info-level spans.
 
-`SERVER_COMMAND` operation `settings.recommendations` supplies eight neutral native-setting
-binding descriptors or evaluates eight observations and review choices. Its bounded snapshot
+`SERVER_COMMAND` operation `settings.recommendations` supplies ten neutral native-setting
+binding descriptors or evaluates ten observations and review choices. Its bounded snapshot
 contains decisions, compare-before-write operations, backup/Undo state, labels and counts.
 Only KOReader applies native settings; the companion writes `orbit-recommended.json` for its
 review page. Review paints read the lifecycle-cached library snapshot with zero round-trips.

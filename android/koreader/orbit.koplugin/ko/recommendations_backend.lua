@@ -14,6 +14,7 @@ local function observe(item,raw)
         item.required_by=="wifi" and not S.wifi_via_companion
     local obs
     if item.kind=="connector" then obs=Library.observeSetting and Library.observeSetting(item) or {available=false,reason="Connector unavailable"}
+    elseif item.kind=="owned" then obs={available=true,current=S[item.key]}
     elseif item.kind=="ko" then obs={available=true,current=G_reader_settings:readSetting(item.key)}
     elseif item.kind=="gesture" then
         local g=context();local defaults=g and g.default_settings and g.default_settings.data
@@ -26,6 +27,7 @@ local function observe(item,raw)
 end
 local function write(item,value)
     if item.kind=="connector" then return Library.writeSetting and Library.writeSetting(item,value) end
+    if item.kind=="owned" then Library.setReaderMenus(liveUI(),value);return true end
     if item.kind=="ko" then
         if value==nil then G_reader_settings:delSetting(item.key) else G_reader_settings:saveSetting(item.key,value) end
         return true
@@ -40,15 +42,16 @@ function Recommendations.pass(why,choices,lost,done)
         Recommendations.pending=true
         return Library.recommendations({definitions=true},function(result)
             if result.error then Recommendations.pending=nil;return end
+            Recommendations.pending=nil
             Recommendations.items=result.items or {};if #Recommendations.items>0 then Recommendations.pass(why,choices,lost,done) end
         end)
     end
     local observations={}
-    for i,item in ipairs(Recommendations.items) do if i<=8 then observations[item.id]=observe(item) end end
+    for i,item in ipairs(Recommendations.items) do if i<=10 then observations[item.id]=observe(item) end end
     local unseen=S.recommended and S.recommended.unseen or 0
     Recommendations.pending=true
     return Library.recommendations({observations=observations,record=S.recommended,backup=S.recommended_backup,choices=choices,lost=lost,wifi=S.wifi_via_companion and Companion.has("wifi")},function(result)
-        Recommendations.pending=nil;if result.error then return end
+        if result.error then Recommendations.pending=nil;return end
         -- Persist backups before native writes. An interrupted pass can recover Undo.
         S.recommended_backup=result.backup
         S.recommended=S.recommended or {items={}}
@@ -57,11 +60,22 @@ function Recommendations.pass(why,choices,lost,done)
         saveSettings()
         local failed={}
         for i,op in ipairs(result.writes or {}) do
-            if i>8 then break end
+            if i>10 then break end
             for _,item in ipairs(Recommendations.items) do
                 if item.id==op.id then
                     -- A user action while the worker ran wins; never overwrite it on return.
                     local same=equal(observe(item,true).current,op.expected)
+                    if same and op.guard_untouched then
+                        for _,other in ipairs(Recommendations.items) do
+                            if not other.untouched_only then
+                                local actual=observe(other,true)
+                                local state=S.recommended.items[other.id]
+                                if state=="conflict" or state=="kept" or actual.available and
+                                    not equal(actual.current,other.ours) and not equal(actual.current,actual.default) and
+                                    not (other.stock~=nil and equal(actual.current,other.stock)) then same=false;break end
+                            end
+                        end
+                    end
                     local worked,took=false,false
                     if same then worked,took=pcall(write,item,op.value) end
                     if not same or not worked or not took then

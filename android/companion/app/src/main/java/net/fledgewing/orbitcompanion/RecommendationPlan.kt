@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 package net.fledgewing.orbitcompanion
 
-/** Eight local settings, never a catalog. The connector supplies its native binding descriptors;
+/** Ten local settings, never a catalog. The connector supplies its native binding descriptors;
  * observations and compare-before-write acknowledgements stay behind Library on the reader. */
 object RecommendationPlan {
     fun evaluate(definitions:List<Map<String,Any?>>,args:Map<*,*>):Map<String,Any?> {
-        require(definitions.size<=8)
+        require(definitions.size<=10)
         val record=(args["record"] as? Map<*,*>).orEmpty()
         val prior=(record["items"] as? Map<*,*>).orEmpty().toMutableMap()
         val backup=(args["backup"] as? Map<*,*>).orEmpty().toMutableMap()
@@ -13,6 +13,15 @@ object RecommendationPlan {
         val choices=(args["choices"] as? Map<*,*>).orEmpty()
         val failed=(args["failed"] as? List<*>).orEmpty()
         val writes=mutableListOf<Map<String,Any?>>()
+        // The clean-menu takeover is automatic only when all observed native
+        // defaults remain untouched and no earlier conflict/keep is unresolved.
+        val customized=definitions.filter { it["untouched_only"]!=true }.any { item ->
+            val id=item["id"] as String
+            val obs=(observed[id] as? Map<*,*>).orEmpty()
+            val value=obs["current"]
+            prior[id] in setOf("conflict","kept") || obs["available"]==true &&
+                value!=item["ours"] && value!=obs["default"] && !(item["stock"]!=null && value==item["stock"])
+        }
         val rows=definitions.map { item ->
             val id=item["id"] as String
             val obs=(observed[id] as? Map<*,*>).orEmpty()
@@ -21,20 +30,21 @@ object RecommendationPlan {
             var next=status
             val choice=choices[id] ?: choices["all"].takeUnless { it=="ours" && status=="kept" || it=="undo" && item["required_by"]=="wifi" && args["wifi"]==true }
             val available=obs["available"]==true
-            fun apply() {
+            fun apply(explicit:Boolean=false) {
                 backup[id]=mapOf("had" to obs.containsKey("current"),"prior" to current,"ours" to ours)
-                writes.add(mapOf("id" to id,"expected" to current,"value" to ours));next="applied"
+                writes.add(mapOf("id" to id,"expected" to current,"value" to ours,"guard_untouched" to (item["untouched_only"]==true && !explicit)));next="applied"
             }
             if(choice=="mine" && status=="conflict") next="kept"
             else if(choice=="undo" && status=="applied" || args["lost"]==true && !available && status=="applied") {
                 val saved=backup[id] as? Map<*,*>
                 if(saved!=null && current==saved["ours"]) writes.add(mapOf("id" to id,"expected" to current,"value" to saved["prior"]))
                 backup.remove(id);next=if(args["lost"]==true) "unavailable" else "kept"
-            } else if(available && choice=="ours" && status in setOf("kept","conflict")) apply()
+            } else if(available && choice=="ours" && status in setOf("kept","conflict")) apply(true)
             else if(args["ack"]!=true && (status==null || status=="unavailable")) {
                 next=when {
                     !available -> "unavailable"
                     current==ours -> if(backup[id]!=null) "applied" else "already"
+                    item["untouched_only"]==true && customized -> "conflict"
                     current==obs["default"] || item["stock"]!=null && current==item["stock"] -> "applied"
                     else -> "conflict"
                 }

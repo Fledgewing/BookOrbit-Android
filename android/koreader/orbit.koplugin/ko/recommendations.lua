@@ -14,7 +14,7 @@ end
 function OrbitAndroid:showRecommended(why)
     local finish=Budgets.span("recommendations.draw",now_s,log)
     local paint=Library.paint("settings-recommendations")
-    local snapshot=paint:widget("recommendations"):read("settings.recommendations",{limit=8}) or {items={}}
+    local snapshot=paint:widget("recommendations"):read("settings.recommendations",{limit=10}) or {items={}}
     paint:flush(true)
     local items={}
     local function choice(id,what)
@@ -26,7 +26,7 @@ function OrbitAndroid:showRecommended(why)
     end
     local section
     for i,row in ipairs(snapshot.items or {}) do
-        if i>8 then break end
+        if i>10 then break end
         local item=row
         if item.section~=section then
             section=item.section;items[#items+1]={text=section,bold=true,callback=function() end}

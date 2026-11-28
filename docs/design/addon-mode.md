@@ -751,7 +751,7 @@ Each is written so that "yes" accepts my recommendation.
 
 0.12 follow-up: the install-permission fallback, update-ready status mirroring, helper deep-link and separate Sleep sync / Screen off choices below are now implemented on the feature branch. Emulator and physical acceptance are recorded separately; they are not a release claim.
 
-Historical follow-up list (the final menu-recommendation item remains pending):
+Historical follow-up list (all items below are implemented on feature/0.12):
 - §3.1 "Install apps" declined: the KOReader row's "Install it yourself" link and a browser
   "Download" for companion updates. Today the KOReader row asks for the permission, as in Full.
 - §3.1 Notifications declined: the required-step text on BookSync settings' status line in KOReader
@@ -760,9 +760,9 @@ Historical follow-up list (the final menu-recommendation item remains pending):
   main page, not its Settings at that helper.
 - §8 step 2 in Add-on: Settings › Mode's "Keep helpers" keeps Sleep sync and Screen off together
   (one checkbox).
-- §9's changes to the 8b menus and the 7/9 cache designs, which are not built yet: `g.no_flip`
-  and `o.clean_menus` join `Recommended.ITEMS` with them (the engine's `untouched_only` rule for
-  `o.clean_menus` is built and tested).
+- §9: `g.no_flip` and `o.clean_menus` now join the ten-item Library recommendation plan.
+  Automatic menu takeover requires untouched defaults; explicit review can opt in, and Undo
+  restores the exact prior unset/false/true value. See [verification](booksync-home/F12-MENU-RECOMMENDATIONS.md).
 
 ## 17. Self-grill log while building (two-way doors, settled)
 
