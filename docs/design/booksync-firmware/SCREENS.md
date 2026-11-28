@@ -356,3 +356,12 @@ The maintainer approved the [Settings list and its six states](F35a-X3-editor.md
 on 2026-11-27 (~18:45 PT): list, add, remove, reset, no space and save failure.
 Keep widget and Keep layout receive initial focus. F35a services, host tests,
 three-profile simulator scenes and maintainer device acceptance remain required.
+
+## F40w Home widget additions — NEEDS APPROVAL
+
+The [F40w inventory](F40w-widgets.md) and [widget gallery](f40w-widgets.html)
+propose the missing ready/state/size and X3 text presentations for the remaining
+Home widgets, plus Android registry entries requiring separate firmware scenes.
+All additions are **NEEDS APPROVAL**. Existing Home revision-16 and B1–B5
+approvals remain unchanged; placeholder cards do not approve new widget content.
+No firmware implementation or pin update is included.
