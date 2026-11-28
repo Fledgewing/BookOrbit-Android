@@ -173,7 +173,7 @@ Interval kind has the stricter page-only rules in the next section.
 
 ## Rest your eyes: continuous reading and presentation
 
-**NEEDS APPROVAL — coordinator decisions (a)–(e), follow-up to PR #231.**
+**APPROVED (2026-11-27) — coordinator decisions (a)–(e), follow-up to PR #231.**
 
 - Count elapsed time only while a book page is visible in the foreground and
   the reader is in use. User-opened menus/panels, Home, hidden/background state,
