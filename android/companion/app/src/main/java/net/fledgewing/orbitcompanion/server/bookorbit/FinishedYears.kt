@@ -96,7 +96,7 @@ internal object FinishedYears {
         val window=selected.drop(offset).take(limit)
         val total=data?.get("finished_total")
         val label="Finished in $year · ${total ?: "—"} total"
-        return mapOf("items" to window,"total" to selected.size,"next" to (offset+window.size).takeIf { it<selected.size },
+        return mapOf("items" to window,"total" to selected.size.takeIf { data!=null || pending.isNotEmpty() },"next" to (offset+window.size).takeIf { it<selected.size },
             "context" to mapOf("title" to LuaValue.str(label),"coverage" to LuaValue.str((if(data==null) "Account year summary pending" else "Saved selection · ${rows.size} books") + if(pending.isNotEmpty()) " · ${pending.size} local pending" else ""),"year" to year,"finished_total" to total),
             "freshness" to mapOf("saved" to (data!=null || pending.isNotEmpty()),"origin" to "cached-remote","at" to data?.get("at")),"row_count" to window.size)
     }

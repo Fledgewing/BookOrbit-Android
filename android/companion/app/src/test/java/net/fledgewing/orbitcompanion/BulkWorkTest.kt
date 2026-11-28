@@ -86,6 +86,26 @@ class BulkWorkTest {
         }
     }
 
+    @Test fun HomeVisibilityReportResumesBulkWorkWithoutRecordingABatteryMeasurement() {
+        val app=org.robolectric.RuntimeEnvironment.getApplication()
+        org.robolectric.Shadows.shadowOf(app.getSystemService(android.os.PowerManager::class.java)).setIsInteractive(true)
+        val prefs=Prefs(app);prefs.readingAt=System.currentTimeMillis();BulkWork.attach(app);BulkWork.changed()
+        val store=StatsStore.get(app);val recorder=StatsRecorder(app,prefs)
+        val before=store.readableDatabase.rawQuery("SELECT count(*) FROM snap",null).use { it.moveToFirst();it.getLong(0) }
+        val done=CountDownLatch(1);val thread=BulkWork.thread("home-visibility-test",Runnable { BulkWork.checkpoint();done.countDown() })
+        thread.start()
+        try {
+            val until=System.nanoTime()+2_000_000_000L
+            while(!BulkWork.paused && System.nanoTime()<until) Thread.sleep(5)
+            assertTrue(BulkWork.paused)
+            val report=android.content.Intent(Contract.STATS).putExtra("reason","home").putExtra("reading","0").putExtra("open","1").putExtra("visibility_only","1")
+            Reading.onStats(app,report);recorder.onStats(report)
+            assertTrue(done.await(2,TimeUnit.SECONDS));assertFalse(Reading.now(app))
+            val after=store.readableDatabase.rawQuery("SELECT count(*) FROM snap",null).use { it.moveToFirst();it.getLong(0) }
+            assertEquals(before,after)
+        } finally { prefs.readingAt=0;BulkWork.changed();thread.interrupt();thread.join(2000) }
+    }
+
     @Test fun repeatedNetUpAndWifiCallbacksShareOneVpnAttemptUntilDisconnect() {
         val gate = VpnConnectGate()
         assertFalse(gate.request(false, false))

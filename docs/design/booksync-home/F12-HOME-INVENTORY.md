@@ -27,7 +27,7 @@ separate, unapproved local completion/goal **settings** proposal.
 | Reading hours / When you read | Done | `P/logic/widget_registry.lua:18` and the reading-statistics renderer retain the hour distribution. |
 | Personal records | Done | `C/ReadingStats.kt:130` supplies measured session/page/streak records; `P/logic/widget_registry.lua:19` retains their card. |
 | A year ago | Done | `P/logic/widget_registry.lua:25`; `P/ko/local_widgets.lua:22` retains its source/summary and empty state. |
-| Finished in YEAR with year selector | Building | [Year selection and provenance](F12-FINISHED-YEAR.md); native acceptance pending. |
+| Finished in YEAR with year selector | Implemented | [Year selection and provenance](F12-FINISHED-YEAR.md); five native checks pass; physical acceptance pending. |
 | Word of the day | Done | `P/logic/widget_registry.lua:21`; `P/ko/local_widgets.lua:43` includes vocabulary source/context and lookup. |
 | Distinct Pick back up shelf | Done after audit | [Owned source and native preset](F12-PICK-BACK-UP.md) select older in-progress books, exclude the current hero before filters/paging and preserve counted See all. Four native checks pass; physical acceptance remains. |
 | Up next in series shelf | Not started | Series next-N is now implemented, but there is no Up next shelf source/preset in `P/logic/booklist.lua:6`–`:12`. A title suggestion is not a source. |

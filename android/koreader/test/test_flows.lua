@@ -3166,6 +3166,39 @@ end)
 
 
 
+test("cache statements: busy scalar always closes the prepared statement",function()
+    local closed=0
+    local c={prepare=function() return {step=function() error("ljsqlite3[busy] injected") end,close=function() closed=closed+1 end} end}
+    eq(pcall(RE.Db.single,c,"PRAGMA user_version"),false);eq(closed,1)
+    c.prepare=function() return {step=function() return {7} end,close=function() closed=closed+1 end} end
+    eq(RE.Db.single(c,"PRAGMA user_version"),7);eq(closed,2)
+end)
+
+test("cache transactions: failed begin skips reads, failed commit rolls back and closes",function()
+    ok(type(RE.Db.single)=="function")
+    local saved={conn=RE.Db.conn,close=RE.Db.close,reading=RE.reading}
+    local phase,active,closed,reads="ok",false,0,0
+    local c={prepare=function(_,sql) return {step=function()
+        if sql=="PRAGMA user_version" then return {1} end
+        if sql=="BEGIN" then if phase=="begin" then error("ljsqlite3[busy] begin") end;active=true end
+        if sql=="COMMIT" then if phase=="commit" then error("ljsqlite3[busy] commit") end;active=false end
+        if sql=="ROLLBACK" then active=false end
+    end,close=function() end} end}
+    RE.Db.conn=function() return c end;RE.Db.close=function() closed=closed+1;active=false end;RE.reading=function() return false end
+    local worked,why=pcall(function()
+        local first=RE.Store.within(nil,"cleanup-regression",function() reads=reads+1;return {value=1} end)
+        eq(first.value,1);eq(active,false)
+        phase="commit"
+        local old=RE.Store.within(nil,"cleanup-regression",function() reads=reads+1;return {value=2} end)
+        eq(old,first);eq(active,false);eq(closed,1)
+        phase="begin"
+        eq(RE.Store.within(nil,"cleanup-regression",function() reads=reads+1;return {value=3} end),first)
+        eq(reads,2);eq(closed,2);eq(active,false)
+    end)
+    RE.Db.conn=saved.conn;RE.Db.close=saved.close;RE.reading=saved.reading
+    if not worked then error(why,0) end
+end)
+
 -- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
 local JSONF = dofile(here .. "/json_mini.lua")
 -- @fixture cache/db.json @fixture cache/schema.sql

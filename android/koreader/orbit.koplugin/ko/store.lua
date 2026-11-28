@@ -69,7 +69,7 @@ end
 function Store.conn(owner)
     local conn, err = Db.conn(Store.path())
     if not conn then return nil, err end
-    local okv, v = pcall(conn.rowexec, conn, "PRAGMA user_version")
+    local okv, v = pcall(Db.single, conn, "PRAGMA user_version")
     if not okv then return nil, v end
     if tonumber(Db.value(v)) ~= Store.VERSION then return nil, "version " .. tostring(Db.value(v)) end
     if owner then
@@ -106,9 +106,20 @@ local function within(owner, what, fn, user_surface)
         Store.last_err = tostring(err)
         return fallback(err)
     end
-    local okb = pcall(conn.exec, conn, "BEGIN")
+    local okb, begin_err = pcall(Db.single, conn, "BEGIN")
+    if not okb then
+        -- A failed transaction cannot authorize an unguarded read. Retire any
+        -- earlier incomplete native statement/transaction before the next paint.
+        Db.close(Store.path())
+        return fallback(begin_err)
+    end
     local okf, r1, r2 = pcall(fn, conn)
-    if okb then pcall(conn.exec, conn, "COMMIT") end
+    local ended, end_err = pcall(Db.single, conn, okf and "COMMIT" or "ROLLBACK")
+    if not ended then
+        pcall(Db.single,conn,"ROLLBACK")
+        Db.close(Store.path())
+        return fallback(end_err)
+    end
     if not okf then
         log("store:", what, "failed:", (tostring(r1):gsub("\n.*", "")))
         return fallback(r1)

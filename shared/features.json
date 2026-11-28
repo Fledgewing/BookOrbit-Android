@@ -6687,7 +6687,7 @@
         "android": {
           "status": "partial",
           "note": "Saved year selector, capped selection versus account total, qualified pending local marks and rollover.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-FINISHED-YEAR.md",

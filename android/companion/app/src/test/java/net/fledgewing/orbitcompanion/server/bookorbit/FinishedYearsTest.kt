@@ -28,7 +28,7 @@ class FinishedYearsTest {
         val version=st.db().pragma("user_version")
         assertEquals(12,FinishedYears.window(st,owner,2025,emptyMap<Any,Any>())["total"])
         val pending=FinishedYears.window(st,owner,2026,emptyMap<Any,Any>())
-        assertEquals(false,(pending["freshness"] as Map<*,*>)["saved"])
+        assertEquals(false,(pending["freshness"] as Map<*,*>)["saved"]);assertNull(pending["total"])
         assertNull((pending["context"] as Map<*,*>)["finished_total"])
         assertEquals(version,st.db().pragma("user_version"));assertNotNull(st.meta("owner"))
     }

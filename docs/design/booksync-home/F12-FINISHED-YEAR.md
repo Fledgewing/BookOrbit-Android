@@ -39,4 +39,34 @@ the writer integration. Lua tests retain the neutral year request and immutable
 selection context. Native review exercises the real source picker, saved year
 shelf, separate account total, counted See all and pending-year presentation.
 
+Native testing exposed two integration gaps. Source-picker work could remain
+paused because owned Home did not mirror its foreground transition to the
+companion until the five-minute stats tick. Home show/close now reports the single
+reading gate immediately through Library, with `visibility_only=1`; the companion
+skips measurement recording for those reports. A regression verifies that bulk
+work resumes with no added battery row.
+
+Busy-cache cleanup also used native convenience calls whose error path can retain
+prepared statements, and silently ignored transaction-end failures. BookSync now
+finalizes its own scalar/transaction statements on success or error, skips reads
+when BEGIN fails, and rolls back/retires a failed transaction. Two forced-busy Lua
+regressions fail before this repair and pass after it. The pinned base
+`6e4bc81af4e04f78d81677a323a780a71b29702a`,
+`thirdparty/lua-ljsqlite3/init.lua:352`–`:375`,
+[defines the convenience-call cleanup order](https://raw.githubusercontent.com/koreader/koreader-base/6e4bc81af4e04f78d81677a323a780a71b29702a/thirdparty/lua-ljsqlite3/init.lua).
+The workaround stays in BookSync; upstream sources remain unchanged.
+
+The native fixture initially used an invalid tab and later assigned its temporary
+layout before the first layout-file load. The harness now uses Insights, primes
+Home, asserts layout validity and verifies the actual widget signature. A unique
+neutral request nonce forces a fresh view so a previously ready row cannot hide
+an integration failure. The reading precondition uses the real Home Close callback,
+and the fixture position-consent popup is explicitly answered No before waiting
+for frontmost Home to repaint.
+
 Physical acceptance, firmware implementation and publication remain pending.
+
+Verification: **906 JVM tests**, zero failures/errors, four skips; shared-version,
+debug APK and lint pass. **260 Lua logic / 296 flows**, boundary guards **12/6**,
+feature matrix **4**, emulator driver **10**. The five native year checks pass;
+current/past minimum-size/See all/unknown-year screenshots were inspected.

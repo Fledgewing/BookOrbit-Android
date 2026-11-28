@@ -143,6 +143,23 @@ return function(test,eq,ok,E,W,Widget)
         controller:smartHome("command",nil,"smart");eq(host.list_layout,nil)
         eq(E.HomeHost.active,host);eq(ui.document.file,"/fixture/current.epub")
     end) end)
+    test('Home visibility: immediate gate reports survive zero measurement counts and restore reading',function()
+        withHost(function()
+            local send,foreground=E.Companion.send,E.Library.isForeground
+            local reports={}
+            E.liveUI=function() return {document={file='/fixture/book.epub'}} end
+            E.Library.isForeground=function() return true end
+            E.Companion.send=function(action,extras) if action==E.Companion.ACTION.STATS then reports[#reports+1]=extras end;return true end
+            local worked,why=pcall(function()
+                E.HomeHost.show();eq(#reports,1);eq(reports[1].reading,'0');eq(reports[1].open,'1');eq(reports[1].visibility_only,'1')
+                local h=E.HomeHost.active;h:onClose();h:onCloseWidget()
+                eq(#reports,2);eq(reports[2].reading,'1');eq(reports[2].reason,'home-close')
+                h:onCloseWidget();eq(#reports,2)
+            end)
+            E.Companion.send=send;E.Library.isForeground=foreground
+            if not worked then error(why,0) end
+        end)
+    end)
     dofile((arg[0]:match("^(.*)/") or ".").."/series_flows.lua")(test,eq,ok,E,W,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)

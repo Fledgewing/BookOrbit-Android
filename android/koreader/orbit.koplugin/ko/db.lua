@@ -57,6 +57,20 @@ local function inode(path)
     return lfs.attributes(path, "ino") or nil
 end
 
+-- The native convenience exec/rowexec helpers do not close a statement if step
+-- throws. Cached readers must finalize even on busy, including scalar PRAGMAs.
+function Db.single(conn,command)
+    local st=conn:prepare(command)
+    local ok,value=pcall(function()
+        local row=st:step()
+        return row and Db.value(row[1])
+    end)
+    local closed,why=pcall(st.close,st)
+    if not ok then error(value,0) end
+    if not closed then error(why,0) end
+    return value
+end
+
 -- The process's connection to path, opened on first use and again after a fork or a replaced file.
 -- -> conn, or nil, err ("missing" when there is no file).
 Db._open = {}
