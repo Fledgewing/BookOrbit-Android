@@ -273,7 +273,8 @@ function Library:read(op, args)
     args.op = op
     -- A ready pre-upgrade view has no root counts/extended source vocabulary.
     -- A new cache identity materializes the changed neutral shape immediately.
-    if op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=5 end
+    if (op=="window" or op=="counts" or op=="facets" or op=="groups") and args.source=="unopened" then local ui=liveUI();args.exclude_path=ui and ui.document and ui.document.file end
+    if op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=6 end
     local remainingRows=math.min(self.budget.rows-self.usage.rows,self.screen_budget.rows-self.metrics.rows)
     local remainingBytes=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
     assert(remainingRows>=1 and remainingBytes>=1,"Library caller budget exhausted")
@@ -567,14 +568,14 @@ end
 -- Adapter capabilities determine the overflow model, never server names in a widget.
 function Library.cardActions(row,caps)
     caps=caps or {}
-    local items={{id="details",label="Details",enabled=row.key~=nil},
+    local items={{id="details",label="Details",enabled=row.key~=nil and row.detail_available~=false},
         {id=row.local_path and "book" or "download",label=row.local_path and "Open" or "Download",enabled=row.local_path~=nil or caps.download==true}}
     if row.series_key and not (caps.series and caps.series.read==false) then
         items[#items+1]={id="series",label="View series",enabled=true}
     end
     -- Status intents are capability-gated and checkpointed by the sole sync writer.
-    items[#items+1]={id="status",label=row.status=="finished" and "Mark unread" or "Mark read",enabled=(caps.status and caps.status.write)==true and row.status~="unknown"}
-    if row.local_path then items[#items+1]={id="remove",label="Remove download",enabled=caps.removeDownload==true} end
+    items[#items+1]={id="status",label=row.status=="finished" and "Mark unread" or "Mark read",enabled=(caps.status and caps.status.write)==true and row.status~="unknown" and row.status_write~=false}
+    if row.local_path then items[#items+1]={id="remove",label="Remove download",enabled=caps.removeDownload==true and row.can_remove~=false} end
     assert(#items<=Budgets.get("screens","book-actions").rows,"Card action row budget exceeded")
     return items
 end

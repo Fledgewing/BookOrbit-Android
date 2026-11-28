@@ -59,6 +59,7 @@ class LibraryReadModel(
         val localStats by lazy { readingStats?.invoke() ?: ReadingStats.read(
             java.io.File(store.root.parentFile, "statistics.sqlite3"), clock(),
             if (local) java.time.ZoneId.systemDefault() else AccountStats.zone(account)) }
+        val unopened by lazy { UnopenedLibrary(roots(),store.root.parentFile?.parentFile ?: store.root,clock()) }
         val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
         val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
@@ -67,9 +68,18 @@ class LibraryReadModel(
             val request = encoded as? String ?: continue
             if (request.length > 8192) continue
             val args = LuaValue.parse(request.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: continue
+            // Native folder/history work may pause for reading. Never hold a cache
+            // transaction while that checkpoint waits for the foreground book.
+            val localUnopened=try { if(local || store.meta("owner")==owner) when {
+                args["op"]=="local.dust" -> unopened.dust(args)
+                args["op"] in setOf("window","counts","facets","groups") && args["source"]=="unopened" -> unopened.window(args)
+                else -> null
+            } else null } catch (_:IllegalArgumentException) { mapOf("error" to "unsupported","items" to emptyList<Any>()) }
             store.transaction {
                 if (!local && store.meta("owner") != owner) return@transaction
-                val projected = try { when (args["op"]) {
+                val projected = try { when {
+                    localUnopened!=null -> localUnopened
+                    else -> when (args["op"]) {
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
@@ -88,10 +98,10 @@ class LibraryReadModel(
                     "sleep.choices" -> SleepChoiceWindow.project(sleepChoices(), args)
                     "capabilities" -> projection.capabilities(owner) + mapOf("battery" to true,"removeDownload" to true)
                     else -> projection.project(owner, args)
-                } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
+                } } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 // Enrich only the bounded display window, never the full catalog. Saved covers
                 // and personal pace share its row/byte budget and its single Home batch.
-                val result = if (args["op"] == "window") {
+                val result = if (args["op"] == "window" && args["source"]!="unopened") {
                     val seconds = ((localStats["year"] as? Map<*, *>)?.get("seconds") as? List<*>).orEmpty()
                     val daily = seconds.takeLast(14).sumOf { (it as? Number)?.toLong() ?: 0 } / 14
                     projected + mapOf("items" to (projected["items"] as? List<*>).orEmpty().map { raw ->

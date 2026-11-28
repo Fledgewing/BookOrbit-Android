@@ -5,6 +5,7 @@ function Library.localWidgetNeed(id)
         local ui=liveUI();return {op="local.nextstop",limit=1,native=ui and ui.document and Library.readerInput(ui,true) or {}}
     end
     if id=="sync-controls" or id=="reader-toggles" then return {op="local.controls",limit=1,native=Library.controlInput()} end
+    if id=="dust" then local ui=liveUI();local pick=S.home_dust_pick or {};return {op="local.dust",limit=1,day=pick.day,pick=pick.skip,exclude_path=ui and ui.document and ui.document.file} end
     if id=="recommended" or id=="discover" then
         return {op="personal.reading",kind=id,limit=1,pick=id=="discover" and (S.home_discover_pick or 0) or nil}
     end
@@ -20,6 +21,10 @@ function Library.localWidgetNeed(id)
 end
 function Library.localWidgetAction(action,value)
     if action:match("^control%-") then return Library.controlAction(action) end
+    if action=="dust-another" then
+        if type(value)~="table" or type(value.day)~="string" or not value.day:match("^%d%d%d%d%-%d%d%-%d%d$") or type(value.pick)~="number" or value.pick~=value.pick or value.pick<0 or value.pick>1000000000 then return false end
+        S.home_dust_pick={day=value.day,skip=math.max(0,math.min(1000000000,math.floor(value.pick)+1))};saveSettings();G_reader_settings:flush();Library.retry();return true
+    end
     if action=="discover-another" then
         S.home_discover_pick=((S.home_discover_pick or 0)+1)%1000000000
         saveSettings(); Library.retry(); return true

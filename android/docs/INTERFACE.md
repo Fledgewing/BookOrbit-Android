@@ -731,3 +731,10 @@ Source projection revision 4 exposes archived years without reusing ready older 
 Window/count/facet source `series-next` preserves the cached provider rank unless
 the reader explicitly sorts it. Context discloses Saved selection coverage;
 window totals count that selection, not all possible series recommendations.
+
+### Local unopened pool
+
+Window/count/facet source `unopened` and one-row `local.dust` share a worker-owned
+conservative native-evidence pool. Missing history is unavailable; current native
+path is excluded before selection. Daily Next stores only day/index in reader settings.
+Unmatched local rows explicitly disable account actions.

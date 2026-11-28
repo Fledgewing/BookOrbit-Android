@@ -141,7 +141,7 @@ function HomeHost.create()
         if self.widgetRefresh then UIManager:unschedule(self.widgetRefresh); self.widgetRefresh=nil end
         if self.series_key then return SeriesUI.paint(self) end
         if self.list_layout and self.filter.model.query.group~="none" and self.filter.model.query.group~=nil then return SeriesUI.groups(self) end
-        local refreshDelay
+        local refreshDelay,pendingSnapshot
         local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
@@ -212,12 +212,13 @@ function HomeHost.create()
                 return data
             end)
             result=ok and result or {error="Unavailable"}
+            if result.pending then pendingSnapshot=true end
             local signature=UIUtil.encode(result)
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
             local snapshotAccount=caps.account
-            if WidgetRegistry[p.widget].localOnly then snapshotAccount=nil end
+            if WidgetRegistry[p.widget].localOnly or (p.settings or {}).src=="unopened" or (p.settings or {}).source=="unopened" then snapshotAccount=nil end
             local snapshot=HomeHostPlan.snapshot(result,snapshotAccount)
             local interval=WidgetRegistry[p.widget].refreshSeconds
             if interval then refreshDelay=math.min(refreshDelay or interval,interval) end
@@ -250,6 +251,12 @@ function HomeHost.create()
             HomeWidgets.button(canvas,"›",w-gap-scale(80),h-bottom,scale(80),bottom,function() self:turn(1) end)
         end
         self.metrics=paint:flush()
+        -- A ready event can race a busy read or the first cold request. Recover
+        -- locally while visible, without an unbounded missing-worker loop.
+        if pendingSnapshot then
+            self.pendingRetries=(self.pendingRetries or 0)+1
+            if self.pendingRetries<=20 then refreshDelay=math.min(refreshDelay or 1,1) end
+        else self.pendingRetries=nil end
         if refreshDelay then
             self.widgetRefresh=function()
                 if HomeHost.active~=self then self.widgetRefresh=nil; return end
@@ -282,7 +289,7 @@ function HomeHost.create()
         if self.list_layout then return self:listPage(delta) end
         local resolved=HomeHostPlan.resolve((self.list_layout or HomeHost.document()),HomeHost.installed(),self.caps)
         local index=HomeHostPlan.page(self.index,delta,#resolved.pages)
-        if index ~= self.index then self.index=index; self:rebuild(); UIManager:setDirty(self,"ui") end
+        if index ~= self.index then self.pendingRetries=nil; self.index=index; self:rebuild(); UIManager:setDirty(self,"ui") end
         return true
     end
     function Host:onHomeSwipe(_,ges)
@@ -313,10 +320,10 @@ function HomeHost.create()
     end
     function Host:dispatch(action,row,p)
         if action == "setup" then AccountView.open()
-        elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "retry" then self.pendingRetries=nil; Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action=="control-rotate" then
             UIManager:close(self);Library.localWidgetAction(action,row);return true
-        elseif action:match("^control%-") or action == "discover-another" or action == "word-lookup" or action == "light-down" or action == "light-up" then
+        elseif action=="dust-another" or action:match("^control%-") or action == "discover-another" or action == "word-lookup" or action == "light-down" or action == "light-up" then
             Library.localWidgetAction(action,row)
             if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()
@@ -431,6 +438,7 @@ function HomeHost.create()
         self:rebuild(); UIManager:setDirty(self,"ui")
     end
     function Host:showList(title,source,query,exclude_current)
+        self.pendingRetries=nil
         if self.series_key or self.list_layout then
             self.catalog_history=self.catalog_history or {}
             self.catalog_history[#self.catalog_history+1]={series_key=self.series_key,series_offset=self.series_offset,

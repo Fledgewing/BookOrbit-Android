@@ -40,6 +40,14 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
             HomeWidgets.text(c,plan.source or "On this reader",pad,pad+scale(22),w-2*pad,12)
             HomeWidgets.button(c,content or _("Open book ›"),pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("book",plan.book) end)
         end
+    elseif p.widget=="dust" and plan.ready then
+        local d=snapshot.data or {};local b=d.book or {};local bw=math.floor((w-3*pad)/2)
+        HomeWidgets.text(c,b.title or "Local file",pad,pad+scale(28),w-2*pad,14,false,true)
+        HomeWidgets.text(c,d.age,pad,pad+scale(49),w-2*pad,11)
+        HomeWidgets.text(c,d.summary,pad,pad+scale(65),w-2*pad,10)
+        HomeWidgets.text(c,d.source,pad,pad+scale(80),w-2*pad,9)
+        HomeWidgets.button(c,"Open",pad,h-pad-scale(50),bw,scale(50),function() dispatch("book",b) end)
+        HomeWidgets.button(c,"Next",2*pad+bw,h-pad-scale(50),bw,scale(50),function() dispatch("dust-another",{day=d.day,pick=d.pick}) end)
     elseif (p.widget=="moon" or p.widget=="glyph") and plan.ready then
         local d=snapshot.data or {}
         if p.widget=="moon" then
@@ -102,7 +110,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"sync-controls","reader-toggles","next-stop","moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
+for _,id in ipairs({"dust","sync-controls","reader-toggles","next-stop","moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}
