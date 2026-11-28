@@ -1,6 +1,7 @@
 package net.fledgewing.orbitcompanion
 
 import android.app.Activity
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -13,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -220,7 +222,15 @@ class ChecklistPageTest {
     @Test
     fun detailsPageHasCopyForSupport() {
         val a = Robolectric.buildActivity(SetupDetailsActivity::class.java).setup().get()
+        // Diagnostics intentionally loads off the UI thread. Drain the callback,
+        // rather than relying on the executor winning a race with this assertion.
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (texts(a.window.decorView).contains("Loading crash summaries…") && System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
         val t = texts(a.window.decorView)
+        assertFalse("Diagnostics callback did not finish", t.contains("Loading crash summaries…"))
         assertTrue(t.contains("BookSync plugin last answered"))
         assertTrue(buttons(a.window.decorView).contains("Copy for support"))
     }
