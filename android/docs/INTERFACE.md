@@ -667,3 +667,18 @@ subprocess, retaining at most 128 matches and 256 KiB privately, then exposing
 visible windows. Native advanced editing/search remains reachable. Menu hooks are
 per ReaderUI lifetime, obey `clean_menus`, preserve third-party ownership and leave
 invisible menu construction intact.
+
+### Retained read-only metric cards (0.12)
+
+`{op="reading.metrics",limit=1}` returns one compact `metrics` record, at most
+16 KiB, derived in the companion from the same account/local precedence as
+`reading.stats`. Keys are `today`, `reading-streak`, `reading-goal`, `pages-read`
+and `monthly-reading`; each has explicit `state`, `source`, ready-to-draw text and
+bounded geometry inputs (seven day markers or twelve month levels/labels).
+Today keeps any unproven local overlap separate. Goal values are account data,
+with no local completion inference or editable target. Pages are timed native
+page visits, counted on the visit's start day. Missing fields remain unavailable.
+Home shares this row by operation, separately from the annual Stats snapshot;
+refresh is host-owned, once a minute only while visible. The separate Finish
+forecast card uses one saved `reading` window row and the existing measured-pace
+provider. Existing layouts and default pages are unchanged.

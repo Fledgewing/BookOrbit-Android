@@ -17,6 +17,13 @@ widget("this-week", "reading.stats", {{2,2},{2,3},{2,1},{1,2}}, {{1,2},{2,2},{2,
 widget("year-in-reading", "reading.stats", {{4,3},{4,2}}, {{2,4},{2,3}})
 widget("when-you-read", "reading.stats", {{2,2},{2,3},{2,1},{4,1}}, {{2,1},{2,2},{1,2}})
 widget("reading-records", "reading.stats", {{3,2},{2,3},{2,2},{4,1}}, {{2,2},{2,3}})
+for _,id in ipairs({"today","reading-streak","reading-goal","pages-read"}) do
+    widget(id,"reading.metrics",{{2,2},{4,2},{2,3}},{{2,2}})
+    WidgetRegistry[id].refreshSeconds=60
+end
+widget("monthly-reading","reading.metrics",{{4,2},{4,3}},{{2,3}})
+WidgetRegistry["monthly-reading"].refreshSeconds=60
+widget("finish-forecast","books.query",{{2,2},{4,2}},{{2,2}})
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 for _,id in ipairs({"word","light","buddy"}) do
     widget(id, "local."..id, {{2,1},{2,2}}, {{2,1}})
@@ -48,6 +55,12 @@ local descriptions={
     ["year-in-reading"]={"Year in reading","A calendar of your reading days."},
     ["when-you-read"]={"When you read","Your reading by hour of day."},
     ["reading-records"]={"Reading records","Your reading streaks and records."},
+    today={"Today","Reading time today, with local time kept separate when needed."},
+    ["reading-streak"]={"Reading streak","Current and longest streak, plus the last seven days."},
+    ["reading-goal"]={"Reading goal","Your account goal, completed books and required pace."},
+    ["pages-read"]={"Pages read","Timed page visits today and across your saved history."},
+    ["monthly-reading"]={"Monthly reading","Twelve monthly reading totals side by side."},
+    ["finish-forecast"]={"Finish forecast","Measured remaining time and finish date for your current book."},
     recommended={"Recommended for you","What to read next using saved books and reading history."},
     discover={"Discover (random)","A daily unread pick, with Another to choose again."},
     highlight={"Highlight of the day","A daily passage from your saved highlights."},

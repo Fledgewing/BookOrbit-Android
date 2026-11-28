@@ -15,15 +15,15 @@ separate, unapproved local completion/goal **settings** proposal.
 |---|---|---|
 | Currently reading | Done | `P/logic/widget_registry.lua:11`; `P/ko/home_widgets.lua:126` renders cover, progress and Resume. |
 | Distinct Also reading | Done | `P/logic/layout.lua:188` installs its separate visible Book list; `P/logic/booklist.lua:8` retains the preset. |
-| Reading streak | Partly done | Current/longest are available in `C/ReadingStats.kt:130` and the records renderer. `P/logic/widget_registry.lua:16`–`:20` has no separate streak card with seven-day history. |
-| This week and distinct Today | Partly done | Week is installed at `P/logic/widget_registry.lua:16`; `C/ReadingStats.kt:133` supplies Today seconds. The distinct Today card is absent. |
-| Account reading goal | Partly done | `C/server/bookorbit/BookOrbitLibrary.kt:25` normalizes cached server target/year/completed count. No goal widget is registered (`P/logic/widget_registry.lua:11`–`:28`), including required pace/ahead-behind. Local settings remain NEEDS APPROVAL separately. |
+| Reading streak | Done after audit | Separate card with current/longest streak and seven-day markers, independently labeled by source. [Implementation and verification](F12-RETAINED-METRICS.md). |
+| This week and distinct Today | Done after audit | Existing Week and new distinct Today card; unproven local overlap stays separately labeled. [Implementation and verification](F12-RETAINED-METRICS.md). |
+| Account reading goal | Done after audit | Read-only saved account target/year/completions with pace/progress and ahead/behind; missing completion stays unknown. Local settings remain NEEDS APPROVAL. [Implementation and verification](F12-RETAINED-METRICS.md). |
 | Reading buddy | Done | `P/logic/widget_registry.lua:21`; `C/LocalWidgets.kt:29` uses known local reading state. |
 | Highlight of the day | Done | `P/logic/widget_registry.lua:25`; `P/ko/local_widgets.lua:22` renders passage/source and explicit open. |
 | Discover and Another | Done with labeled local source | `C/CatalogPersonalReading.kt:7` selects saved neutral catalog rows; `P/ko/local_widgets.lua:19` supplies Another. It does not claim server-generated ranks. |
 | Recently added | Done | `P/logic/layout.lua:190` installs the separate shelf; `P/logic/booklist.lua:9` retains the preset. |
 | Year in reading | Done | `P/logic/widget_registry.lua:17`; `P/ko/reading_stats.lua:5` renders the bounded annual model. |
-| Distinct Finish forecast card | Partly done | Forecast data/rendering exists on the current-book card (`P/ko/home_widgets.lua:138`–`:139`). The separately retained forecast card is absent from the registry. |
+| Distinct Finish forecast card | Done after audit | Separate read-only current-book card using the existing worker measured-pace forecast, with explicit insufficient-history state. [Implementation and verification](F12-RETAINED-METRICS.md). |
 | Reading hours / When you read | Done | `P/logic/widget_registry.lua:18` and the reading-statistics renderer retain the hour distribution. |
 | Personal records | Done | `C/ReadingStats.kt:130` supplies measured session/page/streak records; `P/logic/widget_registry.lua:19` retains their card. |
 | A year ago | Done | `P/logic/widget_registry.lua:25`; `P/ko/local_widgets.lua:22` retains its source/summary and empty state. |
@@ -38,9 +38,9 @@ separate, unapproved local completion/goal **settings** proposal.
 | Sync / Wi-Fi / Night / Rotate controls | Partly done | Sync and reading/native settings paths exist. No retained More/Home control widget is registered (`P/logic/widget_registry.lua:11`–`:28`). Keep Sync distinct from catalog Refresh and gate hardware features. |
 | Clock/date | Done | `P/logic/widget_registry.lua:20`; `C/ClockWidget.kt:19` retains the local date/week. |
 | Moon phase | Not started | No phase/illumination/next-change model or widget in the installed registry. Local date-derived data needs an honest approximation/unknown state. |
-| Pages lifetime/today | Partly done | `C/ReadingStats.kt:130` exposes lifetime timed page visits, explicitly defined at `:55`; Today visit count and a distinct card are absent. Do not mislabel timed visits as exact physical turns. |
+| Pages lifetime/today | Done after audit | Separate Today/lifetime timed page-visit card, attributed to this reader. A visit belongs to its start day; it is not an exact physical page-turn counter. [Implementation and verification](F12-RETAINED-METRICS.md). |
 | Glyph of the day | Not started | No glyph sample/name/code point/font-source model or registered card. |
-| Monthly reading / Tree rings | Partly done | Annual seconds exist (`C/ReadingStats.kt:125`); `:216`–`:227` contains month **axis labels**, not twelve monthly totals/comparative growth. The separate card is absent. |
+| Monthly reading / Tree rings | Done after audit | Separate twelve-calendar-month totals/bar comparison, with previous-month duration and source coverage. [Implementation and verification](F12-RETAINED-METRICS.md). |
 | Next stop | Partly done | `C/ReaderControls.kt:21` supplies current chapter; no retained card supplies next chapter, time to next/end and remaining chapters from bounded reader capture + measured pace. |
 | Achievements | Not started | No achievement normalization/provider or installed card; retain earned/total, latest and next with progress, separating unsupported/off from zero. |
 

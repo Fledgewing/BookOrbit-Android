@@ -178,7 +178,7 @@ function HomeHost.create()
                 x=x+scale(140)
             end
         end
-        local sharedStats
+        local sharedStats={}
         if not self.list_layout then
             HomeWidgets.button(canvas,"⋯",gap+scale(110),scale(66),scale(100),scale(50),function() self:menu() end)
         end
@@ -196,8 +196,8 @@ function HomeHost.create()
                     need.limit=math.min(need.limit,math.max(1,geometry.capacity))
                 end
                 if HomeWidgets.stats[p.widget] then
-                    if not sharedStats then sharedStats=context:read(need.op,need) end
-                    return sharedStats
+                    if not sharedStats[need.op] then sharedStats[need.op]=context:read(need.op,need) end
+                    return sharedStats[need.op]
                 end
                 if self.list_layout then self.list_limit=need.limit end
                 local data=context:read(need.op,need)

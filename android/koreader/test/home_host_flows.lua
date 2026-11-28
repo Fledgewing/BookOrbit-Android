@@ -420,6 +420,26 @@ return function(test,eq,ok,E,W,Widget)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
+    test("Home metrics: separate approved cards share one bounded worker snapshot",function()
+        withHost(function(batches,reads)
+            E.S.home_layout=E.Layout.default()
+            local placements={}
+            for i,id in ipairs({'today','reading-streak','reading-goal','pages-read'}) do
+                placements[i]={instance='metric-'..i,widget=id,version=1,x=((i-1)%2)*2,y=math.floor((i-1)/2)*2,w=2,h=2,settings={}}
+            end
+            placements[5]={instance='monthly',widget='monthly-reading',version=1,x=0,y=4,w=4,h=2,settings={}}
+            placements[6]={instance='year',widget='year-in-reading',version=1,x=0,y=6,w=4,h=2,settings={}}
+            E.S.home_layout.pages={E.S.home_layout.pages[1]}
+            E.S.home_layout.pages[1].placements=placements
+            assert(E.Layout.validate(E.S.home_layout))
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            local count,old=0,0
+            for _,request in ipairs(reads) do if request.op=='reading.metrics' then count=count+1;eq(request.limit,1) elseif request.op=='reading.stats' then old=old+1 end end
+            eq(count,1);eq(old,1);eq(#batches,1);eq(h.metrics.roundTrips,1)
+            eq(h.metrics.spawns,0);eq(h.metrics.network,0)
+            ok(E.Budgets.check(E.Budgets.screens.home,h.metrics))
+        end)
+    end)
     test("Home wiring: measured Battery paints its true level in the shared batch",function()
         withHost(function(batches,reads)
             E.S.home_layout=nil

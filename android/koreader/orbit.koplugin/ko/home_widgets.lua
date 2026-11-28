@@ -200,12 +200,12 @@ for _,id in ipairs({"continue-reading","booklist","lists"}) do HomeWidgets.regis
 -- Register the existing stats renderer against the host snapshot contract. The host
 -- reads one materialized reading.stats row for all Stats cards in a paint.
 HomeWidgets.stats={}
-for _,id in ipairs({"year-in-reading","this-week","when-you-read","reading-records"}) do
+for _,id in ipairs({"year-in-reading","this-week","when-you-read","reading-records","today","reading-streak","reading-goal","pages-read","monthly-reading"}) do
     local name=id
     HomeWidgets.stats[name]=true
     HomeWidgets.register(name,function(p,snapshot,dispatch,rect)
         return ReadingStatsWidgets.render(name,snapshot.data,{w=rect.w-2,h=rect.h-2,rows=p.h,snapshotBytes=snapshot.bytes})
-    end,function() return {op="reading.stats",limit=1} end)
+    end,function() return {op=WidgetRegistry[name].dataNeeds[1].source=="reading.metrics" and "reading.metrics" or "reading.stats",limit=1} end)
 end
 HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     return StorageUI.widget(p,snapshot,dispatch,rect)
@@ -216,3 +216,20 @@ HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)
         snapshotBytes=snapshot.bytes,spawns=0,network=0,roundTrips=0}))
     return BatteryUI.widget(p,snapshot,dispatch,rect)
 end,function() return {op="battery",limit=1} end)
+
+-- The forecast stays a distinct read-only card; pace/date formatting is worker-owned.
+HomeWidgets.register("finish-forecast",function(p,snapshot,dispatch,rect)
+    local finish=Budgets.span("finish-forecast.paint",now_s,log)
+    assert(Budgets.check(Budgets.get("widgets","finish-forecast"),{rows=1,bytes=snapshot.bytes,snapshotBytes=snapshot.bytes,spawns=0,network=0,roundTrips=0}))
+    local scale=function(n) return Device.screen:scaleBySize(n) end
+    local w,h=rect.w-2,rect.h-2;local c=HomeWidgets.canvas(w,h);local pad=scale(10)
+    HomeWidgets.text(c,"Finish forecast",pad,pad,w-2*pad,18,false,true)
+    local b=snapshot.items and snapshot.items[1]
+    if b then
+        HomeWidgets.text(c,b.title or "Current book",pad,pad+scale(34),w-2*pad,18,false,true)
+        HomeWidgets.text(c,b.time_left or "Not enough reading yet",pad,pad+scale(64),w-2*pad,20)
+        HomeWidgets.text(c,b.finish_forecast or "Finish date unavailable",pad,pad+scale(98),w-2*pad,14)
+        if b.forecast_source then HomeWidgets.text(c,"Measured pace · this reader",pad,h-pad-scale(16),w-2*pad,11) end
+    else HomeWidgets.text(c,snapshot.state=="loading" and "Loading…" or "Open a book to see its forecast",pad,pad+scale(42),w-2*pad,14) end
+    finish();return c
+end,function() return {op="window",source="reading",query={sort="last",dir="desc"},offset=0,limit=1} end)
