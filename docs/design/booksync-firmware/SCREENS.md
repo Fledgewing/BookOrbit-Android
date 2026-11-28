@@ -317,12 +317,12 @@ inspected. All 107 articles outside B2 are byte-for-byte unchanged; existing fra
 styles are unchanged. Branding and feature-reference checks pass. This verifies
 the documentation rendering, not firmware behavior or device fit. B2 was subsequently approved on 2026-11-27 (~18:45 PT).
 
-## F37a account additions — NEEDS APPROVAL
+## F37a account additions — APPROVED (2026-11-27)
 
 The approved `server-choice` picker remains buildable on all three profiles.
 The Home gallery has X4 account examples but no X3 account form or capability
 state, and the B1 QR is private-connection pairing rather than library sign-in.
-The [F37a proposal](mockups.html#F37a) adds explicit three-profile states:
+The [F37a account gallery](mockups.html#F37a) adds explicit three-profile states:
 
 - [account-out](mockups.html#account-out) — Your server.
 - [account-in](mockups.html#account-in) — Your server.
@@ -336,8 +336,9 @@ The [F37a proposal](mockups.html#F37a) adds explicit three-profile states:
 - [account-two-step](mockups.html#account-two-step) — Use your phone to sign in.
 - [account-old](mockups.html#account-old) — This service needs an update.
 
-These additions are **NEEDS APPROVAL**, including their strings, focus and
-capability states. They do not inherit B1–B5 approval. The account-manual Pro
+These additions are **APPROVED (2026-11-27)**, including their strings, focus and
+capability states. Maintainer approval (~21:40 PT): “All approved”. This is explicit
+account approval, separate from B1–B5 approval. The account-manual Pro
 keyboard is a direct screen child docked below the fields/actions. Button entry
 keeps key focus; X3 uses bounded text. Phone sign-in retains QR, a readable live
 link and manual Check (Q1), with no invented short-code handoff. The illustration
