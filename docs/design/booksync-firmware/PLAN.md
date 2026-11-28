@@ -212,14 +212,21 @@ channel. Implement only controls whose device presentation is approved. Direct
 hardware configuration follows the approved B1/B4 states below; additional
 unillustrated states still need approval.
 
-F40w IDs: also-reading, streak, week, today, goal, buddy, highlight, discover,
-recently-added, year, forecast, hours, records, year-ago, finished-in-year, word,
-pick-back-up, recommended, sources, sync, toggles, light, clock, moon, pages-turned,
-glyph, monthly-rings, next-stop, achievements. Shelf variants share code but retain
-separate source/ordering/acceptance cases. The word provider needs a bounded local
-lookup-capture increment before its projection; any new capture parser also gets
+F40w X4 scope follows the installed Android 0.12 widget registry and renderers,
+not the withdrawn 0.11-only filter. The [compact X4 proposal](F40w-widgets.md)
+is **NEEDS APPROVAL**: smallest useful main views at 0.11 density, optional larger
+views, and All (n) › at the top-right of headers. Canonical registry IDs:
+`continue-reading`, `booklist`, `this-week`, `reading-streak`, `year-in-reading`, `when-you-read`, `reading-records`, `today`, `reading-goal`, `pages-read`, `monthly-reading`, `finish-forecast`, `battery`, `library`, `lists`, `recommended`, `discover`, `highlight`, `yearago`, `word`, `buddy`, `dust`, `achievements`, `sync-controls`, `reader-toggles`, `light`, `clock`, `moon`, `glyph`, `next-stop`.
+Book list presets (including Also reading, Recently added, Want to read, Finished,
+Pick back up, Up next, year-finished, Unopened and On device) share its renderer
+but retain independent source/order/acceptance cases. Library source pickers and
+Authors/Series/On-card links are not new widget IDs. Achievements and Battery stay
+because Android installs them; Finish forecast remains separate. Word still needs
+a bounded lookup-capture increment before its projection; any capture parser gets
 its own host/simulator slice. Add neither a fake account goal nor zero unknown days.
-Light is unavailable on hardware without it; each cell records the hardware reason.
+Light is unavailable on hardware without it. X3 remains off for new widgets whose
+text scenes are not approved; this X4 review grants no X3 approval. A four-cover
+Discover projection must explicitly budget/test all four rows before its renderer.
 
 F41r panels: top/bottom reading menu, quick settings/Custom, TOC, bookmarks,
 highlights, go-to/scrub, bounded book search, book info/series link, end-of-book.
