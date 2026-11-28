@@ -34,8 +34,8 @@ Native cover specimen without a local file; the default fixture is fully on devi
 
 - Native `home.py`: default spans, ready views/covers, zero-query editor/picker,
   real move and next-fitting-size callbacks, saved layout persistence.
-- Lua flows: 316 passed, 0 failed.
-- Lua logic: 267 passed, 0 failed, plus 13 focused presentation assertions.
+- Lua flows: 319 passed, 0 failed.
+- Lua logic: 268 passed, 0 failed, plus 13 focused presentation assertions.
 - KOReader source-symbol compatibility passed at pinned `9192014` (the optional
   koreader-base FFI static check was skipped); native FFI rendering ran on Android.
 - Feature-matrix checks: 4 passed.

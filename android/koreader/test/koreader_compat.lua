@@ -151,7 +151,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
-    { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
+    { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free", "setText" } },
     { "frontend/ui/widget/imagewidget.lua", { "_render", "paintTo", "free", {"rotation_angle", F} } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/apps/reader/modules/readerdictionary.lua", { "onLookupWord" } },
@@ -170,6 +170,7 @@ local NEEDS = {
 -- Widgets the plugin builds with: each module must still exist.
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
     "container/framecontainer", "horizontalgroup", "horizontalspan", "linewidget", "textboxwidget",
+    "container/alphacontainer",
     "verticalgroup", "verticalspan", "buttontable", "textwidget", "imagewidget", "container/centercontainer",
     "container/leftcontainer", "menu", "buttondialog", "notification" }) do
     table.insert(NEEDS, { "frontend/ui/widget/" .. w .. ".lua", {} })

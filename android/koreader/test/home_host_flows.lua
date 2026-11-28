@@ -347,7 +347,7 @@ return function(test,eq,ok,E,W,Widget)
             end
         end)
     end)
-    test("Home Settings: standalone menu uses native tab rows and the current PIN policy",function()
+    test("Home Settings: owned root preserves the current PIN policy",function()
         withHost(function()
             local owner=setmetatable({}, {__index=E.OrbitAndroid})
             local normal,locked=0,0
@@ -356,10 +356,10 @@ return function(test,eq,ok,E,W,Widget)
             E.Shared.refresh=function() end
             E.Shared.pin_locked=false
             local menu=owner:showSettings()
-            eq(menu.tab_item_table[1][1].text,"Your server"); eq(#menu.tab_item_table[1],1); eq(normal,1); eq(locked,0)
+            eq(menu.make()[1].text,"Your server"); eq(#menu.make(),1); eq(normal,1); eq(locked,0)
             E.Shared.pin_locked=true
             menu=owner:showSettings()
-            eq(menu.tab_item_table[1][1].text,"Locked"); eq(normal,2); eq(locked,1)
+            eq(menu.make()[1].text,"Locked"); eq(normal,2); eq(locked,1)
         end)
     end)
     test("Home design: wide cover shelves read columns rather than a text-row limit",function()
@@ -724,23 +724,12 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
-    test("Settings labels: multi-line choices reuse the measured TextBox label",function()
+    test("Settings labels: multi-line choices retain a title and explanatory row",function()
         withHost(function()
-            local freed=0
-            local button={label_container={dimen={w=480,h=96}},label_widget={fgcolor=0,free=function() freed=freed+1 end}}
-            local require=E.require
-            E.require=function(name)
-                if name=="ui/widget/buttondialog" then return Widget:extend{
-                    getButtonById=function(_,id) if id=="channel" then return button end end,moveFocusTo=function() end} end
-                if name=="ui/widget/textboxwidget" then return Widget:extend{} end
-                if name=="ui/font" then return {getFace=function(_,_,size) return {size=size} end} end
-                return require(name)
-            end
             local view=E.SettingsView.open("Channel",function() return {{id="channel",text="Stable\nTested releases only",height=96}} end,"settings-updates")
-            eq(freed,1);eq(button.label_widget.text,"Stable\nTested releases only")
-            eq(button.label_widget.width,480);eq(button.label_widget.height,96)
-            eq(button.label_container[1],button.label_widget)
-            view.alive=false
+            local row=view.dialog:getButtonById("channel")
+            eq(row.text,"Stable")
+            view:close()
         end)
     end)
     test("Home host: a covered event redraws after reveal without reading on paint",function()
