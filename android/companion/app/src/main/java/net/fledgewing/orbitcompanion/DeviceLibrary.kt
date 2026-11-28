@@ -54,6 +54,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val fresh=mapOf("saved" to true,"origin" to "local-device")
         fun rows(items: List<*>) = mapOf("items" to items,"freshness" to fresh)
         val op=request["op"]
+        if(op=="account.badges") return mapOf("state" to "unavailable","reason" to "Connect an account to save its achievements","row_count" to 1)
         if((request["source"] as? Map<*,*>)?.get("kind")=="finished-year") return unsupported()
         if(request["source"]=="series-next") return unsupported()
         if(op=="capabilities") return mapOf("onDevice" to true,"retainedFinishedYears" to false,"retainedSeriesNext" to false,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,

@@ -18,8 +18,12 @@ def reset_profile(device):
         if "package:"+package in installed:
             device.shell("am","force-stop",package)
             device.shell("pm","clear",package)
-    device.shell("mkdir","-p","/sdcard/koreader")
-    device.shell("mv","/sdcard/koreader","/sdcard/koreader-upgrade-"+str(time.time_ns()))
+    stamp=str(time.time_ns())
+    # Preserve both halves of this disposable fixture profile. A migration test may
+    # have added a synthetic EPUB; it must not leak into a later 59-book fresh run.
+    for name in ("koreader","Books"):
+        device.shell("mkdir","-p","/sdcard/"+name)
+        device.shell("mv","/sdcard/"+name,"/sdcard/"+name+"-upgrade-"+stamp)
 
 def verify(device,legacy_source,legacy_apk,apk,koreader,apksigner,out):
     out.mkdir(parents=True,exist_ok=True)

@@ -4,7 +4,9 @@ These tools install and exercise actual KOReader widgets on an explicitly select
 Android emulator. Every adb invocation carries `-s emulator-N`, and construction
 refuses a target unless `ro.kernel.qemu=1`. The host safety tests run in Android CI.
 Use a disposable AVD: setup replaces its plugin and seeds synthetic books; the
-upgrade test archives its KOReader directory and clears the two app profiles.
+upgrade test archives its KOReader and fixture Books directories together and
+clears the two app profiles. Prior synthetic legacy EPUBs stay in those archives
+instead of changing a later fresh fixture’s 59-book catalog.
 
 Tested with Android 14 Google APIs ARM64, KOReader v2026.07.1 ARM64, a Pixel Tablet
 AVD adjusted to 1200×1600 at 240 dpi, and the four-column `android-tablet` layout.
@@ -34,7 +36,9 @@ python3 tools/e2e/android/test_driver.py
 ```
 
 Setup launches the companion once to initialize its status before opening KOReader.
-Dismiss KOReader's initial quickstart/color messages before the native review.
+The native review dismisses only KOReader's exact initial color-rendering notice.
+Other unexpected dialogs still fail the check; the Unopened restart flow may
+choose Later once on the existing setup reminder before checking the saved pick.
 
 `build.py` copies companion sources and shared inputs into an external directory,
 preserving strict Gradle verification. Only that disposable copy replaces the
@@ -62,7 +66,9 @@ opening, top/bottom reader panels, live Custom value edits with native setting
 assertions, position consent/acceptance,
 end sheet → Series, Full Refresh, and offline Library. It saves PNGs and a small
 `review.json` outside the repository. Projection readiness is polled; an assertion
-failure ends the run. There are no scenario retries.
+failure ends the run. Home readiness includes every visible widget snapshot;
+covered widgets and stale list/Series roles do not hold a different screen open.
+The per-screen deadline stays 20 seconds. There are no scenario retries.
 
 For upgrade/fresh-install checks, use another disposable emulator. Supply an
 external `git archive origin/main` snapshot containing `android/`, `shared/`,

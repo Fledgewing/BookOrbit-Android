@@ -10,6 +10,19 @@ return function(test,eq,ok,E,W,withHost)
         for _,a in ipairs(actions) do if a.id=='details' or a.id=='status' or a.id=='remove' then eq(a.enabled,false) elseif a.id=='book' then eq(a.enabled,true) end end
         E.S.home_dust_pick=old;E.Library.retry=retry
     end)
+    test('achievement card: latest and next remain visible in every immutable span',function()
+        withHost(function()
+            local data={state='ready',summary='3 / 20 earned',latest='Latest: Saved milestone',latest_date='2026-06-01',next='Next: Next milestone',progress='7 / 10',source='Saved account summary'}
+            local function labels(w,t) t=t or {};if w.text then t[w.text]=true end;for _,c in ipairs(w) do if type(c)=='table' then labels(c,t) end end;return t end
+            for _,z in ipairs(E.WidgetRegistry.achievements.sizes['android-tablet']) do
+                local c=E.LocalWidgets.render({widget='achievements',w=z[1],h=z[2]},E.HomeHostPlan.immutable({data=data,state='ready',bytes=300}),function() end,{w=282*z[1]/2,h=156*z[2]/2})
+                local t=labels(c);ok(t[data.latest]);ok(t[data.next]);ok(t[data.progress]);ok(t[data.latest_date]);ok(t[data.summary])
+            end
+            local absent=E.LocalWidgetPlan.build('achievements',{data={state='unavailable',reason='Achievements unavailable or turned off'}})
+            eq(absent.ready,false);eq(absent.message,'Achievements unavailable or turned off')
+            eq(E.Library.localWidgetNeed('achievements').op,'account.badges')
+        end)
+    end)
     test('local decor: bounded immutable cards use the real font probe and explicit missing state',function()
         withHost(function()
             local requireSaved=E.require;local probes=0;local present=true

@@ -30,6 +30,28 @@ class EmulatorSafetyTest(unittest.TestCase):
         with patch('run.uuid.uuid4',return_value=Mock(hex=request)),patch('time.sleep'):
             with self.assertRaisesRegex(RuntimeError,'fixture failure'):device.command('error("fixture failure")')
 
+    def test_visible_projection_wait_does_not_advance_past_loading_home_widgets(self):
+        device=object.__new__(Emulator);device.command=Mock(side_effect=["pending","pending","ready"])
+        with patch("time.sleep"):device.wait_projection()
+        self.assertEqual(3,device.command.call_count)
+        for call in device.command.call_args_list:
+            code=call.args[0]
+            self.assertIn("h.signatures",code);self.assertIn("h.series_key",code);self.assertIn("h.list_layout",code)
+            self.assertNotIn("HomeHost.show",code);self.assertNotIn("Library.retry",code)
+
+    def test_visible_projection_wait_keeps_the_existing_twenty_second_deadline(self):
+        device=object.__new__(Emulator);device.command=Mock(return_value="pending")
+        with patch("time.monotonic",side_effect=[0,21]):
+            with self.assertRaises(TimeoutError):device.wait_projection()
+
+    def test_color_notice_dismissal_matches_only_the_specific_native_first_run_notice(self):
+        device=object.__new__(Emulator);device.command=Mock(return_value="absent")
+        self.assertEqual("absent",device.dismiss_color_notice())
+        code=device.command.call_args.args[0]
+        self.assertIn('Documents will be rendered in color on this device.',code)
+        self.assertIn('==1 then UI:close(w)',code)
+        self.assertNotIn('click(',code)
+
     def test_startup_wait_polls_readiness_without_repeating_a_ui_action(self):
         device=object.__new__(Emulator)
         device.command=Mock(side_effect=["pending","pending","ready"])
@@ -51,6 +73,14 @@ class EmulatorSafetyTest(unittest.TestCase):
             reset_profile(device)
             clears=[call.args for call in device.shell.call_args_list if call.args[:2]==("pm","clear")]
             self.assertEqual([("pm","clear","net.fledgewing.orbitcompanion")] if installed else [],clears)
+    def test_upgrade_reset_preserves_and_isolates_both_fixture_directories(self):
+        device=Mock();device.shell.return_value=""
+        with patch("upgrade.time.time_ns",return_value=1234):reset_profile(device)
+        moves=[c.args for c in device.shell.call_args_list if c.args[0]=="mv"]
+        self.assertEqual([("mv","/sdcard/koreader","/sdcard/koreader-upgrade-1234"),
+                          ("mv","/sdcard/Books","/sdcard/Books-upgrade-1234")],moves)
+        self.assertFalse(any(c.args[0]=="rm" for c in device.shell.call_args_list))
+
     def test_fixture_builder_never_overwrites_the_repo_or_an_unrelated_directory(self):
         with patch("shutil.copytree") as copy:
             with self.assertRaises(ValueError): build(ROOT/"fixture")

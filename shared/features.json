@@ -6838,6 +6838,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-achievements",
+      "feature": "Retained cached Achievements card (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Cached earned/total, latest award/date and next progress with explicit availability.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; native emulator acceptance passed.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-ACHIEVEMENTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Cached achievements follow Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-ACHIEVEMENTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Cached achievements follow Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-ACHIEVEMENTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Cached achievements follow Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-ACHIEVEMENTS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

@@ -36,6 +36,25 @@ class Emulator:
         while self.command('return Companion.workerProblem()==nil and "ready" or "pending"')!="ready":
             if time.monotonic()>=deadline: raise TimeoutError("matching companion status was not published")
             time.sleep(.2)
+    def wait_projection(self,timeout=20):
+        # Wait for the visible screen, including Home's materialized widget rows.
+        # Advancing while those rows are Loading queues unrelated cold work ahead
+        # of the next screen and makes screenshots claim readiness too early.
+        code=('local h=HomeHost.active;local front=top();local pending=AccountView.active and AccountView.active.busy;'
+              'if h and front==h then if h.series_key then pending=pending or h.series_result and h.series_result.pending;'
+              'elseif h.list_layout then pending=pending or h.list_result and h.list_result.pending;'
+              'else for _,raw in pairs(h.signatures or {}) do local r=Cache.decode(raw);if type(r)=="table" and r.pending then pending=true end end end end;'
+              'return pending and "pending" or "ready"')
+        deadline=time.monotonic()+timeout
+        while self.command(code)!="ready":
+            if time.monotonic()>deadline:raise TimeoutError("Visible screen projection did not publish")
+            time.sleep(.2)
+
+    def dismiss_color_notice(self):
+        # KOReader's one-time native color notice can cover a fresh profile's Home.
+        # Dismiss only that exact notice, never an arbitrary dialog or reader sheet.
+        return self.command('local w=top();if w and type(w.text)=="string" and w.text:find("Documents will be rendered in color on this device.",1,true)==1 then UI:close(w);return "dismissed" end;return "absent"')
+
     def command(self,code,timeout=20):
         request_id=uuid.uuid4().hex
         with tempfile.TemporaryDirectory() as directory:
