@@ -90,16 +90,16 @@ click("Download next 3");SeriesUI.download=download;assert(called==1);return tru
 (ui.paging or ui.rolling):onGotoPage(ui.document:getPageCount());local b=Library.nativeReader(ui)
 if b.summary.rating then FinishUI.actions.star(ui,b,b.summary.rating) end
 FinishUI.showSheet(ui,Library.nativeReader(ui));return true''',
-         'return FinishUI.sheet.model.pending and "pending" or "ready"')
+         'local m=FinishUI.sheet.model;return not m.pending and m.book and m.book.cover_path and (not m.next or not m.next.local_path or m.next.book and m.next.book.cover_path) and "ready" or "pending"')
     d.command('local s=FinishUI.sheet;assert(s.model.book.cover_path);assert(s.model.next.book.cover_path);assert(s.sheet_h<s.screen_h);return true')
     step("end-rated", 'click("Rate 4");return true',
-         'return FinishUI.sheet.model.pending and "pending" or "ready"')
+         'local m=FinishUI.sheet.model;return not m.pending and m.book and m.book.cover_path and (not m.next or not m.next.local_path or m.next.book and m.next.book.cover_path) and "ready" or "pending"')
     # Fixture server may reject rating writes; native local rating remains authoritative.
     d.command('local s=FinishUI.sheet;assert(s.ui.doc_settings:readSetting("summary").rating==4);return true')
     # Taps outside close the actual EndSheet; its parent Reader/Custom layouts stay separate.
     d.command('local s=FinishUI.sheet;s:onTapAnywhere(nil,{pos={y=0}});assert(not FinishUI.sheet);assert(not FinishUI.sheet_retry);return true')
     step("end-reopened", 'local ui=require("apps/reader/readerui").instance;FinishUI.showSheet(ui,Library.nativeReader(ui));return true',
-         'return FinishUI.sheet.model.pending and "pending" or "ready"')
+         'local m=FinishUI.sheet.model;return not m.pending and m.book and m.book.cover_path and (not m.next or not m.next.local_path or m.next.book and m.next.book.cover_path) and "ready" or "pending"')
     d.command('FinishUI.closeSheet();return true')
     return evidence
 

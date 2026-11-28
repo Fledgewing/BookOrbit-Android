@@ -68,7 +68,7 @@ function SeriesUI.groups(host)
     K.header(c,{w=w,title=host.list_title,subtitle=f.subtitle,back=function() host:onClose() end,search=function() host:search() end,filter=f.callback,filterActive=f.active})
     local x=edge
     for _,chip in ipairs(f.chips) do
-        local width=K.text{text=chip.label,w=w-2*edge,size="small",bold=true}:getSize().w+p(42)
+        local width=K.text{text=chip.label,w=w-2*edge,size="small",bold=true}:getSize().w+p(52)
         if x+width>w-edge then break end
         K.put(c,K.button{text=chip.label,trailingIcon="x",w=width,size="small",variant="outline",callback=chip.callback},x,p(74));x=x+width+p(10)
     end
