@@ -93,7 +93,7 @@ object ServerAdapters {
             } catch(e:ServerFailure) { done(null,e.kind) }
         }
         override fun captureLifecycle(capture: Map<*, *>): Pair<String, ByteArray> =
-            "fixture-document" to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))
+            ("fixture-document-" + java.security.MessageDigest.getInstance("SHA-256").digest((capture["path"] as? String ?: "fixture").toByteArray()).joinToString("") { "%02x".format(it) }) to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))
         override fun position(document: String, update: Map<String, Any?>?): Map<String, Any?> {
             val file=File(requireNotNull(context).filesDir,"e2e-position.lua")
             if(update!=null) {

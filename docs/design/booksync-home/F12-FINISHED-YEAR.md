@@ -61,7 +61,7 @@ layout before the first layout-file load. The harness now uses Insights, primes
 Home, asserts layout validity and verifies the actual widget signature. A unique
 neutral request nonce forces a fresh view so a previously ready row cannot hide
 an integration failure. The reading precondition uses the real Home Close callback,
-and the fixture position-consent popup is explicitly answered No before waiting
+and the fixture position-consent popup is explicitly accepted before waiting
 for frontmost Home to repaint.
 
 Physical acceptance, firmware implementation and publication remain pending.
@@ -70,3 +70,8 @@ Verification: **906 JVM tests**, zero failures/errors, four skips; shared-versio
 debug APK and lint pass. **260 Lua logic / 296 flows**, boundary guards **12/6**,
 feature matrix **4**, emulator driver **10**. The five native year checks pass;
 current/past minimum-size/See all/unknown-year screenshots were inspected.
+
+The original fixture shared one document identity across all books; a declined
+remote position therefore contaminated the later consent scenario. Fixture captures
+now hash the synthetic book path, and the year review accepts its consent. The
+production policy correctly retains a No answer and is unchanged.

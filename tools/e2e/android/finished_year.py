@@ -32,9 +32,9 @@ def review(device,out):
         if time.monotonic()>deadline:raise TimeoutError('Native reading foreground was not reported')
         time.sleep(.2)
     # The fixture offers the allowed remote-position consent after a book opens.
-    # Answer it explicitly so Home is actually frontmost for event-driven repaint.
+    # Accept it explicitly so Home is actually frontmost for event-driven repaint.
     time.sleep(1)
-    device.command('if PositionPrompt.current then click("No") end;return true')
+    device.command('if PositionPrompt.current then click("Yes") end;return true')
     nonce=uuid.uuid4().hex
     device.command('assert(LibraryAdapter.owner()=="emulator-fixture","run the standard account review first");Library.companion.setupLater();ReaderPanel.close();HomeHost.show();Library._yearReview={layout=Library.settings.read("home_layout")};local cfg=BookList.preset("year");cfg.source={kind="finished-year",key="current",review_nonce="'+nonce+'"};local d=Layout.default();d.pages={{id="year",tab="Insights",name="Finished in year",placements={{instance="year",widget="booklist",version=1,x=0,y=0,w=4,h=3,settings=cfg}}}};assert(Layout.validate(d));Library.settings.write("home_layout",d);Library.retry();HomeHost.show();return true')
     try:
