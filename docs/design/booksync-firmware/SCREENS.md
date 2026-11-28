@@ -316,3 +316,36 @@ no clipped content, broken gallery anchors, page errors or horizontal overflow a
 inspected. All 107 articles outside B2 are byte-for-byte unchanged; existing frame
 styles are unchanged. Branding and feature-reference checks pass. This verifies
 the documentation rendering, not firmware behavior, device fit or B2 approval.
+
+## F37a account additions — NEEDS APPROVAL
+
+The approved `server-choice` picker remains buildable on all three profiles.
+The Home gallery has X4 account examples but no X3 account form or capability
+state, and the B1 QR is private-connection pairing rather than library sign-in.
+The [F37a proposal](mockups.html#F37a) adds explicit three-profile states:
+
+- [account-out](mockups.html#account-out) — Your server.
+- [account-in](mockups.html#account-in) — Your server.
+- [account-limited](mockups.html#account-limited) — Your server.
+- [account-manual](mockups.html#account-manual) — Sign in to your server.
+- [account-busy](mockups.html#account-busy) — Signing in.
+- [account-phone](mockups.html#account-phone) — Sign in from your phone.
+- [account-wait](mockups.html#account-wait) — Waiting for sign-in.
+- [account-expired](mockups.html#account-expired) — Sign-in has expired.
+- [account-failed](mockups.html#account-failed) — Could not sign in.
+- [account-two-step](mockups.html#account-two-step) — Use your phone to sign in.
+- [account-old](mockups.html#account-old) — This service needs an update.
+
+These additions are **NEEDS APPROVAL**, including their strings, focus and
+capability states. They do not inherit B1–B5 approval. The account-manual Pro
+keyboard is a direct screen child docked below the fields/actions. Button entry
+keeps key focus; X3 uses bounded text. Phone sign-in retains QR, a readable live
+link and manual Check (Q1), with no invented short-code handoff. The illustration
+is deliberately non-scannable. Services validate and redact the public link;
+credentials and raw responses never enter display snapshots or logs.
+
+Account/owner epochs scope every result. Back/Cancel retires presentation and
+clears transient fields; closed forms never repaint or reopen, even if account
+authentication subsequently succeeds. Account changes invalidate old deliveries.
+Approval does not waive F15/F12 tests, the sole-writer boundary, firmware size
+gates or maintainer hardware acceptance. F37b/F37c remain separate slices.
