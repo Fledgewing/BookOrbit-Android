@@ -1,8 +1,8 @@
 # F36a Library and lists — NEEDS APPROVAL
 
-27 November 2026. **Docs-only proposal. No new scene is approved by this PR.**
+27 November 2026. **Docs-only proposal. Merging this docs-only PR does not approve implementation.**
 [Gallery](f36a-library.html) · [plan F36a–c](PLAN.md) · [inventory](SCREENS.md).
-All 30 scenes have X4 Pro touch, X4 Classic button and X3 text views.
+All 30 state variants have X4 Pro touch, X4 Classic button and X3 text views.
 
 F36a owns Library counts, browse roots, grouped author/series lists, On card,
 saved Smart-scope/list selection and the shared list view. F36b owns book
@@ -44,10 +44,60 @@ The plugin is the behavior reference; this gallery proposes firmware presentatio
   missing coverage, paged lists, neutral filters and X3 text controls. Saved list
   identities are opaque; UI never evaluates Smart-scope rules or saves server lists.
 
+## Photo comparison and Android parity revision
+
+The maintainer’s supplied 0.11 X4 Home and Library photographs were inspected
+locally. The Library photograph governs **density and layout**: Discover cover
+row, Recently added cover row, then a 2 × 2 grid of compact half-width tiles.
+Catalog shows **10020 books**, Authors **2725**, Series **1480**, and On card
+**6 books · 5 BookOrbit**. Each tile has a large number and a top-right outline
+icon. There is no menu-row replacement for these tiles. The Home photograph
+confirms dense cards and a top-right All link in a shelf header.
+
+The revised proposal puts **All (n) › at the top-right of every relevant header**:
+Discover, Recently added and partial author/series groups. Known complete groups
+show n books without an All link. Unknown coverage does not invent n; use an
+unknown marker and retain the existing incomplete-state rules. Shelf icons sit
+at the far right alongside the All link. List counts and tile values are Library
+projections, not UI-calculated totals. On-card source attribution is supplied as
+neutral display metadata; the photograph’s source label is an example, not a
+backend condition or a new firmware API field.
+
+Private photographs are not committed, embedded or linked from this proposal;
+no personal greetings, names, titles or artwork were transcribed. The displayed
+numbers are the requested illustrative reference values. Cover drawings and book
+titles are synthetic. X3 preserves order and actions as bounded text, without
+cover bitmaps. This is a photo comparison, not a device test.
+
+Android 0.12 remains the **behavior** reference. The current audit also inspected
+`ko/reader_panel.lua:300` and `:485`: Details uses the existing ReaderPanel details
+owner, not another catalog summary page. F36a draws only its list return, keeping
+page, filters and focus; F36b retains that owner’s metadata, missing-data states,
+series links and supported actions. Tap/Select uses the existing open/download
+path; More/long press opens existing actions and Details. No new detail navigation
+or details-before-download fetch is introduced here.
+
+Every gallery article now names an existing surface: the Library dashboard,
+Android’s Browse library index (`ko/storage.lua:126`), shared scoped/grouped list,
+file chooser, offline-consent dialog, existing no-login prompt, or job-info dialog.
+Preparing and errors are variants within the existing list; completion updates
+availability rather than opening a new success screen. Browse library is the
+existing root index behind Catalog, not an added second Library page. Existing
+filter and Series owners are reused, never duplicated. No article authorizes a
+screen or destination absent from Android 0.12. Source evidence remains pinned
+to the audited commit above; this revision changes docs only.
+
+The four-cover Discover row is the requested presentation target. Android’s
+current Discover provider has a one-book/16 KiB budget. As in the parallel compact
+widget proposal, a four-book row needs a separate bounded provider/projection
+increment before implementation; these docs do not widen any budget, change
+Android behavior or authorize catalog work during paint.
+
 ## Presentation and ownership
 
-The gallery uses the approved grayscale frame vocabulary with proposed F36a
-content and focus. On card is the firmware wording for the neutral On this device
+The gallery uses the grayscale frame vocabulary with proposed F36a content and
+focus, revised against the maintainer’s two 0.11 X4 photographs. The previous
+sparse menu layout is superseded. On card is the firmware wording for the neutral On this device
 filter, not a different availability rule. Counts have published coverage and
 provenance. Unknown totals are not zero; account revocation is not empty data.
 Missing covers use existing F25 placeholders; no cover implies file availability.
@@ -73,43 +123,46 @@ Offline tap: Cancel/Back starts nothing; Connect and download explicitly admits
 connection, then the normal supported-file chooser. Download progress is coarse,
 unknown size shows bytes, and cancellation never deletes a complete file.
 Leaving the initiating view retires auto-open and late repaint ownership while
-retaining durable work. User-opened job information may show Resume; background
+retaining durable work. Preparing, unsupported-file, space and access failures are inline row states;
+verified completion changes the row to On card or opens only for the eligible
+initiating owner. There is no preparing, failure or completion destination.
+User-opened job information may show Resume; background
 completion cannot reopen a closed screen, steal reading focus or restart a device.
 
 ## Proposed scenes — every row NEEDS APPROVAL
 
-| Scene | Title | Example state |
+| Scene | Existing surface | Example state |
 |---|---|---|
-| [library](f36a-library.html#library) | Library | Saved catalog · 2,418 books |
-| [library-more](f36a-library.html#library-more) | Library | Saved catalog · 2,418 books |
-| [library-offline](f36a-library.html#library-offline) | Library | Offline · Saved catalog |
-| [library-missing](f36a-library.html#library-missing) | Library | Catalog not saved yet |
-| [library-loading](f36a-library.html#library-loading) | Library | Loading saved catalog |
-| [library-error](f36a-library.html#library-error) | Library | Could not load the catalog |
-| [authors](f36a-library.html#authors) | Authors | 2,418 books · By author |
-| [series-groups](f36a-library.html#series-groups) | Series | 2,418 books · By series |
-| [on-card](f36a-library.html#on-card) | On card | 312 verified books |
-| [lists](f36a-library.html#lists) | Your lists | 12 saved lists |
-| [scope](f36a-library.html#scope) | Short reads | 84 books · Saved list |
-| [list-page](f36a-library.html#list-page) | All books | 2,418 books · List order |
-| [list-back](f36a-library.html#list-back) | Short reads | 84 books · Saved list |
-| [list-empty](f36a-library.html#list-empty) | Short reads | 0 books · Complete saved result |
-| [list-missing](f36a-library.html#list-missing) | Short reads | Not saved yet |
-| [list-incomplete](f36a-library.html#list-incomplete) | Series | Saved membership incomplete |
-| [list-error](f36a-library.html#list-error) | Short reads | Could not load this list |
-| [lists-unsupported](f36a-library.html#lists-unsupported) | Your lists | Unavailable from this source |
-| [download-options](f36a-library.html#download-options) | Download | The Paper Coast |
-| [download-offline](f36a-library.html#download-offline) | Not downloaded | The Paper Coast |
-| [download-preparing](f36a-library.html#download-preparing) | Preparing download | The Paper Coast |
-| [download-progress](f36a-library.html#download-progress) | Downloading | The Paper Coast |
-| [download-unknown](f36a-library.html#download-unknown) | Downloading | The Paper Coast |
-| [download-failed](f36a-library.html#download-failed) | Download stopped | The Paper Coast |
-| [download-canceled](f36a-library.html#download-canceled) | Download canceled | The Paper Coast |
-| [download-unsupported](f36a-library.html#download-unsupported) | Cannot download this book | The Paper Coast |
-| [download-login](f36a-library.html#download-login) | Download unavailable | The Paper Coast |
-| [download-space](f36a-library.html#download-space) | Not enough space | The Paper Coast |
-| [download-access](f36a-library.html#download-access) | Download unavailable | The Paper Coast |
-| [download-saved](f36a-library.html#download-saved) | On card | The Paper Coast |
+| [library](f36a-library.html#library) | Library dashboard | Saved catalog · 10,020 books |
+| [library-browse](f36a-library.html#library-browse) | Existing Browse library index | Saved catalog indexes |
+| [library-offline](f36a-library.html#library-offline) | Library dashboard | Offline · Saved catalog |
+| [library-missing](f36a-library.html#library-missing) | Library dashboard | Catalog not saved yet |
+| [library-loading](f36a-library.html#library-loading) | Library dashboard | Loading saved catalog |
+| [library-error](f36a-library.html#library-error) | Library dashboard | Could not load the catalog |
+| [authors](f36a-library.html#authors) | Shared list | 10,020 books · By author |
+| [series-groups](f36a-library.html#series-groups) | Shared list | 10,020 books · By series |
+| [on-card](f36a-library.html#on-card) | Shared list | 6 verified books |
+| [lists](f36a-library.html#lists) | Shared list | 12 saved lists |
+| [scope](f36a-library.html#scope) | Shared list | 84 books · Saved list |
+| [list-page](f36a-library.html#list-page) | Shared list | 10,020 books · List order |
+| [list-back](f36a-library.html#list-back) | Shared list | 84 books · Saved list |
+| [list-empty](f36a-library.html#list-empty) | Shared list | 0 books · Complete saved result |
+| [list-missing](f36a-library.html#list-missing) | Shared list | Not saved yet |
+| [list-incomplete](f36a-library.html#list-incomplete) | Shared list | Saved membership incomplete |
+| [list-error](f36a-library.html#list-error) | Shared list | Could not load this list |
+| [lists-unsupported](f36a-library.html#lists-unsupported) | Existing source-list availability state | Unavailable from this source |
+| [download-options](f36a-library.html#download-options) | Existing Download chooser | The Paper Coast |
+| [download-offline](f36a-library.html#download-offline) | Existing offline-consent dialog | The Paper Coast |
+| [download-preparing](f36a-library.html#download-preparing) | Shared list · inline row state | The Paper Coast |
+| [download-progress](f36a-library.html#download-progress) | Existing download-job information dialog | The Paper Coast |
+| [download-unknown](f36a-library.html#download-unknown) | Existing download-job information dialog | The Paper Coast |
+| [download-failed](f36a-library.html#download-failed) | Existing download-job information dialog | The Paper Coast |
+| [download-canceled](f36a-library.html#download-canceled) | Existing download-job information dialog | The Paper Coast |
+| [download-unsupported](f36a-library.html#download-unsupported) | Shared list · inline row state | The Paper Coast |
+| [download-login](f36a-library.html#download-login) | Existing no-download-login prompt | The Paper Coast |
+| [download-space](f36a-library.html#download-space) | Shared list · inline row state | The Paper Coast |
+| [download-access](f36a-library.html#download-access) | Shared list · inline row state | The Paper Coast |
+| [list-saved](f36a-library.html#list-saved) | Shared list · verified availability | Download complete · originating list retained |
 
 ## Acceptance after approval
 
@@ -141,8 +194,8 @@ EPUB cache reset is required. Agents do not access devices or serial ports.
 
 Browser checks passed for all 30 scenes / 90 device views at both 1200 px and
 390 px: no clipped content, broken scene anchors, page errors or horizontal
-overflow. Local gallery destinations exist. Library and offline-consent scenes
-were rendered and visually inspected. Repository branding (3 tests), feature
+overflow. Local gallery destinations exist. Library, offline Library, grouped lists, Back restoration and download dialogs
+were rendered and visually inspected against the density reference. Repository branding (3 tests), feature
 references (4 tests) and `git diff --check` pass. These results validate mockups,
 not firmware functionality, performance or memory fit. Host/simulator scenarios and hardware image sizes are intentionally
 unmeasured because this PR contains no implementation.
