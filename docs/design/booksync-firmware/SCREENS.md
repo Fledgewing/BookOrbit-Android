@@ -401,3 +401,13 @@ firmware-only route or completion/Back/error wizard is proposed.
 Existing Home revision-16 and B1–B5 approvals remain unchanged. Firmware F36c
 implementation still requires its Library service and test dependencies.
 No firmware or submodule pin changes; F36a/F36b remain separate.
+
+## F37c independent logins and sign-out — NEEDS APPROVAL
+
+The [source-mapped proposal](F37c-account.md) and [real-device-frame gallery](f37c-account.html)
+add 31 states / 93 device views for separate sync/OPDS logins, origin results,
+service removal and all nine account-sign-out origin combinations. Android 0.12's
+plugin and companion define the wording and retention behavior. All additions are
+**NEEDS APPROVAL**; none is implemented or enabled by this docs-only change.
+The supplied 0.11 X4 photo informs compact density; no private photo or values
+are included. Existing Home, F37a/F37b and B1–B5 approvals stay unchanged.
