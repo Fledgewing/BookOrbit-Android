@@ -8,6 +8,7 @@ local function dispatch(action,b,extra,done)
     return Library.catalogAction(action,args,done or function() end)
 end
 function FinishUI.onMarked(ui)
+    Library.localCompletion(ui,FinishUI.automatic)
     local b=book(ui);if not b then return end
     FinishUI.intent[b.digest]=(FinishUI.intent[b.digest] or 0)+1
     local complete=b.summary.status=="complete"
@@ -119,8 +120,13 @@ if ok and type(ReaderStatus)=="table" and type(ReaderStatus.markBook)=="function
     end end,"finish")
     wrap(ReaderStatus,"onEndOfBook",function(stock) return function(self,...)
         local b=book(self.ui)
-        if Library.settings.read("eob_sheet")==false or not b or not b.key then return stock(self,...) end
-        if b.summary.status~="complete" and Library.settings.read("eob_auto")~=false then self:markBook(true);b=book(self.ui) end
+        if Library.settings.read("eob_sheet")==false or not b or not b.key then
+            local previous=FinishUI.automatic;FinishUI.automatic=true
+            local ok,result=pcall(stock,self,...);FinishUI.automatic=previous
+            if not ok then error(result,0) end
+            return result
+        end
+        if b.summary.status~="complete" and Library.settings.read("eob_auto")~=false then FinishUI.automatic=true;self:markBook(true);FinishUI.automatic=nil;b=book(self.ui) end
         FinishUI.showSheet(self.ui,b);return true
     end end,"finish")
 end
@@ -130,6 +136,7 @@ for _,name in ipairs({"onCloseWidget","onSuspend","onReaderReady","onPageUpdate"
         if name=="onCloseWidget" or name=="onSuspend" then FinishUI.onLeave(self.ui) end
         if name=="onCloseWidget" then FinishUI.closeSheet() end
         if name=="onReaderReady" then
+            Library.prepareLocalCompletion(self.ui)
             local b=book(self.ui)
             FinishUI.reader_key=nil
             if b then

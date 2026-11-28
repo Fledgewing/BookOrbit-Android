@@ -466,5 +466,9 @@
     "layer": "internal",
     "kind": "service",
     "purpose": "Private lifecycle/sync/capability/update policy; pure functions remain behind the interface."
+  },
+  "ko/local_reading_settings.lua": {
+    "layer": "ui",
+    "purpose": "Bounded device-local completion and yearly goal Settings presentation through Library."
   }
 }

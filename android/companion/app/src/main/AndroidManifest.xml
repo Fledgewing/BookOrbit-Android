@@ -220,6 +220,7 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".LocalReadingSettingsActivity" android:exported="false" />
         <activity
             android:name=".SettingsSectionActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

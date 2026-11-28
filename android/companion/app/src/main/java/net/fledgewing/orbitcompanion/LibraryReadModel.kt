@@ -60,9 +60,10 @@ class LibraryReadModel(
             java.io.File(store.root.parentFile, "statistics.sqlite3"), clock(),
             if (local) java.time.ZoneId.systemDefault() else AccountStats.zone(account)) }
         val unopened by lazy { UnopenedLibrary(roots(),store.root.parentFile?.parentFile ?: store.root,clock()) }
+        val localCompletion by lazy { LibraryLocalReading.snapshot(store.root.parentFile!!) }
         val storage by lazy { DeviceStorage(store, projection) }
         val power by lazy { battery() }
-        val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
+        val stats by lazy { ReadingStats.display(AccountStats.combine(ReadingStats.withLocalCompletion(localStats, localCompletion), if (local) null else projection.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -84,6 +85,7 @@ class LibraryReadModel(
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
 
                     "personal.reading" -> personal.window(args["kind"] as? String ?: "", clock(), (args["pick"] as? Number)?.toLong() ?: 0)
+                    "reading.local" -> localCompletion
                     "reading.stats" -> stats
                     "reading.metrics" -> RetainedMetrics.snapshot(stats,clock(),AccountStats.zone(account))
                     "local.moon","local.glyph" -> LocalDecor.snapshot(args["op"].toString().removePrefix("local."),clock())

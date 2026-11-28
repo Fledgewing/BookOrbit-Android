@@ -37,7 +37,7 @@ local KO = {
     "ko/library_diagnostics.lua", "ko/test_sync_path.lua", "ko/companion_activities.lua", "ko/companion_ui.lua", "ko/recommendations_backend.lua", "ko/recommendations.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/endsheet.lua", "ko/finish.lua",
     "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/sleep_backend.lua", "ko/sleepscreen.lua",
-    "ko/sqlite_stress.lua", "ko/library.lua", "ko/position_prompt.lua", "ko/position_sync.lua", "ko/covers.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/storage.lua", "ko/clock.lua", "ko/library_local_widgets.lua", "ko/local_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/series.lua", "ko/home_editor.lua", "ko/booklist_config.lua", "ko/settings_view.lua",
+    "ko/sqlite_stress.lua", "ko/library.lua", "ko/position_prompt.lua", "ko/position_sync.lua", "ko/covers.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/storage.lua", "ko/clock.lua", "ko/library_local_widgets.lua", "ko/local_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/series.lua", "ko/home_editor.lua", "ko/booklist_config.lua", "ko/settings_view.lua", "ko/local_reading_settings.lua",
     "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }
 

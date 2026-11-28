@@ -13,7 +13,8 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
     private val owner: String, private val transport: BookOrbitServerAdapter.ConnectorTransport,
     private val reading: () -> Boolean = { false }, private val current: () -> Boolean = { true },
     private val checkpoint: () -> Unit = {}, private val now: () -> Long = { System.currentTimeMillis()/1000 },
-    private val retainPartial:()->Boolean = { false }, private val staging:String?=null) {
+    private val retainPartial:()->Boolean = { false }, private val staging:String?=null,
+    private val localIntent: (String,String,Boolean,String?,Long)->Unit = { document,token,complete,undo,order -> LibraryLocalReading.catalogIntent(worker.root.parentFile!!,document,token,complete,undo,order) }) {
     private val store get()=worker.store
     private val file=File(worker.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua")
     private val state=load(file).toMutableMap()
@@ -178,9 +179,12 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         val existing=jobs.values.firstOrNull { number(it["book_id"])==book }
         // An explicit newer mark replaces only this book's finish intent, retaining its rating.
         jobs.entries.removeAll { number(it.value["book_id"])==book }
+        val localOrder=maxOf(System.currentTimeMillis()*1000,(number(state["local_completion_order"]) ?: 0L)+1)
+        state["local_completion_order"]=localOrder
         val job=mutableMapOf<Any?,Any?>("book_id" to book,"file" to path,"hash" to hash,"token" to token,"created_at" to now(),
             "ready" to undo,"manual_status" to target,"before_native" to oldSummary?.filterKeys { it in setOf("status","modified") },"native_token" to token,"captured" to (file==null),"position_done" to (file==null),"native_pending" to (file!=null),
-            "native_summary" to nativeSummary,"rating" to existing?.get("rating"))
+            "native_summary" to nativeSummary,"rating" to existing?.get("rating"),
+            "local_completion_revision" to localOrder,"local_completion_pending" to (hash!=null),"local_completion_undo" to if(undo) args["token"] else null)
         if(file!=null) job["native_capture"]=activeCapture ?: mapOf("path" to path,"document" to hash,
             "percentage" to native?.get("percent_finished"),"position" to (native?.get("last_xpointer") ?: native?.get("last_page")),"summary" to oldSummary)
         jobs[document]=job
@@ -195,6 +199,11 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         return mapOf("ok" to true,"token" to token,"document" to document,"path" to path,"native_summary" to nativeSummary,"native_token" to token)
     }
     private fun applyStatusNative(job:MutableMap<Any?,Any?>,open:String?):Boolean {
+        if(job["local_completion_pending"]==true) {
+            localIntent(job["hash"] as String,job["token"] as String,job["manual_status"]=="read",job["local_completion_undo"] as? String,(job["local_completion_revision"] as Number).toLong())
+            job["local_completion_pending"]=false
+            save()
+        }
         if(job["native_pending"]!=true) return true
         val path=job["file"] as? String ?: return true
         val file=bookFile(path)

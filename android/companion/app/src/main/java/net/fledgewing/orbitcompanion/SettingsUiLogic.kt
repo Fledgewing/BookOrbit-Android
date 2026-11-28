@@ -18,6 +18,7 @@ object SettingsUi {
 
     /** Every companion row, by section (§3.4, §5.1; the launcher page's moved choices, §5.9). */
     val EXTRAS = listOf(
+        Extra("reading_statistics", "reading", "Reading statistics", words = listOf("goal", "finished", "local")),
         Extra("home_opens", "reading", "Home opens", before = "home_button", words = listOf("launcher", "home app")),
         Extra("shown_by", "sleep", "Shown by", words = listOf("screen saver", "screensaver")),
         // Drawn by its slot (SharpCoversRow); listed here so search finds it.

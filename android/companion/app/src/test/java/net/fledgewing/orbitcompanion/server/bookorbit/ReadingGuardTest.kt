@@ -47,7 +47,7 @@ class ReadingGuardTest {
         Site("Pages.kt", "startActivity(SettingsPage.section(this, \"sync\", \"helper_wifi\"))", 1, "explicit reader helper-settings link; never background work"),
         Site("Pages.kt", "a.startActivity(SettingsPage.section(a, \"sync\")", 1, "Setup (Add-on): the user tapped Turn on for a helper"),
         Site("Pages.kt", "a.startActivity(", 5, "status and info (StatusPanel, the launcher page): the user's taps"),
-        Site("SettingsPages.kt", "startActivity(", 18, "Settings pages: the user's taps"),
+        Site("SettingsPages.kt", "startActivity(", 19, "Settings pages: the user's taps"),
         Site("CommandProvider.kt", "ctx.startActivity(Intent(ctx, AccountActivity", 1, "trusted plugin call: user tapped Sign in to your server"),
         Site("AboutActivity.kt", "startActivity(", 2, "About: the user tapped the project link or open-source licenses"),
         Site("Attention.kt", "startActivity(Intent(this, SetupBatteryActivity", 1, "the prompt: the user tapped Help on the Battery row"),

@@ -19,6 +19,7 @@ class CatalogWorkflowTest {
         val worker=CacheWorker(root,{_,_,_,_->error("unexpected legacy HTTP")},log={},openSql={JdbcSql(it)},bookRoots=listOf(external))
         var reading=false;var current=true;var code=200;var downloadOk=true;var readStatus="unread";var clock=100L
         var fileReference=70L
+        val localIntents=mutableListOf<List<Any?>>()
         val calls=mutableListOf<String>()
         val writes=mutableListOf<Map<String,Any?>?>()
         val transport=object:BookOrbitServerAdapter.ConnectorTransport {
@@ -40,7 +41,7 @@ class CatalogWorkflowTest {
                 "books" to mapOf(CatalogWorkflow.partial(old) to mapOf("file" to old.path,"bookId" to 7L,"fileId" to 70L,"positionIncompatible" to true)))))
             worker.store.putDetail(7,detail(),100)
         }
-        fun run(action:String,args:Map<String,Any?> = emptyMap())=CatalogWorkflow(worker,creds,owner,transport,{reading},{current},now={clock}).command(action,args)
+        fun run(action:String,args:Map<String,Any?> = emptyMap())=CatalogWorkflow(worker,creds,owner,transport,{reading},{current},now={clock},localIntent={d,t,c,u,_ -> localIntents.add(listOf(d,t,c,u))}).command(action,args)
         fun state()=CatalogWorkflow.load(File(root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
         fun jobs()=(state()["finishes"] as? Map<*,*>).orEmpty()
         fun copies()=state()["copies"] as List<*>
@@ -66,6 +67,9 @@ class CatalogWorkflowTest {
         assertEquals("2026-01-01",(restored["summary"] as Map<*,*>)["modified"])
         assertEquals("saved note",((restored["annotations"] as List<*>).single() as Map<*,*>)["text"])
         assertEquals(.4,restored["percent_finished"])
+        assertEquals(2,w.localIntents.size)
+        assertEquals(true,w.localIntents[0][2]);assertEquals(false,w.localIntents[1][2])
+        assertEquals(result["token"],w.localIntents[1][3])
     }
     @Test fun statusDeliveryWaitsForCaptureCheckpointAndRejectsStaleAcknowledgements()=World().use { w ->
         sidecar(w)

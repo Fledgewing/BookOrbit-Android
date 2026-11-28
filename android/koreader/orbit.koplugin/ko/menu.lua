@@ -318,6 +318,7 @@ function OrbitAndroid:menuItems()
         end),
         group("reading", "Reading", function()
             local out = CustomReading.settingsRows(self.ui)
+            out[#out+1]=action("Reading statistics",LocalReadingSettings.open)
             out[#out+1]={text="BookSync reading menus",checked_func=Library.readerMenusEnabled,callback=function()
                 Library.setReaderMenus(self.ui,not Library.readerMenusEnabled())
             end}
