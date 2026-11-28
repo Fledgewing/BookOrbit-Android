@@ -96,9 +96,6 @@ def measure(gallery):
     sample("Goal numeric field", "goal-1.png", (60, 400, 175, 460), "goal-editor", "12", inset=12)
     sample("Goal Off", "goal-1.png", (62, 615, 150, 675), "goal-editor", "Off", inset=12)
     sample("Goal Save", "goal-1.png", (178, 615, 295, 675), "goal-editor", "Save", inset=12)
-    sample("Checklist row capital", "checklist-3.png", (78, 360, 105, 386), "checklist-needs", "Install apps", prefix=12)
-    sample("Settings heading capital", "settings.webp", (224, 20, 250, 70), "settings", "Settings", prefix=27)
-    sample("Settings row capital", "settings.webp", (156, 205, 185, 240), "settings", "Reading and Home", prefix=26)
 
     # Isolate K in Open KOReader, avoiding the p descender.
     ref, rw = ink(gallery / "approved/launcher.png", (70, 180, 640, 275), white=True)
@@ -144,7 +141,7 @@ def main():
              "| Sample | Approved px / width | Native px / width | Difference |", "|---|---:|---:|---:|"]
     for row in results:
         lines.append(f'| {row["sample"]} | {row["approved_px"]} / {row["approved_width"]} | {row["native_px"]} / {row["native_width"]} | {row["error_percent"]:+.2f}% |')
-    lines += ["", "The shared roles are in `CompanionStyle.kt`. Settings uses the full-width reader-family capture scale; the checklist and standalone forms retain their own approved reference widths. System chrome and synthetic content are excluded from these text measurements.", ""]
+    lines += ["", "The shared roles are in `CompanionStyle.kt`. Round 2 Settings and checklist use the common readable roles, with no Activity-specific downscale. Their body minimum is enforced by CompanionTypeScaleTest; this table retains the approved status/crash/goal scale samples. System chrome and synthetic content are excluded from these text measurements.", ""]
     (args.out / "scale-measurements.md").write_text("\n".join(lines))
     for row in results:
         print(f'{row["sample"]}: {row["error_percent"]:+.2f}%')

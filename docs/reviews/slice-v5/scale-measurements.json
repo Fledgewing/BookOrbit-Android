@@ -45,33 +45,6 @@
     "error_percent": -0.84
   },
   {
-    "sample": "Checklist row capital",
-    "kind": "cap height",
-    "approved_px": 18,
-    "approved_width": 720,
-    "native_px": 35,
-    "native_width": 1404,
-    "error_percent": -0.28
-  },
-  {
-    "sample": "Settings heading capital",
-    "kind": "cap height",
-    "approved_px": 27,
-    "approved_width": 1406,
-    "native_px": 26,
-    "native_width": 1404,
-    "error_percent": -3.57
-  },
-  {
-    "sample": "Settings row capital",
-    "kind": "cap height",
-    "approved_px": 23,
-    "approved_width": 1406,
-    "native_px": 23,
-    "native_width": 1404,
-    "error_percent": 0.14
-  },
-  {
     "sample": "Launcher hero capital K",
     "kind": "cap height",
     "approved_px": 25,

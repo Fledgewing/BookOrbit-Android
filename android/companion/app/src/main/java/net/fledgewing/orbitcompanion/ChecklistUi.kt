@@ -153,7 +153,7 @@ object ChecklistUi {
             val b = Checklist.summaryButton(s)
             if (b != null && onButton != null) {
                 addView(Ui.gap(ctx, 8))
-                addView(Ui.button(ctx, b, solid = s !is Checklist.Summary.Walking, heightDp = VERB_DP, sp = 20f) { onButton() },
+                addView(Ui.button(ctx, b, solid = s !is Checklist.Summary.Walking, heightDp = CompanionStyle.FORM_TARGET, sp = CompanionStyle.FORM_ACTION) { onButton() },
                     LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
             if (onButton != null && b == null) Ui.clickable(this, onButton)

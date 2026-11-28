@@ -46,7 +46,7 @@ class LocalReadingSettingsActivity : SettingsPage() {
             })
             root.addView(Ui.text(this, "Books to finish on this reader", CompanionStyle.FORM_BODY))
             val typed=input?.text?.toString()
-            input=EditText(this).apply {
+            input=Ui.input(this).apply {
                 inputType=InputType.TYPE_CLASS_NUMBER
                 setSingleLine()
                 hint=""

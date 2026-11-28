@@ -300,6 +300,18 @@ object Ui {
             setLineSpacing(0f, 1.15f)
         }
 
+    /** Native form controls inherit the same body floor as every drawn row. */
+    fun input(ctx: Context): android.widget.EditText = android.widget.EditText(ctx).apply {
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, CompanionStyle.textSize(ctx, CompanionStyle.BODY))
+        typeface = CompanionStyle.sans
+    }
+
+    fun checkBox(ctx: Context, label: String): android.widget.CheckBox = android.widget.CheckBox(ctx).apply {
+        text = label
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, CompanionStyle.textSize(ctx, CompanionStyle.BODY))
+        typeface = CompanionStyle.sans
+    }
+
     fun clickable(v: View, onClick: (() -> Unit)?, onLong: (() -> Unit)? = null) {
         v.isSoundEffectsEnabled = false
         v.isHapticFeedbackEnabled = false
@@ -408,7 +420,7 @@ object Ui {
         text(ctx, s, sp, bold = bold).apply { gravity = Gravity.END }
 
     /** On/Off control drawn as a box: filled when on. Changes instantly. */
-    fun toggle(ctx: Context, on: Boolean): TextView = text(ctx, if (on) "On" else "Off", if (ctx is LauncherActivity) CompanionStyle.STATUS_CAPTION else 18f, bold = true, color = if (on) PAPER else INK).apply {
+    fun toggle(ctx: Context, on: Boolean): TextView = text(ctx, if (on) "On" else "Off", if (ctx is LauncherActivity) CompanionStyle.STATUS_CAPTION else CompanionStyle.CONTROL, bold = true, color = if (on) PAPER else INK).apply {
         gravity = Gravity.CENTER
         minWidth = dp(ctx, 76)
         minHeight = dp(ctx, 44)

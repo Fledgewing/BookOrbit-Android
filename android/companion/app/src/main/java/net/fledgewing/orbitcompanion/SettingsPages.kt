@@ -13,7 +13,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
-import android.widget.EditText
 import android.widget.LinearLayout
 import java.io.File
 
@@ -94,7 +93,7 @@ abstract class SettingsPage : EinkActivity() {
             }
             row.forEach { (value, label) ->
                 val sel = value == current
-                val t = Ui.text(this, label, 17f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
+                val t = Ui.text(this, label, CompanionStyle.CONTROL, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
                     gravity = Gravity.CENTER
                     minHeight = Ui.dp(this@SettingsPage, 64)
                     setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
@@ -169,11 +168,11 @@ class SettingsActivity : SleepPickerPage() {
             tag = "search:clear"
             visibility = if (query.isEmpty()) View.GONE else View.VISIBLE
         }
-        val box = EditText(this).apply {
+        val box = Ui.input(this).apply {
             hint = "Search settings"
             setText(query)
             setSingleLine()
-            textSize = 20f
+            textSize = CompanionStyle.textSize(this@SettingsActivity, CompanionStyle.BODY)
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             minHeight = Ui.dp(this@SettingsActivity, 64)
             background = null
@@ -424,7 +423,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
     /** A one-line text, "12 of 60" under it. */
     private fun editText(d: SettingDef, v: String) {
         val count = Ui.text(this, "", 16f, color = Ui.MID)
-        val input = EditText(this).apply {
+        val input = Ui.input(this).apply {
             setText(v)
             setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -735,7 +734,7 @@ class LeaveOutActivity : SleepPickerPage() {
     }
 
     private fun typeTag(done: (String) -> Unit) {
-        val input = EditText(this).apply { setSingleLine(); hint = "age:18" }
+        val input = Ui.input(this).apply { setSingleLine(); hint = "age:18" }
         AlertDialog.Builder(this).setTitle("Tag").setView(input)
             .setPositiveButton("Add") { _, _ -> SleepPoolLogic.parseRule("tag:${input.text}")?.tag?.let(done) }
             .setNegativeButton("Cancel", null).show()

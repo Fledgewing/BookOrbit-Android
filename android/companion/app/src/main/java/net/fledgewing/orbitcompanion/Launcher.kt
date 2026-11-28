@@ -192,7 +192,7 @@ open class LauncherActivity : EinkActivity() {
             append("Open KOReader\n")
             val s = length
             append(if (Prefs(this@LauncherActivity).homeButton == HomeButton.SMART) "back to your book" else "opens on library home")
-            setSpan(android.text.style.RelativeSizeSpan(0.65f), s, length, 0)
+            setSpan(android.text.style.RelativeSizeSpan(CompanionStyle.subtitleScale(if (koFirst) CompanionStyle.HERO_TYPE else CompanionStyle.TILE_TYPE)), s, length, 0)
             setSpan(android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), s, length, 0)
         }
         root.addView(open)
@@ -386,11 +386,10 @@ class AppsActivity : EinkActivity() {
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        val pager = TextView(this)
+        val pager = Ui.text(this, "", CompanionStyle.CAPTION)
         val prev = Ui.button(this, "‹ prev", heightDp = 72) { turn(-1) }
         val next = Ui.button(this, "next ›", heightDp = 72) { turn(+1) }
         pager.gravity = Gravity.CENTER
-        pager.textSize = 18f
         pager.setTextColor(Ui.INK)
         val footer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

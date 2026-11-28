@@ -1,19 +1,22 @@
-# V5: native companion visual review — Round 1
+# V5: native companion visual review — Round 2
 
-[32-pair comparison gallery](index.html) · [Measured scale](scale-measurements.md)
+[Comparison gallery](index.html) · [Measured scale](scale-measurements.md)
 
-The shared `CompanionStyle` roles now reproduce the approved width-normalized
-scale instead of reducing text and controls to fit. All sampled capital/digit
-heights and control dimensions differ by at most **3.6%**, against a 10% review
-budget. The report measures original image pixels before gallery resizing; its
-Pillow script and JSON results are included.
+All native screens now use the same shared readable roles: **34 sp page title,
+36 sp row title, 30 sp body, 28 sp segmented/toggle controls**, with a **24 sp
+minimum** at the M8C reference width. There is no Settings-specific title size or
+Activity multiplier. Smaller viewports retain the shared floor at their width
+scale and scroll; no page is reduced to make its controls fit.
 
-The launcher hero, circle-over-label tiles and status rows retain their approved
-proportions. All §5.9 rows remain present below them; the page scrolls. Goal and
-crash forms use the larger standalone-form scale, including their fields and
-actions. Checklist type uses its own approved illustration scale. Settings uses
-the full-width reader-family references selected in Round 1; it is not scaled
-as if those captures were the smaller standalone illustrations.
+Setup uses the larger row titles, and Fix next uses the same 37 sp / 96 dp action
+role as the approved goal forms. The old one-screen-fit assertion now verifies
+readable type and intact content instead of requiring a screen to shrink.
+
+The accepted status/crash/goal width-normalized samples remain in the measurement
+report. Settings and checklist follow the Round 2 common-scale ruling; the
+rejected separate Settings/checklist measurement profiles are not used as type
+ceilings. The new rendered minimum test is the regression guard for every native
+screen context and each Settings section.
 
 Settings schema, Library commands, permission policy, checklist rules and X1
 routing are unchanged. Launcher edits affect drawing dimensions and type only.
@@ -24,9 +27,12 @@ Reader Lua surfaces belong to V4 and are excluded from this gallery.
 - Dedicated Android 14 ARM64 AVD, **1404×1872 / 300 dpi**, with the repo's fake
   ServerAdapter and synthetic seeded EPUBs, covers, series and reading sidecars.
 - Fixture APK assembly preserves strict Gradle dependency verification.
-- 29 focused Kotlin tests pass, including the smaller-reader checklist fit,
+- 33 focused Kotlin tests pass, including the smaller-reader readable checklist,
   unchanged launcher Settings destination, numeric goal persistence and adjacent
-  goal-action layout. `lintDebug`: zero errors, 36 warnings.
+  goal-action layout. `CompanionTypeScaleTest` checks every declared native screen
+  context, renders every Settings section and locked mode, checks subtitle spans in both launcher tile sizes, and rejects new body
+  views or raw text sizes that bypass the shared factories. Text inputs and
+  checkbox labels use those factories too. `lintDebug`: zero errors, 35 warnings.
 - Fifteen emulator-driver safety/seed tests pass.
 - **All 15 `reader_companion.py` acceptance checks pass**, including Full/Add-on,
   denied/granted permission without helper enablement, protected Settings,
@@ -38,12 +44,14 @@ Reader Lua surfaces belong to V4 and are excluded from this gallery.
   before the reviewed sheet opens, rather than dismissing arbitrary dialogs or
   relaxing the acceptance assertions.
 
+Initialize the disposable emulator with the [repository setup flow](../../../tools/e2e/android/README.md) first; it grants KOReader storage access before starting the reader.
+
 Commands:
 
 ```sh
 python3 tools/e2e/android/test_driver.py
 (cd android/companion && ./gradlew lintDebug testDebugUnitTest \
-  --tests '*ChecklistPageTest' --tests '*SettingsPagesTest' \
+  --tests '*CompanionTypeScaleTest' --tests '*ChecklistPageTest' --tests '*SettingsPagesTest' \
   --tests '*LocalReadingSettingsTest' --tests '*UiPagesTest')
 python3 tools/e2e/android/reader_companion.py --serial emulator-N --out <evidence>
 python3 docs/reviews/slice-v5/measure-scale.py --gallery <gallery> --out <report>

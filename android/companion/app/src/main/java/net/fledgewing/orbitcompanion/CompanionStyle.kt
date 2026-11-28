@@ -13,13 +13,13 @@ import android.widget.LinearLayout
  * serif is reserved for the diagnostic heading, as in crash-summary-mockups.html. */
 object CompanionStyle {
     const val TITLE = 34f
-    const val LABEL = 26f
-    const val BODY = 21f
-    const val CAPTION = 18f
-    const val ACTION = 24f
-    // Calibrated against approved cap-height / full reference width at 1404 px, 300 dpi.
-    // Compact checklist and reader-family Settings samples already use this smaller scale;
-    // the standalone forms and launcher samples use the larger roles below.
+    const val LABEL = 36f
+    const val BODY = 30f
+    const val CAPTION = 24f
+    const val ACTION = 28f
+    const val CONTROL = 28f
+    const val MIN_BODY = 24f
+    // Shared readable roles: never reduce a screen's type to make it fit.
     const val FORM_BODY = 36f
     const val FORM_CAPTION = 30f
     const val FORM_ACTION = 37f
@@ -36,19 +36,13 @@ object CompanionStyle {
     const val STATUS_TYPE = 28f
     const val STATUS_CAPTION = 24f
     const val SUMMARY_TYPE = 31f
-    const val SETTINGS_TITLE = 20f
-    const val SETTINGS_TEXT_SCALE = 0.67f
-
-    /** Keep approved proportions on smaller readers without shrinking the M8C reference. */
+    /** One floor for every Activity; smaller readers scroll rather than get a special scale. */
     fun textSize(ctx: Context, sp: Float): Float {
-        // Reader-family Settings references are full-width 1404 px captures, unlike
-        // the 360 CSS-pixel checklist and 412 CSS-pixel form illustrations.
-        val referenceSp = if (ctx is SettingsPage && ctx !is LocalReadingSettingsActivity) {
-            if (sp == TITLE) SETTINGS_TITLE else sp * SETTINGS_TEXT_SCALE
-        } else sp
         val width = ctx.resources.displayMetrics.widthPixels / ctx.resources.displayMetrics.density
-        return referenceSp * (width / 749f).coerceIn(0.75f, 1.5f)
+        return maxOf(sp, MIN_BODY) * (width / 749f).coerceIn(0.75f, 1.5f)
     }
+    fun subtitleScale(parentSp: Float): Float = maxOf(0.65f, MIN_BODY / parentSp)
+
     const val PAGE_INSET = 25
     const val CARD_RADIUS = 10
     const val FORM_RADIUS = 0
