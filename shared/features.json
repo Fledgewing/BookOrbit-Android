@@ -6531,7 +6531,7 @@
         "android": {
           "status": "partial",
           "note": "Approximate lunar phase/illumination/next change and a daily local-font sample with name/code/source.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain; approved read-only models and cards are implemented.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; nine dedicated native checks and the 65-screen review pass.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-LOCAL-DECOR.md",

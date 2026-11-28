@@ -36,4 +36,12 @@ immutable snapshots, honest missing glyph/date states and zero transport/scan wo
 in the renderer. Native acceptance uses the real companion rows and real font
 probe; missing-state presentation uses temporary Library test doubles.
 
+Validation: 891 JVM tests (zero failures/errors, four skipped), version verification,
+debug assembly and lint; 259 Lua logic and 290 flow tests; 12 server-boundary,
+six UI-boundary, four matrix and ten emulator-driver tests. The pinned KOReader
+symbol check passes (base FFI checked by native use and CI). Nine dedicated
+native checks and the full 65-screen review pass. Visual review confirms clear
+text at the smallest permitted sizes. Measured construction spans were 0–0.6 ms
+for Moon (six samples) and 0–0.4 ms for Glyph (ten), below the 50 ms budget.
+
 Firmware implementation, physical acceptance and publication remain separate.
