@@ -3,7 +3,56 @@
 ReadingStatsPlan = {}
 local titles = {['year-in-reading']='Year in reading', ['this-week']='This week',
     ['when-you-read']='When you read', ['reading-records']='Reading records'}
+local metricTitles={today="Today",["reading-streak"]="Reading streak",["reading-goal"]="Reading goal",["pages-read"]="Pages read",["monthly-reading"]="Monthly reading"}
+local function metricPlan(id,data,w,h,rows,headerTop)
+    local p={title=metricTitles[id],rects={},labels={}}
+    local m=data and data.metrics and data.metrics[id]
+    if not m then p.message="Loading reading statistics";return p end
+    p.source=m.source=="all your devices" and "All your devices" or m.source=="this reader" and "This reader only" or nil
+    p.sourceInline=false
+    if m.state~="ready" then p.message=m.reason or "Reading statistics unavailable";return p end
+    local top=math.max(headerTop or 0,p.source and 48 or 30)
+    local function label(x,y,text,size,bold,width)
+        if text~=nil then p.labels[#p.labels+1]={x=x,y=y,text=tostring(text),size=size,bold=bold,width=width} end
+    end
+    local function rect(x,y,rw,rh,level,outline) p.rects[#p.rects+1]={x=x,y=y,w=rw,h=rh,level=level,outline=outline} end
+    if id=="today" then
+        label(8,top,m.value,30,true);label(8,top+44,"Reading today",12)
+        label(8,h-20,m.separate,10)
+    elseif id=="reading-streak" then
+        label(8,top,m.value,30,true);label(8,top+38,m.best,12)
+        if m.days then
+            assert(m.days[7]~=nil and m.days[8]==nil)
+            local gap=6;local width=math.max(1,(w-16-6*gap)/7)
+            for i=1,7 do rect(8+(i-1)*(width+gap),top+62,width,10,m.days[i],true) end
+            label(8,h-20,m.days_source,10)
+        else label(8,h-20,"Seven-day history unavailable",10) end
+    elseif id=="reading-goal" then
+        label(8,top,m.value,20,true)
+        if m.fraction then
+            rect(8,top+34,w-16,6,0,true);rect(8,top+34,(w-16)*m.fraction,6,4)
+        end
+        label(8,top+50,m.pace,12);label(8,top+72,m.status,12)
+    elseif id=="pages-read" then
+        label(8,top,m.today,22,true,w/2-16);label(w/2,top,m.lifetime,22,true,w/2-16)
+        label(8,top+30,"today",12);label(w/2,top+30,"all time",12)
+        label(8,h-20,m.definition,11)
+    elseif id=="monthly-reading" then
+        assert(m.levels[12]~=nil and m.levels[13]==nil and m.labels[12]~=nil and m.labels[13]==nil)
+        label(8,top,m.total,24,true,w/2-16);label(w/2,top+8,m.previous,11,false,w/2-8)
+        local bottom=h-32;local height=math.max(1,bottom-top-36);local width=(w-16)/12
+        for i=1,12 do
+            assert(m.levels[i]>=0 and m.levels[i]<=1)
+            local bar=height*m.levels[i]
+            rect(8+(i-1)*width,bottom-bar,width-4,bar,i==12 and 4 or 2)
+            label(8+(i-1)*width,bottom+3,m.labels[i],9,false,width-2)
+        end
+        rect(8,bottom,w-16,1,4);label(8,h-13,m.period,9)
+    end
+    return p
+end
 function ReadingStatsPlan.build(id, data, w, h, rows, headerTop)
+    if metricTitles[id] then return metricPlan(id,data,w,h,rows,headerTop) end
     assert(titles[id] and w >= 64 and h >= 64)
     local p = {title=titles[id], rects={}, labels={}}
     local function rect(x,y,rw,rh,level,outline)

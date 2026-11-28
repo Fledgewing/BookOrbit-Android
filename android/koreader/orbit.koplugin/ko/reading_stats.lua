@@ -64,7 +64,7 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     finish()
     return widget
 end
-for _,id in ipairs({'year-in-reading','this-week','when-you-read','reading-records'}) do
+for _,id in ipairs({'year-in-reading','this-week','when-you-read','reading-records','today','reading-streak','reading-goal','pages-read','monthly-reading'}) do
     local name=id
     WidgetRegistry[name].renderers=WidgetRegistry[name].renderers or {}
     WidgetRegistry[name].renderers['android-tablet']=function(snapshot,placement)

@@ -33,6 +33,7 @@ class ReadingStatsTest {
         assertEquals(0,v["peak_hour"])
         val records=v["records"] as Map<String,Any?>
         assertEquals(2L,records["recorded_pages"])
+        assertEquals(0L,(records["today_pages"] as Number).toLong()) // midnight time spills, the visit starts yesterday
         assertEquals(3600L,records["longest_session_seconds"])
         assertEquals(3,records["streak"])
         assertNull(records["books_this_year"])
@@ -53,6 +54,7 @@ class ReadingStatsTest {
         for (i in 0..300) db.exec("INSERT INTO page_stat_data VALUES(1,?, ?,60)",i,base+i*60)
         val v=ReadingStats.aggregate(db,base+301*60,ZoneId.of("America/New_York"))
         assertEquals(301*60L,(v["records"] as Map<String,Any>)["longest_session_seconds"])
+        assertEquals(301L,((v["records"] as Map<String,Any>)["today_pages"] as Number).toLong())
         val h=v["hours"] as List<Long>
         assertEquals(7200L,h[1]) // both occurrences of 01:00 on the fall-back day
         assertEquals(301*60L,h.sum())

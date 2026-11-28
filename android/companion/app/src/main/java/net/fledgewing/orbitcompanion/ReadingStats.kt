@@ -127,7 +127,7 @@ object ReadingStats {
             "hours" to hours.toList(), "hour_levels" to hours.map { it.toDouble() / maxOf(1, hours.maxOrNull() ?: 0) },
             "hour_intensity" to hours.map { v -> when { v == 0L -> 0; v * 4 < (hours.maxOrNull() ?: 0) -> 1; v * 2 < (hours.maxOrNull() ?: 0) -> 2; v * 5 < (hours.maxOrNull() ?: 0) * 4 -> 3; else -> 4 } }, "peak_hour" to peak,
             "after_18_percent" to if (total > 0) (hours.drop(18).sum() * 100 / total).toInt() else null,
-            "records" to mapOf("recorded_pages" to visits, "longest_session_seconds" to longest,
+            "records" to mapOf("recorded_pages" to visits,"today_pages" to (pages[today] ?: 0L), "longest_session_seconds" to longest,
                 "best_day_pages" to (bestDay?.value ?: 0), "best_day" to bestDay?.key?.toString(), "books_this_year" to null,
                 "streak" to streak, "best_streak" to best),
             "goal" to mapOf("today_seconds" to (daily[today] ?: 0), "week_seconds" to week.sum(),

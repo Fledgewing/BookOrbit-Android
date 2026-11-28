@@ -139,6 +139,51 @@ return function(test,eq,ok,here,Cache)
         end
     end)
 
+    test('retained metrics: compact cards preserve independent provenance and bounded geometry',function()
+        local metrics={today={state='ready',source='all your devices',value='1 h 20 m',separate='10 m · this reader, separate'},
+            ['reading-streak']={state='ready',source='all your devices',value='7 days',best='Longest: 12 days',days={0,4,4,0,4,4,4},days_source='Last seven days · this reader'},
+            ['reading-goal']={state='ready',source='all your devices',value='8 / 24 books · 2026',fraction=1/3,pace='Need 0.5 books / week',status='On pace'},
+            ['pages-read']={state='ready',source='this reader',today='17',lifetime='2,345',definition='Timed page visits'},
+            ['monthly-reading']={state='ready',source='all your devices',levels={0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1,.5},labels={'D','J','F','M','A','M','J','J','A','S','O','N'},total='20 h 10 m',previous='Previous month: 2 h 10 m',period='Dec 2025 – Nov 2026'}}
+        local snapshot={state='ready',metrics=metrics};local before=Cache.encode(snapshot)
+        for id in pairs(metrics) do
+            local spec=e.WidgetRegistry[id];ok(spec.renderers['android-tablet']);eq(spec.dataNeeds[1].source,'reading.metrics')
+            eq(e.Budgets.get('widgets',id).rows,1)
+            for _,size in ipairs(spec.sizes['android-tablet']) do
+                local w=math.floor(size[1]*690/4)-12;local h=math.floor(size[2]*776/8)-12
+                local plan=e.ReadingStatsPlan.build(id,snapshot,w,h,size[2],56)
+                for _,r in ipairs(plan.rects) do ok(r.w>=0 and r.h>=0 and r.x>=0 and r.y>=0 and r.x+r.w<=w and r.y+r.h<=h,id) end
+                for _,t in ipairs(plan.labels) do ok(t.y>=0 and t.y+t.size<=h,id..' clipped '..t.text) end
+            end
+        end
+        local today=e.ReadingStatsPlan.build('today',snapshot,333,182,2)
+        eq(today.source,'All your devices');ok(has(today,'this reader, separate'))
+        local streak=e.ReadingStatsPlan.build('reading-streak',snapshot,333,182,2)
+        eq(#streak.rects,7);ok(has(streak,'Last seven days · this reader'))
+        local pages=e.ReadingStatsPlan.build('pages-read',snapshot,333,182,2)
+        eq(pages.source,'This reader only');ok(has(pages,'Timed page visits'))
+        local monthly=e.ReadingStatsPlan.build('monthly-reading',snapshot,574,156,2,60)
+        eq(#monthly.rects,13);ok(monthly.rects[11].h>=20,'two-row monthly retains a visible chart below measured header')
+        local compact=e.ReadingStatsPlan.build('reading-streak',snapshot,282,156,2,60)
+        ok(compact.rects[1].y+compact.rects[1].h<=136,'seven-day strip clears its footer')
+        -- Home wraps each nested value; the proxy arrays deliberately have length zero.
+        local function freeze(v) if type(v)~='table' then return v end;local values={};for k,x in pairs(v) do values[k]=freeze(x) end;return setmetatable({}, {__index=values}) end
+        local frozen=freeze(snapshot)
+        eq(#frozen.metrics['reading-streak'].days,0)
+        eq(#e.ReadingStatsPlan.build('reading-streak',frozen,333,182,2).rects,7)
+        eq(#e.ReadingStatsPlan.build('monthly-reading',frozen,678,182,2).rects,13)
+        eq(Cache.encode(snapshot),before)
+    end)
+    test('retained metrics: unknown counts and goals never become zero progress',function()
+        local snapshot={metrics={['reading-goal']={state='ready',source='all your devices',value='Target 24 · 2026',status='Completion count unavailable'},today={state='unavailable',reason='Reading time unavailable'}}}
+        local goal=e.ReadingStatsPlan.build('reading-goal',snapshot,333,182,2)
+        eq(#goal.rects,0);ok(has(goal,'Completion count unavailable'))
+        eq(e.ReadingStatsPlan.build('today',snapshot,333,182,2).message,'Reading time unavailable')
+        for _,id in ipairs({'today','reading-streak','reading-goal','pages-read','monthly-reading'}) do
+            local plan=e.ReadingStatsPlan.build(id,nil,333,182,2);eq(#plan.rects,0);ok(plan.message)
+        end
+    end)
+
     -- Battery presentation regressions live in test_battery.lua after the F12-O display projection.
     test('reader duration helper: measured and unavailable values',function()
         eq(e.ReaderPanelPlan.duration(.5,true),'30 min')

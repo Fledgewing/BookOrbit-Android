@@ -6366,6 +6366,58 @@
         }
       },
       "deferred": "Firmware, physical acceptance and publication."
+    },
+    {
+      "id": "android-retained-home-metrics",
+      "feature": "Retained read-only Home metric cards (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Distinct Today, streak, account goal, timed page visits, monthly reading and finish forecast cards.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; read-only source-aware Android cards are implemented.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RETAINED-METRICS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Retained metric cards follow the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RETAINED-METRICS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Retained metric cards follow the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RETAINED-METRICS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Retained metric cards follow the Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-RETAINED-METRICS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation; local completion/goal settings await their separate approval."
     }
   ],
   "release_evidence": {

@@ -92,7 +92,7 @@ function HomeHostPlan.resolve(document,registry,caps)
             if (p.widget == "booklist" or p.widget == "continue-reading") and caps and caps.catalog == false then supported=false end
             if p.widget == "battery" and caps and caps.battery == false then supported=false end
             if p.widget == "library" and caps and caps.catalog == false then supported=false end
-            if WidgetRegistry[p.widget] and WidgetRegistry[p.widget].dataNeeds[1].source == "reading.stats" and caps and caps.readingStats == false then supported=false end
+            if WidgetRegistry[p.widget] and (WidgetRegistry[p.widget].dataNeeds[1].source == "reading.stats" or WidgetRegistry[p.widget].dataNeeds[1].source == "reading.metrics") and caps and caps.readingStats == false then supported=false end
             if need.source == "want-to-read" and caps and caps.wantToRead == false then supported=false end
             if need.source == "on-device" and caps and caps.onDevice == false then supported=false end
             if supported then placements[#placements+1]=p end
