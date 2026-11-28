@@ -14,6 +14,10 @@ def review(d,out):
         while d.command('local r=Cache.decode(HomeHost.active.signatures.badges);if not r or r.pending then return "pending" end;assert(r.state=="ready" and r.earned==3 and r.total==20 and r.latest:find("Saved milestone",1,true) and r.next:find("Next milestone",1,true));return "ready"')!='ready':
             if time.monotonic()>end:raise TimeoutError('Cached achievement summary was not published')
             time.sleep(.2)
+    deadline=time.monotonic()+40
+    while d.command('return LibraryAdapter.owner()=="emulator-fixture" and "ready" or "pending"')!='ready':
+        if time.monotonic()>deadline:raise TimeoutError('Fixture account was not restored')
+        time.sleep(.2)
     d.command('assert(LibraryAdapter.owner()=="emulator-fixture");Library.companion.setupLater();ReaderPanel.close();if PositionPrompt.current then click("Yes") end;HomeHost.show();Library._badgesReview={layout=Library.settings.read("home_layout")};return true')
     try:
         for w,h in [(2,2),(4,2),(2,3)]:
