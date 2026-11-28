@@ -102,6 +102,10 @@ class LibraryTest {
             val sources=read(st,mapOf("op" to "sources","category" to "builtin","offset" to 6,"limit" to 6))
             val choice=(sources["items"] as List<*>).single() as Map<*,*>
             assertEquals("pickup",choice["src"]);assertEquals(4L,(choice["count"] as Number).toLong());assertEquals(0L,(choice["default_sort"] as Number).toLong())
+            // Even with every date unknown, exclusion must match Reading now's hero.
+            for(i in 1L..3L) st.db().exec("UPDATE bulk_books SET item=? WHERE g=1 AND id=?",LuaValue.encode(mapOf("id" to i,"title" to "Book $i","readStatus" to "reading")),i)
+            val hero=((read(st,mapOf("op" to "window","source" to "reading","limit" to 1))["items"] as List<*>).first() as Map<*,*>)["key"]
+            assertFalse((window()["items"] as List<*>).any { (it as Map<*,*>)["key"]==hero })
         }
     }
     private val owner = "fixture|https://library.invalid"

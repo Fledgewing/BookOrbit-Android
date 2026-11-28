@@ -6479,7 +6479,7 @@
         "android": {
           "status": "partial",
           "note": "Older-in-progress Book list preset, provider order, current-book exclusion and counted See all.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain; neutral source and preset are implemented.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; unit and native emulator flows verify the distinct source and preset.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-PICK-BACK-UP.md",

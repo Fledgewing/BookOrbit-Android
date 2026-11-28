@@ -38,4 +38,15 @@ Add widget preset picker, restoring its synthetic layout afterward.
 python3 tools/e2e/android/pick_back_up.py --serial emulator-5580 --out <evidence>
 ```
 
+Combined validation: 887 companion tests, zero failures/errors, four skipped;
+shared-version verification, debug build and lint pass. Lua: 259 logic / 289 flows;
+server/UI guards 12/6; feature matrix four; emulator driver ten. Four native checks
+pass through the real projection, distinct shelf, counted See all and actual Add
+widget picker. The broader 63-screen review is recorded in the PR.
+
+Source requests use projection revision 3, so ready older source lists do not hide
+the newly added built-in choice. Undated entries stay after dated entries with an
+explicit caption. Hero selection uses an unmodified copy before display
+normalization, including the all-dates-unknown case.
+
 Physical acceptance, firmware implementation and publication remain separate.

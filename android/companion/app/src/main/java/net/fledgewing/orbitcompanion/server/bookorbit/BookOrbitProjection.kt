@@ -338,15 +338,15 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 val enriched = raw.entries.associate { it.key to it.value } + context
                 val b = summary(owner, enriched, (context["_booksyncRank"] as? Number)?.toLong() ?: id, local?.contains(id)).toMutableMap()
                 b["local_path"] = localPaths?.get(id)
-                if(kind=="pick-back-up" && (b["last_read"]==null || (b["last_read"] as? String)?.isBlank()==true)) {
-                    b["last_read"]=null // the shared comparator keeps unknowns after dated rows
-                    b["status_note"]=(b["status_note"] as? String)?.let { "$it; last read unknown" } ?: "Last read unknown"
-                }
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 b["match"] = when { title == q -> 0; title.startsWith(q) -> 1; q in title -> 2; else -> 3 }
                 if (excludeCurrent && kind in setOf("reading","pick-back-up") && LibraryFilter.matches(b,mapOf("show" to "reading")) &&
-                    (current==null || currentOrder.compare(b,current!!)<0)) current=b
+                    (current==null || currentOrder.compare(b,current!!)<0)) current=b.toMap()
+                if(kind=="pick-back-up" && (b["last_read"]==null || (b["last_read"] as? String)?.isBlank()==true)) {
+                    b["last_read"]=null // the shared comparator keeps unknowns after dated rows
+                    b["status_note"]=(b["status_note"] as? String)?.let { "$it; last read unknown" } ?: "Last read unknown"
+                }
                 if ((membership == null || id in membership) && LibraryFilter.matches(b, sourceFilter)) {
                     facet?.include(b)
                     if (LibraryFilter.matches(b, filter)) selected.add(b)

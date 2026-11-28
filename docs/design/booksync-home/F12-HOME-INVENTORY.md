@@ -29,7 +29,7 @@ separate, unapproved local completion/goal **settings** proposal.
 | A year ago | Done | `P/logic/widget_registry.lua:25`; `P/ko/local_widgets.lua:22` retains its source/summary and empty state. |
 | Finished in YEAR with year selector | Not started | `P/logic/booklist.lua:11` offers all Finished, without a year selector or year-filtered source. A capped shelf must not become a total. |
 | Word of the day | Done | `P/logic/widget_registry.lua:21`; `P/ko/local_widgets.lua:43` includes vocabulary source/context and lookup. |
-| Distinct Pick back up shelf | Building | [Owned source and native preset](F12-PICK-BACK-UP.md) select older in-progress books, exclude the current hero before filters/paging and preserve counted See all. Native acceptance pending. |
+| Distinct Pick back up shelf | Done after audit | [Owned source and native preset](F12-PICK-BACK-UP.md) select older in-progress books, exclude the current hero before filters/paging and preserve counted See all. Four native checks pass; physical acceptance remains. |
 | Up next in series shelf | Not started | Series next-N is now implemented, but there is no Up next shelf source/preset in `P/logic/booklist.lua:6`–`:12`. A title suggestion is not a source. |
 | Want to read shelf | Done | `P/logic/layout.lua:190`; `P/logic/booklist.lua:10` retains its separate selection. |
 | Unopened and distinct Gathering dust | Not started | Registry and Book list source vocabulary lack both (`P/logic/widget_registry.lua:11`–`:28`, `P/logic/booklist.lua:6`). Need downloaded-never-opened identity/history, age/count/size and daily Next selection. Server unread is not equivalent. |
