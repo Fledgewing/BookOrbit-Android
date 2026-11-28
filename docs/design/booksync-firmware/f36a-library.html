@@ -1,0 +1,913 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BookSync F36a · Library and lists · NEEDS APPROVAL</title><style>*{box-sizing:border-box}body{margin:0;background:#e7e6e3;color:#171717;font:15px/1.5 Arial,sans-serif}main{max-width:1150px;margin:auto;padding:28px 24px}h1,h2{font-family:Georgia,serif}a{color:inherit}nav{display:flex;flex-wrap:wrap;gap:14px}article{border-top:1px solid #aaa;padding:24px 0;scroll-margin-top:10px}.devices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.frame{background:#262626;border-radius:28px;padding:20px 18px;width:516px;zoom:.63}.screen{width:480px;height:800px;background:white;display:flex;flex-direction:column;color:black;font:18px/1.35 Arial,sans-serif}.hdr{min-height:64px;display:flex;align-items:center;gap:16px;padding:8px 16px;border-bottom:1px solid black}.back{border:1.5px solid black;border-radius:28px;padding:12px 16px;font-size:16px}.hdr strong{font-size:20px}.content{padding:20px 18px;flex:1;min-height:0}.status{font-size:15px;margin:0 0 18px}.title{font:700 29px/1.2 Georgia,serif;margin:0 0 16px}.body{font-size:19px;margin:12px 0 20px}.rows{display:grid;gap:10px}.row{min-height:68px;border:1px solid #aaa;border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px}.row strong{font-size:19px}.row small{font-size:15px}.actions{display:grid;gap:12px;margin-top:20px}.action{min-height:52px;border:1.5px solid black;border-radius:28px;padding:12px 16px;text-align:center;font-size:17px;font-weight:bold}.pro .action:first-child{background:black;color:white}.focused{outline:3px solid black;outline-offset:2px}.foot{height:54px;border-top:1px solid black;display:flex;align-items:center;justify-content:space-between;padding:8px 18px;font-size:14px}.hardware{display:flex;justify-content:space-around;color:white;font:14px Arial,sans-serif;padding-top:16px}.hardware span{padding:8px;border:1px solid #555;border-radius:6px}figure{margin:0;min-width:0}figcaption{font-size:13px;margin:12px 0}.x3 .title{font-family:Arial,sans-serif;font-size:26px}.x3 .row,.x3 .action{border-radius:0}.x3 .row{border:0;border-bottom:1px solid #aaa;padding-left:12px}.x3 .focused:before{content:'> ';font-weight:bold}.approval{font-weight:bold;border:2px solid black;padding:10px}.note{max-width:1000px}li{margin:5px 0}@media(max-width:1050px){.devices{grid-template-columns:1fr}.frame{zoom:.8}}@media(max-width:500px){main{padding:18px 12px}.frame{zoom:.64}}</style></head><body><main>
+<p class="approval">NEEDS APPROVAL · F36a proposal · 27 November 2026</p><h1>Library and lists</h1><p>BookSync firmware proposal for X4 Pro touch, X4 Classic buttons and X3 text. No implementation, release, firmware pin change or expansion of existing approval. All values are synthetic. These static scenes do not contact a server.</p><p><a href="F36a-library.md">Scope, Android evidence and acceptance</a> · <a href="SCREENS.md">Screen inventory</a> · <a href="mockups.html">Approved firmware gallery</a></p><p>The 480 × 800 frames express design layout only. Firmware uses runtime dimensions and bezel-safe bounds; X3 uses bounded text without cover bitmaps. Touch targets are at least 50 design pixels. Button focus uses a black outline; Prev/Next move focus, Select activates, Back returns. Footer page arrows are focusable controls. No screen scrolls.</p><nav aria-label="F36a scene index">
+<a href="#library">library</a>
+<a href="#library-more">library-more</a>
+<a href="#library-offline">library-offline</a>
+<a href="#library-missing">library-missing</a>
+<a href="#library-loading">library-loading</a>
+<a href="#library-error">library-error</a>
+<a href="#authors">authors</a>
+<a href="#series-groups">series-groups</a>
+<a href="#on-card">on-card</a>
+<a href="#lists">lists</a>
+<a href="#scope">scope</a>
+<a href="#list-page">list-page</a>
+<a href="#list-back">list-back</a>
+<a href="#list-empty">list-empty</a>
+<a href="#list-missing">list-missing</a>
+<a href="#list-incomplete">list-incomplete</a>
+<a href="#list-error">list-error</a>
+<a href="#lists-unsupported">lists-unsupported</a>
+<a href="#download-options">download-options</a>
+<a href="#download-offline">download-offline</a>
+<a href="#download-preparing">download-preparing</a>
+<a href="#download-progress">download-progress</a>
+<a href="#download-unknown">download-unknown</a>
+<a href="#download-failed">download-failed</a>
+<a href="#download-canceled">download-canceled</a>
+<a href="#download-unsupported">download-unsupported</a>
+<a href="#download-login">download-login</a>
+<a href="#download-space">download-space</a>
+<a href="#download-access">download-access</a>
+<a href="#download-saved">download-saved</a>
+</nav>
+<article id="library"><h2>library · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Counts are published totals with coverage, never the number of visible rows. On card opens verified local books. Your lists includes saved Smart scopes; the UI does not evaluate their rules.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<p class="body">4.2 GB free of 32 GB</p>
+<div class="rows">
+<div class="row"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 2 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<p class="body">4.2 GB free of 32 GB</p>
+<div class="rows">
+<div class="row focused"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<p class="body">4.2 GB free of 32 GB</p>
+<div class="rows">
+<div class="row focused"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="library-more"><h2>library-more · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Preserves every Android browse root. Unsupported roots are omitted by capability. Page navigation restores focus; it does not scroll.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<div class="rows">
+<div class="row"><strong>Libraries</strong><small>3 ›</small></div>
+<div class="row"><strong>Collections</strong><small>8 ›</small></div>
+<div class="row"><strong>In progress</strong><small>17 ›</small></div>
+<div class="row"><strong>Recently added</strong><small>All ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back</span><span>‹ 2 / 2 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<div class="rows">
+<div class="row focused"><strong>Libraries</strong><small>3 ›</small></div>
+<div class="row"><strong>Collections</strong><small>8 ›</small></div>
+<div class="row"><strong>In progress</strong><small>17 ›</small></div>
+<div class="row"><strong>Recently added</strong><small>All ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Saved catalog · 2,418 books</p><h3 class="title">Library</h3>
+<div class="rows">
+<div class="row focused"><strong>Libraries</strong><small>3 ›</small></div>
+<div class="row"><strong>Collections</strong><small>8 ›</small></div>
+<div class="row"><strong>In progress</strong><small>17 ›</small></div>
+<div class="row"><strong>Recently added</strong><small>All ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="library-offline"><h2>library-offline · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Connectivity and snapshot freshness are independent. All saved indexes stay usable offline; entry starts no connection.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Offline · Saved catalog</p><h3 class="title">Library</h3>
+<p class="body">Last saved snapshot available</p>
+<div class="rows">
+<div class="row"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 2 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Offline · Saved catalog</p><h3 class="title">Library</h3>
+<p class="body">Last saved snapshot available</p>
+<div class="rows">
+<div class="row focused"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Offline · Saved catalog</p><h3 class="title">Library</h3>
+<p class="body">Last saved snapshot available</p>
+<div class="rows">
+<div class="row focused"><strong>All books</strong><small>2,418 ›</small></div>
+<div class="row"><strong>Authors</strong><small>186 ›</small></div>
+<div class="row"><strong>Series</strong><small>92 ›</small></div>
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+<div class="row"><strong>Your lists</strong><small>12 ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 2 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="library-missing"><h2>library-missing · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Unknown catalog counts stay unknown. Full refresh is explicit and uses its separately approved owner; no automatic radio boot or forced sign-in.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Catalog not saved yet</p><h3 class="title">Library</h3>
+<p class="body">Saved books are available. Connect to save your catalog.</p>
+<div class="rows">
+<div class="row"><strong>On card</strong><small>312 ›</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Full refresh</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Catalog not saved yet</p><h3 class="title">Library</h3>
+<p class="body">Saved books are available. Connect to save your catalog.</p>
+<div class="rows">
+<div class="row focused"><strong>On card</strong><small>312 ›</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Full refresh</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Catalog not saved yet</p><h3 class="title">Library</h3>
+<p class="body">Saved books are available. Connect to save your catalog.</p>
+<div class="rows">
+<div class="row focused"><strong>On card</strong><small>312 ›</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Full refresh</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="library-loading"><h2>library-loading · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">A bounded published-window request is pending. Paint performs no scan, transport or file work; Back retires this presentation.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Loading saved catalog</p><h3 class="title">Library</h3>
+<p class="body">On-card books remain available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">On card</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Loading saved catalog</p><h3 class="title">Library</h3>
+<p class="body">On-card books remain available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">On card</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Loading saved catalog</p><h3 class="title">Library</h3>
+<p class="body">On-card books remain available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">On card</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="library-error"><h2>library-error · Library</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Keep the last valid window when available. Retry is an explicit Library intent. Authentication failure is not an empty catalog.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Could not load the catalog</p><h3 class="title">Library</h3>
+<p class="body">Your saved books are still available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">On card</div>
+<div class="action">Retry</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Could not load the catalog</p><h3 class="title">Library</h3>
+<p class="body">Your saved books are still available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">On card</div>
+<div class="action">Retry</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Library</strong></header><div class="content"><p class="status">Could not load the catalog</p><h3 class="title">Library</h3>
+<p class="body">Your saved books are still available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">On card</div>
+<div class="action">Retry</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="authors"><h2>authors · Authors</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Grouped book results, not a second author database. A partial group opens the same list scoped to that author. Complete groups show N books without an All link.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Authors</strong></header><div class="content"><p class="status">2,418 books · By author</p><h3 class="title">Authors</h3>
+<div class="rows">
+<div class="row"><strong>Author A · All 12 ›</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Author B · 1 book</strong><small>The Paper Coast · Server only</small></div>
+<div class="row"><strong>Author C · All 9 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 8 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Authors</strong></header><div class="content"><p class="status">2,418 books · By author</p><h3 class="title">Authors</h3>
+<div class="rows">
+<div class="row focused"><strong>Author A · All 12 ›</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Author B · 1 book</strong><small>The Paper Coast · Server only</small></div>
+<div class="row"><strong>Author C · All 9 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 8 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Authors</strong></header><div class="content"><p class="status">2,418 books · By author</p><h3 class="title">Authors</h3>
+<div class="rows">
+<div class="row focused"><strong>Author A · All 12 ›</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Author B · 1 book</strong><small>The Paper Coast · Server only</small></div>
+<div class="row"><strong>Author C · All 9 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 8 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="series-groups"><h2>series-groups · Series</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Contextual order and known progress come from Library. X4 shows saved progress dots; X3 uses state text. A named series header hands off to F36c; Not in a series opens a scoped list. No F36c detail or download-next screen is proposed here.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">2,418 books · By series</p><h3 class="title">Series</h3>
+<div class="rows">
+<div class="row"><strong>Harbour sequence · All 7 ›</strong><small>1 · Glasswater · On card</small></div>
+<div class="row"><strong>Tide stories · 1 book ›</strong><small>1.5 · The Paper Coast · Server only</small></div>
+<div class="row"><strong>Not in a series · All 17 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 6 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">2,418 books · By series</p><h3 class="title">Series</h3>
+<div class="rows">
+<div class="row focused"><strong>Harbour sequence · All 7 ›</strong><small>1 · Glasswater · On card</small></div>
+<div class="row"><strong>Tide stories · 1 book ›</strong><small>1.5 · The Paper Coast · Server only</small></div>
+<div class="row"><strong>Not in a series · All 17 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 6 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">2,418 books · By series</p><h3 class="title">Series</h3>
+<div class="rows">
+<div class="row focused"><strong>Harbour sequence · All 7 ›</strong><small>1 · Glasswater · On card</small></div>
+<div class="row"><strong>Tide stories · 1 book ›</strong><small>1.5 · The Paper Coast · Server only</small></div>
+<div class="row"><strong>Not in a series · All 17 ›</strong><small>A Quiet Harbour · On card</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 6 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="on-card"><h2>on-card · On card</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Same shared list with On this device fixed. A missing file loses its local availability after service verification; a cached cover is not proof that a file exists.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">312 verified books</p><h3 class="title">On card</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 104 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">312 verified books</p><h3 class="title">On card</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 104 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">312 verified books</p><h3 class="title">On card</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 104 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="lists"><h2>lists · Your lists</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Names and counts come from published opaque scope identities. No server list creation, editing or client-side Smart-scope evaluation.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">12 saved lists</p><h3 class="title">Your lists</h3>
+<div class="rows">
+<div class="row"><strong>Short reads</strong><small>84 books ›</small></div>
+<div class="row"><strong>Unread fiction</strong><small>132 books ›</small></div>
+<div class="row"><strong>Weekend shelf</strong><small>26 books ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 4 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">12 saved lists</p><h3 class="title">Your lists</h3>
+<div class="rows">
+<div class="row focused"><strong>Short reads</strong><small>84 books ›</small></div>
+<div class="row"><strong>Unread fiction</strong><small>132 books ›</small></div>
+<div class="row"><strong>Weekend shelf</strong><small>26 books ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 4 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">12 saved lists</p><h3 class="title">Your lists</h3>
+<div class="rows">
+<div class="row focused"><strong>Short reads</strong><small>84 books ›</small></div>
+<div class="row"><strong>Unread fiction</strong><small>132 books ›</small></div>
+<div class="row"><strong>Weekend shelf</strong><small>26 books ›</small></div>
+</div><div class="actions">
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 4 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="scope"><h2>scope · Short reads</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Uses the selected opaque list identity with the shared list query. Back restores Your lists at its original page and focus.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 1 / 28 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 28 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 1 / 28 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-page"><h2>list-page · All books</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Whole rows and their metadata page together. Pro taps a row or page arrow; Classic/X3 Prev/Next focus controls and Select activates the page arrows. No scrolling.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>All books</strong></header><div class="content"><p class="status">2,418 books · List order</p><h3 class="title">All books</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 2 / 806 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>All books</strong></header><div class="content"><p class="status">2,418 books · List order</p><h3 class="title">All books</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 806 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>All books</strong></header><div class="content"><p class="status">2,418 books · List order</p><h3 class="title">All books</h3>
+<div class="rows">
+<div class="row focused"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 806 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-back"><h2>list-back · Short reads</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">RETURN SCENE: Back from a user-opened panel restores this list, its page, filters and focused row (The Paper Coast). Back again returns to Your lists. Returning to the loaded reader preserves the exact position.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back</span><span>‹ 2 / 28 ›</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row focused"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 28 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">84 books · Saved list</p><h3 class="title">Short reads</h3>
+<div class="rows">
+<div class="row"><strong>Glasswater</strong><small>Author A · On card · Reading 42%</small></div>
+<div class="row focused"><strong>The Paper Coast</strong><small>Author B · Server only · Unread</small></div>
+<div class="row"><strong>A Quiet Harbour</strong><small>Author C · On card · Finished</small></div>
+</div><div class="actions">
+<div class="action">Filter</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>‹ 2 / 28 ›</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-empty"><h2>list-empty · Short reads</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Zero is shown only for a known complete empty result. Resetting a filter does not remove books or change the saved server list.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">0 books · Complete saved result</p><h3 class="title">Short reads</h3>
+<p class="body">No books here yet.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Filter</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">0 books · Complete saved result</p><h3 class="title">Short reads</h3>
+<p class="body">No books here yet.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Filter</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">0 books · Complete saved result</p><h3 class="title">Short reads</h3>
+<p class="body">No books here yet.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Filter</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-missing"><h2>list-missing · Short reads</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Offline without data differs from an empty result. Retry asks Library for eligible work; it does not connect without consent.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Not saved yet</p><h3 class="title">Short reads</h3>
+<p class="body">This list has not been saved on this reader.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Not saved yet</p><h3 class="title">Short reads</h3>
+<p class="body">This list has not been saved on this reader.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Not saved yet</p><h3 class="title">Short reads</h3>
+<p class="body">This list has not been saved on this reader.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-incomplete"><h2>list-incomplete · Series</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Do not claim All N, complete counts or a bulk next action until membership coverage is known. Existing accessible rows remain usable.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">Saved membership incomplete</p><h3 class="title">Series</h3>
+<p class="body">Showing saved members. Total not known.</p>
+<div class="rows">
+<div class="row"><strong>Harbour sequence</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Not in a series</strong><small>Coverage unknown</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">Saved membership incomplete</p><h3 class="title">Series</h3>
+<p class="body">Showing saved members. Total not known.</p>
+<div class="rows">
+<div class="row focused"><strong>Harbour sequence</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Not in a series</strong><small>Coverage unknown</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Series</strong></header><div class="content"><p class="status">Saved membership incomplete</p><h3 class="title">Series</h3>
+<p class="body">Showing saved members. Total not known.</p>
+<div class="rows">
+<div class="row focused"><strong>Harbour sequence</strong><small>Glasswater · On card</small></div>
+<div class="row"><strong>Not in a series</strong><small>Coverage unknown</small></div>
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="list-error"><h2>list-error · Short reads</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Preserve the previous good window, selection and cursor if one exists. Late errors cannot replace a departed list or appear over reading.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Could not load this list</p><h3 class="title">Short reads</h3>
+<p class="body">Keep browsing your saved catalog.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Could not load this list</p><h3 class="title">Short reads</h3>
+<p class="body">Keep browsing your saved catalog.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Short reads</strong></header><div class="content"><p class="status">Could not load this list</p><h3 class="title">Short reads</h3>
+<p class="body">Keep browsing your saved catalog.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="lists-unsupported"><h2>lists-unsupported · Your lists</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">A restored shortcut may show this explanation; unsupported roots are normally omitted. Unavailable is distinct from no lists and not saved yet.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">Unavailable from this source</p><h3 class="title">Your lists</h3>
+<p class="body">This source does not provide saved lists.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">Unavailable from this source</p><h3 class="title">Your lists</h3>
+<p class="body">This source does not provide saved lists.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Your lists</strong></header><div class="content"><p class="status">Unavailable from this source</p><h3 class="title">Your lists</h3>
+<p class="body">This source does not provide saved lists.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-options"><h2>download-options · Download</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">A Library-projected supported-file chooser precedes transfer when needed. File and destination identities stay private. Initial button focus is the first supported option; Cancel starts nothing.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download</h3>
+<p class="body">Destination: Books on card</p>
+<div class="rows">
+<div class="row"><strong>EPUB · Standard</strong><small>2.4 MB</small></div>
+<div class="row"><strong>EPUB · Alternate edition</strong><small>Size unknown</small></div>
+</div><div class="actions">
+<div class="action">Cancel</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download</h3>
+<p class="body">Destination: Books on card</p>
+<div class="rows">
+<div class="row focused"><strong>EPUB · Standard</strong><small>2.4 MB</small></div>
+<div class="row"><strong>EPUB · Alternate edition</strong><small>Size unknown</small></div>
+</div><div class="actions">
+<div class="action">Cancel</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download</h3>
+<p class="body">Destination: Books on card</p>
+<div class="rows">
+<div class="row focused"><strong>EPUB · Standard</strong><small>2.4 MB</small></div>
+<div class="row"><strong>EPUB · Alternate edition</strong><small>Size unknown</small></div>
+</div><div class="actions">
+<div class="action">Cancel</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-offline"><h2>download-offline · Not downloaded</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Offline row selection opens this consent. Cancel/Back restores the exact originating row and starts no connection. Successful connection proceeds through the normal chooser.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Not downloaded</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not downloaded</h3>
+<p class="body">Connect to get it. Nothing is queued until you choose to connect.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Cancel</div>
+<div class="action">Connect and download</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Not downloaded</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not downloaded</h3>
+<p class="body">Connect to get it. Nothing is queued until you choose to connect.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Connect and download</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Not downloaded</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not downloaded</h3>
+<p class="body">Connect to get it. Nothing is queued until you choose to connect.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Connect and download</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-preparing"><h2>download-preparing · Preparing download</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">User-requested progress only. Services validate identity and storage. Cancel is serviced when safe; leaving retires auto-open without discarding durable work.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Preparing download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Preparing download</h3>
+<p class="body">Checking the selected file and available space.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Preparing download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Preparing download</h3>
+<p class="body">Checking the selected file and available space.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Preparing download</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Preparing download</h3>
+<p class="body">Checking the selected file and available space.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-progress"><h2>download-progress · Downloading</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Coarse progress; no animation. Duplicate selections deduplicate the job. Open on verified completion only if the initiating owner is still active. Back retires auto-open and restores the list.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB of 2.4 MB · 50%</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB of 2.4 MB · 50%</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB of 2.4 MB · 50%</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-unknown"><h2>download-unknown · Downloading</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">No invented percentage. The same job and ownership rules apply to transfers with unknown length.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB received · Total size unknown</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB received · Total size unknown</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Downloading</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Downloading</h3>
+<p class="body">1.2 MB received · Total size unknown</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Cancel</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-failed"><h2>download-failed · Download stopped</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Explicit Resume uses the same job. Space, access and validation errors use service-projected reasons; nothing deletes an existing complete file or claims success.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Download stopped</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download stopped</h3>
+<p class="body">Connection lost. Your completed books are safe.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Download stopped</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download stopped</h3>
+<p class="body">Connection lost. Your completed books are safe.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Download stopped</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download stopped</h3>
+<p class="body">Connection lost. Your completed books are safe.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-canceled"><h2>download-canceled · Download canceled</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Cancellation affects only this job. No automatic retry, open or removal of an existing complete file.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Download canceled</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download canceled</h3>
+<p class="body">Your completed books are still on the card.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Download canceled</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download canceled</h3>
+<p class="body">Your completed books are still on the card.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Download canceled</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download canceled</h3>
+<p class="body">Your completed books are still on the card.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Resume</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-unsupported"><h2>download-unsupported · Cannot download this book</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">No transfer starts. Local books remain openable. The presentation does not guess a format conversion or fetch detail during paint.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Cannot download this book</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Cannot download this book</h3>
+<p class="body">No supported EPUB file available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Cannot download this book</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Cannot download this book</h3>
+<p class="body">No supported EPUB file available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Cannot download this book</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Cannot download this book</h3>
+<p class="body">No supported EPUB file available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-login"><h2>download-login · Download unavailable</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Set up hands off to the separately approved Account owner. Cancel/Back leaves the list intact; no credentials or vendor protocol enter this UI.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">No download login is set up.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Keep browsing</div>
+<div class="action">Set up</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">No download login is set up.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Keep browsing</div>
+<div class="action">Set up</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">No download login is set up.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Keep browsing</div>
+<div class="action">Set up</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-space"><h2>download-space · Not enough space</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Library owns the capacity check and safe reserve. Do not delete books, annotations or queued work to make room. No invented free-space figure.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Not enough space</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not enough space</h3>
+<p class="body">Free some space on the card before downloading.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Not enough space</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not enough space</h3>
+<p class="body">Free some space on the card before downloading.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Not enough space</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Not enough space</h3>
+<p class="body">Free some space on the card before downloading.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+<div class="action">Retry</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-access"><h2>download-access · Download unavailable</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Authorization loss is not an empty catalog. Existing permitted local files remain accessible. Account changes retire this owner and all stale deliveries.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">Access to this file is no longer available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">Access to this file is no longer available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>Download unavailable</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">Download unavailable</h3>
+<p class="body">Access to this file is no longer available.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+<article id="download-saved"><h2>download-saved · On card</h2><p><strong>NEEDS APPROVAL</strong></p><p class="note">Return scene after the owner has declined auto-open or reopened job information. Open is explicit. A completion delivered after Back never reopens the departed list or reader.</p><div class="devices">
+<figure><div class="frame"><div class="screen pro"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">On card</h3>
+<p class="body">Download verified and saved.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action">Open</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back</span><span>Saved view</span></footer></div>
+</div><figcaption>X4 Pro · touch · Tap rows and actions; Back stays available.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">On card</h3>
+<p class="body">Download verified and saved.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Open</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X4 Classic · buttons · Outlined initial focus.</figcaption></figure>
+<figure><div class="frame"><div class="screen buttons x3"><header class="hdr"><span class="back">‹ Back</span><strong>On card</strong></header><div class="content"><p class="status">The Paper Coast</p><h3 class="title">On card</h3>
+<p class="body">Download verified and saved.</p>
+<div class="rows">
+</div><div class="actions">
+<div class="action focused">Open</div>
+<div class="action">Back</div>
+</div></div><footer class="foot"><span>Back · Select</span><span>Saved view</span></footer></div>
+<div class="hardware"><span>Prev</span><span>Next</span><span>Select</span><span>Back</span></div>
+</div><figcaption>X3 · text/buttons · Outlined initial focus; text-only rows.</figcaption></figure>
+</div></article>
+</main></body></html>

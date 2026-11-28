@@ -370,3 +370,13 @@ headers at the top-right; larger views are explicitly optional.
 Every new scene/state remains **NEEDS APPROVAL**. This is an X4 Pro / Classic
 review; it enables no X3 widget and changes no existing approval, firmware, pin,
 default layout or native reader behavior.
+
+## F36a Library and lists — NEEDS APPROVAL
+
+The [F36a proposal](F36a-library.md) and [three-profile gallery](f36a-library.html)
+add 30 Library/list scenes for review, including catalog counts, authors,
+series grouping, On card, saved Smart-scope lists, offline, nested Back,
+download consent/progress/cancel and errors. All additions **NEED APPROVAL**.
+The approved Home examples do not supply the complete X3 or three-profile state
+coverage. Missing presentations stay off. Existing approvals, F36b/F36c scope,
+firmware source and integration pin are unchanged.
