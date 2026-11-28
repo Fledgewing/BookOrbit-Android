@@ -85,7 +85,10 @@ def review(device,out,seed_books=True):
     device.wait_projection();device.command("UI:forceRePaint();return true");time.sleep(.5);device.shot(out/"editor-saved.png")
     # Restore the default fixture layout after verifying persistence.
     device.command('assert(HomeEditor.save(Layout.default()));HomeHost.show();return true')
-    (out/"home-tests.json").write_text(json.dumps({"screens":["home-1","home-2","editor","picker","editor-sizes","editor-saved"],"render":"native KOReader","emulator":device.serial,"size":[1404,1872],"dpi":300,"server":"opt-in fake ServerAdapter","assertions":["59-book fixture","editor/picker zero queries","move revision","resize persisted"]},indent=2)+"\n")
+    device.wait_projection()
+    device.command('local entry=assert(HomeHost.active.presentation.want);local saved=assert(entry.snapshot.items[1]);local row={key=saved.key,title=saved.title,authors=saved.authors,cover_path=assert(saved.cover_path)};local old=HomeWidgets.preview;HomeWidgets.preview=true;local ok,w=pcall(HomeWidgets.card,{widget="booklist",w=2,h=2,settings={title="Want to read",style=0}},{state="ready",items={row},count=1,total=1,bytes=0},function() end,{w=654,h=382});HomeWidgets.preview=old;assert(ok,w);local BB=require("ffi/blitbuffer");local bb=BB.new(670,398,BB.TYPE_BB8);bb:fill(BB.COLOR_WHITE);w:paintTo(bb,8,8);bb:writeToFile("/sdcard/koreader/e2e-home-remote.png");bb:free();w:free();return true')
+    device.adb("pull","/sdcard/koreader/e2e-home-remote.png",str(out/"remote-cover.png"))
+    (out/"home-tests.json").write_text(json.dumps({"screens":["home-1","home-2","editor","picker","editor-sizes","editor-saved"],"render":"native KOReader","emulator":device.serial,"size":[1404,1872],"dpi":300,"server":"opt-in fake ServerAdapter","assertions":["59-book fixture","editor/picker zero queries","move revision","resize persisted","remote cover badge"]},indent=2)+"\n")
 
 
 if __name__=="__main__":

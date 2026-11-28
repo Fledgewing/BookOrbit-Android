@@ -143,7 +143,7 @@ function HomeHost.create()
         if self.list_layout and self.filter.model.query.group~="none" and self.filter.model.query.group~=nil then return SeriesUI.groups(self) end
         if self.list_layout then return CatalogUI.library(self) end
         local refreshDelay,pendingSnapshot
-        local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
+        local paint=Library.paint("home")
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
         self.caps=caps
@@ -154,38 +154,17 @@ function HomeHost.create()
         self.presentation=self.presentation or {}
         local registry=HomeHost.installed()
         if type(caps.lists) == "table" and not caps.lists.read then registry.lists=nil end
-        local resolved=assert(HomeHostPlan.resolve((self.list_layout or HomeHost.document()),registry,caps))
+        local resolved=assert(HomeHostPlan.resolve(HomeHost.document(),registry,caps))
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local K=HomeWidgets.kit();local px=K.px
-        local scale=self.list_layout and function(n) return Device.screen:scaleBySize(n) end or px
+        local scale=px
         local gap=scale(12)
-        local inset=self.list_layout and gap or px(18)
-        local top=self.list_layout and scale(178) or px(76)
-        local bottom=self.list_layout and scale(52) or px(58)
+        local inset=px(18)
+        local top=px(76)
+        local bottom=px(58)
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
-        if self.list_layout then
-        HomeWidgets.text(canvas,self.list_title or page.name or page.tab or "Home",gap,gap,w-scale(self.list_layout and 120 or 220),24,false,true)
-        local status,kind=AccountPlan.sync(account,true)
-        if status~=self.account_status then
-            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
-            self.account_status=status
-        end
-        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(220),scale(66),w-2*gap-scale(220),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
-        HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(50),function() self:onClose() end)
-        HomeWidgets.button(canvas,_("Search"),gap,scale(66),scale(100),scale(50),function() self:search() end)
-        if self.list_layout then
-            local header=self.filter:header(self.list_result and self.list_result.total)
-            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(66),scale(100),scale(50),header.callback)
-            local x=gap
-            for _,chip in ipairs(header.chips) do
-                if x+scale(140)>w-gap then break end
-                HomeWidgets.button(canvas,chip.label.." ×",x,scale(118),scale(136),scale(50),chip.callback)
-                x=x+scale(140)
-            end
-        end
-        end
         local sharedStats={}
         for _,p in ipairs(page.placements) do
             local rect=HomeHostPlan.rect(p,resolved.grid,w-2*inset,h-top-bottom,gap)
@@ -201,7 +180,6 @@ function HomeHost.create()
                     if not sharedStats[need.op] then sharedStats[need.op]=context:read(need.op,need) end
                     return sharedStats[need.op]
                 end
-                if self.list_layout then self.list_limit=need.limit end
                 local data=context:read(need.op,need)
                 if p.widget=="library" then
                     local merged={}; for k,v in pairs(data) do merged[k]=v end
@@ -219,7 +197,6 @@ function HomeHost.create()
             local signature=UIUtil.encode(result)
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
-            if self.list_layout then self.list_result=result end
             local snapshotAccount=caps.account
             if WidgetRegistry[p.widget].localOnly or (p.settings or {}).src=="unopened" or (p.settings or {}).source=="unopened" then snapshotAccount=nil end
             local snapshot=HomeHostPlan.snapshot(result,snapshotAccount)
@@ -244,12 +221,7 @@ function HomeHost.create()
             end
             HomeWidgets.put(canvas,boundary,rect.x,rect.y)
         end
-        if self.list_layout then
-            local result=self.list_result or {}
-            HomeWidgets.button(canvas,"‹",gap,h-bottom,scale(80),bottom,function() self:listPage(-1) end)
-            HomeWidgets.text(canvas,result.pending and _("Loading…") or (tostring(result.total or "—").._(" books")),scale(110),h-bottom+gap,w-scale(220),16)
-            if result.next then HomeWidgets.button(canvas,"›",w-gap-scale(80),h-bottom,scale(80),bottom,function() self:listPage(1) end) end
-        else
+        do
             local title=page.name or page.tab or "Home"
             K.label(canvas,title,px(20),px(8),w-px(300),"title",{bold=true})
             local accountStatus,kind=AccountPlan.sync(account,true)

@@ -379,6 +379,7 @@ return function(test,eq,ok,E,W,Widget)
     end)
     test("Home card rows: paging consumes exactly the visible books",function()
         withHost(function()
+            E.Device.screen.getHeight=function() return 936 end -- Match the 702-unit M8C reference viewport.
             local read=E.LibraryAdapter.read
             E.LibraryAdapter.read=function(raw)
                 local args=E.Cache.decode(raw)

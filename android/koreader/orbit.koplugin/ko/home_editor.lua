@@ -22,11 +22,17 @@ function HomeEditor.title(p)
     if type(title)~="string" or #title>80 then title=(WidgetRegistry[p.widget] or {}).name or p.widget end
     return title
 end
+function HomeEditor.previewKey(p)
+    local s=p.settings or {}
+    return UIUtil.encode({widget=p.widget,source=s.source or s.src,query=s.query or {},sort=s.sort or 0,offset=s.offset or 0,exclude_current=s.exclude_current})
+end
 function HomeEditor.preview(host,p,rect,scale)
+    local key=HomeEditor.previewKey(p)
     local cached=(host.presentation or {})[p.instance]
+    if cached and HomeEditor.previewKey(cached.p)~=key then cached=nil end
     if not cached then
         for _,entry in pairs(host.presentation or {}) do
-            if entry.p.widget==p.widget and (p.widget=="continue-reading" or (entry.p.settings or {}).src==(p.settings or {}).src) then cached=entry;break end
+            if HomeEditor.previewKey(entry.p)==key then cached=entry;break end
         end
     end
     local snapshot=cached and cached.snapshot
@@ -200,7 +206,7 @@ function HomeEditor.create(host)
                 K.put(c,HomeEditor.preview(host,miniature,{w=previewW,h=previewH},K.scale*.45),pad,y)
                 local tx=pad+previewW+px(14);local tw=sw-tx-px(112)
                 local heading=K.label(c,title,tx,y-px(5),tw-px(64),"body",{bold=true})
-                local badge=K.canvas(px(54),px(16));K.label(badge,"In 0.12",px(6),0,px(46),"caption",{bold=true,ink=true})
+                local badge=K.canvas(px(54),px(16));local tag=K.text{text="In 0.12",w=px(46),size=10,bold=true,ink=true};K.put(badge,tag,(px(54)-tag:getSize().w)/2,(px(16)-tag:getSize().h)/2)
                 K.put(c,K.frame(badge,{w=px(54),h=px(16),radius=px(8),ink=true}),tx+heading:getSize().w+px(8),y-px(3))
                 local descriptions={
                     ["continue-reading"]="Your current book, big: cover, progress, time left and when you'll finish.",

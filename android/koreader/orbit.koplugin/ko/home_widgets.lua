@@ -15,7 +15,7 @@ function HomeWidgets.ui()
 end
 function HomeWidgets.kit()
     local K=BookSyncUI.new(HomeWidgets.kitScale)
-    K.icons.filter=true -- Home's list/selection decoration extends the owned icon set.
+    K.icons.filter=true;K.icons.clouddl=true -- Home's list/selection decoration extends the owned icon set.
     return K
 end
 function HomeWidgets.canvas(w,h)
@@ -230,6 +230,10 @@ function HomeWidgets.card(p,snapshot,dispatch,rect)
     local function cover(b,x,y,cw,ch)
         HomeWidgets.cover(c,b,x,y,cw,ch,hero)
         HomeWidgets.coverTap(c,function() dispatch("book",b) end,x,not hero and math.max(y,px(52)) or y,cw,ch)
+        if not hero and not b.local_path then
+            local badge=K.canvas(px(20),px(20));K.put(badge,K.icon{name="clouddl",w=px(14)},px(3),px(3))
+            K.put(c,K.frame(badge,{w=px(20),h=px(20),radius=px(10),border=px(1.5)}),x+cw-px(10),y+ch-px(10))
+        end
     end
     if hero and h<px(250) then
         local b=snapshot.items[1];local ch=h-2*pad;local cw=math.min(math.floor(ch*2/3),math.floor(w*.36))

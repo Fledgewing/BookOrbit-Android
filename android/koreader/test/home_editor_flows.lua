@@ -19,6 +19,19 @@ return function(test,eq,ok,E,W,Widget,withHost)
         E.HomeEditor.show(host)
         return W.shown[#W.shown],host
     end
+    test("Home editor: a changed query never borrows an unrelated cached preview",function()
+        withHost(function(_,reads)
+            local e,host=editor();local p=E.Layout.editorPage(e.model.document,1).placements[2]
+            p.settings.query={q="a different saved filter"}
+            local render=E.HomeWidgets.renderers.booklist;local captured;local before=#reads
+            E.HomeWidgets.renderers.booklist=function(_,snapshot) captured=snapshot;return Widget:new{} end
+            local success,err=pcall(function()
+                E.HomeEditor.preview(host,p,{w=300,h=200},1)
+                eq(captured.state,"empty");eq(#reads,before,"preview remains query-free")
+            end)
+            E.HomeWidgets.renderers.booklist=render;ok(success,err)
+        end)
+    end)
     test("Home editor: Settings shortcuts reuse rename and reset confirmation",function()
         withHost(function()
             E.S.home_layout=E.Layout.default()
