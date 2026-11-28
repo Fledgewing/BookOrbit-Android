@@ -401,3 +401,9 @@ firmware-only route or completion/Back/error wizard is proposed.
 Existing Home revision-16 and B1–B5 approvals remain unchanged. Firmware F36c
 stays off pending presentation approval and Library service dependencies.
 No firmware or submodule pin changes; F36a/F36b remain separate.
+
+## F42 sleep additions — NEEDS APPROVAL
+
+[Device scenes](F42-sleep-mockups.html) and [contract](F42-sleep.md) fill the
+missing sleep gallery without changing B1–B5 or Home approvals. New BookSync sleep
+artwork and extras remain off. Existing native sleep and wake behavior is retained.
