@@ -146,7 +146,7 @@ object ChecklistUi {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 if (s !is Checklist.Summary.FirstRun && s !is Checklist.Summary.Walking) addView(glyph(ctx, Checklist.summaryState(s)))
-                addView(Ui.text(ctx, Checklist.summaryTitle(s), 28f, bold = true))
+                addView(Ui.text(ctx, Checklist.summaryTitle(s), CompanionStyle.SUMMARY_TYPE, bold = true))
             }
             addView(title)
             addView(Ui.text(ctx, line, CompanionStyle.BODY, color = Ui.MID).apply { setPadding(0, Ui.dp(ctx, 2), 0, 0) })
@@ -334,11 +334,11 @@ class SetupDetailsActivity : EinkActivity() {
         val lines = crashes?.setup.orEmpty()
         lines.forEach { (k, v) -> root.addView(Ui.row(this, k, v)) }
         root.addView(Ui.gap(this, 20))
-        root.addView(Ui.text(this, "Companion crashes", 28f, bold = true).apply { typeface = CompanionStyle.serif })
+        root.addView(Ui.text(this, "Companion crashes", CompanionStyle.FORM_HEADING, bold = true).apply { typeface = CompanionStyle.serif })
         root.addView(Ui.gap(this, 14))
-        root.addView(Ui.text(this, crashes?.text ?: "Loading crash summaries…", CompanionStyle.BODY))
+        root.addView(Ui.text(this, crashes?.text ?: "Loading crash summaries…", CompanionStyle.FORM_BODY))
         if (!Pin.locked(this)) {
-            if (crashes?.canClear == true) root.addView(Ui.button(this, "Clear crash summaries", heightDp = 56, sp = CompanionStyle.ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
+            if (crashes?.canClear == true) root.addView(Ui.button(this, "Clear crash summaries", heightDp = CompanionStyle.FORM_TARGET, sp = CompanionStyle.FORM_ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
                 val ticket = ++generation
                 LibraryDiagnostics.clear(this) { ok ->
                     if (ticket == generation && !isFinishing && !isDestroyed) {
@@ -348,7 +348,7 @@ class SetupDetailsActivity : EinkActivity() {
             })
             if (crashes != null) {
                 root.addView(Ui.gap(this, 12))
-                root.addView(Ui.button(this, "Copy for support", heightDp = 56, sp = CompanionStyle.ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
+                root.addView(Ui.button(this, "Copy for support", heightDp = CompanionStyle.FORM_TARGET, sp = CompanionStyle.FORM_ACTION, radiusDp = CompanionStyle.FORM_RADIUS) {
                     val text = SetupDetails.copyText(BuildConfig.VERSION_NAME, lines + ("Companion crashes" to crashes.text))
                     (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("BookSync setup details", text))
                     OLog.i("setup: details copied for support")

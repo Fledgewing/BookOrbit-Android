@@ -13,10 +13,42 @@ import android.widget.LinearLayout
  * serif is reserved for the diagnostic heading, as in crash-summary-mockups.html. */
 object CompanionStyle {
     const val TITLE = 34f
-    const val LABEL = 25f
+    const val LABEL = 26f
     const val BODY = 21f
     const val CAPTION = 18f
-    const val ACTION = 22f
+    const val ACTION = 24f
+    // Calibrated against approved cap-height / full reference width at 1404 px, 300 dpi.
+    // Compact checklist and reader-family Settings samples already use this smaller scale;
+    // the standalone forms and launcher samples use the larger roles below.
+    const val FORM_BODY = 36f
+    const val FORM_CAPTION = 30f
+    const val FORM_ACTION = 37f
+    const val FORM_YEAR = 52f
+    const val FORM_HEADING = 48f
+    const val FORM_TARGET = 96
+    const val FORM_FIELD_WIDTH = 120
+    const val FORM_BUTTON_INSET = 24
+    const val HERO_TYPE = 38f
+    const val HERO_HEIGHT = 270
+    const val TILE_HEIGHT = 160
+    const val TILE_TYPE = 24f
+    const val TILE_ICON = 64
+    const val STATUS_TYPE = 28f
+    const val STATUS_CAPTION = 24f
+    const val SUMMARY_TYPE = 31f
+    const val SETTINGS_TITLE = 20f
+    const val SETTINGS_TEXT_SCALE = 0.67f
+
+    /** Keep approved proportions on smaller readers without shrinking the M8C reference. */
+    fun textSize(ctx: Context, sp: Float): Float {
+        // Reader-family Settings references are full-width 1404 px captures, unlike
+        // the 360 CSS-pixel checklist and 412 CSS-pixel form illustrations.
+        val referenceSp = if (ctx is SettingsPage && ctx !is LocalReadingSettingsActivity) {
+            if (sp == TITLE) SETTINGS_TITLE else sp * SETTINGS_TEXT_SCALE
+        } else sp
+        val width = ctx.resources.displayMetrics.widthPixels / ctx.resources.displayMetrics.density
+        return referenceSp * (width / 749f).coerceIn(0.75f, 1.5f)
+    }
     const val PAGE_INSET = 25
     const val CARD_RADIUS = 10
     const val FORM_RADIUS = 0

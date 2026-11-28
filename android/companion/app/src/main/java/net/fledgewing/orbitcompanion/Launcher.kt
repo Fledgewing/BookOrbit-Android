@@ -180,7 +180,7 @@ open class LauncherActivity : EinkActivity() {
             root.addView(Ui.gap(this, 8))
         }
         val koFirst = !HomeApp.isApp(choice)
-        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 128 else 80, sp = if (koFirst) 26f else 22f) {
+        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) CompanionStyle.HERO_HEIGHT else 120, sp = if (koFirst) CompanionStyle.HERO_TYPE else CompanionStyle.TILE_TYPE) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
             } else {

@@ -266,7 +266,7 @@ object Ui {
 
     const val ROW_DP = 76
     /** A status row's height (Ui.row compact): read, rarely tapped. */
-    const val INFO_ROW_DP = 48
+    const val INFO_ROW_DP = 64
     const val BUTTON_DP = 88
     /** The fixed gap between a row's text and its control. */
     const val ROW_GAP_DP = 16
@@ -294,7 +294,7 @@ object Ui {
         TextView(ctx).apply {
             text = s
             setTextColor(color)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, CompanionStyle.textSize(ctx, sp))
             typeface = if (bold) CompanionStyle.strong else CompanionStyle.sans
             includeFontPadding = false
             setLineSpacing(0f, 1.15f)
@@ -311,7 +311,7 @@ object Ui {
         text(ctx, label, sp, bold = true, color = if (solid) PAPER else INK).apply {
             gravity = Gravity.CENTER
             minHeight = dp(ctx, heightDp)
-            val p = dp(ctx, 12)
+            val p = dp(ctx, if (radiusDp == CompanionStyle.FORM_RADIUS) CompanionStyle.FORM_BUTTON_INSET else 12)
             setPadding(p, p / 2, p, p / 2)
             background = if (solid) {
                 pressable(box(ctx, INK, radiusDp = radiusDp), box(ctx, MID, radiusDp = radiusDp))
@@ -326,15 +326,15 @@ object Ui {
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            minimumHeight = dp(ctx, 96)
+            minimumHeight = dp(ctx, CompanionStyle.TILE_HEIGHT)
             background = pressable(box(ctx, PAPER), box(ctx, PRESSED))
-            addView(text(ctx, symbol, 21f, bold = true).apply {
+            addView(text(ctx, symbol, 32f, bold = true).apply {
                 gravity = Gravity.CENTER
-                val size = dp(ctx, 36)
+                val size = dp(ctx, CompanionStyle.TILE_ICON)
                 layoutParams = LinearLayout.LayoutParams(size, size).apply { bottomMargin = dp(ctx, 6) }
                 background = box(ctx, PAPER, oval = true)
             })
-            addView(text(ctx, label, 22f).apply { gravity = Gravity.CENTER })
+            addView(text(ctx, label, CompanionStyle.TILE_TYPE).apply { gravity = Gravity.CENTER })
             clickable(this, onClick)
         }
 
@@ -367,12 +367,12 @@ object Ui {
         onClick: (() -> Unit)? = null,
         onLong: (() -> Unit)? = null,
         left: View? = null,
-        /** A status line, not a setting: shorter, so the main view fits on one screen. */
+        /** A status line: approved launcher type, with natural wrapping and scrolling. */
         compact: Boolean = false,
     ): LinearLayout = RowLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(ctx, if (compact) INFO_ROW_DP else ROW_DP)
+        minimumHeight = dp(ctx, if (compact) INFO_ROW_DP else if (ctx is SettingsActivity) 112 else ROW_DP)
         val p = dp(ctx, if (compact) 4 else 6)
         setPadding(p, p, p, p)
         val rule = GradientDrawable().apply { setColor(PAPER) }
@@ -387,8 +387,8 @@ object Ui {
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             tag = ROW_TEXT_TAG
-            addView(text(ctx, label, if (compact) 20f else CompanionStyle.LABEL, bold = !compact))
-            if (!sub.isNullOrEmpty()) addView(text(ctx, sub, if (compact) 17f else CompanionStyle.BODY, color = MID))
+            addView(text(ctx, label, if (compact) CompanionStyle.STATUS_TYPE else if (ctx is LocalReadingSettingsActivity) CompanionStyle.FORM_BODY else CompanionStyle.LABEL, bold = !compact))
+            if (!sub.isNullOrEmpty()) addView(text(ctx, sub, if (compact) CompanionStyle.STATUS_CAPTION else if (ctx is LocalReadingSettingsActivity) CompanionStyle.FORM_CAPTION else CompanionStyle.BODY, color = MID))
         }
         addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (right != null) {
@@ -408,7 +408,7 @@ object Ui {
         text(ctx, s, sp, bold = bold).apply { gravity = Gravity.END }
 
     /** On/Off control drawn as a box: filled when on. Changes instantly. */
-    fun toggle(ctx: Context, on: Boolean): TextView = text(ctx, if (on) "On" else "Off", 18f, bold = true, color = if (on) PAPER else INK).apply {
+    fun toggle(ctx: Context, on: Boolean): TextView = text(ctx, if (on) "On" else "Off", if (ctx is LauncherActivity) CompanionStyle.STATUS_CAPTION else 18f, bold = true, color = if (on) PAPER else INK).apply {
         gravity = Gravity.CENTER
         minWidth = dp(ctx, 76)
         minHeight = dp(ctx, 44)
