@@ -101,7 +101,7 @@ function Editor:build()
         choices[#choices+1]={text=r.text:gsub("^● ",""):gsub("^○ ",""),radio=selected,bold=selected,callback=r.action,h=p(52),size="body",rule=true,serif=r.fontIndex~=4}
     end end
     self[1]=SettingsPage.new{title=rows[1].text,subtitle="Used when you pick Custom in the reading panel. Changes apply straight away.",
-        modal=true,startY=p(76),w=p(598),h=p(self.key=="font" and (#choices*52+312) or 306),rows=choices,onBack=function() C.close() end,
+        modal=true,startY=p(76),w=p(self.key=="margins" and 640 or 598),h=p(self.key=="font" and (#choices*52+312) or 306),rows=choices,onBack=function() C.close() end,
         content=function(_,c,w,y,put)
             local stepY=y+p(12)
             K.label(c,self.key=="font" and "Weight" or ({spacing="Line height",contrast="Ink strength",margins="Side margins"})[self.key],p(24),stepY+p(13),p(240),"body",{bold=true})
@@ -110,7 +110,7 @@ function Editor:build()
             put(K.button{text="+",w=p(52),variant="outline",callback=function() step(1) end},w-p(76),stepY,"more")
             local preview=self:rowWidget({row={preview=true}},w-p(48),p(90),self.metrics)
             put(preview,p(24),stepY+p(64),"preview")
-            put(K.button{text="Done",w=p(84),callback=function() C.close() end},p(24),stepY+p(145),"done")
+            put(K.button{text="Done",w=p(84),variant=self.key=="margins" and "outline" or nil,callback=function() C.close() end},p(24),stepY+p(145),"done")
         end}
     finish()
 end

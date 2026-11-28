@@ -106,4 +106,22 @@ return function(test,eq,ok,here)
         v:close(); eq(invalidations,1); e.Library.changed=function() end
     end)
 
+    test("account summary: signed-out guidance and signed-in ordered value rows",function()
+        local v=e.AccountView.open()
+        v.state={signedIn=false};v:paint()
+        eq(#v.dialog.rows,2);eq(v.dialog.rows[1].text,"Sign in to your server")
+        ok(v.dialog.rows[1].sub);eq(v.dialog.rows[2].text,"Until you sign in")
+        v.state={signedIn=true,username="reader",server="https://fixture.example.test",sync=login("account"),opds=login("account")};v:paint()
+        local names={"Signed in as","Your server","Connection","What BookSync set up","Sign in again…","Sign out","LOGINS","Sync login","OPDS login"}
+        eq(#v.dialog.rows,#names)
+        for i,name in ipairs(names) do eq(v.dialog.rows[i].text,name) end
+        ok(v.dialog.rows[5].sub);ok(v.dialog.rows[6].sub);ok(v.dialog.rows[7].section)
+        eq(v.dialog.rows[8].detail,"Set up by your account");ok(v.dialog.rows[8].callback)
+        v.result={"Sync login: Found","OPDS login: Created"};v.page="result";v:paint()
+        eq(v.dialog.fitContent,true);eq(v.dialog.h,nil)
+        v.state={signedIn=false,sync={},opds={}};v.page="summary";v:paint()
+        eq(#v.dialog.rows,2);eq(v.dialog.rows[1].text,"Sign in to your server");eq(v.dialog.rows[2].text,"Until you sign in")
+        v:close()
+    end)
+
 end

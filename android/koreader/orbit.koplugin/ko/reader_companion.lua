@@ -95,29 +95,34 @@ function V:paint()
                 function() self:toggle(helper) end,helper.mutable)
         end
         if not s.helpers[3].permission then row("review","Review screen-off permission",function() self.page="permission";self:paint() end) end
-        row("protected","Protected settings ›",function() self:external("protected") end)
-        row("back","Back",function() self:back() end)
     end
     if self.error then title=title.."\n"..self.error end
     if self.page~="permission" then
-        row("recovery","Companion settings › · recovery route",function() self:external("recovery") end)
-        row("close","Back to book",function() self:close() end)
+        row("protected","Protected settings ›",function() self:external("protected") end)
+        row("back","Back",function() self:back() end)
     end
     assert(#buttons<=9,"Reader companion display budget exceeded")
     local heading,subtitle=title:match("^([^\n]+)\n(.*)$")
-    local display={}
+    local display,footer={},{}
     for _,line in ipairs(buttons) do
         local b=line[1]
         local name,sub=b.text:match("^([^\n]+)\n(.*)$")
-        display[#display+1]={id=b.id,text=name or b.text,sub=sub,callback=b.callback,enabled=b.enabled,h=Device.screen:getWidth()/702*64}
-        if self.page=="helpers" then for _,helper in ipairs(s.helpers or {}) do
-            if b.id==helper.id then display[#display].text=helper.label;display[#display].toggle=helper.on end
-        end end
+        if b.id=="protected" or b.id=="back" then footer[#footer+1]=b
+        else
+            local entry={id=b.id,text=name or b.text,sub=sub,callback=b.callback,enabled=b.enabled,h=Device.screen:getWidth()/702*64}
+            for _,helper in ipairs(s.helpers or {}) do
+                if b.id==helper.id then
+                    entry.text=helper.label;entry.detail=helper.on and "On" or "Off"
+                    if self.page=="helpers" then entry.sub=helper.detail end
+                end
+            end
+            display[#display+1]=entry
+        end
     end
     local permission=self.page=="permission"
     local scale=Device.screen:getWidth()/702
     local dialog=SettingsPage.new{title=heading or title,subtitle=nil,intro=subtitle,
-        rows=permission and {} or display,modal=true,bottom=true,w=Device.screen:getWidth(),
+        rows=permission and {} or display,modal=true,bottom=true,fitContent=not permission,w=Device.screen:getWidth(),
         h=math.min(Device.screen:getHeight(),scale*(permission and 440 or (#display*64+210))),onBack=function() self:back() end,
         content=function(K,c,w,y,put)
             if permission then
@@ -125,6 +130,12 @@ function V:paint()
                 put(K.button{text="Open Android settings",w=p(280),callback=buttons[1][1].callback},p(24),y,"permission")
                 put(K.button{text="Later",w=p(100),variant="outline",callback=buttons[2][1].callback},p(320),y,"later")
                 K.label(c,"No permission is accepted automatically.",p(24),y+p(75),w-p(48),"small")
+            else
+                local p=K.px
+                for i,b in ipairs(footer) do
+                    put(K.button{text=b.text,w=p(i==1 and 240 or 100),variant="outline",enabled=b.enabled,callback=b.callback},p(i==1 and 24 or 280),y+p(20),b.id)
+                end
+                return y+p(72)
             end
         end}
     dialog.buttons=buttons;dialog.focus=focus

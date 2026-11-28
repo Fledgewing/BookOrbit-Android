@@ -23,11 +23,10 @@ def review(d, out):
     def clean():
         d.command('if AccountView.active then AccountView.active:close() end;if ReaderCompanionView.active then ReaderCompanionView.active:close() end;while SettingsView.active do local v=SettingsView.active;v.onBack=nil;v:close() end;return true')
     clean()
-    time.sleep(2)
-    d.command('local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then click("Later") end;Library.companion.setupLater();return true')
-    step('settings-root', 'Library.companion.setupLater();plugin:showSettings()')
-    # Exercise actual native hit geometry once, rather than only calling callbacks.
-    d.shell('input', 'tap', '350', '240')
+    step('settings-root', 'plugin:showSettings();plugin:maybeSetupPrompt("resume");assert(top()==SettingsView.active.dialog)')
+    # Use the actual account-row geometry, including any non-blocking setup row.
+    point=d.command('local v=SettingsView.active;local id=v.make()[1].text=="Companion setup" and "setting-2" or "setting-1";local b=v.dialog:getButtonById(id);return math.floor(b.dimen.x+b.dimen.w/2)..","..math.floor(b.dimen.y+b.dimen.h/2)')
+    x,y=point.split(',');d.shell('input','tap',x,y)
     d.command('assert(AccountView.active and top()==AccountView.active.dialog);return true')
     clean()
     for group in ('sync', 'library', 'reading', 'home', 'sleep', 'updates', 'about'):
@@ -71,7 +70,12 @@ def review(d, out):
     while d.command('local r=SettingsView.active.make()[1];return r.pending and "pending" or "ready"') != 'ready':
         if time.monotonic() > deadline: raise TimeoutError('Local goal did not publish')
         time.sleep(.2)
-    step('goal-editor', 'SettingsView.active.dialog:getButtonById("setting-1"):onKitTap()')
+    d.command('Library.localReadingGoal("12",function() Library.retry() end);return true')
+    deadline=time.monotonic()+40
+    while d.command('local p=Library.paint("settings-reading-statistics");local r=p:localReading();p:flush();return r.target==12 and "ready" or "pending"')!='ready':
+        if time.monotonic()>deadline:raise TimeoutError('Current goal 12 did not publish')
+        time.sleep(.2)
+    step('goal-editor', 'SettingsView.active:paint();SettingsView.active.dialog:getButtonById("setting-1"):onKitTap();assert(top():getButtonById("goal-number").text=="12")')
     step('goal-keyboard', 'top():getButtonById("goal-number"):onKitTap()')
     d.command('local input;for _,w in ipairs(UI._window_stack) do if w.widget.setInputText then input=w.widget end end;assert(input and input.input_type=="number");input:setInputText("12");input.buttons[1][2].callback();return true')
     step('goal-number', 'assert(top():getButtonById("goal-save"));top():getButtonById("goal-save"):onKitTap()')

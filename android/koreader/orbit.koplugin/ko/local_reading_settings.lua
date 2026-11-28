@@ -12,6 +12,9 @@ function LocalReadingSettings.open()
         view:paint()
     end
     local function edit(snapshot)
+        local paint=Library.paint("settings-reading-statistics")
+        local current=paint:localReading();paint:flush()
+        if not current.pending and not current.error then snapshot=current end
         local value=snapshot.target and tostring(snapshot.target) or ""
         local goal
         local function close() if goal then UIManager:close(goal);goal=nil end end

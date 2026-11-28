@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Owned Android forms reuse ButtonDialog, the native keyboard and Library's bounded worker port.
+-- Owned account pages and forms use the kit, native keyboard and bounded Library worker port.
 AccountView = {}
 function AccountView.read(paint)
     local own=not paint
@@ -91,22 +91,33 @@ function AccountView:paint()
     Budgets.get("screens","account-" .. self.page)
     local buttons={}
     local focus=1
-    local function row(id,text,action,enabled)
+    local function row(id,text,action,enabled,options)
         buttons[#buttons+1]={{id=id,text=text,align="left",enabled=enabled~=false,callback=action or function() end}}
+        for k,v in pairs(options or {}) do buttons[#buttons][1][k]=v end
         if id==self.focus then focus=#buttons end
     end
     local a=self.state
     local title="Your server"
     if self.page=="summary" then
-        title=title .. "\n" .. AccountPlan.summary(a)
-        if a.signedIn and a.server then row("address",a.server,nil,false) end
-        row("account",a.signedIn and "Sign in again…" or "Sign in to your server",function() self:form("account") end)
-        if a.signedIn then row("signout","Sign out · Also removes the logins your account set up",function() self.page="signout"; self.focus="keep"; self:paint() end) end
-        row("logins","Logins",nil,false)
-        for _,k in ipairs({"sync","opds"}) do
-            row(k,AccountPlan.names[k] .. " · " .. AccountPlan.status(AccountPlan.login(a,k)),function() self:form(k) end)
+        if a.signedIn then
+            row("identity","Signed in as",nil,false,{info=true,detail=a.username or "your account"})
+            row("address","Your server",nil,false,{info=true,detail=a.server or "Not saved"})
+            row("connection","Connection",nil,false,{info=true,detail=a.connected==true and "Connected" or "Signed in"})
+            row("configured","What BookSync set up",nil,false,{info=true,sub="Sync: "..AccountPlan.status(AccountPlan.login(a,"sync")).." · OPDS: "..AccountPlan.status(AccountPlan.login(a,"opds"))})
+            row("account","Sign in again…",function() self:form("account") end,true,{sub="If your password changed or sync says you are signed out"})
+            row("signout","Sign out",function() self.page="signout"; self.focus="keep"; self:paint() end,true,{sub="Asks first. Keeps your downloaded books and progress"})
+        else
+            row("account","Sign in to your server",function() self:form("account") end,true,{sub="Once, with your server account. BookSync then sets up sync and OPDS for you"})
+            row("until","Until you sign in",nil,false,{info=true,sub=AccountPlan.login(a,"sync").available and "Stats come from this reader only. Your own sync login still works." or "Stats come from this reader only, and your place doesn’t sync"})
         end
-        row("close","Close",function() self:close() end)
+        if a.signedIn or AccountPlan.login(a,"sync").set or AccountPlan.login(a,"opds").set then
+            row("logins","LOGINS",nil,false,{info=true,section=true})
+            for _,k in ipairs({"sync","opds"}) do
+                if a.signedIn or AccountPlan.login(a,k).set then
+                    row(k,AccountPlan.names[k],function() self:form(k) end,true,{detail=AccountPlan.status(AccountPlan.login(a,k))})
+                end
+            end
+        end
     elseif self.page=="signout" or self.page=="remove" then
         local out=self.page=="signout"
         title=out and "Sign out of your server?\n" .. AccountPlan.signout(a) or
@@ -148,17 +159,12 @@ function AccountView:paint()
         local b=line[1]
         local head,sub=b.text:match("^(.-) · (.*)$")
         local name,value=b.text:match("^(.-): (.+)$")
-        display[#display+1]={id=b.id,text=name or head or b.text,sub=sub,detail=value,keyboard=self.page=="form" and (b.id=="server" or b.id=="username" or b.id=="password"),callback=b.enabled and b.callback or nil,enabled=b.enabled}
+        display[#display+1]={id=b.id,text=name or head or b.text,sub=b.sub or sub,detail=b.detail or value,section=b.section,keyboard=self.page=="form" and (b.id=="server" or b.id=="username" or b.id=="password"),callback=b.enabled and b.callback or nil,enabled=b.enabled}
     end
-    if self.page=="summary" and a.signedIn then
-        for i=#display,1,-1 do
-            local r=display[i]
-            if r.id=="address" then r.text="Your server";r.detail=a.server;r.enabled=true
-            elseif r.id=="close" then table.remove(display,i) end
-        end
-        table.insert(display,2,{text="What BookSync set up",sub="Sync: "..AccountPlan.status(AccountPlan.login(a,"sync")).." · OPDS: "..AccountPlan.status(AccountPlan.login(a,"opds"))})
-        table.insert(display,1,{text="Connection",detail=a.connected==true and "Connected" or "Signed in"})
-        table.insert(display,1,{text="Signed in as",detail=a.username or "reader"})
+    for i,line in ipairs(buttons) do
+        local b=line[1]
+        if b.info then display[i].callback=nil;display[i].enabled=true end
+        if b.section then display[i].h=Device.screen:getWidth()/702*36 end
     end
     local modal=self.page~="summary"
     local heading,subtitle=title:match("^([^\n]+)\n(.*)$")
@@ -175,7 +181,7 @@ function AccountView:paint()
     end
     local scale=Device.screen:getWidth()/702
     local dialog=SettingsPage.new{title=heading or title,subtitle=modal and self.page=="form" and (self.kind=="account" and "Use your server account, once. BookSync then sets up sync and OPDS for you." or subtitle) or (not modal and "BookSync settings" or nil),
-        modal=modal,startY=self.page=="form" and scale*86 or nil,w=modal and scale*580 or nil,intro=modal and self.page~="form" and subtitle or nil,h=modal and scale*(#display*52+194+(self.page~="form" and 170 or 0)+(self.error and 35 or 0)) or nil,rows=display,onBack=function() self:back() end,
+        modal=modal,fitContent=self.page=="result",startY=self.page=="form" and scale*86 or self.page=="result" and scale*64 or nil,w=modal and scale*580 or nil,intro=modal and self.page~="form" and subtitle or nil,h=modal and self.page~="result" and scale*(#display*52+194+(self.page~="form" and 170 or 0)+(self.error and 35 or 0)) or nil,rows=display,onBack=function() self:back() end,
         content=function(K,c,w,y,put)
             if modal then
                 local p=K.px
@@ -189,6 +195,7 @@ function AccountView:paint()
                     if r.enabled==false then button[1].background=K.tile;button[1].color=K.rule end
                     put(button,p(24)+(i-1)*(aw+p(12)),y+p(self.error and 65 or 30),r.id)
                 end
+                return y+p(self.error and 65 or 30)+p(52)
             end
         end}
     dialog.buttons=buttons

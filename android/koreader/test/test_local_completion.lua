@@ -38,7 +38,8 @@ return function(test,eq,ok,here,Cache)
         paints=0
         local view={alive=true,dialog={},paint=function() paints=paints+1 end}
         local e=setmetatable({Library={},SettingsView={},UIManager={}},{__index=_G})
-        e.Library.paint=function() return {localReading=function() return {year=2026,target=12,goal_label='Off'} end,flush=function() end} end
+        e.currentTarget=12
+        e.Library.paint=function() return {localReading=function() return {year=2026,target=e.currentTarget,goal_label='Off'} end,flush=function() end} end
         e.Library.localReadingGoal=function(_,done) pending=done end
         e.SettingsView.open=function(_,make) view.make=make;top=view.dialog;return view end
         e.UIManager.setDirty=function() e.dirty=(e.dirty or 0)+1 end
@@ -56,12 +57,13 @@ return function(test,eq,ok,here,Cache)
             return {new=function(_,o) o.getInputText=function() return '12' end;o.onShowKeyboard=function() end;return o end}
         end
         setfenv(assert(loadfile(root..'ko/local_reading_settings.lua')),e)()
-        e.LocalReadingSettings.open();view.make()[1].callback();form.controls["goal-save"].callback()
+        e.LocalReadingSettings.open();view.make()[1].callback();eq(form.controls["goal-number"].text,"12");form.controls["goal-save"].callback()
         eq(top,view.dialog)
         local reader={};top=reader
         pending({goal_label='2026 · 12 books · This reader only',target=12})
         eq(top,reader);eq(paints,0)
         top=view.dialog;view.make()[1].callback();form.controls["goal-off"].callback()
+        e.currentTarget=nil
         pending({goal_label='Off · This reader only'})
         eq(paints,1)
         view.make()[1].callback();local editor=form;form.controls["goal-save"].callback()

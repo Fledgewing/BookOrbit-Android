@@ -113,4 +113,19 @@ return function(here,test,eq,ok)
         e.Library.isForeground=function() return false end
         local count=m.shown;e.done({ok=true});eq(m.shown,count)
     end)
+    test("reader companion: navigation is a two-button footer and helper states are values",function()
+        local e,V=world()
+        for _,page in ipairs({"status","helpers"}) do
+            local v=V.open(page);local footer={}
+            for _,r in ipairs(v.dialog.rows) do
+                ok(r.id~="back" and r.id~="close" and r.id~="protected" and r.id~="recovery")
+                if r.id=="wifi" or r.id=="sleep" or r.id=="screen" then eq(r.detail,"Off") end
+            end
+            local K={px=function(n) return n end,button=function(o) return o end}
+            eq(v.dialog.content(K,{},1200,100,function(b,_,_,id) footer[#footer+1]=id end),172)
+            eq(#footer,2);eq(footer[1],"protected");eq(footer[2],"back");ok(v.dialog.fitContent)
+            v:close()
+        end
+    end)
+
 end

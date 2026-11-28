@@ -143,4 +143,19 @@ return function(test,eq,ok,E,W,Widget)
         end)
     end)
 
+    test("Settings setup: pending setup is an owned row and delayed prompts stay quiet",function()
+        withUI(function()
+            local owner=setmetatable({},{__index=E.OrbitAndroid})
+            local previous=E.Shared.setup_needed
+            E.Shared.refresh=function() end;E.Shared.setup_needed=9
+            local old=Widget:new{ok_text="Fix now"};E.OrbitAndroid.setup_dialog=old;E.UIManager:show(old)
+            local v=owner:showSettings()
+            eq(E.OrbitAndroid.setup_dialog,nil);eq(v.make()[1].text,"Companion setup");eq(v.make()[1].detail,"9 steps")
+            local count=#W.shown
+            owner:maybeSetupPrompt("start");owner:maybeSetupPrompt("resume")
+            eq(#W.shown,count);eq(W.shown[#W.shown],v.dialog)
+            E.Shared.setup_needed=previous
+        end)
+    end)
+
 end

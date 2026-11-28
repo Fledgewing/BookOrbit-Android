@@ -37,7 +37,7 @@ function SettingsView:paint(attempt)
     assert(#items<=(Budgets.get("screens",self.screen).displayRows or Budgets.get("screens",self.screen).rows),"Settings display row budget exceeded")
     -- Reserve the title/navigation and a tall mode card. Every action is at least 50 px.
     local screen=Device.screen
-    local pageSize=self.screen=="settings" and 8 or self.screen=="settings-sync" and 8 or math.max(1,math.min(10,math.floor((screen:getHeight()-screen:getWidth()/702*160)/(screen:getWidth()/702*73))))
+    local pageSize=self.screen=="settings" and 9 or self.screen=="settings-sync" and 8 or math.max(1,math.min(10,math.floor((screen:getHeight()-screen:getWidth()/702*160)/(screen:getWidth()/702*73))))
     self.offset=math.min(self.offset,math.max(0,math.floor((#items-1)/pageSize)*pageSize))
     if self.choiceFocus then
         self.choiceFocus=nil
@@ -102,10 +102,11 @@ function SettingsView:paint(attempt)
             local head,sub=text:match("^([^\n]+)\n(.*)$")
             local name,value=(head or text):match("^(.-): (.+)$")
             display[#display+1]={id=b.id,text=name or head or text,sub=sub or (items[self.offset+#display+1] or {}).sub,icon=(items[self.offset+#display+1] or {}).icon,detail=value,
-                enabled=b.enabled,callback=b.callback,h=screen:getWidth()/702*(self.screen=="settings" and 105 or 73)}
-            if self.screen=="settings" and #display==1 then display[#display].h=screen:getWidth()/702*109.5 end
+                enabled=b.enabled,callback=b.callback,h=screen:getWidth()/702*(self.screen=="settings" and (#items>8 and 85 or 105) or 73)}
+            if self.screen=="settings" and #items<=8 and #display==1 then display[#display].h=screen:getWidth()/702*109.5 end
             local row=items[self.offset+#display]
             if row and not row.callback and not row.card_action and not row.sub_item_table and not row.sub_item_table_func then display[#display].callback=nil;display[#display].enabled=true end
+            if row and row.detail then display[#display].detail=row.detail end
             if row and row.sub then display[#display].sub=row.sub end
             if row and row.checked_func and not row.radio then display[#display].toggle=row.checked_func();display[#display].text=(head or text):gsub("^● ",""):gsub("^○ ","") end
             if row and row.radio then display[#display].detail=row.checked_func() and "●" or "○" end

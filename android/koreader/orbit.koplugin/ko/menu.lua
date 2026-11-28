@@ -310,8 +310,10 @@ function OrbitAndroid:menuItems()
                     else self:showSettings("library") end
                 end)
             end
-            local out = {action("Storage · "..(storage.free_label or "Space unavailable").." ›",function() openStorage() end),
-                action("Download folder · "..(storage.folder_label or "Not selected").." ›",function() openStorage("folder") end)}
+            local out = {action("Storage",function() openStorage() end),
+                action("Download folder",function() openStorage("folder") end)}
+            out[1].detail=storage.free_label and (storage.free_label.." free") or "Space unavailable"
+            out[2].detail=storage.folder_label or "Not selected"
             for _,row in ipairs(rows({"keep_copies_current", "offline_cache", "mirror_covers"})) do out[#out+1]=row end
             out[#out+1] = action("Full refresh", function() Library.fullRefresh() end)
             return out
@@ -435,6 +437,7 @@ end
 
 -- The owned Home and reader gear share the existing Settings rows and PIN policy.
 function OrbitAndroid:showSettings(group)
+    if OrbitAndroid.setup_dialog then UIManager:close(OrbitAndroid.setup_dialog);OrbitAndroid.setup_dialog=nil end
     Library.settings.refresh("menu")
     Library.refreshDevice()
     local items={}
@@ -473,6 +476,8 @@ function OrbitAndroid:showSettings(group)
         subtitles.updates=SettingsUI.value(Library.settings.schema().byKey.update_channel,Library.settings.read("update_channel")).." channel · "..PATCH_VERSION
         if battery.display and battery.display.level and battery.display.level:find("%d") then subtitles.sync=SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()).." · "..battery.display.level.." battery" end
         local rows={}
+        local setup=tonumber(Library.settings.status("setup_needed")) or 0
+        if setup>0 then rows[#rows+1]={text="Companion setup",sub="Finish configuring this reader",detail=tostring(setup).." steps",icon="info",callback=Library.companion.openSetup} end
         for _,item in ipairs(items) do
             local id=item.settings_group
             rows[#rows+1]={text=item.text,icon=icons[id],sub=subtitles[id],callback=id and function() self:showSettings(id) end or item.callback}

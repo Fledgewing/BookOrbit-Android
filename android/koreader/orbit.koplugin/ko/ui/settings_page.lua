@@ -64,13 +64,13 @@ function SettingsPage.new(o)
         local detail=row.detail
         local dw=p(25)
         if detail then
-            local measure=K.text{text=detail,w=rw*.48,size="small"}
+            local measure=K.text{text=detail,w=rw*.48,size="small",bold=row.callback~=nil and not row.keyboard}
             dw=math.min(rw*.48,measure:getSize().w+p(8))
             if measure.free then measure:free() end
         end
         local labelY=row.sub and (rh-p(42))/2 or (rh-p(23))/2
         if row.card then labelY=p(15) end
-        K.label(rc,row.text,x,labelY,rw-x-dw-p(18),row.size or (o.root and "body" or "small"),{bold=row.bold~=false,serif=row.serif,muted=row.enabled==false})
+        K.label(rc,row.text,x,labelY,rw-x-dw-p(row.callback and detail and 43 or 18),row.size or (row.section and "caption" or o.root and "body" or "small"),{bold=row.bold~=false,serif=row.serif,muted=row.enabled==false})
         if row.card then
             local lines={};for line in (row.sub or ""):gmatch("[^\n]+") do lines[#lines+1]=line end
             K.put(rc,K.segments{w=rw-p(24),items={"Battery saver","Balanced","Always current"},selected=({["Battery saver"]=1,Balanced=2,["Always up to date"]=3})[lines[1]],onChange=row.cardChange},p(12),p(42))
@@ -79,9 +79,10 @@ function SettingsPage.new(o)
         if row.toggle~=nil then
             K.put(rc,K.toggle{value=row.toggle,enabled=row.enabled,onChange=function() if row.callback then row.callback() end end},rw-p(56),(rh-p(32))/2)
         elseif detail then
-            local inset=row.keyboard and p(25) or 0
-            K.label(rc,detail,rw-dw-inset,(rh-p(23))/2,dw,"small",{muted=row.enabled==false})
-            if row.keyboard then K.put(rc,icon("settings-keyboard",p(17)),rw-p(17),(rh-p(17))/2) end
+            local inset=(row.keyboard or row.callback) and p(25) or 0
+            K.label(rc,detail,rw-dw-inset,(rh-p(23))/2,dw,"small",{bold=row.callback~=nil and not row.keyboard,muted=row.enabled==false})
+            if row.keyboard then K.put(rc,icon("settings-keyboard",p(17)),rw-p(17),(rh-p(17))/2)
+            elseif row.callback then K.put(rc,icon("settings-chevR",p(17)),rw-p(17),(rh-p(17))/2) end
         elseif row.callback and row.radio==nil and not row.card then K.put(rc,icon("settings-chevR",p(17)),rw-p(20),(rh-p(17))/2) end
         if row.card then rc=K.frame(rc,{w=rw,h=rh,radius=p(16),border=p(1),color=K.light}) end
         local hit=K.hit(rc,{w=rw,h=rh,text=row.text,callback=row.callback,enabled=row.enabled})
@@ -90,7 +91,15 @@ function SettingsPage.new(o)
         if row.rule~=false then rule(y+rh) end
         y=y+rh
     end
-    if o.content then o.content(K,c,w,y,put) end
+    local contentEnd=o.content and o.content(K,c,w,y,put)
+    if o.fitContent then
+        h=math.min(sh,(contentEnd or y)+p(24))
+        -- OverlapGroup caches its size at init. Build a canvas at the measured height
+        -- so Center/BottomContainer sees the same bounds that the frame paints.
+        local fitted=K.canvas(w,h)
+        for _,child in ipairs(c) do fitted[#fitted+1]=child end
+        c=fitted
+    end
     local Input=require("ui/widget/container/inputcontainer"):extend{name="booksync_settings_page",covers_fullscreen=not o.modal,modal=o.modal}
     function Input:onClose() if o.onBack then o.onBack() end;return true end
     function Input:getButtonById(id) return widgets[id] end
