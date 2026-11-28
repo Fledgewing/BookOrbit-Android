@@ -568,7 +568,7 @@ end
 -- Explicit background acquisition; paints consume local references from their snapshots.
 function Library.acquireCover(key,done,wanted)
     return command("covers.acquire",function()
-        return LibraryAdapter.command("covers.acquire",{key=key},function(result)
+        return LibraryAdapter.command("covers.acquire",{key=key,owner=LibraryAdapter.owner()},function(result)
             if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover",owner=LibraryAdapter.owner()}) end
             if done then done(result) end
         end,{kind="owner",wanted=wanted})
@@ -759,7 +759,7 @@ function Library.prepareCardCover(row,done,visible)
     local task=function()
         if not valid() then return end
         if row.cover_path and deliver(row.cover_path) then return end
-        if not row.key or row.local_path and row.key:match("^device:") then return end
+        if not row.key then return end
         local key="card-cover:"..owner..row.key
         local last=LibraryAdapter.sent[key]
         if last and now_s()-last<30 then return end
