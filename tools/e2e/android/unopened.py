@@ -18,6 +18,7 @@ def review(device,out):
         while device.command(code)!="ready":
             if time.monotonic()>end:raise TimeoutError('Unopened projection not published')
             time.sleep(.2)
+    wait('return LibraryAdapter.owner()=="emulator-fixture" and "ready" or "pending"')
     root=Path(__file__).resolve().parents[3]
     spec=importlib.util.spec_from_file_location('unopened_kit',root/'tools/e2e/kit.py')
     kit=importlib.util.module_from_spec(spec);sys.modules[spec.name]=kit;spec.loader.exec_module(kit)
