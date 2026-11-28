@@ -3,8 +3,9 @@
 BookList = {PAGE_SIZE=6, categories={"builtin","lists","series","authors","collections","libraries"},
     captions={"None","Date added","Progress","Author"}, styles={"Cover shelf","Rows with progress"},
     sorts={"List order","Title","Author","Last read"},
-    names={upnext="Up next in series",year="Finished this year",pickup="Pick back up",custom="Custom filter",recent="Recently added",wtr="Want to read",reading="Reading now",finished="All finished",device="On this device"},
+    names={unopened="Unopened on this reader",upnext="Up next in series",year="Finished this year",pickup="Pick back up",custom="Custom filter",recent="Recently added",wtr="Want to read",reading="Reading now",finished="All finished",device="On this device"},
     presets={
+        unopened={title="Unopened on this reader",src="unopened",style=0,sort=0,cap=0},
         upnext={title="Up next in series",src="upnext",style=0,sort=0,cap=3},
         year={title="Finished this year",src="year",style=0,sort=0,cap=0},
         pickup={title="Pick back up",src="pickup",style=0,sort=0,cap=3},
@@ -62,5 +63,5 @@ end
 function BookList.source(cfg)
     local kind,key=cfg.src:match("^(%a+):(.+)$")
     if kind then return {kind=kind=="year" and "finished-year" or kind,key=key} end
-    return cfg.source or ({upnext="series-next",year={kind="finished-year",key="current"},pickup="pick-back-up",recent="recently-added",wtr="want-to-read",reading="reading",finished="finished",device="on-device",custom="library/all"})[cfg.src]
+    return cfg.source or ({unopened="unopened",upnext="series-next",year={kind="finished-year",key="current"},pickup="pick-back-up",recent="recently-added",wtr="want-to-read",reading="reading",finished="finished",device="on-device",custom="library/all"})[cfg.src]
 end

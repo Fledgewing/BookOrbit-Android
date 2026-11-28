@@ -66,7 +66,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
             val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
             val category=request["category"] as? String ?: "builtin"
             val available=when(category) {
-                "builtin" -> definitions.map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count,"default_sort" to 0.takeIf { src=="pickup" }) }
+                "builtin" -> definitions.map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count,"default_sort" to 0.takeIf { src=="pickup" }) }+listOf(mapOf("src" to "unopened","title" to "Unopened on this reader","count" to null,"default_sort" to 0))
                 "authors","series" -> {
                     val kind=if(category=="authors") "author" else "series"
                     val counts=books.flatMap { book -> (book[if(category=="authors") "authors" else "series"] as? List<*>)?.filterIsInstance<String>().orEmpty().distinct() }.groupingBy { it }.eachCount()

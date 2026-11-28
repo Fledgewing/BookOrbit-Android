@@ -6782,6 +6782,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-unopened",
+      "feature": "Local Unopened list and Gathering dust pick (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Conservative local opening-record absence, daily file pick, age/count/size and persistent Next.",
+          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UNOPENED.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Local unopened evidence follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and native-history acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UNOPENED.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Local unopened evidence follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and native-history acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UNOPENED.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Local unopened evidence follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and native-history acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UNOPENED.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

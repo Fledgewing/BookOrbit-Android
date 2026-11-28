@@ -217,7 +217,7 @@ function HomeHost.create()
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
             local snapshotAccount=caps.account
-            if WidgetRegistry[p.widget].localOnly then snapshotAccount=nil end
+            if WidgetRegistry[p.widget].localOnly or (p.settings or {}).src=="unopened" or (p.settings or {}).source=="unopened" then snapshotAccount=nil end
             local snapshot=HomeHostPlan.snapshot(result,snapshotAccount)
             local interval=WidgetRegistry[p.widget].refreshSeconds
             if interval then refreshDelay=math.min(refreshDelay or interval,interval) end
@@ -316,7 +316,7 @@ function HomeHost.create()
         elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action=="control-rotate" then
             UIManager:close(self);Library.localWidgetAction(action,row);return true
-        elseif action:match("^control%-") or action == "discover-another" or action == "word-lookup" or action == "light-down" or action == "light-up" then
+        elseif action=="dust-another" or action:match("^control%-") or action == "discover-another" or action == "word-lookup" or action == "light-down" or action == "light-up" then
             Library.localWidgetAction(action,row)
             if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()

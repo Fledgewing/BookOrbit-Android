@@ -210,11 +210,11 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             val definitions=listOf(Triple("custom","Custom filter","library/all"),Triple("recent","Recently added","recently-added"),
                 Triple("wtr","Want to read","want-to-read"),Triple("reading","Reading now","reading"),
-                Triple("finished","All finished","finished"),Triple("device","On this device","on-device"),Triple("pickup","Pick back up","pick-back-up"),Triple("upnext","Up next in series","series-next"))
+                Triple("finished","All finished","finished"),Triple("device","On this device","on-device"),Triple("pickup","Pick back up","pick-back-up"),Triple("upnext","Up next in series","series-next"),Triple("unopened","Unopened on this reader","unopened"))
                 .filter { (src,_,_) -> !(src=="wtr" && a["allow_wtr"]==false || src=="device" && a["allow_device"]==false) }
             val builtins=definitions.map { (src,title,source) ->
-                val count=project(owner,mapOf("op" to "counts","source" to source,"exclude_current" to (src=="reading")))
-                mapOf("src" to src,"title" to title,"default_sort" to 0.takeIf { src in setOf("pickup","upnext") },"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
+                val count=if(src=="unopened") emptyMap() else project(owner,mapOf("op" to "counts","source" to source,"exclude_current" to (src=="reading")))
+                mapOf("src" to src,"title" to title,"default_sort" to 0.takeIf { src in setOf("pickup","upnext","unopened") },"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
             }
             val options=builtins+FinishedYears.options(store,owner,clock())
             val rows=options.drop(offset).take(limit)

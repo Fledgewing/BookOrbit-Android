@@ -1,5 +1,15 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 return function(test,eq,ok,E,W,withHost)
+    test('unopened: daily Next persists through Library and local rows cannot forge account actions',function()
+        local old=E.S.home_dust_pick;local retry=E.Library.retry;E.Library.retry=function() end
+        E.S.home_dust_pick={day='2026-11-27',skip=2}
+        local n=E.Library.localWidgetNeed('dust');eq(n.op,'local.dust');eq(n.day,'2026-11-27');eq(n.pick,2)
+        ok(E.Library.localWidgetAction('dust-another',{day=n.day,pick=n.pick}));eq(E.S.home_dust_pick.skip,3)
+        eq(E.Library.localWidgetAction('dust-another',{day=n.day,pick=0/0}),false)
+        local actions=E.Library.cardActions({key='device:book:fixture',local_path='/Books/Fixture.epub',status='unknown',detail_available=false,status_write=false,can_remove=false},{status={write=true},removeDownload=true})
+        for _,a in ipairs(actions) do if a.id=='details' or a.id=='status' or a.id=='remove' then eq(a.enabled,false) elseif a.id=='book' then eq(a.enabled,true) end end
+        E.S.home_dust_pick=old;E.Library.retry=retry
+    end)
     test('local decor: bounded immutable cards use the real font probe and explicit missing state',function()
         withHost(function()
             local requireSaved=E.require;local probes=0;local present=true
