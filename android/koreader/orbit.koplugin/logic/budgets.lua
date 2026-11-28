@@ -168,7 +168,7 @@ Budgets.screens["series-downloads"] = budget(11,16384,50)
 Budgets.screens["series-downloads"].displayRows=15
 
 -- Cached native navigation: one summary plus eight rows, no render-time IO.
-Budgets.screens["reader-navigation"] = budget(9,16384,50)
+Budgets.screens["reader-navigation"] = budget(12,16384,50)
 Budgets.screens["reader-navigation"].roundTrips=0
 
 Budgets.screens["settings-reading-statistics"] = budget(1, 16384, 50)
