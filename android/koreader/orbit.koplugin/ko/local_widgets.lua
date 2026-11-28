@@ -57,6 +57,14 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
                 HomeWidgets.text(c,(d.code or "").." · "..(font or d.source or "Font"),pad,h-pad-scale(12),w-2*pad,10)
             else HomeWidgets.text(c,"Glyph unavailable in the interface font",pad,pad+scale(36),w-2*pad,13) end
         end
+    elseif p.widget=="next-stop" and plan.ready then
+        local d=snapshot.data or {}
+        HomeWidgets.text(c,d.current,pad,pad+scale(26),w-2*pad,11)
+        HomeWidgets.text(c,d.next,pad,pad+scale(44),w-2*pad,12,false,true)
+        HomeWidgets.text(c,d.to_next,pad,pad+scale(64),w-2*pad,16)
+        HomeWidgets.text(c,d.to_end,pad,pad+scale(87),w-2*pad,11)
+        HomeWidgets.text(c,d.remaining,pad,pad+scale(104),w-2*pad,10)
+        HomeWidgets.text(c,d.source or "On this reader",pad,h-pad-scale(12),w-2*pad,9)
     elseif p.widget=="word" and plan.word then
         if p.h==1 then
             HomeWidgets.button(c,plan.word.." ›",pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("word-lookup",plan.word) end)
@@ -82,7 +90,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
+for _,id in ipairs({"next-stop","moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}

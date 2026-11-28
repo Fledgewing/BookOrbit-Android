@@ -706,3 +706,9 @@ source. Invalid/untrusted date ranges return `unavailable` with a reason, never 
 fabricated phase or sample. The plugin's Library font helper probes only the
 loaded interface face and returns its actual family; missing glyphs remain
 explicit. These operations perform no server transport or font directory scan.
+
+### Local Next stop
+
+`local.nextstop` accepts bounded cached native page/count, TOC summary and checksum.
+The companion reads local measured pace read-only and returns one row / 16 KiB.
+Unknown geometry or history remains explicit; no completion or account state is written.
