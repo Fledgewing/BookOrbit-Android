@@ -129,6 +129,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         statusOverrides=CatalogWorkflow.statusOverrides(store,owner)
         if (store.meta("owner") != owner) return mapOf("error" to "unauthorized", "items" to emptyList<Any>())
         val op = a["op"]
+        if(op=="account.badges") return AchievementSummary.read(store)
         if (op == "copies.state") {
             val state=CatalogWorkflow.load(java.io.File(store.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
             return mapOf("pending" to (state["copies"] as? List<*>).orEmpty().size,"row_count" to 1)

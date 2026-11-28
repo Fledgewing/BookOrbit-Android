@@ -745,3 +745,9 @@ Unmatched local rows explicitly disable account actions.
 host subscription. Its returned retirement function detaches the modal. Source
 pickers coalesce ready events and repaint only while visible and not reading;
 close cancels pending callbacks. No new intent or backend call is added.
+
+### Cached account badges
+
+`account.badges` returns one row / 16 KiB with earned/total, latest/date and next
+progress/threshold display fields. Missing/off/unsupported are explicit and differ
+from known zero. UI never interprets protocol fields or fetches remote artwork.
