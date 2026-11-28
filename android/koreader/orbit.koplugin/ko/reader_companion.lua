@@ -104,11 +104,20 @@ function V:paint()
         row("close","Back to book",function() self:close() end)
     end
     assert(#buttons<=9,"Reader companion display budget exceeded")
-    local dialog=require("ui/widget/buttondialog"):new{title=title,buttons=buttons,
-        width=math.min(Device.screen:getWidth()-Device.screen:scaleBySize(24),Device.screen:scaleBySize(640)),
-        tap_close_callback=function() self:close() end}
-    dialog.onClose=function() self:back();return true end
-    dialog:moveFocusTo(1,focus)
+    local heading,subtitle=title:match("^([^\n]+)\n(.*)$")
+    local display={}
+    for _,line in ipairs(buttons) do
+        local b=line[1]
+        local name,sub=b.text:match("^([^\n]+)\n(.*)$")
+        display[#display+1]={id=b.id,text=name or b.text,sub=sub,callback=b.callback,enabled=b.enabled,h=Device.screen:getWidth()/702*64}
+        if self.page=="helpers" then for _,helper in ipairs(s.helpers or {}) do
+            if b.id==helper.id then display[#display].text=helper.label;display[#display].toggle=helper.on end
+        end end
+    end
+    local dialog=SettingsPage.new{title=heading or title,subtitle=subtitle,rows=display,modal=true,
+        h=Device.screen:getWidth()/702*(#display*64+130),onBack=function() self:back() end}
+    dialog.buttons=buttons
+    dialog.buttons=buttons;dialog.focus=focus
     self:hide();self.dialog=dialog
     UIManager:show(dialog) -- gate: user action (status/helpers or valid explicit system-action return only)
     finish()

@@ -140,11 +140,44 @@ function AccountView:paint()
         if self.error[3]=="phone" then row("phone","Phone setup · on the X4 build",function() end) end
     end
     assert(#buttons<=Budgets.get("screens","account-" .. self.page).displayRows,"Account display row budget exceeded")
-    local dialog=require("ui/widget/buttondialog"):new{title=title,buttons=buttons,
-        width=math.min(Device.screen:getWidth()-Device.screen:scaleBySize(24),Device.screen:scaleBySize(640)),
-        tap_close_callback=function() self:back() end}
-    dialog.onClose=function() self:back(); return true end
-    dialog:moveFocusTo(1,focus)
+    local display={}
+    for _,line in ipairs(buttons) do
+        local b=line[1]
+        local head,sub=b.text:match("^(.-) · (.*)$")
+        local name,value=b.text:match("^(.-): (.+)$")
+        display[#display+1]={id=b.id,text=name or head or b.text,sub=sub,detail=value,callback=b.enabled and b.callback or nil,enabled=b.enabled}
+    end
+    if self.page=="summary" and a.signedIn then
+        table.insert(display,1,{text="Connection",detail=a.connected==true and "Connected" or "Signed in"})
+        table.insert(display,1,{text="Signed in as",detail=a.username or "reader"})
+    end
+    local modal=self.page~="summary"
+    local heading,subtitle=title:match("^([^\n]+)\n(.*)$")
+    if self.page=="summary" then heading="Your server" end
+    local actions={}
+    if modal then
+        local keep={}
+        for _,r in ipairs(display) do
+            if r.id=="cancel" or r.id=="save" or r.id=="done" or r.id=="keep" or r.id=="confirm" then actions[#actions+1]=r
+            else keep[#keep+1]=r end
+        end
+        display=keep
+        for _,r in ipairs(display) do r.h=Device.screen:getWidth()/702*52 end
+    end
+    local scale=Device.screen:getWidth()/702
+    local dialog=SettingsPage.new{title=heading or title,subtitle=modal and (self.kind=="account" and "Use your server account, once. BookSync then sets up sync and OPDS for you." or subtitle) or "BookSync settings",
+        modal=modal,h=modal and scale*(#display*52+190) or nil,rows=display,onBack=function() self:back() end,
+        content=function(K,c,w,y,put)
+            if modal then
+                local p=K.px
+                K.label(c,self.error and self.error[1] or "Each row opens KOReader's keyboard.",p(24),y+p(7),w-p(48),"caption",{muted=true})
+                local aw=(w-p(48)-p(12)*(#actions-1)) / math.max(1,#actions)
+                for i,r in ipairs(actions) do put(K.button{text=r.text,w=aw,h=p(52),enabled=r.enabled,
+                    variant=i==#actions and "solid" or "outline",callback=r.callback},p(24)+(i-1)*(aw+p(12)),y+p(35),r.id) end
+            end
+        end}
+    dialog.buttons=buttons
+    dialog.focus=focus
     if self.dialog then UIManager:close(self.dialog) end
     self.dialog=dialog
     UIManager:show(dialog) -- gate: user action (account form; completion requires visible initiating form)

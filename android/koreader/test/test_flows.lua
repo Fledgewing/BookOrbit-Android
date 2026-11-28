@@ -135,6 +135,7 @@ local function class(base)
 end
 local Widget = class()
 Widget.__index = Widget
+function Widget:getSize() return {w=self.width or self.max_width or self.dimen and self.dimen.w or 20,h=self.height or self.dimen and self.dimen.h or 20} end
 
 -- A tiny JNI: objects are Lua tables, method ids are names.
 local env_fns = {

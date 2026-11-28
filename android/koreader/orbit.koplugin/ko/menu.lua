@@ -441,9 +441,8 @@ function OrbitAndroid:showSettings(group)
     for _,row in ipairs(self:menuItems()) do
         if row.settings_group then items[#items+1]=row end
     end
-    -- Storage and multi-line channel choices use their owned groups. Preserve the
-    -- reader's native Reading route and the other established direct entry points.
-    if group=="library" or group=="updates" then
+    if group=="account" and not Library.settings.status("pin_locked") then return AccountView.open() end
+    if group then
         for _,row in ipairs(items) do if row.settings_group==group then
             local make=row.sub_item_table_func
             return SettingsView.open(row.text,function()
@@ -452,17 +451,17 @@ function OrbitAndroid:showSettings(group)
             end,"settings-"..group,function() self:showSettings() end)
         end end
     end
-    if group and not Library.settings.status("pin_locked") then
-        for _,row in ipairs(items) do
-            if row.settings_group==group then items=row.sub_item_table_func(); break end
-        end
-    end
     if Library.settings.status("pin_locked") then items=self:lockedMenuItems(items) end
-    items=self:settingsPresentation(items)
-    items.icon="appbar.settings"
-    local menu=require("ui/widget/touchmenu"):new{width=Device.screen:getWidth(),tab_item_table={items}}
-    UIManager:show(menu) -- gate: user action (BookSync settings)
-    return menu
+    local icons={account="settings-user",sync="sync",library="settings-download",reading="settings-type",home="home",sleep="settings-moon",updates="arrowU",about="info"}
+    local subtitles={account="Account and logins",sync=SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()),library="Storage and downloaded books",reading="Fonts, margins and reading controls",home="BookSync Home",sleep="Cover and sleep screen choices",updates=SettingsUI.installed(PATCH_VERSION),about="BookSync "..PATCH_VERSION}
+    return SettingsView.open("BookSync settings",function()
+        local rows={}
+        for _,item in ipairs(items) do
+            local id=item.settings_group
+            rows[#rows+1]={text=item.text,icon=icons[id],sub=subtitles[id],callback=id and function() self:showSettings(id) end or item.callback}
+        end
+        return rows
+    end,"settings")
 end
 
 function OrbitAndroid:addToMainMenu(menu_items)

@@ -43,6 +43,7 @@ return function(test,eq,ok,here)
         end} end
         return nativeRequire(name)
     end
+    e.SettingsPage={new=function(o) o.onClose=o.onBack;return o end}
     e.Device={screen={getWidth=function() return 700 end,scaleBySize=function(_,n) return n end}}
     e.now_s=function() return 1 end; e.log=function() end
     e.UIManager={show=function(_,d) current=d; shown[#shown+1]=d end,close=function(_,d) if current==d then current=nil end end,
