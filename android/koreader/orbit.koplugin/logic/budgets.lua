@@ -178,3 +178,13 @@ for _,id in ipairs({"reader-status","reader-helpers"}) do
     Budgets.screens[id]=budget(4,16384,50)
     Budgets.screens[id].displayRows=9
 end
+
+-- Reminder values are materialized on a lifecycle/worker boundary, never during paint.
+Budgets.screens["reminders-runtime"] = budget(9,8192,50)
+Budgets.screens["reminders-list"] = budget(9,8192,50)
+Budgets.screens["reminders-list"].displayRows=12
+Budgets.screens["reminders-list"].roundTrips=0
+Budgets.screens["reminders-editor"] = budget(8,1024,50)
+Budgets.screens["reminders-editor"].roundTrips=0
+Budgets.screens["reminders-sheet"] = budget(1,1024,50)
+Budgets.screens["reminders-sheet"].roundTrips=0

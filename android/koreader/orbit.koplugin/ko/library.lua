@@ -1120,3 +1120,11 @@ function Library.companion.command(args,done)
         done(result)
     end,{kind="device"})
 end
+
+-- The reminder service uses this fixed device-local port; no arbitrary adapter operation.
+function Library.remindersCommand(op,args,done)
+    assert(({draft=true,list=true,retry=true,runtime=true,add=true,edit=true,setEnabled=true,delete=true,claimDue=true,respond=true,sleep=true})[op],"Unknown reminder operation")
+    return command("reminders."..op,function()
+        return deviceCommand("reminders."..op,args,function() end,done)
+    end)
+end

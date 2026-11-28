@@ -67,6 +67,7 @@ end
 -- Back (ReaderBack:onBack, readerback.lua:117), frontlight (DeviceListener:onToggleFrontlight,
 -- devicelistener.lua:175), and the patch's own Home and Sync and sleep.
 function Clicks.run(action, code)
+    if Library.reminders and Library.reminders.sheet then Library.reminders.input("dismiss");return end
     local ReaderUI = require("apps/reader/readerui")
     local ui = ReaderUI.instance or liveUI()
     log("clicker: key", code, "->", action)

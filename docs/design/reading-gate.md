@@ -134,3 +134,14 @@ For initial entry to that existing control, the explicit editor action supplies
 its visible origin. The same frontmost/not-reading checks apply; catalog notice
 suppression cannot disable a control the user is opening from the editor. An
 automatic job has no such visible originating action.
+
+## Claimed reminder presentation (approved 2026-11-27)
+
+The additional `Gate.reminder` type accepts only a current Library-issued claim.
+Both bedtime and eye-rest sheets recheck owner generation, revision, visibility,
+sleep and modal state immediately before drawing. Eye rest also requires the page;
+bedtime may cover Home or a reader-opened menu. Hidden/sleeping always deny.
+The companion evaluates bounded local values; it never shows an Activity or notification.
+Ordinary `Gate.show`, notices, updates, network and restart negatives are unchanged.
+A reminder draw never drains ordinary pending work. Input dismissal is consumed;
+only a fresh explicit action can Sleep or Turn off. See [reminder rules](reminders.md).

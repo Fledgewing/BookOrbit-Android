@@ -17,6 +17,7 @@
 key_wrappers = setmetatable({}, { __mode = "k" })
 
 function Clicks.handleKey(self, ev, stock)
+    if Library.reminders and Library.reminders.rawKey(self,ev) then return end
     local acts = ev and Clicks.map[ev.code]
     local result
     if acts and Clicks.ownPath(Channel.up, Channel.service_on) then

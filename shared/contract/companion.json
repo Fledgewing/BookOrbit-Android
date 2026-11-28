@@ -554,5 +554,29 @@
       "leave_out",
       "jobs"
     ]
+  },
+  "reminders": {
+    "version": 1,
+    "lifetime": "device-local; independent of accounts and catalog revisions",
+    "operations": [
+      "reminders.draft",
+      "reminders.list",
+      "reminders.retry",
+      "reminders.runtime",
+      "reminders.add",
+      "reminders.edit",
+      "reminders.setEnabled",
+      "reminders.delete",
+      "reminders.claimDue",
+      "reminders.respond",
+      "reminders.sleep"
+    ],
+    "snapshot_bytes": 8192,
+    "due_bytes": 1024,
+    "time_limit": 8,
+    "interval_limit": 1,
+    "runtime": "coalesced owner, visible/sleeping/page/modal/presenting flags, input serial and idle age; native input itself performs no IPC",
+    "claim": "one-use opaque grant tied to current owner, record revision and kind; durable time high-water before reply",
+    "sleep": "explicit response issues one-use intent; position checkpoint precedes existing SLEEP_NOW path; no permission UI"
   }
 }

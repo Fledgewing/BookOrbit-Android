@@ -43,6 +43,8 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/ui/time.lua", { "boottime" } },
+    { "frontend/ui/uimanager.lua", { "handleInputEvent" } },
     { "frontend/apps/reader/modules/readerpagemap.lua", { "wantsPageLabels", "cleanPageLabel", "getPageLabelProps" } },
     { "frontend/apps/reader/modules/readerlink.lua", { "addCurrentLocationToStack", "onGotoLink" } },
     { "frontend/apps/reader/modules/readerrolling.lua", { "onGotoXPointer" } },
