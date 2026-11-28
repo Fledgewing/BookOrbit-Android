@@ -8,6 +8,56 @@ import java.io.File
 import java.nio.file.Files
 
 class DeviceLibraryTest {
+    @Test fun recentlyAddedUsesPersistedFirstSeenAcrossEditsAndWorkerRestarts() {
+        val root=Files.createTempDirectory("recent-device").toFile()
+        try {
+            val books=File(root,"Books").apply { mkdirs() }
+            val cache=File(root,"cache").apply { mkdirs() }
+            val old=File(books,"old.epub").apply { writeText("old") }
+            fun window(now: Long, query: Map<String,Any?> = emptyMap()) = DeviceLibrary(listOf(books),cache,{now}).project(DeviceLibrary.OWNER,
+                mapOf("op" to "window","source" to "recently-added","query" to query,"limit" to 1))
+            val original=((window(1000)["items"] as List<*>).single() as Map<*,*>)["added"]
+            val new=File(books,"new.epub").apply { writeText("new") }
+            old.writeText("edited");old.setLastModified(999999999999L)
+            val recent=window(2000)
+            assertEquals(2,recent["total"]);assertEquals(1,recent["next"])
+            assertEquals(new.canonicalPath,((recent["items"] as List<*>).single() as Map<*,*>)["local_path"])
+            val oldest=(window(3000,mapOf("sort" to "added","dir" to "asc"))["items"] as List<*>).single() as Map<*,*>
+            assertEquals(original,oldest["added"]);assertEquals(old.canonicalPath,oldest["local_path"])
+            assertEquals(1,window(4000,mapOf("q" to "new"))["total"])
+        } finally { root.deleteRecursively() }
+    }
+    @Test fun localReaderAndBookJoinSavedPerBookStatsWithoutInventingCompletion() {
+        val root=Files.createTempDirectory("device-book-stats").toFile()
+        try {
+            val books=File(root,"Books").apply { mkdirs() }
+            val book=File(books,"one.epub").apply { writeText("fixture") }
+            val md5="a".repeat(32)
+            File(books,"one.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs();writeText("return "+String(LuaValue.encode(mapOf("partial_md5_checksum" to md5,"summary" to mapOf("status" to "reading"))),Charsets.ISO_8859_1)) }
+            val cache=File(root,"cache").apply { mkdirs() }
+            JdbcSql(File(root,"statistics.sqlite3")).use { db ->
+                db.exec("CREATE TABLE book(id INTEGER,md5 TEXT)");db.exec("CREATE TABLE page_stat(id_book INTEGER,page INTEGER,start_time INTEGER,duration INTEGER)")
+                db.exec("INSERT INTO book VALUES(1,?)",md5)
+                db.exec("INSERT INTO page_stat VALUES(1,1,1793534400,60),(1,2,1793534400,120)")
+            }
+            val noScan=object : File(books.path) {
+                override fun listFiles(): Array<File>? = error("A reader panel must not scan the library")
+            }
+            val direct=DeviceLibrary(listOf(noScan),cache,bookStats={ ReaderBookStats.read(cache,it) { file -> JdbcSql(file) } })
+                .project(DeviceLibrary.OWNER,mapOf("op" to "reader","path" to book.canonicalPath))
+            assertEquals(2L,(((direct["items"] as List<*>).single() as Map<*,*>)["stats"] as Map<*,*>)["pages_read"])
+            val adapter=DeviceLibrary(listOf(books),cache,bookStats={ ReaderBookStats.read(cache,it) { file -> JdbcSql(file) } })
+            val row=(adapter.project(DeviceLibrary.OWNER,mapOf("op" to "window","source" to "on-device"))["items"] as List<*>).single() as Map<*,*>
+            for(op in listOf("reader","book")) {
+                val result=adapter.project(DeviceLibrary.OWNER,mapOf("op" to op,"path" to book.canonicalPath,"key" to row["key"],"native_progress" to .75))
+                val info=(result["items"] as List<*>).single() as Map<*,*>
+                val stats=info["stats"] as Map<*,*>
+                assertEquals(180L,stats["reading_seconds"]);assertEquals(2L,stats["pages_read"])
+                assertNull(stats["days_start_to_finish"])
+                if(op=="reader") assertEquals(75.0,info["progress"])
+            }
+        } finally { root.deleteRecursively() }
+    }
     @Test fun localPickBackUpRemovesTheLatestReaderBeforeApplyingItsQuery() {
         val root=Files.createTempDirectory("local-pick-back-up").toFile()
         try {

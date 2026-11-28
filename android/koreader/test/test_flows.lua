@@ -45,6 +45,7 @@ local UIManager = {
         for i = #W.shown, 1, -1 do if W.shown[i] == w then table.remove(W.shown, i) end end
         if w and w.dismiss_callback then w.dismiss_callback() end
     end,
+    handleInput = function(_, ...) return W.handle_input(...) end,
     forceRePaint = function() end,
     setDirty = function() end,
     -- Android: Device:canRestart is no, so a restart is quit + the companion's RELAUNCH.
@@ -3319,6 +3320,25 @@ test("main-loop diagnostics: slow callbacks log, preserve returns/errors and can
     UIManager:nextTick(fn)
     UIManager:unschedule(fn)
     run(0.1)
+end)
+
+test("main-loop fatal: original Lua traceback is logged, persisted and rethrown", function()
+    local write,dir=RE.Store.writeFile,RE.Store.dir
+    local path,saved
+    RE.Store.dir=function() return "/fixture" end
+    RE.Store.writeFile=function(p,text) path,saved=p,text;return true end
+    W.handle_input=function(...) return nil,false,select("#",...) end
+    local a,b,c=UIManager:handleInput("x",nil)
+    eq(a,nil);eq(b,false);eq(c,2)
+    W.handle_input=function() error("fixture main loop cause") end
+    local success,err=pcall(UIManager.handleInput,UIManager)
+    eq(success,false);ok(err:find("fixture main loop cause",1,true));ok(err:find("stack traceback:",1,true))
+    eq(path,"/fixture/koreader-crash.txt");ok(saved:find("fixture main loop cause",1,true));ok(#saved<=4096)
+    RE.Store.writeFile=function() error("unwritable diagnostics") end
+    success,err=pcall(UIManager.handleInput,UIManager)
+    eq(success,false);ok(err:find("fixture main loop cause",1,true),"diagnostic failure preserves cause")
+    RE.Store.writeFile,RE.Store.dir=write,dir
+    W.handle_input=nil
 end)
 
 test("sqlite stress: the verdict line", function()

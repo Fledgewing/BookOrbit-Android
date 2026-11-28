@@ -27,11 +27,11 @@ return function(test,eq,ok,here,Cache)
     for i=1,365 do data.year.intensity[i]=i%5 end
     for i=1,24 do data.hour_levels[i]=i/24; data.hour_intensity[i]=i%5 end
     test('stats: standalone registry widgets paint bounded snapshots and release text',function()
-        local frees, paints, logs = 0, 0, 0
+        local frees, paints, logs, textAlloc = 0, 0, 0, 0
         local positions={}
         local function class()
             local c={}
-            function c:new(o) return setmetatable(o or {},{__index=self}) end
+            function c:new(o) if o and o.text then textAlloc=textAlloc+1 end;return setmetatable(o or {},{__index=self}) end
             function c:getSize() return self.dimen or {w=100,h=self.bold and 28 or 18} end
             function c:paintTo(_,x,y) paints=paints+1;if self.text then positions[self.text]={x=x,y=y} end end
             function c:free() frees=frees+1 end
@@ -43,7 +43,7 @@ return function(test,eq,ok,here,Cache)
         e.require=function(name) return assert(modules[name],name) end
         e.log=function() logs=logs+1 end
         local rects=0
-        local bb={paintRect=function(_,x,y,w,h,color)
+        local bb={paintBorder=function() end,paintRect=function(_,x,y,w,h,color)
             ok(w>=0 and h>=0 and x>=10 and y>=10 and x+w<=610 and y+h<=310)
             ok(color~=nil); rects=rects+1
         end}
@@ -51,14 +51,94 @@ return function(test,eq,ok,here,Cache)
             local w=e.WidgetRegistry[id].renderers['android-tablet'](data,{w=600,h=300,rows=2})
             eq(w:getSize().w,600); w:paintTo(bb,10,10); w:free()
         end
-        ok(rects>=400); ok(paints>4); eq(frees,paints); eq(logs,8)
+        ok(rects>=400); ok(paints>4); eq(frees,textAlloc); eq(logs,8)
         local sourced={state='not-saved',sources={hours='this reader'}}
         local w=e.ReadingStatsWidgets.render('when-you-read',sourced,{w=600,h=300,rows=2})
         w:paintTo(bb,10,10);w:free()
         ok(positions['This reader only'].y>=positions['When you read'].y+28+4,'badge clears the measured title')
         ok(positions['Enable KOReader statistics'].y>=positions['This reader only'].y+18+4,'empty message clears the measured badge')
     end)
-    test('stats: fixed geometry, hour bars and short strip, immutable snapshot',function()
+    test('stats and battery: every registered size paints disjoint measured text within the card',function()
+        local boxes,scale={},1
+        local function class()
+            local c={}
+            function c:new(o) return setmetatable(o or {},{__index=self}) end
+            function c:getSize()
+                if self.dimen then return self.dimen end
+                if self.width then return {w=self.width,h=self.height} end
+                local size=(self.face and self.face.size or 14)*scale
+                return {w=math.min(self.max_width or math.huge,#(self.text or '')*size*.62),h=math.ceil(size*1.45)}
+            end
+            function c:paintTo(bb,x,y)
+                if self.text then
+                    local b=self:getSize()
+                    if self.width then
+                        local th=math.ceil((self.text_font_size or 14)*scale*1.45)
+                        y=y+(self.height-th)/2
+                        b={w=math.min(self.width,#self.text*(self.text_font_size or 14)*scale*.62),h=th}
+                    end
+                    boxes[#boxes+1]={x=x,y=y,w=b.w,h=b.h,text=self.text}
+                end
+                for _,child in ipairs(self) do
+                    local o=child.overlap_offset or {0,0};child:paintTo(bb,x+o[1],y+o[2])
+                end
+            end
+            function c:free() end
+            return c
+        end
+        local colors={COLOR_WHITE=0,COLOR_LIGHT_GRAY=1,COLOR_GRAY=2,COLOR_DARK_GRAY=3,COLOR_BLACK=4}
+        local U={Font={getFace=function(_,name,size) return {size=size,name=name} end},BB=colors}
+        for _,k in ipairs({'Text','Button','Frame','Progress','Overlap'}) do U[k]=class() end
+        local modules={['ui/widget/widget']=class(),['ui/geometry']=class(),
+            ['ui/font']=U.Font,['ui/widget/textwidget']=U.Text,['ffi/blitbuffer']=colors}
+        local env=setmetatable({now_s=function() return 0 end,log=function() end,
+            Device={screen={scaleBySize=function(_,n) return n*scale end}},
+            require=function(name) return assert(modules[name],name) end},{__index=e})
+        for _,file in ipairs({'ko/home_widgets.lua','logic/battery_widget.lua','ko/battery.lua','ko/reading_stats.lua'}) do
+            setfenv(assert(loadfile(root..file)),env)()
+        end
+        env.HomeWidgets._ui=U
+        local bb={paintBorder=function() end,paintRect=function() end}
+        local ready={}
+        for k,v in pairs(data) do ready[k]=v end
+        ready.metrics={today={state='ready',value='1 h 20 m',separate='10 m · this reader, separate'},
+            ['reading-streak']={state='ready',value='7 days',best='Longest: 12 days',days={0,4,4,0,4,4,4},days_source='Last seven days · this reader'},
+            ['reading-goal']={state='ready',value='8 / 24 books · 2026',fraction=1/3,pace='Need 0.5 books / week',status='On pace'},
+            ['pages-read']={state='ready',today='17',lifetime='2,345',definition='Timed page visits'},
+            ['monthly-reading']={state='ready',levels={0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1,.5},labels={'D','J','F','M','A','M','J','J','A','S','O','N'},total='20 h 10 m',previous='Previous month: 2 h 10 m',period='Dec 2025 – Nov 2026'}}
+        local battery={state='ready',data={level=78,display={level='78%',estimate='≈ 2 d 6 h at your usual use',
+            narrow_estimate='≈ 2 d 6 h · usual use',reading='19 h reading non-stop',standby='5 d 22 h standby only',
+            reading_rate='Reading · 4.1 ± 0.3 %/h',standby_rate='Standby · 0.6 %/h',used_week='76% used this week',
+            last_charge='Last charge · Sun 21:10 · 12% → 100%'}}}
+        for _,factor in ipairs({1,1.25,2}) do
+            scale=factor
+            for _,id in ipairs({'year-in-reading','this-week','when-you-read','reading-records','today','reading-streak','reading-goal','pages-read','monthly-reading','battery'}) do
+                for _,size in ipairs(e.WidgetRegistry[id].sizes['android-tablet']) do
+                    local w=(math.floor(size[1]*690/4)-12)*scale
+                    local h=(math.floor(size[2]*776/8)-12)*scale
+                    for _,state in ipairs({'ready','loading','error','not-saved'}) do
+                        boxes={}
+                        local snapshot=ready
+                        if state~='ready' then snapshot={state=state,sources={records='this reader',hours='this reader'}} end
+                        local widget
+                        if id=='battery' then
+                            widget=env.BatteryUI.widget({w=size[1],h=size[2]},state=='ready' and battery or {state=state},function() end,{w=w,h=h})
+                        else widget=env.ReadingStatsWidgets.render(id,snapshot,{w=w,h=h,rows=size[2]}) end
+                        widget:paintTo(bb,0,0);widget:free()
+                        ok(#boxes>0,id..' has visible text')
+                        for i,b in ipairs(boxes) do
+                            ok(b.x>=0 and b.y>=0 and b.x+b.w<=w and b.y+b.h<=h,id..' out of card: '..b.text)
+                            for j=1,i-1 do local a=boxes[j]
+                                ok(b.x>=a.x+a.w or a.x>=b.x+b.w or b.y>=a.y+a.h or a.y>=b.y+b.h,
+                                    id..' overlapping: '..a.text..' / '..b.text)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    test('stats: measured plans, hour bars and short strip, immutable snapshot',function()
         local before=Cache.encode(data)
         for id,n in pairs({['year-in-reading']=371,['this-week']=8,['when-you-read']=26,['reading-records']=1}) do
             local p=e.ReadingStatsPlan.build(id,data,600,300,2)
