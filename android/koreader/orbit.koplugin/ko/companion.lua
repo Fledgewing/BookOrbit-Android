@@ -38,6 +38,7 @@ Companion.ACTION = {
     NET_DONE = Companion.PACKAGE .. ".action.NET_DONE",
     WIFI_OFF = Companion.PACKAGE .. ".action.WIFI_OFF",
     SLEEP_NOW = Companion.PACKAGE .. ".action.SLEEP_NOW",
+    READER_ACTION = Companion.PACKAGE .. ".action.READER_ACTION",
     SHOW_STATUS = Companion.PACKAGE .. ".action.SHOW_STATUS",
     SHOW_APPS = Companion.PACKAGE .. ".action.SHOW_APPS",
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",

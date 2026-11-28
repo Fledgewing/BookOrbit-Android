@@ -261,7 +261,7 @@ function OrbitAndroid:menuItems()
                 end}
             local out = {modeRow}
             if Library.companion.addon() then
-                out[#out+1]=action("Wi-Fi switching and sleep sync: in BookSync Companion ›",Library.companion.openHelpers)
+                out[#out+1]=action("Reader Helpers",function() ReaderCompanionView.open("helpers") end)
             end
             local text,go,note=AccountView.syncAction(account)
             table.insert(out, 1, action(text or "Sync now", text and go or function() Library.syncNow(self) end))
@@ -359,7 +359,7 @@ function OrbitAndroid:menuItems()
             {text="This reader: " .. (device.reader or "Loading…"),enabled=false,pending=device.pending},
             (function() local row = action("About", function() self:showAbout() end); row.read_only=true; return row end)(),
             action("Help and guides", function() self:onOrbitOpenCompanion() end),
-            action("Advanced: open companion app", function() self:onOrbitOpenCompanion() end),
+            action("Advanced: open companion app", Library.companion.openStatus),
         } end),
     }
     assert(#items <= Budgets.get("screens", "settings").rows, "Settings row budget exceeded")

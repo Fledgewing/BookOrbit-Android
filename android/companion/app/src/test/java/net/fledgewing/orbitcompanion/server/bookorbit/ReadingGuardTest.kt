@@ -25,6 +25,8 @@ class ReadingGuardTest {
         Site("OrbitKeys.kt", "nm.notify(NOTE_ID", 1, "keyboard note: Reading.show(KEY_KEYBOARD), or at once when the user focused a text field"),
         Site("Installers.kt", "app.startActivity(confirm", 1, "KOReader install prompt: inside Reading.show(installKey)"),
         // Exempt: never pops up, or started by the user.
+        Site("ReaderActionActivity.kt", "startActivityForResult(next,", 1, "foreground bridge only after a reader button: Android/security/recovery remains visible and no helper is enabled"),
+        Site("Battery.kt", "startActivityForResult(i,", 2, "user requested battery export/document picker"),
         Site("DeviceSettings.kt", "ctx.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS", 1, "trusted plugin command: user chose Sleep after in an explicitly opened Settings menu; never automatic"),
         Site("OrbitService.kt", "notify(ID_STATUS", 1, "the ongoing foreground-service status: IMPORTANCE_LOW, setOnlyAlertOnce, never pops up"),
         Site("Updater.kt", "ctx.startActivity(confirm)", 1, "install prompt only when interactive: the user tapped Check for updates"),
@@ -55,7 +57,7 @@ class ReadingGuardTest {
         Site("BookOrbitCovers.kt", "a.startActivity(Intent(a, SleepScreenActivity", 1, "Setup: the user tapped Sign in again on the sharp covers row"),
     )
 
-    private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity|startActivities)\(""")
+    private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity|startActivities|startActivityForResult)\(""")
 
     private fun sources(): File {
         val rel = "src/main/java/net/fledgewing/orbitcompanion"

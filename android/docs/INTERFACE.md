@@ -751,3 +751,37 @@ close cancels pending callbacks. No new intent or backend call is added.
 `account.badges` returns one row / 16 KiB with earned/total, latest/date and next
 progress/threshold display fields. Missing/off/unsupported are explicit and differ
 from known zero. UI never interprets protocol fields or fetches remote artwork.
+
+### Reader-inline companion status and helpers (0.12)
+
+UI uses only `Library.companion.snapshot()` and `Library.companion.command()`.
+`READER_COMPANION` is a caller-checked provider read, with matching `patch_version`,
+returning one local record containing a saved sync/update summary, cached setup
+summary and three helper descriptors. Four materialized rows and 16 KiB bound
+both sides; there is no catalog, checklist scan, network or subprocess on paint.
+Unknown/saved results stay labeled. The sheet performs one local call per paint.
+
+`reader.companion` through `SERVER_COMMAND` accepts only `action=set`, a `helper`
+(`wifi`, `sleep`, `screen`) and boolean `on`. Companion rechecks the live protected
+settings policy, mode and screen-off permission before writing existing helper
+preferences. Full mode retains its built-in helpers; Add-on defaults remain off.
+Successful changes use the existing helper/service/status lifecycle and Library
+refreshes the plugin's capabilities after completion. No permission result writes
+helper preferences.
+
+Only an explicit user button launches `READER_ACTION` with `booksync_action`
+`permission`, `protected`, `setup` or `recovery`. Its isolated, translucent,
+no-preview task requests the existing Android or Companion page for a result and
+finishes on return. Android's device-admin consent must be started by an activity
+without a NEW_TASK child flag. PIN entry remains in existing protected settings;
+the bridge rechecks protection before requesting permission. No service or
+permission observer launches the bridge.
+
+Library issues one in-memory return ticket for the current reader instance,
+document and session generation. The user-opened sheet captures its underlying
+menu and focus. A matching foreground resume after an actual departure consumes
+the ticket, re-reads permission and restores that sheet only if the underlying
+menu and reader session still match. A new book/session, departure from that menu,
+closing the sheet or a superseding request retires presentation. Background
+permission changes never create a ticket or open a sheet. Existing external
+Companion routes remain available for recovery.

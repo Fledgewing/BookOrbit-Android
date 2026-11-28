@@ -194,6 +194,17 @@
     "layer": "internal",
     "purpose": "Position lifecycle, native locator captures and answer dispatch; consent screen is position_prompt."
   },
+  "ko/reader_companion.lua": {
+    "layer": "ui",
+    "purpose": "Explicit reader Status, Helpers and system-action return composition."
+  },
+  "ko/reader_companion_service.lua": {
+    "layer": "interface",
+    "purpose": "Bounded local companion snapshots, helper intents and reader-session return tickets.",
+    "public": [
+      "Library"
+    ]
+  },
   "ko/reader_panel.lua": {
     "layer": "ui",
     "purpose": "Screen/widget/native UI composition."

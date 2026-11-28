@@ -1104,3 +1104,19 @@ function Library:localReading() return self:read("reading.local",{limit=1}) end
 function Library.localReadingGoal(target,done)
     return deviceCommand("reading.local.goal",{target=target},function() Library.retry() end,done)
 end
+
+Library.companion=Library.companion or {}
+function Library.companion.command(args,done)
+    if args.action~="set" then
+        if not ({permission=true,protected=true,setup=true,recovery=true})[args.action] then done({error="invalid"});return false end
+        if Companion.workerProblem() then done({error="unavailable"});return false end
+        local ok=Jni.startActivity{action=Companion.ACTION.READER_ACTION,package=Companion.PACKAGE, -- gate: user action (explicit system/security or recovery button)
+            extras={booksync_action=args.action}}
+        done(ok and {ok=true} or {error="unavailable"})
+        return ok
+    end
+    return LibraryAdapter.command("reader.companion",args,function(result)
+        if not result.error then Shared.refresh("reader-helper") end
+        done(result)
+    end,{kind="device"})
+end

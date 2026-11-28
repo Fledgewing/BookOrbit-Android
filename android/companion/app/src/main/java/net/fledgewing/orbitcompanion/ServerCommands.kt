@@ -10,7 +10,7 @@ object ServerCommands {
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("reading.local.read","reading.local.goal","reading.local.event","reading.local.prepare","device.sleep","storage.free","storage.folder","storage.refresh","storage.remove.preview","storage.remove","sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
+        require(op in setOf("reader.companion","reading.local.read","reading.local.goal","reading.local.event","reading.local.prepare","device.sleep","storage.free","storage.folder","storage.refresh","storage.remove.preview","storage.remove","sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -26,6 +26,7 @@ object ServerCommands {
             "reading.local.read","reading.local.goal","reading.local.event","reading.local.prepare" -> LibraryLocalReading.command(op,args,::finish)
             "sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain" -> LibraryAccount.sync(ctx,op,args,::finish)
             "storage.free", "storage.folder", "storage.refresh", "storage.remove.preview", "storage.remove" -> Worker.localCommand(ctx,op,args,::finish)
+            "reader.companion" -> ReaderCompanion.command(ctx,args,::finish)
             "device.sleep" -> DeviceSettings.sleep(ctx,(args["ms"] as? Number)?.toInt() ?: 600000) { finish(mapOf("device" to DeviceSettings.snapshot()),it) }
 
             "account.signIn" -> LibraryAccount.signIn(ctx,text("server"),text("username"),text("password").toCharArray(),::accountDone)
