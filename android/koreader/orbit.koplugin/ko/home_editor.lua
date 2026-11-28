@@ -166,7 +166,7 @@ function HomeEditor.create(host)
         local m=self.model
         for _i,p in ipairs(Layout.editorPage(m.document,m.index).placements) do
             if p.instance==m.selected and p.widget=="booklist" then
-                self.config=BookListConfig.new{cfg=p.settings,caps=host.caps,classic=classic or (Device.isTouchDevice and not Device:isTouchDevice()),
+                self.config=BookListConfig.new{cfg=p.settings,caps=host.caps,origin=self,classic=classic or (Device.isTouchDevice and not Device:isTouchDevice()),
                     onDone=function(cfg) return self:action(function() return m:configure(cfg) end) end,
                     onSave=function(saved)
                         local d,page=HomeHostPlan.saveFilter(m.document,saved,"Custom filter")

@@ -23,7 +23,7 @@ so no Android outcome disappears during reconciliation.
 | Word, Buddy, Light, Highlight and A year ago | Done | `P/logic/widget_registry.lua:21` and `:25` register all five; `P/ko/local_widgets.lua:3` renders local snapshots. Personal sources aggregate behind Library. |
 | Server-free covers, refresh, copies, recommendations, finish (duplicate) | Done | `P/ko/library.lua:514` dispatches cover work; `:679` dispatches refresh. Copy/finish ownership is `C/server/bookorbit/CatalogWorkflow.kt:141`. The row saying these are pending is stale. |
 | Independent account/sync/OPDS logins, encryption, sign-out, account stats | Done | `P/ko/account.lua:1` uses Library; `C/AccountVault.kt:20` encrypts private credentials. `P/ko/library.lua:401` owns account commands and `C/ServerCommands.kt:33` routes login removal. No UI backend requests. |
-| Configurable Book list presets, counted sources, Custom filters | Done | `P/ko/booklist_config.lua:42` paints bounded source pages; `:22` opens the shared filter. `P/ko/home_editor.lua:165` configures the selected widget. |
+| Configurable Book list presets, counted sources, Custom filters | Done after audit | `P/ko/booklist_config.lua:42` paints bounded source pages; `:22` opens the shared filter. `P/ko/home_editor.lua:165` configures the selected widget. |
 | Two-page Home / Stats defaults, shared lists/search, save filters | Done | `P/ko/home_host.lua:15` resolves layouts; `:38` shares one paint context. `P/logic/widget_registry.lua:11` defines the installed widget contracts. List/search use the owned host and filter sheet. |
 | Editable Custom reading values and copy/Undo | Done | `P/ko/custom_reading.lua:1` owns the approved editors; native style operations remain behind `P/ko/reading_style.lua:1`. Emulator review checks persisted native values (`tools/e2e/android/review.py:88`). |
 | Home editor add/remove/move/resize/pages/reset/atomic save | Done | `P/ko/home_editor.lua:19` creates the editor, `:153` renames, `:192` resizes, `:207` resets, `:213` saves through Library. |
@@ -69,3 +69,11 @@ and pin stay untouched. Physical device acceptance and release publication are s
 - Server boundary: **12 tests**; UI boundary: **6 tests**; feature matrix: **4 tests**; emulator harness safety: **8 tests**. All passed.
 - Existing emulator scenarios are `tools/e2e/android/review.py` and `upgrade.py`;
   harness safety tests alone are not emulator acceptance.
+
+## Late source-picker follow-up
+
+Final cross-feature acceptance exposed a cold paged Source response arriving after
+the picker’s bounded polling window. The ready row was cached, but the modal had
+no Library observer. [The source-picker repair](F12-SOURCE-PICKER.md) adds a neutral
+observer without replacing Home’s subscriber; a failing regression covers late
+arrival, covered dialogs and close. This completes the existing approved control.

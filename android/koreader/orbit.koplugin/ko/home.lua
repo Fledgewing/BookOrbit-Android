@@ -95,7 +95,10 @@ function Gate.refreshNotice(what)
 end
 
 -- what: for the log; fn: shows it; max_age_s: dropped after this long held.
-function Gate.show(what, fn, max_age_s)
+function Gate.show(what, fn, max_age_s, visible_owner)
+    -- Updating the user's already visible modal is not a background notice.
+    -- Keep the one reading gate and verify ownership before replacing it.
+    if visible_owner and topWidget()==visible_owner and not reading() then return fn() end
     if Gate.silent() then
         Gate.refreshNotice(what)
         return

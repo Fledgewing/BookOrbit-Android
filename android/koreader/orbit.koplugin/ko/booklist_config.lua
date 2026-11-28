@@ -3,10 +3,12 @@
 BookListConfig = {}
 function BookListConfig.new(context)
     return setmetatable({cfg=Layout.copy(context.cfg),onDone=context.onDone,onSave=context.onSave,
-        caps=context.caps or {},classic=context.classic,category="builtin",offset=0,alive=true}, {__index=BookListConfig})
+        caps=context.caps or {},origin=context.origin,classic=context.classic,category="builtin",offset=0,alive=true}, {__index=BookListConfig})
 end
 function BookListConfig:close()
     self.alive=false
+    if self.unobserve then self.unobserve();self.unobserve=nil end
+    if self.eventPaint then UIManager:unschedule(self.eventPaint);self.eventPaint=nil end
     if self.retry then UIManager:unschedule(self.retry); self.retry=nil end
     if self.filter then self.filter:close(false); self.filter=nil end
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
@@ -42,12 +44,25 @@ end
 function BookListConfig:paint(attempt)
     if not self.alive then return end
     if self.retry then UIManager:unschedule(self.retry); self.retry=nil end
+    if self.eventPaint then UIManager:unschedule(self.eventPaint);self.eventPaint=nil end
     local finish=Budgets.span(self.sources and "booklist-sources.draw" or "booklist-config.draw",now_s,log)
     local buttons={}
     local function row(text,fn,id) buttons[#buttons+1]={{text=text,callback=fn,id=id,align="left"}} end
     local result
     local focus=1
     if self.sources then
+        if not self.unobserve then
+            self.unobserve=Library.observe(function()
+                if not self.alive or not self.sources or self.eventPaint then return end
+                self.eventPaint=function()
+                    if not self.alive or not self.sources then self.eventPaint=nil;return end
+                    if self.dialog and topWidget()==self.dialog and not reading() then
+                        self.eventPaint=nil;self:paint()
+                    else UIManager:scheduleIn(.5,self.eventPaint) end
+                end
+                UIManager:nextTick(self.eventPaint)
+            end)
+        end
         local paint=Library.paint("booklist-sources")
         result=paint:sources(self.category,self.offset,BookList.PAGE_SIZE,self.caps)
         self.metrics=paint:flush()
@@ -107,17 +122,24 @@ function BookListConfig:paint(attempt)
         tap_close_callback=function() self:back() end}
     dialog.onClose=function() self:back(); return true end
     dialog:moveFocusTo(1,focus)
-    if self.dialog then UIManager:close(self.dialog) end
+    local previous=self.dialog
     self.dialog=dialog
     Gate.show("Book list settings",function()
-        if self.alive and self.dialog==dialog then UIManager:show(dialog) end -- gate: Gate.show, explicit Configure
-    end)
-    if result and result.pending and (attempt or 0)<20 then
-        self.retry=function()
-            self.retry=nil
-            if self.alive and not reading() then self:paint((attempt or 0)+1) end
+        if self.alive and self.dialog==dialog then
+            if previous then UIManager:close(previous) end
+            UIManager:show(dialog) -- gate: Gate.show, explicit Configure or visible owned replacement
         end
-        UIManager:scheduleIn(.5,self.retry)
+    end,nil,previous or self.origin)
+    if result and result.pending and (attempt or 0)<20 then
+        local retry
+        retry=function()
+            if not self.alive then self.retry=nil;return end
+            if self.dialog and topWidget()==self.dialog and not reading() then
+                self.retry=nil;self:paint((attempt or 0)+1)
+            else UIManager:scheduleIn(.5,retry) end
+        end
+        self.retry=retry
+        UIManager:scheduleIn(.5,retry)
     end
     finish()
 end

@@ -5789,7 +5789,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "One Book list renderer with friendly presets, settings, paged counted sources and local Custom filters",
+          "note": "One Book list renderer with friendly presets, settings, paged counted sources and local Custom filters; visible source pickers also repaint on late Library updates; explicit editor controls stay available during catalog refresh",
           "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
           "evidence": [
             {
@@ -5801,7 +5801,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows; late source-ready repaint follows that firmware work",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5812,7 +5812,7 @@
         "x4": {
           "status": "missing",
           "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows; late source-ready repaint follows that firmware work",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5823,7 +5823,7 @@
         "x3": {
           "status": "missing",
           "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows; late source-ready repaint follows that firmware work",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",

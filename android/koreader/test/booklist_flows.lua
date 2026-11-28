@@ -24,6 +24,38 @@ return function(test,eq,ok,E,W,Widget,withHost)
             return {items=rows,total=a.category=="builtin" and 6 or 13,next=a.category~="builtin" and a.offset<12 and a.offset+6 or nil,freshness={saved=true}},900
         end
     end
+    test("Book list sources: late Library events refresh a visible picker without replacing Home",function()
+        withHost(function()
+            local read=E.LibraryAdapter.read;local ready=false
+            E.LibraryAdapter.read=function(raw,...)
+                if E.Cache.decode(raw).op=='sources' then
+                    if not ready then return nil end
+                    return {items={{src='year:2025',title='Finished in 2025',count=100}},total=1,freshness={saved=true}},200
+                end
+                return read(raw,...)
+            end
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h};local listener=E.Library.listener
+            local view=E.BookListConfig.new{cfg=E.BookList.preset('year'),origin=h,caps=h.caps,onDone=function() return true end}
+            view.sources=true
+            local active=E.Library.catalog_active;E.Library.catalog_active=true
+            local opened,openErr=pcall(view.paint,view);E.Library.catalog_active=active;ok(opened,openErr)
+            eq(W.shown[#W.shown],view.dialog,'explicit editor controls stay available during catalog refresh')
+            if view.retry then E.UIManager:unschedule(view.retry);view.retry=nil end
+            ready=true;E.Library.changed({kind='library'})
+            ok(view.eventPaint,'late ready events must survive the bounded polling window')
+            eq(E.Library.listener,listener)
+            local refresh=view.eventPaint;W.shown={};refresh();eq(view.eventPaint,refresh)
+            W.shown={view.dialog};E.Gate.background(refresh);eq(view.eventPaint,nil)
+            eq(W.shown[#W.shown],view.dialog,'a background reply must replace the visible owned dialog')
+            local reading=E.reading;E.reading=function() return true end
+            local shown=false
+            local safe,err=pcall(function() E.Gate.background(function() E.Gate.show('owned reading guard',function() shown=true end,nil,view.dialog) end) end)
+            E.reading=reading;ok(safe,err);eq(shown,false,'an owned modal never bypasses the reading gate')
+            press(view,'○ Finished in 2025 · 100');eq(view.cfg.src,'year:2025')
+            view:close();E.Library.changed({kind='library'});eq(view.eventPaint,nil)
+            E.LibraryAdapter.read=read
+        end)
+    end)
     test("Book list year: native request and immutable context retain saved-selection semantics",function()
         local cfg=E.BookList.choose(E.BookList.preset('year'),{src='year:2025',title='Finished in 2025',default_sort=0})
         local need=E.HomeHostPlan.need({widget='booklist',settings=cfg})
