@@ -89,6 +89,10 @@ class CommandProvider : ContentProvider() {
                 if(body.toByteArray().size>16384) return answer(false,"budget")
                 return answer(true).apply { putString("body",body) }
             }
+            if (method == ReaderCompanion.SNAPSHOT) {
+                if (extras?.getString("patch_version") != BuildConfig.VERSION_NAME) return answer(false, "version")
+                return answer(true).apply { putString("body", LuaValue.transportText(ReaderCompanion.snapshot(ctx))) }
+            }
             if (method == DEVICE_SETTINGS) {
                 DeviceSettings.refreshAsync()
                 return answer(true).apply { putString("body",LuaValue.transportText(DeviceSettings.snapshot())) }

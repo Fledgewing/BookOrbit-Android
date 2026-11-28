@@ -172,3 +172,9 @@ Budgets.screens["reader-navigation"].roundTrips=0
 
 Budgets.screens["settings-reading-statistics"] = budget(1, 16384, 50)
 Budgets.screens["settings-reading-statistics"].displayRows = 3
+
+-- Reader companion: four local summary/action rows, one bounded snapshot and batch.
+for _,id in ipairs({"reader-status","reader-helpers"}) do
+    Budgets.screens[id]=budget(4,16384,50)
+    Budgets.screens[id].displayRows=9
+end

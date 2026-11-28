@@ -3820,6 +3820,7 @@ end
 dofile(here .. "/catalog_actions_flows.lua")({E=RE,W=W,test=test,eq=eq,ok=ok,newUI=newUI,UIManager=UIManager,store=store})
 dofile(here.."/retirement_flows.lua")(test,eq,ok,RE)
 dofile(here.."/ui_interface_flows.lua")(here,test,eq,ok)
+dofile(here.."/reader_companion_flows.lua")(here,test,eq,ok)
 if perfReport then
     local keys={};for key in pairs(perfReport) do keys[#keys+1]=key end;table.sort(keys)
     for _,key in ipairs(keys) do

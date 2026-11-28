@@ -23,9 +23,9 @@ status, helpers, PIN or setup. The approved add-on helper deep-link deliberately
 opens that existing companion surface; it does not approve an inline replacement.
 A universal no-switch promise would also misrepresent Android permission/security
 screens, protected parent settings, launching another app and manual APK install.
-Those remain explicit, clearly labeled user actions under this proposal.
+Those remain explicit, clearly labeled user actions under this approved scope.
 
-## Proposed slice and states
+## Approved slice and states
 
 1. **Reader Status:** a bounded local summary, last sync/update state and at most
    four actionable checklist rows. No automatic page opening, notifications or
@@ -46,7 +46,7 @@ security, a parent challenge and opening another application remain visible when
 requested. The stretch outcome is “ordinary BookSync status and helper actions
 stay in the reader”; it is not permission to hide or bypass those boundaries.
 
-## Interface, budgets and acceptance after approval
+## Interface, budgets and acceptance
 
 - UI requests one neutral summary/helper snapshot through Library, no backend
   names, endpoints, credential parsing or direct companion implementation types.
@@ -60,9 +60,75 @@ stay in the reader”; it is not permission to hide or bypass those boundaries.
   departure and another book opening, return without focus theft, bounded replies,
   and the existing emulator reading/upgrade flows. Physical acceptance is separate.
 - Android only in this slice. All three firmware platforms retain their separately
-  planned settings surfaces; no firmware source or pin is changed by this proposal.
+  planned settings surfaces; no firmware source or pin is changed by this slice.
 
 ## Approval recorded
 
 The four mocked states, wording and bounded ordinary-action scope above are
 **APPROVED (2026-11-27)**. The existing explicit companion recovery routes remain.
+
+## Implementation on feature/0.12
+
+Reader Status and Reader Helpers are owned KOReader sheets. Their interface service
+reads the caller-checked `READER_COMPANION` local snapshot, with four materialized
+rows, at most 16 KiB and one call per paint. Static controls have a nine-row display
+ceiling. Snapshot and paint emit one timing span each. Setup and update checks are
+labeled saved/unknown; no checklist, catalog, folder or network scan runs on paint.
+
+The existing policy matters here: Full mode includes the helpers; Add-on's existing
+Wi-Fi and Sleep sync opt-ins remain off by default. Sleep sync itself does not need
+the lock-screen permission. The permission explanation therefore names **Screen
+off after sync**, the operation that actually requires it. Granting it neither
+sets the screen-off helper nor enables Sleep sync. The normal worker owns helper
+writes and rechecks protection, mode and permission at execution time. A successful
+write follows the existing service/status lifecycle and refreshes capabilities.
+
+The explicit system action uses an isolated transparent activity for a result.
+Android rejects device-admin consent started as a new task; the bridge starts that
+child from a foreground activity with no NEW_TASK flag. It never paints a companion
+screen, asks for a PIN or changes a helper. Protected settings and recovery open
+the existing native pages only when requested.
+
+Library owns a one-use ticket for the exact reader instance/document/session.
+The sheet remembers its page, focus and underlying menu. Only foreground return
+after an actual departure can consume the ticket; a changed book, reader session
+or underlying menu drops it. Helper completion may redraw only the still-visible
+foreground initiating sheet. A background permission change cannot issue a return
+ticket or open a sheet.
+
+Reproduce the unit and native evidence with:
+
+```sh
+luajit android/koreader/test/test_logic.lua
+luajit android/koreader/test/test_flows.lua
+python3 tools/test/test-ui-boundary.py
+python3 tools/test/test-server-boundary.py
+python3 tools/test/test-features.py
+(cd android/companion && ./gradlew verifySharedVersion testDebugUnitTest assembleDebug lintDebug)
+python3 tools/e2e/android/test_driver.py
+python3 tools/e2e/android/reader_companion.py --serial emulator-N --out /tmp/reader-companion
+python3 tools/e2e/android/review.py --serial emulator-N --out /tmp/reader-review
+```
+
+Use the existing [upgrade/fresh-install flow](../../../tools/e2e/android/README.md)
+after these checks. Physical reader acceptance remains separate; no release is
+part of this implementation.
+
+
+Native Android 14 review captures (1200×1600, synthetic books/accounts):
+[Status](evidence/reader-companion/status.png),
+[Helpers](evidence/reader-companion/helpers.png),
+[permission explanation](evidence/reader-companion/permission.png),
+[return with permission available and the helper still off](evidence/reader-companion/return.png),
+[existing protected settings](evidence/reader-companion/protected.png).
+
+
+Validation on 2026-11-27: 261 Lua logic tests and 308 flow tests passed; Companion
+ran 919 JVM tests with zero failures/errors and four existing skips (915 passed),
+plus shared-version verification, debug assembly and lint. UI/server boundary
+guards passed all 18 tests, feature generation all four checks, and emulator host
+safety all ten checks. Native Android 14 passed 15 reader-companion checks, the
+existing 68-screen reading review, three Add-on recovery checks, and the four
+upgrade/fresh-profile captures. Upgrade retained the seven-minute idle setting and
+synthetic sentinel and verified the once-only news acknowledgment. All device
+commands targeted the disposable emulator; no physical reader was used.

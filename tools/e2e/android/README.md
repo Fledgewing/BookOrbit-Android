@@ -144,3 +144,13 @@ flow verifies deduplication across process starts, uninterrupted foreground read
 reader-local time, explicit sanitized clipboard copy, Clear and reopen. It writes
 three screenshots and `review.json`; no intentional crash or unqualified adb runs
 against physical readers. Use a fresh AVD; it sets the fixture timezone to Los Angeles.
+
+Reader companion surfaces: after setup, run
+`python3 tools/e2e/android/reader_companion.py --serial emulator-N --out <evidence>`.
+It exercises Full and Add-on Status/Helpers, explicit helper toggles, missing
+screen-off permission, Later, native Android denial and grant, return with the
+helper still off, native revocation without opening a reader sheet, existing
+protected settings and book/session departure. It captures native PNGs and
+`reader-companion.json`; synthetic mode/helper preferences are restored afterward.
+The Android 14 fixture uses the explicit Device admin Settings component for
+revocation because that image does not export the generic settings action.

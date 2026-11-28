@@ -288,6 +288,18 @@
         "body"
       ],
       "does": "one bounded local legacy retirement descriptor before plugin instances start"
+    },
+    {
+      "name": "READER_COMPANION",
+      "method": "net.fledgewing.orbitcompanion.call.READER_COMPANION",
+      "caller": "koreader-library",
+      "extras": [
+        "patch_version"
+      ],
+      "answer": [
+        "body"
+      ],
+      "does": "one neutral local reader status/helper snapshot; four rows, 16 KiB; no network or checklist scan"
     }
   ],
   "activities": [
@@ -322,6 +334,14 @@
     {
       "name": "SHOW_SLEEP",
       "action": "net.fledgewing.orbitcompanion.action.SHOW_SLEEP"
+    },
+    {
+      "name": "READER_ACTION",
+      "action": "net.fledgewing.orbitcompanion.action.READER_ACTION",
+      "extras": [
+        "booksync_action"
+      ],
+      "does": "explicit user-requested permission, protected settings, setup or recovery; isolated transparent result bridge; no helper writes"
     }
   ],
   "usb": [

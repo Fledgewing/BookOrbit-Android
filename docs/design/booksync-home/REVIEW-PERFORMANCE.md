@@ -212,3 +212,15 @@ Companion test XML includes sanitized `PERF` lines with rows, bytes, provider/ra
 counts and elapsed spans. The audit fixture uses plain JVM SQLite with injected
 sleep choices, avoiding Android/Robolectric JDBC classloader coupling. No test or
 boundary skip list was added. No device, adb, tag or release was used.
+
+
+## Reader companion sheets (approved 2026-11-27)
+
+Reader Status and Helpers each inherit four materialized rows, 16 KiB decoded
+bytes and one local companion call per paint, with zero network calls or spawns.
+The permission explanation shares that bounded snapshot; static actions have a
+nine-row display limit. `ReaderCompanion` reads existing local preferences and the
+native protected/permission policy; it never evaluates the full checklist or reads
+the catalog. The Lua service checks bytes before decoding and rejects an incorrect
+helper-row count. Unit fixtures cover oversized replies and foreground-only
+completion/return; the emulator flow captures all four approved states.

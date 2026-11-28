@@ -179,6 +179,19 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
+        <!-- User-requested system/security action. Never launched by a service or permission observer. -->
+        <activity
+            android:name=".ReaderActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Orbit.Invisible">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.READER_ACTION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Add-on restarts: the plugin starts this just before KOReader quits (RELAUNCH_UI). -->
         <activity
             android:name=".RelaunchActivity"

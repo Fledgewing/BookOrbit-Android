@@ -20,7 +20,7 @@ function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_go_home",
         { category = "none", event = "OrbitGoHome", title = _("BookSync: go to library home"), general = true })
     Dispatcher:registerAction("orbit_open_companion",
-        { category = "none", event = "OrbitOpenCompanion", title = _("BookSync: open BookSync Companion"), general = true })
+        { category = "none", event = "OrbitOpenCompanion", title = _("BookSync: Reader Status"), general = true })
     Dispatcher:registerAction("orbit_open_apps",
         { category = "none", event = "OrbitOpenApps", title = _("BookSync Companion: apps"), general = true, separator = true })
 end

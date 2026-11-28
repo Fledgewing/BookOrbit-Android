@@ -6890,6 +6890,62 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-reader-companion-surfaces",
+      "feature": "Reader-inline Status and Helpers with explicit system-action return (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Bounded local Reader Status and Helpers, protected Companion actions and session-scoped return; permission never enables a helper.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; approved Android implementation is verified with unit and emulator flows.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/READER-COMPANION-SURFACES.md",
+              "line": 1
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and protected settings",
+          "reason": "not applicable: maintainer approved an Android-only slice on 2026-11-27; this reader has no Android companion or system permission activities. Its firmware settings remain separately planned.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/READER-COMPANION-SURFACES.md",
+              "line": 1
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and protected settings",
+          "reason": "not applicable: maintainer approved an Android-only slice on 2026-11-27; this reader has no Android companion or system permission activities. Its firmware settings remain separately planned.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/READER-COMPANION-SURFACES.md",
+              "line": 1
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Android companion permissions and protected settings",
+          "reason": "not applicable: maintainer approved an Android-only slice on 2026-11-27; this reader has no Android companion or system permission activities. Its firmware settings remain separately planned.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/READER-COMPANION-SURFACES.md",
+              "line": 1
+            }
+          ],
+          "version": null
+        }
+      },
+      "deferred": "Physical acceptance and publication; firmware settings remain in their separately planned surfaces."
     }
   ],
   "release_evidence": {
