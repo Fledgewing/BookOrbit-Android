@@ -1330,7 +1330,9 @@ test("contract: every command, call, page, launch command, status key, file and 
     for f in p:lines() do local h = io.open(f, "rb"); src[#src + 1] = h:read("*a"); h:close() end
     p:close()
     src = table.concat(src, "\n")
-    local function count(pat) local n = 0; for _ in src:gmatch(pat) do n = n + 1 end; return n end
+    -- Index action references once: repeated full-source pattern scans grow with every module.
+    local actionUses = {}
+    for name in src:gmatch("Companion%.ACTION%.([%w_]+)") do actionUses[name] = (actionUses[name] or 0) + 1 end
     local function esc(x) return (x:gsub("%p", "%%%0")) end
     local CO = RE.Companion
     eq(C.version, 1)
@@ -1342,7 +1344,7 @@ test("contract: every command, call, page, launch command, status key, file and 
     for k, v in pairs(want) do eq(CO.ACTION[k], v, "Companion.ACTION." .. k) end
     for k in pairs(CO.ACTION) do ok(want[k], "Companion.ACTION." .. k .. " is in the contract") end
     -- Each is used (beyond its definition), and each extra is set somewhere.
-    for k in pairs(want) do ok(count("Companion%.ACTION%." .. k .. "%f[^%w_]") >= 1, k .. " is sent or opened") end
+    for k in pairs(want) do ok((actionUses[k] or 0) >= 1, k .. " is sent or opened") end
     for _, c in ipairs(C.commands) do
         for _, e in ipairs(c.extras) do
             ok(src:find("%f[%w_]" .. esc(e) .. "%s*=") or src:find("%." .. esc(e) .. "%f[^%w_]") or src:find('%["' .. esc(e) .. '"%]'), c.name .. " extra " .. e)

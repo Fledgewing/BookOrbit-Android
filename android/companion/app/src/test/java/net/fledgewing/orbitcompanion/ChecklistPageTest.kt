@@ -222,13 +222,16 @@ class ChecklistPageTest {
     @Test
     fun detailsPageHasCopyForSupport() {
         val a = Robolectric.buildActivity(SetupDetailsActivity::class.java).setup().get()
-        // Diagnostics intentionally loads off the UI thread. Drain the callback,
-        // rather than relying on the executor winning a race with this assertion.
+        // Details publishes asynchronously. A second Library callback is a FIFO barrier
+        // after the Activity's request; drain the main queue before inspecting its rows.
+        val ready = java.util.concurrent.atomic.AtomicBoolean(false)
+        LibraryDiagnostics.snapshot(a) { ready.set(true) }
         val deadline = System.nanoTime() + 10_000_000_000L
-        while (texts(a.window.decorView).contains("Loading crash summaries…") && System.nanoTime() < deadline) {
-            shadowOf(Looper.getMainLooper()).idle()
+        while (!ready.get() && System.nanoTime() < deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             Thread.sleep(10)
         }
+        assertTrue("Library diagnostics callback missing", ready.get())
         val t = texts(a.window.decorView)
         assertFalse("Diagnostics callback did not finish", t.contains("Loading crash summaries…"))
         assertTrue(t.contains("BookSync plugin last answered"))
