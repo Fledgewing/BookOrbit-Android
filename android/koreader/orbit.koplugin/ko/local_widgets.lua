@@ -40,6 +40,23 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
             HomeWidgets.text(c,plan.source or "On this reader",pad,pad+scale(22),w-2*pad,12)
             HomeWidgets.button(c,content or _("Open book ›"),pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("book",plan.book) end)
         end
+    elseif (p.widget=="moon" or p.widget=="glyph") and plan.ready then
+        local d=snapshot.data or {}
+        if p.widget=="moon" then
+            HomeWidgets.text(c,d.phase or "Unknown phase",pad,pad+scale(30),w-2*pad,20,false,true)
+            HomeWidgets.text(c,"≈ "..tostring(d.illumination or "—").."% lit",pad,pad+scale(60),w-2*pad,24)
+            HomeWidgets.text(c,d.next or "Next phase unavailable",pad,pad+scale(100),w-2*pad,12)
+            HomeWidgets.text(c,d.source or "Approximate",pad,h-pad-scale(12),w-2*pad,10)
+        else
+            local face,font=Library.glyphFace(d.codepoint,60)
+            if face then
+                -- Reuse the exact probed face; no fallback glyph is presented as a sample.
+                local sample=require("ui/widget/textwidget"):new{text=d.sample,face=face,max_width=w-2*pad}
+                HomeWidgets.put(c,sample,pad,pad+scale(24))
+                HomeWidgets.text(c,d.name or "Glyph",pad,pad+scale(100),w-2*pad,12)
+                HomeWidgets.text(c,(d.code or "").." · "..(font or d.source or "Font"),pad,h-pad-scale(12),w-2*pad,10)
+            else HomeWidgets.text(c,"Glyph unavailable in the interface font",pad,pad+scale(36),w-2*pad,13) end
+        end
     elseif p.widget=="word" and plan.word then
         if p.h==1 then
             HomeWidgets.button(c,plan.word.." ›",pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("word-lookup",plan.word) end)
@@ -65,7 +82,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"word","light","buddy","highlight","yearago","recommended","discover"}) do
+for _,id in ipairs({"moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}

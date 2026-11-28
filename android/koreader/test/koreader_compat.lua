@@ -174,7 +174,7 @@ for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "conta
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.
 local BASE = {
-    { "ffi/freetype.lua", { "getEmboldenHalfStrength" } },
+    { "ffi/freetype.lua", { "getEmboldenHalfStrength", "hasGlyph", "getInfo" } },
     { "cre.cpp", { {"getFontFaceFilenameAndFaceIndex", T} } },
     -- Home editor: dkjson preserves array/object tags and nulls for Layout.save/load.
     { "thirdparty/dkjson/CMakeLists.txt", { { "dkjson.lua", T } } },

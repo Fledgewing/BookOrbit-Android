@@ -696,3 +696,13 @@ unsupported server roots. `sources` additionally accepts `collections` and
 are opaque `collection:<key>` / `library:<key>` identities; windows accept the
 corresponding neutral `{kind,key}` source. Adapters own membership and account
 validation. The reader preserves the entire key and never parses backend IDs.
+
+### Retained local decor (0.12)
+
+`local.moon` and `local.glyph` each return one local-date row, at most 16 KiB.
+Moon exposes `phase`, `illumination` (0–100), `next` and explicit approximate
+`source`; Glyph exposes `sample`, numeric `codepoint`, `code`, `name` and font
+source. Invalid/untrusted date ranges return `unavailable` with a reason, never a
+fabricated phase or sample. The plugin's Library font helper probes only the
+loaded interface face and returns its actual family; missing glyphs remain
+explicit. These operations perform no server transport or font directory scan.
