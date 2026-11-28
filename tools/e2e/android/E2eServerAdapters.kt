@@ -52,7 +52,7 @@ object ServerAdapters {
                 val rows=options.drop(offset).take(limit)
                 return mapOf("items" to rows,"total" to options.size,"next" to (offset+rows.size).takeIf { it<options.size },"freshness" to mapOf("saved" to true))
             }
-            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("retainedFinishedYears" to true,"series" to mapOf("read" to true,"downloadNext" to true),"download" to true,"lists" to mapOf("read" to true,"save" to false))
+            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("retainedFinishedYears" to true,"retainedSeriesNext" to true,"series" to mapOf("read" to true,"downloadNext" to true),"download" to true,"lists" to mapOf("read" to true,"save" to false))
             if(request["op"]=="lists") return mapOf("items" to listOf(mapOf("key" to "fixture-list","title" to "Fixture shelf","count" to 59)),"freshness" to mapOf("saved" to true))
             return books.project(DeviceLibrary.OWNER, request)
         }
