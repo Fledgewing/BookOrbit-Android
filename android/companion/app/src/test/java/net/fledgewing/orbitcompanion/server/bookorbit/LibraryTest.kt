@@ -55,6 +55,38 @@ class LibraryTest {
             assertEquals("Not saved yet",read(st,mapOf("op" to "window","source" to source))["empty"])
         }
     }
+    @Test fun namedLibraryAndCollectionShortcutsPageOpaqueAccountScopedMembership() {
+        store().use { st ->
+            seed(st)
+            for((section,kind) in listOf("libraries" to "library","collections" to "collection")) {
+                for(i in 1..8) st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,?,?,?,?,?)",section,i,i.toString(),"Source $i",i)
+                st.db().exec("INSERT INTO bulk_members(g,kind,value,id,context) VALUES(1,?,'7',3,?)",if(kind=="library") "libraryId" else "collectionId",LuaValue.encode(emptyMap<String,Any>()))
+                val first=read(st,mapOf("op" to "sources","category" to section,"limit" to 6))
+                assertEquals(6,(first["items"] as List<*>).size);assertEquals(8L,(first["total"] as Number).toLong())
+                val next=read(st,mapOf("op" to "sources","category" to section,"offset" to 6,"limit" to 6))
+                val row=(next["items"] as List<*>).first() as Map<*,*>
+                assertEquals("$kind:${BookOrbitLibrary.key(owner,kind,7)}",row["src"])
+                val books=read(st,mapOf("op" to "window","source" to mapOf("kind" to kind,"key" to BookOrbitLibrary.key(owner,kind,7))))["items"] as List<*>
+                assertEquals(listOf("Book 3"),books.map { (it as Map<*,*>)["title"] })
+                assertEquals("missing",read(st,mapOf("op" to "window","source" to mapOf("kind" to kind,"key" to BookOrbitLibrary.key("other",kind,7))))["error"])
+            }
+            assertTrue((read(st,mapOf("op" to "sources","category" to "collections","allow_collections" to false))["items"] as List<*>).isEmpty())
+            st.setMeta("bulk_complete",null)
+            assertEquals(false,(read(st,mapOf("op" to "sources","category" to "libraries"))["freshness"] as Map<*,*>)["saved"])
+        }
+    }
+    @Test fun libraryRootCountsSeparateIncompleteIndexesFromKnownZero() {
+        store().use { st ->
+            seed(st)
+            st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'libraries',1,'7','Shelf',5)")
+            val summary=read(st,mapOf("op" to "library.summary"));val browse=summary["browse"] as Map<*,*>
+            assertEquals(1L,browse["libraries"]);assertEquals(0L,browse["collections"])
+            assertNotNull(summary["in_progress"]);assertTrue(LuaValue.encode(summary).size<16384)
+            st.setMeta("bulk_complete",null)
+            val incomplete=read(st,mapOf("op" to "library.summary"))["browse"] as Map<*,*>
+            assertNull(incomplete["libraries"]);assertNull(incomplete["collections"])
+        }
+    }
     private val owner = "fixture|https://library.invalid"
     private val book = mapOf<String, Any?>("key" to "b", "title" to "The Moon", "authors" to listOf("A", "B"), "series" to listOf("Orbit"),
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,

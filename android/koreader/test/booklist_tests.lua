@@ -11,7 +11,7 @@ return function(M,test,ok,eq)
         for _,bad in ipairs({{title="",src="recent"},{title="A",src="unknown"},{title="A",src="recent",sort=4},
             {title="A",src="recent",cap=-1},{title="A",src="recent",style=.5},{title="A",src="recent",query="json"},
             {title="A",src="recent",query={q=string.rep("x",4100)}}}) do eq(B.valid(bad),nil) end
-        for _,src in ipairs({"custom","recent","wtr","reading","finished","device","list:opaque:key","series:opaque","author:A:B"}) do
+        for _,src in ipairs({"custom","recent","wtr","reading","finished","device","list:opaque:key","series:opaque","author:A:B","collection:opaque:key","library:opaque:key"}) do
             ok(B.valid({title="Title",src=src})); ok(B.source({src=src}))
         end
     end)

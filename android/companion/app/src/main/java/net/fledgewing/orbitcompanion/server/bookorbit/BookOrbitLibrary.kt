@@ -77,8 +77,8 @@ object BookOrbitLibrary {
         val g=store.meta("bulk_active")?.toLongOrNull()
         val saved=g != null && store.meta("bulk_complete")?.toLongOrNull()==g
         if (!saved) return mapOf("items" to emptyList<Any>(), "freshness" to mapOf("saved" to false))
-        val section=if (category=="lists") "smart-scopes" else "series"
-        val kind=if (category=="lists") "list" else "series"
+        val section=when(category) { "lists" -> "smart-scopes";"collections" -> "collections";"libraries" -> "libraries";else -> "series" }
+        val kind=when(category) { "lists" -> "list";"collections" -> "collection";"libraries" -> "library";else -> "series" }
         val total=store.db().query("SELECT count(*) FROM bulk_sections WHERE g=? AND section=?",g,section) { it.long(0)!! }.single()
         val rows=store.db().query("SELECT id,name,n FROM bulk_sections WHERE g=? AND section=? ORDER BY pos,id LIMIT ? OFFSET ?",g,section,limit,offset) {
             val id=it.text(0).orEmpty().removePrefix("series:")

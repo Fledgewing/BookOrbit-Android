@@ -69,8 +69,8 @@ function StorageUI.widget(p,snapshot,dispatch,rect)
         StorageUI.bar(c,st.parts,2*pad+half,y+s(50),half,s(6))
         HomeWidgets.text(c,label,2*pad+half,y+s(60),half,11)
         if not short then
-            local links={{"Authors","group",{group="author"}},{"Series","group",{group="series"}},{"Collections","collections"}}
-            if not d.collections_available then table.remove(links,3) end
+            local links={{"Browse library","browse"},{"Authors","group",{group="author"}},{"Series","group",{group="series"}},{"Collections","collections"}}
+            if not d.collections_available then table.remove(links,4) end
             local count=math.min(#links,math.max(0,math.floor((h-s(92)-pad)/s(50))))
             local start=h-count*s(50)-pad
             for i,link in ipairs(links) do
@@ -82,12 +82,12 @@ function StorageUI.widget(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-function StorageUI.create(mode,onCollection,onReturn)
+function StorageUI.create(mode,onCollection,onReturn,caps)
     local Input=require("ui/widget/container/inputcontainer")
     local Geom=require("ui/geometry")
     local Page=Input:extend{name="booksync_storage",covers_fullscreen=true}
     function Page:init()
-        self.mode=mode or "storage"; self.offset=0; self.focus=1
+        self.mode=mode or "storage"; self.offset=0; self.focus=1;self.caps=caps or {}
         self.dimen=Geom:new{w=Device.screen:getWidth(),h=Device.screen:getHeight()}
         self.key_events={Close={{"Back"}},Next={{"Down"}},Previous={{"Up"}},Select={{"Press"}}}
         self:rebuild()
@@ -95,8 +95,9 @@ function StorageUI.create(mode,onCollection,onReturn)
     function Page:visible() return not self.closed and UIManager:getTopmostVisibleWidget()==self end
     function Page:rebuild()
         if self.refresh then UIManager:unschedule(self.refresh); self.refresh=nil end
-        local paint=Library.paint(self.mode=="collections" and "collections" or self.mode=="folder" and "storage-folder" or "storage")
-        self.data=self.mode=="collections" and paint:collections(self.offset,6) or paint:storage()
+        local sourceMode=self.mode=="libraries" or self.mode=="lists"
+        local paint=Library.paint(sourceMode and "booklist-sources" or self.mode=="collections" and "collections" or self.mode=="folder" and "storage-folder" or "storage")
+        self.data=sourceMode and paint:sources(self.mode,self.offset,6) or self.mode=="browse" and paint:summary() or self.mode=="collections" and paint:collections(self.offset,6) or paint:storage()
         self.metrics=paint:flush()
         self:draw()
         if self.data.pending and (self.attempts or 0)<6 then
@@ -117,10 +118,31 @@ function StorageUI.create(mode,onCollection,onReturn)
             self.controls[#self.controls+1]=b
             return b
         end
-        HomeWidgets.text(c,self.mode=="collections" and "Collections" or self.mode=="folder" and "Download folder" or "Storage",s(16),s(12),w-s(32),24,false,true)
+        HomeWidgets.text(c,self.mode=="browse" and "Library" or self.mode=="libraries" and "Libraries" or self.mode=="lists" and "Your lists" or self.mode=="collections" and "Collections" or self.mode=="folder" and "Download folder" or "Storage",s(16),s(12),w-s(32),24,false,true)
         if self.busy then HomeWidgets.text(c,"Working…",w-s(150),s(18),s(134),16) end
         local y=s(62)
-        if self.mode=="collections" then
+        if self.mode=="browse" then
+            local counts=self.data.browse or {}
+            HomeWidgets.text(c,self.data.coverage or "Catalog indexes not saved yet",s(16),y,w-s(32),14);y=y+s(32)
+            local roots={{"All books","all",self.data.total},{"In progress","reading",self.data.in_progress},
+                {"Libraries","libraries",counts.libraries},{"Authors","authors",counts.authors},{"Series","series",counts.series},
+                {"Collections","collections",counts.collections},{"Your lists","lists",counts.lists}}
+            for _,root in ipairs(roots) do
+                if not (root[2]=="libraries" and self.caps.libraries==false or root[2]=="collections" and self.caps.collections==false or root[2]=="lists" and self.caps.lists and self.caps.lists.read==false) then
+                button(root[1].." · "..tostring(root[3] or "—").." ›",y,function() self:onClose();if onCollection then onCollection({root=root[2],title=root[1]}) end end);y=y+s(56)
+                end
+            end
+            if self.data.pending or self.data.error then button("Retry",y,function() Library.retry();self:rebuild() end);y=y+s(56) end
+        elseif self.mode=="libraries" or self.mode=="lists" then
+            if self.data.pending or self.data.error or #(self.data.items or {})==0 then
+                button(self.data.pending and "Loading…" or self.data.error and "Couldn't load sources · Retry" or not (self.data.freshness and self.data.freshness.saved) and "Not saved yet" or "No sources",y,function() Library.retry();self:rebuild() end);y=y+s(56)
+            end
+            for _,row in ipairs(self.data.items or {}) do
+                button(row.title.." · "..tostring(row.count or "—").." ›",y,function() self:onClose();if onCollection then onCollection(row) end end);y=y+s(56)
+            end
+            if self.offset>0 then button("Previous",y,function() self.offset=math.max(0,self.offset-6);self:rebuild() end);y=y+s(56) end
+            if self.data.next then button("Next",y,function() self.offset=self.data.next;self:rebuild() end);y=y+s(56) end
+        elseif self.mode=="collections" then
             if self.data.pending or self.data.error or #(self.data.items or {})==0 then
                 button(self.data.pending and "Loading…" or self.data.error and "Couldn't load collections · Retry" or not (self.data.freshness and self.data.freshness.saved) and "Not saved yet" or "No collections",y,function() Library.retry(); self:rebuild() end)
             end
@@ -221,11 +243,11 @@ function StorageUI.create(mode,onCollection,onReturn)
     function Page:onClose() if self.closed then return true end; self:onCloseWidget(); UIManager:close(self); Library.changed({kind="storage"}); if onReturn then onReturn() end; return true end
     return Page:new{}
 end
-function StorageUI.show(mode,onCollection,onReturn)
+function StorageUI.show(mode,onCollection,onReturn,caps)
     local problem=Library.companion.workerProblem("for Storage")
     if problem then UIManager:show(InfoMessage:new{text=problem}); return false end -- gate: user action (Storage)
     StorageUI.opening=true
-    local ok,page=pcall(StorageUI.create,mode,onCollection,onReturn)
+    local ok,page=pcall(StorageUI.create,mode,onCollection,onReturn,caps)
     StorageUI.opening=nil
     if not ok then error(page) end
     StorageUI.active=page

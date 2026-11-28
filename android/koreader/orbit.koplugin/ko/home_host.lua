@@ -267,6 +267,7 @@ function HomeHost.create()
     function Host:menu()
         local menu
         menu=require("ui/widget/buttondialog"):new{title=_("Home"),buttons={
+            {{text=_("Browse library"),callback=function() UIManager:close(menu);self:dispatch("browse") end}},
             {{text=_("Edit Home"),callback=function() UIManager:close(menu); HomeEditor.show(self) end}},
             {{text=_("BookSync settings"),callback=function()
                 UIManager:close(menu)
@@ -318,6 +319,12 @@ function HomeHost.create()
             if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()
         elseif action == "storage" then StorageUI.show()
+        elseif action == "browse" then StorageUI.show("browse",function(row)
+            if row.root=="authors" or row.root=="series" then self:showList(row.title,"all",{group=row.root=="authors" and "author" or "series"})
+            elseif row.root=="all" or row.root=="reading" then self:showList(row.title,row.root)
+            else self:dispatch(row.root) end
+        end,nil,self.caps)
+        elseif action == "libraries" or action == "lists" then StorageUI.show(action,function(row) self:showList(row.title,BookList.source({src=row.src})) end)
         elseif action == "collections" then StorageUI.show("collections",function(row)
             self:showList(row.title,{kind="collection",key=row.key})
         end)

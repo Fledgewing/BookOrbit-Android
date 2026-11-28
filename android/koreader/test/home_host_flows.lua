@@ -241,8 +241,9 @@ return function(test,eq,ok,E,W,Widget)
             E.state.module={showSettings=function() opened=opened+1 end}
             local success,err=pcall(function()
                 h:menu(); local menu=W.shown[#W.shown]
-                eq(menu.buttons[2][1].text,"BookSync settings")
-                menu.buttons[2][1].callback(); eq(opened,1); eq(W.shown[#W.shown],h)
+                eq(menu.buttons[1][1].text,"Browse library")
+                eq(menu.buttons[3][1].text,"BookSync settings")
+                menu.buttons[3][1].callback(); eq(opened,1); eq(W.shown[#W.shown],h)
             end)
             E.state.module=old
             ok(success,err)

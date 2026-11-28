@@ -12,6 +12,43 @@ return function(test,eq,ok,E,W,withHost)
             actions={{id='finished',label='Remove finished books from device',detail='Frees 10 MB · 1 book',token='preview'}},
             folders={{id='Books',label='/Books'},{id='BookSync',label='/BookSync'}},folder='Books',freshness={saved=true}}
     end
+    test('library roots: saved counts, capabilities and named source selection stay behind Library',function()
+        withHost(function(_,reads)
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                local a=E.Cache.decode(raw)
+                if a.op=='library.summary' then return {total=7,in_progress=2,browse={libraries=1,authors=3,series=2,collections=1,lists=1},coverage='Saved catalog indexes',freshness={saved=true}},300 end
+                if a.op=='sources' then
+                    reads[#reads+1]=a
+                    return {items={{src=a.category=='libraries' and 'library:opaque:7' or 'list:opaque:9',title='Named source',count=2}},total=1,freshness={saved=true}},180
+                end
+                return read(raw)
+            end
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            h:dispatch('browse');local page=E.StorageUI.active
+            eq(page.metrics.rows,1);eq(page.metrics.roundTrips,1)
+            ok(click(page,'Libraries · 1 ›'));eq(E.StorageUI.active.mode,'libraries')
+            page=E.StorageUI.active;eq(reads[#reads].category,'libraries');eq(reads[#reads].limit,6)
+            ok(click(page,'Named source · 2 ›'))
+            eq(h.filter.model.source.kind,'library');eq(h.filter.model.source.key,'opaque:7')
+            h:onClose();h:dispatch('browse');page=E.StorageUI.active
+            ok(click(page,'Your lists · 1 ›'));page=E.StorageUI.active
+            ok(click(page,'Named source · 2 ›'));eq(h.filter.model.source.kind,'list');eq(h.filter.model.source.key,'opaque:9')
+        end)
+    end)
+    test('library roots: incomplete counts remain unknown and unsupported roots are hidden',function()
+        withHost(function()
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                if E.Cache.decode(raw).op=='library.summary' then return {total=7,browse={complete=false},coverage='Catalog indexes updating',freshness={saved=true}},180 end
+                return read(raw)
+            end
+            local page=E.StorageUI.show('browse',function() end,nil,{libraries=false,collections=false,lists={read=false}})
+            local labels={};for _,control in ipairs(page.controls) do labels[control.text]=true;ok(control.overlap_offset[2]+control.height<=page.dimen.h) end
+            ok(labels['Authors · — ›']);ok(labels['Series · — ›']);eq(labels['Collections · — ›'],nil);eq(labels['Libraries · — ›'],nil);eq(labels['Your lists · — ›'],nil)
+            page:onClose()
+        end)
+    end)
     test('storage: one-row Library caption stays within a portrait tablet tile',function()
         withHost(function()
             local text=E.HomeWidgets.text

@@ -54,7 +54,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val fresh=mapOf("saved" to true,"origin" to "local-device")
         fun rows(items: List<*>) = mapOf("items" to items,"freshness" to fresh)
         val op=request["op"]
-        if(op=="capabilities") return mapOf("onDevice" to true,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,
+        if(op=="capabilities") return mapOf("onDevice" to true,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,
             "lists" to mapOf("read" to false,"save" to false),"wantToRead" to false,"progress" to mapOf("read" to true,"write" to false),
             "status" to mapOf("read" to true,"write" to false))
         if(op in setOf("lists","collections")) return rows(emptyList<Any>())
@@ -62,11 +62,22 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
             val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","Finished",books.count { it["status"]=="finished" }))
             val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
             val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
-            val items=if(request["category"] in setOf("lists","authors")) emptyList() else definitions.drop(offset).take(limit).map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count) }
-            return rows(items)+mapOf("total" to if(items.isEmpty()) 0 else definitions.size)
+            val category=request["category"] as? String ?: "builtin"
+            val available=when(category) {
+                "builtin" -> definitions.map { (src,title,count) -> mapOf("src" to src,"title" to title,"count" to count) }
+                "authors","series" -> {
+                    val kind=if(category=="authors") "author" else "series"
+                    val counts=books.flatMap { book -> (book[if(category=="authors") "authors" else "series"] as? List<*>)?.filterIsInstance<String>().orEmpty().distinct() }.groupingBy { it }.eachCount()
+                    counts.keys.sortedWith(String.CASE_INSENSITIVE_ORDER).map { name -> mapOf("src" to "$kind:$name","title" to LuaValue.boundedText(LuaValue.utf8(name),80),"count" to counts[name]) }
+                }
+                else -> emptyList()
+            }
+            return rows(available.drop(offset).take(limit))+mapOf("total" to available.size,"next" to (offset+limit).takeIf { it<available.size })
         }
         if(op=="catalog.state") return mapOf("state" to "idle","freshness" to fresh)
-        if(op=="library.summary") return mapOf("total" to books.size,"on_device" to books.size,"freshness" to fresh)
+        if(op=="library.summary") return mapOf("total" to books.size,"on_device" to books.size,"in_progress" to books.count { it["status"] in setOf("reading","rereading") },
+            "browse" to mapOf("complete" to true,"authors" to books.flatMap { (it["authors"] as? List<*>).orEmpty() }.distinct().size,"series" to books.mapNotNull { it["series_key"] }.distinct().size),
+            "coverage" to "This reader's files","freshness" to fresh)
         if(op=="series") {
             val key=request["key"] as? String ?: return mapOf("error" to "missing")
             val members=books.filter { it["series_key"]==key }
@@ -108,8 +119,9 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val filter=(request["query"] as? Map<*,*>).orEmpty().entries.associate { it.key.toString() to it.value }
         LibraryFilter.validate(filter)
         val source=request["source"]
-        val sourceFilter=when(source) { "reading" -> mapOf("show" to "reading"); "finished" -> mapOf("show" to "finished"); "want-to-read" -> mapOf("wtr" to true); else -> emptyMap() }
-        var selected=if(source !in setOf("all","library/all","on-device","reading","finished","search")) emptyList() else books.filter { LibraryFilter.matches(it,sourceFilter) && LibraryFilter.matches(it,filter) }
+        val context=source as? Map<*,*>
+        val sourceFilter=if(context?.get("kind")=="author") mapOf("author" to listOf(context["key"])) else if(context?.get("kind")=="series") mapOf("series" to listOf(context["key"])) else when(source) { "reading" -> mapOf("show" to "reading"); "finished" -> mapOf("show" to "finished"); "want-to-read" -> mapOf("wtr" to true); else -> emptyMap() }
+        var selected=if(source !in setOf("all","library/all","on-device","reading","finished","search") && context?.get("kind") !in setOf("author","series")) emptyList() else books.filter { LibraryFilter.matches(it,sourceFilter) && LibraryFilter.matches(it,filter) }
         val sort=if(filter["sort"]==null && source=="reading") filter+mapOf("sort" to "last","dir" to "desc") else filter
         selected=selected.sortedWith(LibraryFilter.comparator(sort))
         if(request["exclude_current"]==true && source=="reading") selected=selected.drop(1)

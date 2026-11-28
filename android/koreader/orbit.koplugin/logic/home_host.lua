@@ -40,7 +40,7 @@ function HomeHostPlan.need(p)
     -- Neutral context keys only; adapters interpret their opaque identities.
     if type(s.src) == "string" and s.src:match("^(%a+):") then
         local kind,key=s.src:match("^(%a+):(.+)$")
-        if kind=="list" or kind=="series" or kind=="author" then source={kind=kind,key=key} end
+        if kind=="list" or kind=="series" or kind=="author" or kind=="collection" or kind=="library" then source={kind=kind,key=key} end
     end
     assert(s.query == nil or type(s.query) == "table", "Invalid widget query")
     assert(s.limit == nil or type(s.limit) == "number" and s.limit >= 1, "Invalid widget limit")
@@ -93,6 +93,7 @@ function HomeHostPlan.resolve(document,registry,caps)
             if p.widget == "battery" and caps and caps.battery == false then supported=false end
             if p.widget == "library" and caps and caps.catalog == false then supported=false end
             if WidgetRegistry[p.widget] and (WidgetRegistry[p.widget].dataNeeds[1].source == "reading.stats" or WidgetRegistry[p.widget].dataNeeds[1].source == "reading.metrics") and caps and caps.readingStats == false then supported=false end
+            if type(need.source)=="table" and need.source.kind=="collection" and caps and caps.collections==false then supported=false end
             if need.source == "want-to-read" and caps and caps.wantToRead == false then supported=false end
             if need.source == "on-device" and caps and caps.onDevice == false then supported=false end
             if supported then placements[#placements+1]=p end

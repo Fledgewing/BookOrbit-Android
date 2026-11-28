@@ -189,11 +189,11 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         }
         if (op == "sources") {
             val category=a["category"] as? String ?: "builtin"
-            require(category in setOf("builtin","lists","series","authors"))
+            require(category in setOf("builtin","lists","series","authors","collections","libraries"))
             val offset=((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
             val limit=((a["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
-            if (category=="lists" && a["allow_lists"]==false) return empty(true)
-            if (category=="lists" || category=="series") return BookOrbitLibrary.sourceSections(store,owner,category,offset,limit)
+            if (category=="lists" && a["allow_lists"]==false || category=="collections" && a["allow_collections"]==false) return empty(true)
+            if (category in setOf("lists","series","collections","libraries")) return BookOrbitLibrary.sourceSections(store,owner,category,offset,limit)
             if (category=="authors") {
                 val page=project(owner,mapOf("op" to "facets","source" to "library/all","field" to "author","offset" to offset,"limit" to limit))
                 val rows=(page["items"] as? List<*>).orEmpty().map { raw ->
@@ -267,7 +267,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         val source = if (op == "library.summary") "library/all" else if (op in setOf("series","series.preview")) mapOf("kind" to "series", "key" to a["key"]) else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
-        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "series", "author", "search", "selection"))
+        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "library", "series", "author", "search", "selection"))
         val activeGeneration = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
         val completeGeneration=store.meta("bulk_complete")?.toLongOrNull()
         val incomplete=completeGeneration!=activeGeneration
@@ -275,7 +275,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         val seriesContext=kind=="series" || op=="groups" && f["group"]=="series"
         val g=if(seriesContext && incomplete) completeGeneration ?: return empty(false) else activeGeneration
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
-        if (kind in setOf("list", "collection") && incomplete) return empty(false)
+        if (kind in setOf("list", "collection", "library") && incomplete) return empty(false)
 
         val localPaths = BookOrbitLibrary.localPaths(store, owner)
         val local = localPaths?.keys
@@ -298,12 +298,12 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 }
                 selected
             }
-            "list", "series", "collection" -> {
+            "list", "series", "collection", "library" -> {
                 val id = BookOrbitLibrary.id(owner, kind, sourceKey) ?: return mapOf("error" to "missing")
-                val section = when(kind) { "list" -> "smart-scopes"; "collection" -> "collections"; else -> "series" }
+                val section = when(kind) { "list" -> "smart-scopes"; "collection" -> "collections";"library" -> "libraries"; else -> "series" }
                 val exists = store.db().query("SELECT 1 FROM bulk_sections WHERE g=? AND section=? AND id=? LIMIT 1", g, section, if (kind == "series") "series:$id" else id.toString()) { true }.isNotEmpty()
                 if (!exists) return mapOf("error" to "missing")
-                store.db().query("SELECT id,context FROM bulk_members WHERE g=? AND kind=? AND value=?", g, when(kind) { "list" -> "smartScopeId"; "collection" -> "collectionId"; else -> "seriesId" }, id.toString()) {
+                store.db().query("SELECT id,context FROM bulk_members WHERE g=? AND kind=? AND value=?", g, when(kind) { "list" -> "smartScopeId"; "collection" -> "collectionId";"library" -> "libraryId"; else -> "seriesId" }, id.toString()) {
                     it.long(0)!! to (it.bytes(1)?.let(LuaValue::parse) as? Map<*, *>).orEmpty()
                 }.toMap()
             }
@@ -372,7 +372,17 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             val limit = ((a["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)
             return (facet?.page(offset, limit) ?: mapOf("items" to emptyList<Any>())) + mapOf("total" to total, "freshness" to freshness(true))
         }
-        if (op == "library.summary") return mapOf("total" to total, "on_device" to local?.let { selected.count { b -> b["local_path"] != null } }, "freshness" to freshness(true))
+        if (op == "library.summary") {
+            // Root counts are known only after every secondary index is published.
+            val roots=if(incomplete) emptyMap<String,Long>() else store.db().query(
+                "SELECT section,count(*) FROM bulk_sections WHERE g=? AND section IN ('libraries','authors','series','collections','smart-scopes') GROUP BY section",g) { it.text(0)!! to it.long(1)!! }.toMap()
+            val browse=mapOf("complete" to !incomplete)+listOf("libraries","authors","series","collections","lists").associateWith { name ->
+                if(incomplete) null else roots[if(name=="lists") "smart-scopes" else name] ?: 0L
+            }
+            return mapOf("total" to total,"in_progress" to selected.count { it["status"] in setOf("reading","rereading") },
+                "on_device" to local?.let { selected.count { b -> b["local_path"] != null } },"browse" to browse,
+                "coverage" to if(incomplete) "Catalog indexes updating" else "Saved catalog indexes","freshness" to freshness(true))
+        }
         val counts = selected.groupingBy { it["status"].toString() }.eachCount()
         if (op == "counts") return mapOf("total" to total, "statuses" to counts, "freshness" to freshness(true))
         if (op == "series" || op == "groups") {
