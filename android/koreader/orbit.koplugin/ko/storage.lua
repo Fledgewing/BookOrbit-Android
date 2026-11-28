@@ -125,6 +125,7 @@ function StorageUI.create(mode,onCollection,onReturn,caps)
             local counts=self.data.browse or {}
             HomeWidgets.text(c,self.data.coverage or "Catalog indexes not saved yet",s(16),y,w-s(32),14);y=y+s(32)
             local roots={{"All books","all",self.data.total},{"In progress","reading",self.data.in_progress},
+                {"Recently added","recently-added",self.data.total},{"On this device","on-device",self.data.on_device},
                 {"Libraries","libraries",counts.libraries},{"Authors","authors",counts.authors},{"Series","series",counts.series},
                 {"Collections","collections",counts.collections},{"Your lists","lists",counts.lists}}
             for _,root in ipairs(roots) do

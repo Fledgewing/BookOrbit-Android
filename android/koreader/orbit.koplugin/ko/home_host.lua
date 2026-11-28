@@ -321,7 +321,7 @@ function HomeHost.create()
         elseif action == "storage" then StorageUI.show()
         elseif action == "browse" then StorageUI.show("browse",function(row)
             if row.root=="authors" or row.root=="series" then self:showList(row.title,"all",{group=row.root=="authors" and "author" or "series"})
-            elseif row.root=="all" or row.root=="reading" then self:showList(row.title,row.root)
+            elseif row.root=="all" or row.root=="reading" or row.root=="recently-added" or row.root=="on-device" then self:showList(row.title,row.root)
             else self:dispatch(row.root) end
         end,nil,self.caps)
         elseif action == "libraries" or action == "lists" then StorageUI.show(action,function(row) self:showList(row.title,BookList.source({src=row.src})) end)
