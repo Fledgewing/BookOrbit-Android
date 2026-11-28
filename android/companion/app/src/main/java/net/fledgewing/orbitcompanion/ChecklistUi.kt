@@ -311,24 +311,48 @@ class SetupBatteryActivity : EinkActivity() {
 
 /** Details (§3.6): what a support conversation needs, and Copy for support. Nothing here is counted. */
 class SetupDetailsActivity : EinkActivity() {
+    private var generation = 0
     override fun onResume() {
         super.onResume()
-        render()
+        load()
+    }
+    private fun load(showLoading: Boolean = true) {
+        val ticket = ++generation
+        if (showLoading) render(null)
+        LibraryDiagnostics.snapshot(this) { snapshot ->
+            if (ticket == generation && !isFinishing && !isDestroyed) render(snapshot)
+        }
+    }
+    override fun onPause() {
+        generation++
+        super.onPause()
     }
 
-    private fun render() {
+    private fun render(crashes: LibraryDiagnostics.Snapshot?) {
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Details", "‹ Setup") { finish() })
-        val lines = Setup.details(this)
+        val lines = crashes?.setup.orEmpty()
         lines.forEach { (k, v) -> root.addView(Ui.row(this, k, v)) }
+        root.addView(Ui.text(this, "Companion crashes", 24f))
+        root.addView(Ui.text(this, crashes?.text ?: "Loading crash summaries…", 18f))
         if (!Pin.locked(this)) {
-            root.addView(Ui.gap(this, 12))
-            root.addView(Ui.button(this, "Copy for support", heightDp = 56, sp = 20f) {
-                val text = SetupDetails.copyText(BuildConfig.VERSION_NAME, lines)
-                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("BookSync setup details", text))
-                OLog.i("setup: details copied for support")
-                Ui.note(this, "Copied. Paste it into your message.")
+            if (crashes?.canClear == true) root.addView(Ui.button(this, "Clear crash summaries", heightDp = 56, sp = 20f) {
+                val ticket = ++generation
+                LibraryDiagnostics.clear(this) { ok ->
+                    if (ticket == generation && !isFinishing && !isDestroyed) {
+                        if (ok) load(false) else render(crashes.copy(text = "Crash summary unavailable", canClear = true))
+                    }
+                }
             })
+            if (crashes != null) {
+                root.addView(Ui.gap(this, 12))
+                root.addView(Ui.button(this, "Copy for support", heightDp = 56, sp = 20f) {
+                    val text = SetupDetails.copyText(BuildConfig.VERSION_NAME, lines + ("Companion crashes" to crashes.text))
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("BookSync setup details", text))
+                    OLog.i("setup: details copied for support")
+                    Ui.note(this, "Copied. Paste it into your message.")
+                })
+            }
         }
     }
 

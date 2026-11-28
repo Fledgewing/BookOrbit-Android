@@ -69,3 +69,19 @@ exactly-once handler delegation. Library tests: byte/row ceiling and explicit cl
 Emulator: synthetic crash in a disposable process, restart, reopen Details, check
 count/dedup, copy sanitised support text, clear and reopen; no popup during reading.
 No intentional crash runs against a real reader. Physical acceptance stays separate.
+
+## Implementation on feature/0.12
+
+`BookSyncApplication` installs the uncaught handler once per process. The record’s
+schema fixes its component to Companion; it cannot represent native KOReader
+failures. `CrashSummary` uses a bounded binary record in `noBackupFilesDir`, an
+fsynced temporary file and atomic replacement. Record reads revalidate every
+field, including exact frame/type allowlists, before exposing a summary.
+`LibraryDiagnostics` owns asynchronous reads, local-time formatting and explicit
+Clear. Setup → Details paints only its immutable snapshot and rejects callbacks
+after leaving the page. The crash row is at most 8 KiB, alongside at most 8 KiB
+of existing setup diagnostics; no paint scans, network or subprocesses are added.
+
+The disposable emulator acceptance flow is `tools/e2e/android/crash_summary.py`.
+Its crash trigger is added only to the external fixture build, never to shipping
+sources or the shipping manifest. Physical reader acceptance remains separate.

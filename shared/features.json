@@ -2844,24 +2844,28 @@
       "category": "Behaviour",
       "platforms": {
         "android": {
-          "status": "missing",
-          "note": "Logs exist; no BookSync persisted crash-record equivalent",
-          "reason": "gap — no reason",
+          "status": "partial",
+          "note": "Companion-only private crash summaries: deduplication, reader-local times, explicit Clear and Copy for support in Setup → Details; never uploaded automatically",
+          "reason": "deliberately deferred: maintainer-approved Android scope (2026-11-27): uncaught Java/Kotlin Companion failures only; native KOReader crash handoff is deferred",
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReadingLogic.kt",
-              "line": 11
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CrashSummary.kt",
+              "line": 12
             },
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Pages.kt",
-              "line": 18
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/LibraryDiagnostics.kt",
+              "line": 10
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ChecklistUi.kt",
+              "line": 313
             }
           ],
-          "version": null
+          "version": "0.12.0"
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Core-dump summary logged; not automatic remote upload",
+          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply",
           "reason": null,
           "evidence": [
             {
@@ -2873,7 +2877,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Core-dump summary logged; not automatic remote upload",
+          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply",
           "reason": null,
           "evidence": [
             {
@@ -2886,7 +2890,7 @@
         "x3": {
           "status": "missing",
           "note": "Crash summary implementation is S3-only",
-          "reason": "hardware: firmware core-dump implementation gated to S3",
+          "reason": "hardware: firmware core-dump implementation gated to S3; maintainer-approved Companion-only Android outcome does not add a C3 crash handoff",
           "evidence": [
             {
               "path": "xteink/orbify/CrashRecord.cpp",
@@ -7042,19 +7046,6 @@
       "size": "M",
       "x3_fit": "Unknown; buttons can navigate categories, but text entry and extra strings have a cost.",
       "outcome": "Make equivalent settings discoverable; retain button navigation rather than require touch."
-    },
-    {
-      "priority": 4,
-      "id": "android-crash-record",
-      "features": [
-        "crash"
-      ],
-      "platforms": [
-        "android"
-      ],
-      "size": "S–M",
-      "x3_fit": "Android only; X3 S3 core-dump code is excluded. A C3 alternative requires separate validation.",
-      "outcome": "Persist an Android crash summary that survives restart, with deduplication and no automatic remote upload."
     }
   ],
   "deferred": [
@@ -7077,6 +7068,11 @@
       "feature": "battery-ui",
       "roadmap": "Ideas",
       "note": "Future idea (maintainer ruling 2026-11-25): a BookSync server could serve cross-reader battery comparison data to other devices. On-device comparison remains Android-only by design (screen size)."
+    },
+    {
+      "feature": "crash",
+      "roadmap": "Ideas — native KOReader crash handoff",
+      "note": "Native KOReader crash capture requires a separate bounded handoff; Android 0.12 summaries cover the Companion only."
     }
   ],
   "limitations": [
