@@ -133,12 +133,12 @@ harness tests cover source labels and server-only availability. The next Home
 slice can consume the same `reading.stats` operation; Goal/Streak widgets can use
 the newly available targets/counts without inspecting a backend payload.
 
-## Local completion and goal settings proposal
+## Local completion and goal settings
 
-Status: **NEEDS APPROVAL**. This section and
-[the settings mockup](stats-settings-mockups.html) propose the missing Android
-0.12 follow-up. They do not authorise new visible controls. X4 Pro/X4/X3 retain
-the Android-first deferral; no firmware changes accompany this proposal.
+Status: **APPROVED (2026-11-27)** by the maintainer, including the coordinator
+change: the goal carries over to each new year at the same target instead of
+resetting to Off. The [settings mockup](stats-settings-mockups.html) and Android
+0.12 implementation are authorised. X4 Pro/X4/X3 retain the Android-first deferral.
 
 Add “Reading statistics” under the existing Reading settings group, in both the
 reader and companion settings. Reuse their existing row/choice/input primitives:
@@ -155,10 +155,10 @@ Account totals remain separate when overlap is unknown.
 ```
 
 “Local reading goal” opens the existing numeric-entry style with Off and a year
-plus target from 1 to 999. A saved goal is year-specific and device-local; it does
+plus target from 1 to 999, with the touch keyboard docked at the bottom. A saved goal is year-specific and device-local; it does
 not change an account/server goal. In the off state the local target is unavailable,
 not zero. Display “2026 · 12 books · This reader only” after saving. On year rollover,
-keep the old record and show Off for the new year until explicitly set. Show the
+keep the old record and carry the same target into the new year. Off stays Off. Show the
 current year using companion-formatted text; Lua does not calculate dates.
 
 The local completion ledger records explicit native mark-finished events and
@@ -185,6 +185,6 @@ reading gate remain unchanged until any newly visible presentation is approved.
 
 After approval, unit tests cover duplicate and reordered events, Undo/re-finish,
 restart, additive 0.11 import, invalid dates, local midnight/year/DST, target range,
-off/new-year state, source pairing and unknown overlap. Emulator flows set/reopen/
+off/new-year carryover state, source pairing and unknown overlap. Emulator flows set/reopen/
 disable a goal, finish/Undo/reopen, check labels offline and preserve existing
 0.11 state on upgrade. No real reader or publication is part of this follow-up.
