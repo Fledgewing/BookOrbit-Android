@@ -71,7 +71,8 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
   only exceptions are what the reader does in the book: menus they open, the end-of-book sheet;
   and, by the user's ruling, BookSync position sync's one-draw "Continue from <device>, p. N? Yes / No" popup
-  ([position sync](docs/design/position-sync.md)).
+  ([position sync](docs/design/position-sync.md)); and the approved, claimed one-draw
+  bedtime/eye-rest reminder sheets ([reminders](docs/design/reminders.md)).
   Enforced by one gate per side (plugin `reading()`/`Gate.show`, companion `Reading`) and guard
   tests that fail on a new show or notify path that bypasses it
   ([design](docs/design/reading-gate.md)). Xteink firmware follows the same rule.

@@ -642,6 +642,7 @@ local SYNC_OPS={ ["sync.activate"]=true,["sync.capture"]=true,["sync.override"]=
 local SyncEnv=getfenv(Orbit.onSuspend)
 local stockCommand=SyncEnv.LibraryAdapter.command
 SyncEnv.LibraryAdapter.command=function(op,args,done)
+    if op:match("^reminders%.") then UIManager:scheduleIn(.01,function() done({due={}}) end);return true end
     if not SYNC_OPS[op] then return stockCommand(op,args,done) end
     W.sync_commands=W.sync_commands or {}; table.insert(W.sync_commands,{op=op,args=args})
     if op=="sync.capture" or op=="sync.override" then
@@ -3332,6 +3333,7 @@ end)
 ---------------------------------------------------------------- Companion-owned position sync
 
 dofile(here .. "/position_sync_flows.lua")(test,eq,ok,RE,W,UIManager,run,newUI,ReaderUI,FileManager)
+dofile(here .. "/reminders_flows.lua")(test,eq,ok,RE,W,UIManager,ReaderUI,FileManager)
 
 test("settings: sync controls remain visible under either position rule", function()
     local _, m = newUI(true)

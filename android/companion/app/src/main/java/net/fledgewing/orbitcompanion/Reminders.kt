@@ -29,7 +29,7 @@ class Reminders(private val store: Store, private val wall: () -> Long,
     data class State(val records: List<Record> = listOf(Record(INTERVAL, "interval", intervalMinutes=20)),
         val deletedId: String? = null, val deletion: String? = null)
     data class Runtime(val owner: String, val visible: Boolean, val sleeping: Boolean,
-        val page: Boolean, val modal: Boolean, val lastInput: Long, val knownClock: Boolean = true)
+        val page: Boolean, val modal: Boolean, val lastInput: Long, val knownClock: Boolean = true, val presenting: Boolean = false)
     data class Due(val event: String, val id: String, val revision: Long, val kind: String,
         val original: String, val due: Long, val expiry: Long, val sequence: Int = 0,
         val session: String? = null, val missed: Boolean = false)
@@ -129,7 +129,7 @@ class Reminders(private val store: Store, private val wall: () -> Long,
     fun activity(next: Runtime) {
         val now=elapsed(); require(next.lastInput<=now && now>=previousAt)
         val old=runtime
-        val oldActive=old!=null && old.visible && !old.sleeping && old.page && !old.modal && grant==null
+        val oldActive=old!=null && old.visible && !old.sleeping && old.page && !old.modal && !old.presenting && grant==null
         // Gap starts at the idle boundary, or when a lifecycle pause began. Active reading
         // before the five-minute idle limit still counts; at the limit the entire count resets.
         if(oldActive) {
@@ -142,7 +142,7 @@ class Reminders(private val store: Store, private val wall: () -> Long,
             grant!!.due.kind=="interval" && !next.page)) { grant=null; resetInterval() }
         if(old!=null && old.owner!=next.owner) { grant=null; intervalDue=null }
         runtime=next; previousAt=now
-        val active=next.visible && !next.sleeping && next.page && !next.modal && grant==null && now-next.lastInput<BREAK
+        val active=next.visible && !next.sleeping && next.page && !next.modal && !next.presenting && grant==null && now-next.lastInput<BREAK
         if(active) gapAt=null else if(gapAt==null) gapAt=now
         if(!active && intervalDue!=null) resetInterval()
         if(waitForInput!=null && next.lastInput>waitForInput!!) waitForInput=null
@@ -218,17 +218,18 @@ class Reminders(private val store: Store, private val wall: () -> Long,
         grant=null; waitForInput=runtime!!.lastInput; previousAt=elapsed(); gapAt=elapsed()
         return Response(true,action=="sleep")
     }
-    fun snapshot(twelveHour: Boolean, locale: Locale = Locale.getDefault()): Map<String,Any?> {
+    fun presentation(r: Record, twelveHour: Boolean, locale: Locale = Locale.getDefault()): Map<String,Any?> {
         val formatter=DateTimeFormatter.ofPattern(if(twelveHour) "h:mm a" else "HH:mm",locale)
-        val rows=state.records.map {r ->
             val time=r.minuteOfDay?.let {java.time.LocalTime.of(it/60,it%60).format(formatter)}
             val days=when(r.days) {127->"Every day";31->"Weekdays";96->"Weekends";null->null;else->(0..6).filter {r.days!! and (1 shl it)!=0}.joinToString(", ") {java.time.DayOfWeek.of(it+1).getDisplayName(java.time.format.TextStyle.SHORT,locale)}}
-            mapOf("kind" to r.kind,"id" to r.id,"revision" to r.revision,"source" to "local","sourceLabel" to "This reader",
+            return mapOf("kind" to r.kind,"id" to r.id,"revision" to r.revision,"source" to "local","sourceLabel" to "This reader",
                 "editable" to true,"enabled" to r.enabled,"minuteOfDay" to r.minuteOfDay,"days" to r.days,
                 "message" to r.message?.let(LuaValue::str),"intervalMinutes" to r.intervalMinutes,
                 "title" to LuaValue.str(if(r.kind=="interval") "Rest your eyes" else time!!),
                 "detail" to LuaValue.str(if(r.kind=="interval") "Every ${r.intervalMinutes} minutes of reading" else days!!))
-        }
+    }
+    fun snapshot(twelveHour: Boolean, locale: Locale = Locale.getDefault()): Map<String,Any?> {
+        val rows=state.records.map {presentation(it,twelveHour,locale)}
         val result=mapOf("items" to rows,"clockStatus" to if(runtime?.knownClock!=false) "known" else "unknown", "timeLimit" to 8,"timeCount" to state.records.count {it.kind=="time"},"state" to "ready")
         check(LuaValue.encode(result).size<=8192)
         return result

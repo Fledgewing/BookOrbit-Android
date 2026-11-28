@@ -78,6 +78,19 @@ class ReadingGuardTest {
     }
 
     @Test
+    fun remindersPublishOnlyClaimedDataAndNeverLaunchOrNotify() {
+        val source=File(sources(),"LibraryReminders.kt").readText()
+        assertTrue(!call.containsMatchIn(source))
+        assertTrue(!source.contains("startForegroundService("))
+        assertTrue(source.contains("s.claim(text(\"event\"),text(\"owner\"))"))
+        assertTrue(source.contains("s.respond(g,text(\"action\"),available(app))"))
+        assertTrue(source.contains("sleepToken!=token"))
+        val service=File(sources(),"OrbitService.kt").readText()
+        assertTrue(service.contains("reminderSleepNow(): String = sleepNow(\"reminder\")"))
+        assertTrue(Regex("\\.lockNow\\(").findAll(service).count()==1)
+    }
+
+    @Test
     fun everyNotifyAndStartActivityIsGatedOrExempt() {
         val counts = HashMap<Site, Int>()
         val unknown = mutableListOf<String>()
