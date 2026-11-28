@@ -83,7 +83,7 @@ class ReadingGuardTest {
         assertTrue(!call.containsMatchIn(source))
         assertTrue(!source.contains("startForegroundService("))
         assertTrue(source.contains("s.claim(text(\"event\"),text(\"owner\"))"))
-        assertTrue(source.contains("s.respond(g,text(\"action\"),available(app))"))
+        assertTrue(source.contains("s.respond(g,action,available(app))"))
         assertTrue(source.contains("sleepToken!=token"))
         val service=File(sources(),"OrbitService.kt").readText()
         assertTrue(service.contains("reminderSleepNow(): String = sleepNow(\"reminder\")"))

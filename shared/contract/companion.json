@@ -575,8 +575,10 @@
     "due_bytes": 1024,
     "time_limit": 8,
     "interval_limit": 1,
-    "runtime": "coalesced owner, visible/sleeping/page/modal/presenting flags, input serial and idle age; native input itself performs no IPC",
+    "runtime": "coalesced owner, visible/sleeping/page/modal/presenting flags, input serial, idle age and suspend-aware capture time; at most one earlier lifecycle frame; no per-page IPC",
     "claim": "one-use opaque grant tied to current owner, record revision and kind; durable time high-water before reply",
-    "sleep": "explicit response issues one-use intent; position checkpoint precedes existing SLEEP_NOW path; no permission UI"
+    "sleep": "explicit response issues one-use intent; position checkpoint precedes existing SLEEP_NOW path; no permission UI",
+    "grant_ticket_ms": 120000,
+    "add_key": "a:<immutable configuration revision>:<nonce>; Library assigned, bounded, deterministic local identity; stale deleted Add keys reject"
   }
 }

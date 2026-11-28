@@ -511,6 +511,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
             "guarded" -> if ((!addon || prefs.helperPin) && Pin.isSet(this)) {
                 linkRow(root, "Guarded apps", "${Pin.guarded(this).size} · open only after the PIN") { Pin.run(this) { startActivity(Intent(this, GuardedAppsActivity::class.java)) } }
             }
+            "reminders" -> root.addView(Ui.row(this, "Reminders", "Set reminders in BookSync reader settings"))
             "reading_statistics" -> linkRow(root, "Reading statistics", "Local goal and explicit completions · This reader only") { startActivity(Intent(this, LocalReadingSettingsActivity::class.java)) }
             "setup" -> linkRow(root, "Setup", "The checklist: what BookSync needs on this reader") { startActivity(Intent(this, SetupActivity::class.java)) }
             "mode" -> linkRow(root, "Mode", when (prefs.mode) {

@@ -37,7 +37,7 @@ function SettingsView:paint(attempt)
     assert(#items<=(Budgets.get("screens",self.screen).displayRows or Budgets.get("screens",self.screen).rows),"Settings display row budget exceeded")
     -- Reserve the title/navigation and a tall mode card. Every action is at least 50 px.
     local screen=Device.screen
-    local pageSize=math.max(1,math.min(5,math.floor((screen:getHeight()-screen:scaleBySize(300))/screen:scaleBySize(74))))
+    local pageSize=math.max(1,math.min(self.screen:match("^reminders") and 4 or 5,math.floor((screen:getHeight()-screen:scaleBySize(300))/screen:scaleBySize(74))))
     self.offset=math.min(self.offset,math.max(0,math.floor((#items-1)/pageSize)*pageSize))
     if self.choiceFocus then
         self.choiceFocus=nil
@@ -54,7 +54,7 @@ function SettingsView:paint(attempt)
         if row.checked_func then text=(row.checked_func() and "● " or "○ ")..text end
         local enabled=row.enabled~=false and (not row.enabled_func or row.enabled_func())
         local id=row.card_text and "mode-card" or row.id or "setting-"..i
-        if row.card_text or text:find("\n",1,true) then multiline[id]={text=text,size=row.card_text and 15 or 16} end
+        if row.card_text or row.multiline or text:find("\n",1,true) then multiline[id]={text=text,size=row.card_text and 15 or 16} end
         buttons[#buttons+1]={{text=row.card_text and SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()) or text,id=id,align="left",enabled=enabled,
             height=screen:scaleBySize(row.card_text and 180 or row.height or 64),text_font_size=row.card_text and 15 or 16,bordersize=row.section and 0 or nil,text_font_bold=row.section or nil,
             callback=function()

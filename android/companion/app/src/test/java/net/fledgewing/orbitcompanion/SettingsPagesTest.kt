@@ -56,6 +56,16 @@ class SettingsPagesTest {
         open(SettingsPage.section(RuntimeEnvironment.getApplication(), id, focus).setClass(RuntimeEnvironment.getApplication(), SettingsSectionActivity::class.java))
 
     @Test
+    fun reminderInformationIsSearchableAndReadableWithoutUnlocking() {
+        for(query in listOf("reminder","bedtime","eye rest")) assertTrue(SettingsUi.search(schema,query).any {it.id=="reminders"})
+        SettingsPage.forceLocked=true
+        val a=section("reading")
+        assertTrue(texts(a).contains("Reminders"))
+        assertTrue(texts(a).contains("Set reminders in BookSync reader settings"))
+        assertNull(shadowOf(a).nextStartedActivity)
+    }
+
+    @Test
     fun aboutIsReachableWhileLockedAndShowsSharedCreditWithBrowserLink() {
         SettingsPage.forceLocked = true
         val settings = open<SettingsActivity>()

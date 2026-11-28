@@ -786,7 +786,7 @@ closing the sheet or a superseding request retires presentation. Background
 permission changes never create a ticket or open a sheet. Existing external
 Companion routes remain available for recovery.
 
-## Local reminders (0.12, contract version 1)
+## Local reminders (0.12.1, contract version 1)
 
 The reader UI calls only `Library.reminders`. The Library uses trusted
 `SERVER_COMMAND`/`SERVER_RESULT` delivery for the `reminders.*` operations listed
@@ -809,3 +809,35 @@ Responses accept only their kind's actions. Explicit Sleep checkpoints the occur
 and current position before a separate one-use intent invokes the existing
 `SLEEP_NOW` implementation. Capability/permission failure stays in the initiating
 sheet; reminders never start an Activity, request permission, notify or wake a reader.
+
+Reminder Add keys carry the immutable configuration revision (`a:<revision>:<nonce>`),
+assigned by Library, and map to deterministic opaque local IDs. A live record deduplicates
+its original Add even after an edit; a key from an older configuration cannot recreate a
+deleted row. This needs only one configuration high-water counter, not an unbounded token
+or tombstone history. Record revisions remain separate from the snapshot revision; mutation
+receipts return the saved record identity under `saved` without overwriting that snapshot.
+Runtime frames include suspend-aware capture time and at most one earlier coalesced
+lifecycle transition, so delayed worker processing does not count paused time as reading.
+
+An undrawn grant has a 120-second monotonic presentation-ticket lifetime; it is
+separate from the time reminder's 60-minute eligibility window. A late callback
+cannot exercise the gate. A visible sheet has no timer-driven close. Snooze grants
+carry an elapsed expiry within the boot, so wall-clock corrections cannot change it.
+A failed explicit native Sleep attempt retains only the same visible sheet's one-use
+retry intent; another input is required, and retirement drops that intent.
+
+Reminder Sleep captures native `SaveSettings` and requires the return from
+`DocSettings.flush(nil, true)` before dispatch. At pinned KOReader
+`9192014d8bd82a91dc1012473be0f238dedfdb54`, position capture is in
+[`readerrolling.lua:337`](https://github.com/koreader/koreader/blob/9192014d8bd82a91dc1012473be0f238dedfdb54/frontend/apps/reader/modules/readerrolling.lua#L337)
+and [`readerpaging.lua:159`](https://github.com/koreader/koreader/blob/9192014d8bd82a91dc1012473be0f238dedfdb54/frontend/apps/reader/modules/readerpaging.lua#L159);
+[`docsettings.lua:317`](https://github.com/koreader/koreader/blob/9192014d8bd82a91dc1012473be0f238dedfdb54/frontend/docsettings.lua#L317)
+returns a sidecar directory only after the native durable write succeeds. The
+second argument avoids moving custom metadata/cover files during this checkpoint.
+A signed-out reader needs no account to save its local position and sleep; an
+available sync login additionally checkpoints the existing offline lifecycle outbox.
+
+A prepared Sleep checkpoints its response before the one-use native intent, while
+retaining the visible sheet grant until native success or retirement. Duplicate
+preparation cannot issue another intent. A failed native attempt still permits
+Got it or a durable snooze; a fresh explicit Sleep may retry the native intent.

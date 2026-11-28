@@ -7,7 +7,7 @@ function Gate.inBackground()
     return Gate.backgrounds[coroutine.running() or main] == true
 end
 function Gate.silent()
-    return Gate.inBackground() or Library.catalog_active
+    return Gate.inBackground() or Library.catalog_active or (Library.reminders and Library.reminders.presenting())
 end
 function Gate.withBackground(background, fn, ...)
     local key = coroutine.running() or main

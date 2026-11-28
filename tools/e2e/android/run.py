@@ -81,7 +81,7 @@ def setup(device, apk, koreader, apksigner):
     cert=subprocess.check_output([str(apksigner),"verify","--print-certs",str(apk)],text=True)
     digest=re.search(r"certificate SHA-256 digest: ([a-fA-F0-9]{64})",cert).group(1).upper()
     pin=":".join(digest[i:i+2] for i in range(0,64,2))
-    device.adb("install","-r",koreader);device.adb("install","-r",apk)
+    device.adb("install","-r",koreader);device.adb("install","-r","-t",apk)
     device.shell("appops","set","org.koreader.launcher","MANAGE_EXTERNAL_STORAGE","allow")
     for permission in ("READ_EXTERNAL_STORAGE","WRITE_EXTERNAL_STORAGE"):
         device.shell("pm","grant",PACKAGE,"android.permission."+permission)
@@ -97,6 +97,13 @@ def setup(device, apk, koreader, apksigner):
         source,count=re.subn(r'\["(?:[0-9A-F]{2}:){31}[0-9A-F]{2}"\] = true',f'["{pin}"] = true',source)
         if count != 1: raise ValueError("expected one release signer in staged test copy")
         policy.write_text(source)
+        # The deterministic fixture clock must be shared by both halves of a grant.
+        # Inject only into the staged emulator plugin; paint reads a memo, never a file.
+        reminders=work/"orbit.koplugin/ko/library_reminders.lua"
+        text=reminders.read_text()
+        text=text.replace("return (time.boottime and time.to_s(time.boottime()) or now_s())*1000", "return R.clockMemo or (time.boottime and time.to_s(time.boottime()) or now_s())*1000")
+        text=text.replace('return Library.remindersCommand(op,args or {},done or function() end)', 'return Library.remindersCommand(op,args or {},function(result) R.clockMemo=result.clockElapsed or R.clockMemo;if done then done(result) end end)')
+        reminders.write_text(text)
         device.shell("mkdir","-p","/sdcard/koreader/plugins","/sdcard/koreader/patches","/sdcard/Books")
         device.shell("rm","-rf","/sdcard/koreader/plugins/orbit.koplugin")
         device.push(work/"orbit.koplugin","/sdcard/koreader/plugins/")

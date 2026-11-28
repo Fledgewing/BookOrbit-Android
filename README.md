@@ -18,10 +18,10 @@ Generated support counts (settings included): ✅ supported, 🟡 partial, ❌ m
 
 | Platform | ✅ | 🟡 | ❌ | ➖ |
 |---|---:|---:|---:|---:|
-| Android (M8C / Boox) | 76 | 33 | 0 | 3 |
-| X4 Pro | 55 | 12 | 31 | 14 |
-| X4 classic | 54 | 12 | 31 | 15 |
-| X3 | 20 | 16 | 61 | 15 |
+| Android (M8C / Boox) | 76 | 35 | 0 | 3 |
+| X4 Pro | 55 | 12 | 33 | 14 |
+| X4 classic | 54 | 12 | 33 | 15 |
+| X3 | 20 | 16 | 63 | 15 |
 <!-- feature-counts:end -->
 
 ## Releases

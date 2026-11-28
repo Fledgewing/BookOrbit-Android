@@ -57,6 +57,7 @@ class CommandProvider : ContentProvider() {
 
     override fun onCreate(): Boolean {
         context?.let(DeviceSettings::initialize)
+        context?.let(LibraryReminders::initialize)
         return true
     }
 

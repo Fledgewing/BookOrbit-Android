@@ -154,3 +154,30 @@ protected settings and book/session departure. It captures native PNGs and
 `reader-companion.json`; synthetic mode/helper preferences are restored afterward.
 The Android 14 fixture uses the explicit Device admin Settings component for
 revocation because that image does not export the generic settings action.
+
+Reminders: `python3 tools/e2e/android/reminders.py --serial emulator-N --out
+<evidence>` exercises the native list, interval editor, docked time/message keyboards,
+explicit Save/Back, failed Save, bedtime over Home/page, consumed page keys, repeated
+snooze, the inclusive missed window and expiry, eye-rest threshold/reset, simultaneous
+bedtime priority and durable Turn off/failure. `build.py` injects `ReminderClock` into
+the disposable APK only. Its two clocks use the emulator's OS timezone and a small
+synthetic control file; a third scalar injects a store-save failure. The production
+APK, provider API, dependencies and trust policy contain no test-clock route. This
+flow publishes PNGs and `checks.json`; JVM tests exercise SQLite publication faults
+and the full recurrence, claim, source and lifecycle rule matrix.
+
+`reminders_settings.py` adds capacity/four-row paging, custom days, 12-hour input,
+delete Cancel focus, future read-only and load/recovery/clock render fakes, the
+companion information row, and explicit Sleep failure/retry through native
+`SLEEP_NOW`/`lockNow` with page restoration on wake. This disposable APK is marked
+test-only so its synthetic device administrator can be removed in `finally`;
+`run.py setup` installs it with `-t`. Shipping manifests and permission policy stay
+unchanged. The render fakes replace only the Library presentation port; future
+providers and credentials do not register. Run it after `reminders.py` on the same
+verified emulator and supply a separate evidence directory.
+
+The staged emulator plugin also consumes the fixture's published elapsed-clock memo.
+Both halves therefore validate the same injected grant expiry, including the exact
+60-minute boundary; host time spent editing cannot make a frozen test-clock grant
+appear expired. This changes only disposable staged sources. Production uses the OS
+suspend-aware clock; the fixture adds no paint IO and retains the actual gate predicates.
