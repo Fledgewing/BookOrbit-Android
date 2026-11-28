@@ -86,6 +86,7 @@ local NEEDS = {
     { "reader.lua", { { "userpatch.applyPatches(userpatch.early)", T }, { "userpatch.applyPatches(userpatch.late)", T },
         { "settings.reader.lua", T } } },
     { "frontend/device/input.lua", { "handleKeyBoardEv" } },
+    { "frontend/device/devicelistener.lua", { "onToggleNightMode", "onIterateRotation" } },
     { "frontend/apps/reader/readerui.lua", { "init", "showReader", "registerModule", "onHome",
         { "instance", F }, { "registerModule(\"status\"", T }, { "registerModule(\"toc\"", T },
         { "registerModule(\"menu\"", T } } },

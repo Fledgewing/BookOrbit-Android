@@ -38,6 +38,18 @@ object LocalWidgets {
             else -> row("ready", "Welcome back. Your next chapter is waiting.")
         }
     }
+    fun controls(native:Map<*,*>,now:Long):Map<String,Any?> {
+        val at=(native["at"] as? Number)?.toLong()?.takeIf { it>0 && it<=now }
+        val known=native["kind"] in setOf("menu_sync","sync_and_sleep") && at!=null && native["ok"] is Boolean
+        val busy=native["sync_busy"]==true
+        val result=when { busy -> "Syncing…";!known -> "No saved sync check";native["ok"]==true -> "Last sync check succeeded";else -> "Saved here · sync check failed" }
+        val age=if(known) (now-at!!).let { if(it<60) "Just checked" else if(it<3600) "Checked ${it/60} min ago" else if(it<86400) "Checked ${it/3600} h ago" else "Checked ${it/86400} d ago" } else "Reading sync · not catalog Refresh"
+        val wifi=native["wifi_available"]==true && native["wifi_on"] is Boolean
+        return row("ready",result)+mapOf("result" to LuaValue.str(result),"age" to LuaValue.str(age),
+            "sync_enabled" to (native["sync_available"]==true && !busy),"sync_label" to LuaValue.str(if(busy) "Syncing…" else "Sync now"),
+            "wifi_enabled" to (wifi && native["wifi_busy"]!=true),"wifi_label" to when { !wifi -> "Wi-Fi unavailable";native["wifi_busy"]==true -> "Wi-Fi busy";native["wifi_on"]==true -> "Wi-Fi on";else -> "Wi-Fi off" },
+            "night_label" to if(native["night"]==true) "Night on" else "Night off","rotate_enabled" to (native["rotate_available"]==true),"rotate_label" to "Rotate")
+    }
     fun light(native: Map<*, *>): Map<String, Any?> {
         val level = (native["level"] as? Number)?.toInt()?.takeIf { it in 0..100 }
         return if (native["supported"] != true || level == null) row("unavailable", "Frontlight unavailable on this reader")

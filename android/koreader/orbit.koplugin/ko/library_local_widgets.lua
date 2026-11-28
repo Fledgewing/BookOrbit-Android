@@ -4,6 +4,7 @@ function Library.localWidgetNeed(id)
     if id=="next-stop" then
         local ui=liveUI();return {op="local.nextstop",limit=1,native=ui and ui.document and Library.readerInput(ui,true) or {}}
     end
+    if id=="sync-controls" or id=="reader-toggles" then return {op="local.controls",limit=1,native=Library.controlInput()} end
     if id=="recommended" or id=="discover" then
         return {op="personal.reading",kind=id,limit=1,pick=id=="discover" and (S.home_discover_pick or 0) or nil}
     end
@@ -18,6 +19,7 @@ function Library.localWidgetNeed(id)
     return need
 end
 function Library.localWidgetAction(action,value)
+    if action:match("^control%-") then return Library.controlAction(action) end
     if action=="discover-another" then
         S.home_discover_pick=((S.home_discover_pick or 0)+1)%1000000000
         saveSettings(); Library.retry(); return true
@@ -45,4 +47,38 @@ function Library.glyphFace(codepoint,size)
         return f,f.ftsize:getInfo().name
     end)
     if ok then return face,name end
+end
+
+-- Cached native scalars only; no packet counters, folder scans or server work.
+function Library.controlInput()
+    local controller=Library.controller()
+    local last=type(S.last_sleep_sync)=="table" and S.last_sleep_sync or {}
+    local device=require("device")
+    local ui=liveUI() or require("apps/filemanager/filemanager").instance
+    local holds=Wifi.state().n or 0
+    local busy=Wifi.busy() or holds>0
+    return {sync_available=controller~=nil,sync_busy=controller and controller.sas_running==true,
+        at=last.at,ok=last.ok,kind=last.reason,
+        wifi_available=S.wifi_via_companion==true and Companion.has("wifi"),wifi_on=Wifi.radioOn(),wifi_busy=busy==true,
+        night=G_reader_settings:isTrue("night_mode"),rotate_available=ui~=nil and device.screen.getRotationMode~=nil}
+end
+function Library.controlAction(action)
+    local n=Library.controlInput()
+    if action=="control-sync" then
+        if not n.sync_available or n.sync_busy then return false end
+        local result=Library.syncNow(Library.controller())
+        Library.retry();return result
+    elseif action=="control-wifi" then
+        if not n.wifi_available or n.wifi_busy or type(n.wifi_on)~="boolean" then return false end
+        if n.wifi_on then Companion.wifiOff("home_manual",false)
+        else Companion.netUp("home_manual",{owner="manual"}) end
+    elseif action=="control-night" then
+        local ui=liveUI() or require("apps/filemanager/filemanager").instance
+        require("device/devicelistener"):new{ui=ui}:onToggleNightMode()
+    elseif action=="control-rotate" then
+        if not n.rotate_available then return false end
+        local ui=liveUI() or require("apps/filemanager/filemanager").instance
+        require("device/devicelistener"):new{ui=ui}:onIterateRotation()
+    else return false end
+    Library.retry();return true
 end

@@ -65,6 +65,18 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
         HomeWidgets.text(c,d.to_end,pad,pad+scale(87),w-2*pad,11)
         HomeWidgets.text(c,d.remaining,pad,pad+scale(104),w-2*pad,10)
         HomeWidgets.text(c,d.source or "On this reader",pad,h-pad-scale(12),w-2*pad,9)
+    elseif (p.widget=="sync-controls" or p.widget=="reader-toggles") and plan.ready then
+        local d=snapshot.data or {};local bh=scale(50)
+        if p.widget=="sync-controls" then
+            HomeWidgets.text(c,d.result,pad,pad+scale(30),w-2*pad,13)
+            HomeWidgets.text(c,d.age,pad,pad+scale(53),w-2*pad,11)
+            HomeWidgets.button(c,d.sync_label,pad,h-pad-bh,w-2*pad,bh,function() dispatch("control-sync") end,d.sync_enabled)
+        else
+            local bw=math.floor((w-3*pad)/2)
+            for i,item in ipairs({{d.wifi_label,"control-wifi",d.wifi_enabled},{d.night_label,"control-night",true},{d.rotate_label,"control-rotate",d.rotate_enabled},{d.sync_label,"control-sync",d.sync_enabled}}) do
+                HomeWidgets.button(c,item[1],pad+((i-1)%2)*(bw+pad),h-pad-(i<=2 and 2*bh or bh),bw,bh,function() dispatch(item[2]) end,item[3])
+            end
+        end
     elseif p.widget=="word" and plan.word then
         if p.h==1 then
             HomeWidgets.button(c,plan.word.." ›",pad,h-pad-scale(50),w-2*pad,scale(50),function() dispatch("word-lookup",plan.word) end)
@@ -90,7 +102,7 @@ function LocalWidgets.render(p,snapshot,dispatch,rect)
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-for _,id in ipairs({"next-stop","moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
+for _,id in ipairs({"sync-controls","reader-toggles","next-stop","moon","glyph","word","light","buddy","highlight","yearago","recommended","discover"}) do
     local name=id
     HomeWidgets.register(name,LocalWidgets.render,function() return Library.localWidgetNeed(name) end)
     WidgetRegistry[name].renderers={['android-tablet']=LocalWidgets.render}

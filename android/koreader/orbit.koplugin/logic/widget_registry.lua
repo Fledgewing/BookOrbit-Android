@@ -26,6 +26,10 @@ WidgetRegistry["monthly-reading"].refreshSeconds=60
 widget("finish-forecast","books.query",{{2,2},{4,2}},{{2,2}})
 widget("next-stop","local.nextstop",{{2,2},{4,2},{4,3}},{{2,2}})
 WidgetRegistry["next-stop"].localOnly=true;WidgetRegistry["next-stop"].refreshSeconds=60
+for _,id in ipairs({"sync-controls","reader-toggles"}) do
+    widget(id,"local.controls",{{2,2},{4,2}},{{2,2}})
+    WidgetRegistry[id].localOnly=true;WidgetRegistry[id].refreshSeconds=5
+end
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 for _,id in ipairs({"moon","glyph"}) do
     widget(id,"local."..id,{{2,2},{2,3},{4,2}},{{2,2}})
@@ -67,6 +71,8 @@ local descriptions={
     ["pages-read"]={"Pages read","Timed page visits today and across your saved history."},
     ["monthly-reading"]={"Monthly reading","Twelve monthly reading totals side by side."},
     ["finish-forecast"]={"Finish forecast","Measured remaining time and finish date for your current book."},
+    ["sync-controls"]={"Sync now","Sync your saved reading work, with the last sync-check result."},
+    ["reader-toggles"]={"Quick controls","Wi-Fi, Night, Rotate and Sync through existing native controls."},
     recommended={"Recommended for you","What to read next using saved books and reading history."},
     discover={"Discover (random)","A daily unread pick, with Another to choose again."},
     highlight={"Highlight of the day","A daily passage from your saved highlights."},

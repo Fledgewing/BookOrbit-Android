@@ -712,3 +712,9 @@ explicit. These operations perform no server transport or font directory scan.
 `local.nextstop` accepts bounded cached native page/count, TOC summary and checksum.
 The companion reads local measured pace read-only and returns one row / 16 KiB.
 Unknown geometry or history remains explicit; no completion or account state is written.
+
+### Local quick controls
+
+`local.controls` accepts only cached native scalars and the last reading sync check
+(at/result/kind). It returns one row / 16 KiB. Actions recheck helper opt-in,
+capabilities and active work. No helper is enabled by rendering or tapping a control.
