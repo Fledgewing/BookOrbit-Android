@@ -42,7 +42,12 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(view.eventPaint,'late ready events must survive the bounded polling window')
             eq(E.Library.listener,listener)
             local refresh=view.eventPaint;W.shown={};refresh();eq(view.eventPaint,refresh)
-            W.shown={view.dialog};refresh();eq(view.eventPaint,nil)
+            W.shown={view.dialog};E.Gate.background(refresh);eq(view.eventPaint,nil)
+            eq(W.shown[#W.shown],view.dialog,'a background reply must replace the visible owned dialog')
+            local reading=E.reading;E.reading=function() return true end
+            local shown=false
+            local safe,err=pcall(function() E.Gate.background(function() E.Gate.show('owned reading guard',function() shown=true end,nil,view.dialog) end) end)
+            E.reading=reading;ok(safe,err);eq(shown,false,'an owned modal never bypasses the reading gate')
             press(view,'○ Finished in 2025 · 100');eq(view.cfg.src,'year:2025')
             view:close();E.Library.changed({kind='library'});eq(view.eventPaint,nil)
             E.LibraryAdapter.read=read

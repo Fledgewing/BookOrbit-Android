@@ -21,3 +21,10 @@ selects the year and verifies close retirement. Native acceptance exercises the
 real cached second source page through the existing year flow.
 
 Physical acceptance and publication remain pending.
+
+The native reply also inherited background-notice scope. The old repaint closed
+its dialog before the gate suppressed its replacement. Replacements now stay
+inside `Gate.show`: the central gate verifies that the previous owned modal is
+frontmost and nobody is reading, then replaces it as one operation. A suppressed
+replacement leaves the old dialog intact. The regression executes the ready
+callback in background scope and asserts that the actual dialog stays visible.
