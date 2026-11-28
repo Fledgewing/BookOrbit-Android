@@ -388,3 +388,16 @@ of each relevant header. Lists, Details handoffs and transfer states retain
 Android 0.12 behavior; no new destinations are proposed. Preparing/errors stay
 inline and completion updates the originating row. This remains **NEEDS APPROVAL**
 after a docs-only merge; private photographs are not included.
+
+## F36c Series additions — NEEDS APPROVAL
+
+The [F36c source-mapped inventory](F36c-series.md) and
+[three-profile gallery, revision 2](f36c-series.html) use the supplied 0.11 X4
+photo density: covers, large values/small labels and top-right icons. Preview
+headers place All (n) › at the top-right. States and controls map to existing
+Android Series/group/preview/input/file/review/notice/queue branches; no extra
+firmware-only route or completion/Back/error wizard is proposed.
+**All additions remain NEEDS APPROVAL**, including after this docs-only merge.
+Existing Home revision-16 and B1–B5 approvals remain unchanged. Firmware F36c
+stays off pending presentation approval and Library service dependencies.
+No firmware or submodule pin changes; F36a/F36b remain separate.
