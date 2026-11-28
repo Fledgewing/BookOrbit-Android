@@ -271,6 +271,9 @@ function Library:read(op, args)
     local function read()
     args = args or {}
     args.op = op
+    -- A ready pre-upgrade view has no root counts/extended source vocabulary.
+    -- A new cache identity materializes the changed neutral shape immediately.
+    if op=="library.summary" or op=="sources" then args.projection=2 end
     local remainingRows=math.min(self.budget.rows-self.usage.rows,self.screen_budget.rows-self.metrics.rows)
     local remainingBytes=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
     assert(remainingRows>=1 and remainingBytes>=1,"Library caller budget exhausted")
@@ -443,7 +446,7 @@ end
 -- Paged source names/counts, never a catalog delivered to the editor.
 function Library:sources(category, offset, limit, caps)
     return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
-        allow_lists=not (caps and caps.lists and caps.lists.read==false),
+        allow_lists=not (caps and caps.lists and caps.lists.read==false),allow_collections=not (caps and caps.collections==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
 end
 

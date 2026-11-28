@@ -6418,6 +6418,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation; local completion/goal settings await their separate approval."
+    },
+    {
+      "id": "android-library-roots-shortcuts",
+      "feature": "Retained Library roots and named source shortcuts (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Counted browse roots and named collection/library/list shortcuts with saved opaque membership.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; the approved Android Library paths are implemented.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LIBRARY-ROOTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Counted roots and named shortcuts follow Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LIBRARY-ROOTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Counted roots and named shortcuts follow Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LIBRARY-ROOTS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Counted roots and named shortcuts follow Android-first implementation.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-LIBRARY-ROOTS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

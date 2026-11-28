@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import zipfile
+import uuid
 
 sys.dont_write_bytecode = True
 
@@ -36,18 +37,19 @@ class Emulator:
             if time.monotonic()>=deadline: raise TimeoutError("matching companion status was not published")
             time.sleep(.2)
     def command(self,code,timeout=20):
-        self.shell("rm","-f","/sdcard/koreader/e2e-result")
+        request_id=uuid.uuid4().hex
         with tempfile.TemporaryDirectory() as directory:
-            path=Path(directory)/"command.lua";path.write_text(code)
+            path=Path(directory)/"command.lua";path.write_text("-- booksync-request:"+request_id+"\n"+code)
             self.push(path,"/sdcard/koreader/e2e-pending.lua")
             self.shell("mv","/sdcard/koreader/e2e-pending.lua","/sdcard/koreader/e2e-command.lua")
         deadline=time.monotonic()+timeout
         while time.monotonic()<deadline:
             try: result=self.shell("cat","/sdcard/koreader/e2e-result")
             except subprocess.CalledProcessError: result=""
-            if result:
-                if not result.startswith("OK\n"): raise RuntimeError(result)
-                return result[3:]
+            if result.startswith("FAIL "+request_id+"\n"):
+                raise RuntimeError(result.split("\n",1)[1])
+            if result.startswith("OK "+request_id+"\n"):
+                return result.split("\n",1)[1]
             time.sleep(.2)
         raise TimeoutError("KOReader test driver did not respond")
     def shot(self,path):

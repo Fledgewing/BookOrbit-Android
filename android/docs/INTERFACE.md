@@ -682,3 +682,17 @@ Home shares this row by operation, separately from the annual Stats snapshot;
 refresh is host-owned, once a minute only while visible. The separate Finish
 forecast card uses one saved `reading` window row and the existing measured-pace
 provider. Existing layouts and default pages are unchanged.
+
+### Retained Library roots and named shortcuts (0.12)
+
+Library requests for `library.summary` / `sources` carry `projection=2` so ready
+pre-upgrade views cannot mask the expanded neutral shape.
+
+`library.summary` adds `in_progress`, a bounded `browse` count record and a plain
+`coverage` label. `browse.complete=false` means secondary counts are unknown;
+missing counts must not display zero. Local mode labels its own files and omits
+unsupported server roots. `sources` additionally accepts `collections` and
+`libraries`, using the same six-row/16 KiB paging contract. Returned `src` values
+are opaque `collection:<key>` / `library:<key>` identities; windows accept the
+corresponding neutral `{kind,key}` source. Adapters own membership and account
+validation. The reader preserves the entire key and never parses backend IDs.

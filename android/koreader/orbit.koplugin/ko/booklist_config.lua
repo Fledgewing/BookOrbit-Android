@@ -53,15 +53,15 @@ function BookListConfig:paint(attempt)
         self.metrics=paint:flush()
         local categories={}
         for i,id in ipairs(BookList.categories) do
-            local name=({builtin="Built in",lists="Your lists",series="Series",authors="Authors"})[id]
+            local name=({builtin="Built in",lists="Your lists",series="Series",authors="Authors",collections="Collections",libraries="Libraries"})[id]
             categories[#categories+1]={text=(id==self.category and "● " or "").._(name),
-                enabled=id~="lists" or not (self.caps.lists and self.caps.lists.read==false),
+                enabled=(id~="lists" or not (self.caps.lists and self.caps.lists.read==false)) and (id~="collections" or self.caps.collections~=false) and (id~="libraries" or self.caps.libraries~=false),
                 callback=function() self.category=id; self.offset=0; self:paint() end}
             if i%2==0 then buttons[#buttons+1]=categories; categories={} end
         end
         for i,option in ipairs(result.items or {}) do
             local chosen=option.src==self.cfg.src
-            if chosen then focus=i+2 end
+            if chosen then focus=i+math.ceil(#BookList.categories/2) end
             row((chosen and "● " or "○ ")..option.title..(option.count~=nil and " · "..option.count or " · —"),
                 function() self:choose(option) end,"source-"..i)
         end

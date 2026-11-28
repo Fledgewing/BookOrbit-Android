@@ -13,6 +13,23 @@ from build import build, ROOT
 from upgrade import reset_profile
 
 class EmulatorSafetyTest(unittest.TestCase):
+    def test_command_ignores_stale_and_incomplete_results_and_correlates_its_payload(self):
+        device=object.__new__(Emulator);request='a'*32
+        device.shell=Mock(side_effect=['', 'OK old\nwrong', 'OK '+request, 'OK '+request+'\nready'])
+        payload=[]
+        device.push=lambda path,destination: payload.append(Path(path).read_text())
+        with patch('run.uuid.uuid4',return_value=Mock(hex=request)),patch('time.sleep'):
+            self.assertEqual('ready',device.command('return "ready"'))
+        self.assertEqual(['-- booksync-request:'+request+'\nreturn "ready"'],payload)
+        self.assertEqual(4,device.shell.call_count)
+
+    def test_command_reports_only_its_own_failure(self):
+        device=object.__new__(Emulator);request='b'*32
+        device.shell=Mock(side_effect=['','FAIL old\nunrelated','FAIL '+request+'\nfixture failure'])
+        device.push=Mock()
+        with patch('run.uuid.uuid4',return_value=Mock(hex=request)),patch('time.sleep'):
+            with self.assertRaisesRegex(RuntimeError,'fixture failure'):device.command('error("fixture failure")')
+
     def test_startup_wait_polls_readiness_without_repeating_a_ui_action(self):
         device=object.__new__(Emulator)
         device.command=Mock(side_effect=["pending","pending","ready"])

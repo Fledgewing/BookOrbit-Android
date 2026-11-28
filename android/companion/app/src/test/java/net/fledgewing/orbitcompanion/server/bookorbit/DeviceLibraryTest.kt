@@ -19,6 +19,14 @@ class DeviceLibraryTest {
                     "summary" to mapOf("status" to if(i==1) "reading" else "new"))),Charsets.ISO_8859_1))
             }
             val adapter=DeviceLibrary(listOf(root))
+            val sources=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "sources","category" to "series"))
+            val source=(sources["items"] as List<*>).single() as Map<*,*>
+            assertEquals("series:Fixture series",source["src"]);assertEquals(30,source["count"])
+            val window=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "window","source" to mapOf("kind" to "series","key" to "Fixture series"),"limit" to 6))
+            assertEquals(30,window["total"]);assertEquals(6,(window["items"] as List<*>).size)
+            for(category in listOf("libraries","collections","lists")) assertTrue((adapter.project(DeviceLibrary.OWNER,mapOf("op" to "sources","category" to category))["items"] as List<*>).isEmpty())
+            val summary=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "library.summary"))
+            assertEquals(1,(summary["browse"] as Map<*,*>)["series"]);assertNull((summary["browse"] as Map<*,*>)["libraries"])
             val series=adapter.project(DeviceLibrary.OWNER,mapOf("op" to "series","key" to "Fixture series","limit" to 6))
             assertEquals(2,(series["items"] as List<*>).size)
             assertEquals(3,series["row_count"])

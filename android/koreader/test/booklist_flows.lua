@@ -18,7 +18,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
                     rows[#rows+1]={src=src,title=E.BookList.names[src],count=7}
                 end
             else
-                local kind=({lists="list",series="series",authors="author"})[a.category]
+                local kind=({lists="list",series="series",authors="author",collections="collection",libraries="library"})[a.category]
                 for i=a.offset+1,math.min(a.offset+a.limit,13) do rows[#rows+1]={src=kind..":key-"..i,title=kind.." "..i,count=i} end
             end
             return {items=rows,total=a.category=="builtin" and 6 or 13,next=a.category~="builtin" and a.offset<12 and a.offset+6 or nil,freshness={saved=true}},900
@@ -34,7 +34,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
             local old=e.model.document
             for _,src in ipairs({"recent","wtr","reading","finished","device"}) do
                 press(cfg,"Source: "..E.BookList.name(cfg.cfg).." ›")
-                eq(#cfg.dialog.buttons,9); eq(cfg.metrics.rows,6); eq(cfg.metrics.roundTrips,1)
+                eq(#cfg.dialog.buttons,10); eq(cfg.metrics.rows,6); eq(cfg.metrics.roundTrips,1)
                 press(cfg,"○ "..E.BookList.names[src].." · 7")
                 eq(cfg.cfg.src,src); eq(e.model.document,old)
             end
@@ -44,18 +44,18 @@ return function(test,eq,ok,E,W,Widget,withHost)
             local filter=cfg.filter
             filter.model.query.show="unread"; filter:back()
             eq(cfg.cfg.query.show,"unread"); eq(cfg.cfg.title,"Custom filter"); eq(cfg.filter,nil)
-            for _,cat in ipairs({{"lists","Your lists","list"},{"series","Series","series"},{"authors","Authors","author"}}) do
+            for _,cat in ipairs({{"lists","Your lists","list"},{"series","Series","series"},{"authors","Authors","author"},{"collections","Collections","collection"},{"libraries","Libraries","library"}}) do
                 press(cfg,"Source: "..E.BookList.name(cfg.cfg).." ›")
                 if cfg.category~=cat[1] then press(cfg,cat[2]) end; eq(cfg.category,cat[1])
                 press(cfg,"›"); eq(cfg.offset,6); eq(reads[#reads].offset,6); eq(reads[#reads].limit,6)
-                press(cfg,"›"); eq(cfg.offset,12); eq(#cfg.dialog.buttons,4)
+                press(cfg,"›"); eq(cfg.offset,12); eq(#cfg.dialog.buttons,5)
                 press(cfg,"‹"); eq(cfg.offset,6)
                 press(cfg,"○ "..cat[3].." 7 · 7"); eq(cfg.cfg.src,cat[3]..":key-7")
                 eq(E.HomeHostPlan.need({widget="booklist",settings=cfg.cfg}).source.kind,cat[3])
             end
             press(cfg,"Caption: Progress"); eq(cfg.cfg.cap,3)
             press(cfg,"Done"); eq(cfg.alive,false)
-            eq(e.model:page().placements[2].settings.src,"author:key-7")
+            eq(e.model:page().placements[2].settings.src,"library:key-7")
             eq(E.S.home_layout.pages[1].placements[2].settings.src,"reading","unpublished until editor Done")
         end)
     end)
@@ -84,7 +84,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
             local original=e.model.document
             local cfg=e:onMore(); eq(cfg.classic,true); eq(cfg.dialog.focus[2],1)
             press(cfg,"Title: Also reading"); eq(cfg.cfg.title,"Reading now")
-            press(cfg,"Source: Reading now ›"); eq(cfg.dialog.focus[2],6,"current source receives focus after category rows")
+            press(cfg,"Source: Reading now ›"); eq(cfg.dialog.focus[2],7,"current source receives focus after category rows")
             cfg.dialog:onClose(); eq(cfg.sources,nil); ok(cfg.alive)
             press(cfg,"Cancel"); eq(cfg.alive,false); eq(e.model.document,original)
             cfg=e:onMore(); cfg.dialog:onClose(); eq(cfg.alive,false); eq(e.model.document,original)

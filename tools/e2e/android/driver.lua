@@ -2,11 +2,15 @@
 -- Test-only user patch installed on a dedicated emulator, never packaged with BookSync.
 local UI=require("ui/uimanager")
 local base="/sdcard/koreader/e2e-"
+local running=false
 local function run()
     UI:scheduleIn(.2,run)
+    if running then return end
     local file=io.open(base.."command.lua","rb")
     if not file then return end
     local code=file:read("*a");file:close();os.remove(base.."command.lua")
+    running=true
+    local request_id=code:match("^%-%- booksync%-request:([%x]+)\n") or "unknown"
     local plugin=require("pluginloader"):getPluginInstance("orbit")
     local ok,result=pcall(function()
         assert(plugin,"plugin not loaded")
@@ -31,6 +35,8 @@ local function run()
         setfenv(chunk,setmetatable({plugin=plugin,UI=UI,click=click,top=top},{__index=env}))
         return chunk()
     end)
-    local out=assert(io.open(base.."result","wb"));out:write(ok and "OK\n" or "FAIL\n",tostring(result));out:close()
+    local out=assert(io.open(base.."result.tmp","wb"));out:write(ok and "OK " or "FAIL ",request_id,"\n",tostring(result));out:close()
+    assert(os.rename(base.."result.tmp",base.."result"))
+    running=false
 end
 UI:scheduleIn(1,run)

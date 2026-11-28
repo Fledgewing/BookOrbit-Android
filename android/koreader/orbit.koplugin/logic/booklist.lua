@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Small configuration values only; source catalogs and counts stay in the companion.
-BookList = {PAGE_SIZE=6, categories={"builtin","lists","series","authors"},
+BookList = {PAGE_SIZE=6, categories={"builtin","lists","series","authors","collections","libraries"},
     captions={"None","Date added","Progress","Author"}, styles={"Cover shelf","Rows with progress"},
     sorts={"List order","Title","Author","Last read"},
     names={custom="Custom filter",recent="Recently added",wtr="Want to read",reading="Reading now",finished="Finished",device="On this device"},
@@ -18,7 +18,7 @@ function BookList.name(cfg) return cfg.source_title or BookList.names[cfg.src] o
 function BookList.valid(cfg)
     if type(cfg)~="table" or type(cfg.title)~="string" or #cfg.title<1 or #cfg.title>80 then return nil,"invalid title" end
     if not BookList.names[cfg.src] and not (type(cfg.src)=="string" and cfg.src:match("^(%a+):.+") and
-        ({list=true,series=true,author=true})[cfg.src:match("^(%a+):")]) then return nil,"invalid source" end
+        ({list=true,series=true,author=true,collection=true,library=true})[cfg.src:match("^(%a+):")]) then return nil,"invalid source" end
     for key,max in pairs({style=1,sort=3,cap=3}) do
         local n=cfg[key] or 0
         if type(n)~="number" or n~=math.floor(n) or n<0 or n>max then return nil,"invalid "..key end
