@@ -78,7 +78,7 @@ main allocation; it does not inherit a spatial editor or touch target.
 | 12 | [Finish forecast](f40w-widgets.html#forecast) | 2×2 | Current title, large time left, position bar and finish-date ledger. |
 | 13 | [Monthly reading](f40w-widgets.html#monthly-rings) | 2×3 | Twelve monthly bars; X3 twelve labelled values in two columns. |
 | 14 | [Pages read](f40w-widgets.html#pages-turned) | 2×2 | Monospaced daily odometer and separate lifetime count. |
-| 15 | [Battery](f40w-widgets.html#battery) | 2×2 | Level glyph, remaining-use estimate and two rate columns. |
+| 15 | [Battery](f40w-widgets.html#battery) | 2×2 | Level glyph, usual/reading/standby estimates, two rates and weekly use. |
 | 16 | [Lists](f40w-widgets.html#lists) | 1×3 | Icon/name/count rows; X3 full-width ruled list. |
 | 17 | [Library](f40w-widgets.html#library) | 2×2 | Account/device headline totals, patterned storage bar and browse rows. |
 | 18 | [Want to read](f40w-widgets.html#want-to-read) | 2×2 | Cover shelf with saved-pick captions; X3 saved-title list. |
@@ -121,6 +121,8 @@ or firmware change has already been approved. Everything remains NEEDS APPROVAL.
 | Buddy, Pro / Classic | Original static reading-owl illustration; Android currently renders the local message as text. | Give the optional buddy an identity without animation or copied sprite/pose code. X3 remains message-led. |
 | Recommended, Discover, Gathering dust, Pro / Classic | A cover is added to the local renderer's text pick. | Carry the approved Home book-card recognition pattern into pick widgets. Missing covers still need a typographic fallback. |
 | Word, every profile | Main view uses 2×2 instead of the current X4 registry's compact 2×1; larger headword and context block. | Preserve word/context/source/lookup together; adapts the Android tablet's 2×2 family. No alternate-size approval is implied. |
+| Today and Pages read, every profile | Today gains a date masthead; Pages uses a daily odometer above the separate lifetime total instead of Android’s side-by-side numbers. | Give daily reading and lifetime visits distinct visual hierarchy while retaining the Android fields and coverage labels. |
+| Library sources, every profile | Dedicated numbered Home source card adapted from Android’s source picker; Android has no separate installed widget renderer for this ID. | Keep PLAN’s retained source content reviewable without claiming an existing Android card. |
 | A year ago, every profile | Calendar-style date block and separate minutes/days columns replace the Android plain summary lines. | Keep the original date/book/summary/stop-position content readable at a glance. |
 | Next stop, every profile | A chapter route links current, next and end instead of Android's stacked text lines. | Make the relationship between the existing chapter and timing fields visible. No native engine call is added. |
 | Sync, every profile | Result seal and per-kind saved-work ledger replace plain result/age lines. | Distinguish a saved result from waiting local work; still one SyncOwner action, distinct from Refresh. |
