@@ -1,142 +1,164 @@
 # F36c Series and download next N — NEEDS APPROVAL
 
-27 November 2026. **NEEDS APPROVAL.** Documentation only. No firmware, submodule
-pin, shipped feature cell or release changes. Existing Home revision-16 and B1–B5
-approvals remain unchanged. [Three-profile gallery](f36c-series.html).
+Revision 2 · 28 November 2026. **NEEDS APPROVAL.** Documentation only.
+[Three-profile gallery](f36c-series.html). Merging these docs does not approve
+implementation. No firmware, pin, shipped feature cell or release changes.
+Home revision-16 and B1–B5 approvals remain unchanged. F36c stays off pending
+presentation approval and its Library dependencies; F36a/F36b remain separate.
 
-## Approval gap
+## Photo comparison and visual rules
 
-The approved Home gallery contains `x4pro-series` and `x4c-series`, but no X3
-Series page or explicit three-profile next-N review, editor, queue and failure
-scenes. B3 update-download screens are firmware updates, not book downloads.
-The proposed additions below do not inherit approval from those other screens.
-F36c remains off until the missing states and its service dependencies are ready;
-no partially navigable firmware Series route is introduced by this proposal.
-F36a Library/lists and F36b detail/actions retain their separate ownership.
+Reviewed the two supplied 0.11 X4 Home and Library photographs locally. The
+revision adopts their compact cover-led rows/shelves, bold sans headings,
+large numeric values with small labels, thin outlined cards and top-right icons.
+The first draft's sparse text-only cards and generic BOOK rectangles are replaced
+with original monochrome vector jackets and tighter spacing on X4. X3 retains
+bounded text with the same state/action meanings. No photo, private identity,
+reading record, title, account, host or address from the photographs is committed.
+Every example is synthetic; illustrated covers are original geometric artwork.
 
-## Reference and behavior
+“All (n) ›” is at the top-right of a preview header, never below the items or as
+a bottom “See all”. The existing Android grouped Series context demonstrates
+this placement and opens the existing Series page. The full Series page already
+lists all members; adding a redundant All route there would invent an action.
+Search remains the Series page's top-right header icon. All, Back, Search and
+primary actions retain at least 50 design-pixel targets around their compact
+labels/icons. Card icons stay at the
+top-right; Series totals and queue counts use large values with small labels.
+No random Discover, Home widget, account or additional firmware screen is added.
 
-Audited Android source at integration commit
-`aa5c9b9f202e030d6636b07df15837b031501aed` on `feature/0.12`:
+## Android is the behavior reference
 
-- `android/koreader/orbit.koplugin/ko/series.lua:18–102`: header, bounded page,
-  saved/empty/error states, row actions, incomplete membership and paging.
-- `android/koreader/orbit.koplugin/ko/series.lua:180–345`: explicit queue monitor,
-  cancellation/resume, file review, default count 3, editor bounds 1–10,
-  offline preview, earlier-gap action and closed-sheet guards.
-- `android/koreader/orbit.koplugin/logic/series.lua:4–18`: state classification
-  and page geometry; no transport policy in presentation.
-- [Home design §5](../booksync-home/DESIGN.md#5-series-and-detail) and
-  [Android Series download implementation](../booksync-home/F12-SERIES-DOWNLOADS.md)
-  define eligibility, ordering, durable plans and queue behavior.
+Audited plugin at integration commit `7271551677142919e27bcf1592b870c8f89c9f9d`:
+`android/koreader/orbit.koplugin/ko/series.lua`, with state classification in
+`android/koreader/orbit.koplugin/logic/series.lua`. Companion context:
+`SeriesPresentation.kt` and `server/bookorbit/SeriesTransfers.kt`.
+[Home §5](../booksync-home/DESIGN.md#5-series-and-detail) and
+[Android queues](../booksync-home/F12-SERIES-DOWNLOADS.md) explain selection and
+persistence. Paths in the table below use `ko/series.lua` unless prefixed.
 
-Library selects unread, known server-only eligible members after the current
-reading anchor, otherwise the last finished member, otherwise the beginning.
-Read/local/active or recoverable jobs are skipped. No wrapping; an earlier gap
-requires an explicit new start and another preview. Primary and secondary
-memberships keep their own contextual decimal indexes and source rank.
-The interface, not UI, owns ordering, aggregation, selection, safe paths,
-file eligibility, account isolation, queue state and all transfer work.
+The gallery has **32 state examples / 96 device views of eight existing
+Android surface families**, not 32 new screens: grouped list, Series page,
+preview, count input, file chooser, final review, one-button notice and queue.
+Paused and terminal results are data variants of the queue.
+The eight named surface families, including the existing grouped-list context, are
+presentation references; no new navigation route is proposed. All shown states
+map to source branches below. Count-invalid, per-book failures and completion
+are data in existing dialogs. Back departure and late delivery are acceptance
+assertions only; the first draft's invented departure screen is removed.
 
-Default N is 3, editable 1–10. The preview names the actual selection and each
-known size or “Size unknown”. Up to ten selected titles use bounded pages on
-firmware instead of Android's scrollable dialog. Review files, then final
-confirmation, precedes Start downloads. No aggregate size is invented when an
-item's size is unknown. An exact-selection token prevents replacement books
-from being silently substituted when the catalog changes.
-
-The queue is sequential and durable under the sole writer. Individual Cancel
-leaves later books queued; Cancel remaining keeps completed books. Offline or
-lost authorization pauses work for explicit Resume. Format/validation/storage
-errors remain visible per book; later eligible items continue where possible.
-Summary counts requested, saved, skipped and failed. Bulk downloads never open
-a book automatically. Back closes presentation polling; late results never
-reopen a departed sheet or steal the reader's focus.
-
-## Proposed states — all NEEDS APPROVAL
-
-Every linked article has X4 Pro touch, X4 Classic buttons and X3 text/buttons.
-The departure article is a Back acceptance storyboard, not a new product screen.
-
-| Scene | Display | Back behavior |
+| Example | Existing Android branch | Back / Cancel |
 |---|---|---|
-| [series-ready](f36c-series.html#series-ready) | The Lantern Cycle | Return to the caller at its saved page and focus; a reader caller retains its exact position. |
-| [series-offline](f36c-series.html#series-offline) | The Lantern Cycle | Return to the caller without connecting. |
-| [series-loading](f36c-series.html#series-loading) | Series | Return to the caller; retire the request. |
-| [series-not-saved](f36c-series.html#series-not-saved) | Series | Return to the caller; no download is queued. |
-| [series-empty](f36c-series.html#series-empty) | Series | Return to the caller. |
-| [series-error](f36c-series.html#series-error) | Series | Return to the caller. |
-| [series-incomplete](f36c-series.html#series-incomplete) | The Lantern Cycle | Return to the caller. |
-| [series-unsupported](f36c-series.html#series-unsupported) | Series | Return to the caller. |
-| [series-saved](f36c-series.html#series-saved) | The Lantern Cycle | Return to the caller. |
-| [series-unknown](f36c-series.html#series-unknown) | The Lantern Cycle | Return to the caller. |
-| [series-preview](f36c-series.html#series-preview) | Download next 3 | Close the preview and return to the Series page. |
-| [series-preview-pages](f36c-series.html#series-preview-pages) | Download next 10 | Close the preview; retain the Series page. |
-| [series-count](f36c-series.html#series-count) | Download how many? | Discard the edit and restore the previous preview. |
-| [series-count-invalid](f36c-series.html#series-count-invalid) | Download how many? | Discard the invalid edit; keep the previous number. |
-| [series-offline-preview](f36c-series.html#series-offline-preview) | Download next 3 | Close without connecting or queuing. |
-| [series-connect-failed](f36c-series.html#series-connect-failed) | Could not connect | Return to Series without queuing. |
-| [series-gap](f36c-series.html#series-gap) | Download next 3 | Return without selecting earlier books. |
-| [series-no-eligible](f36c-series.html#series-no-eligible) | Download next 3 | Return to Series. |
-| [series-files](f36c-series.html#series-files) | Choose file · Stone Path | Cancel file resolution and return to Series. |
-| [series-file-unavailable](f36c-series.html#series-file-unavailable) | Stone Path | Return to Series; no job has started. |
-| [series-review](f36c-series.html#series-review) | Download 3 books? | Return to the exact preview; start nothing. |
-| [series-stale](f36c-series.html#series-stale) | Series preview unavailable | Return to Series; no substitute queue is created. |
-| [series-queue](f36c-series.html#series-queue) | Series downloads | Close the queue sheet; downloads continue under the sole worker. |
-| [series-paused](f36c-series.html#series-paused) | Series downloads paused | Close the sheet; keep paused work for explicit resume. |
-| [series-auth](f36c-series.html#series-auth) | Series downloads paused | Return without opening account UI automatically. |
-| [series-resume](f36c-series.html#series-resume) | Series downloads paused | Keep the queue paused. |
-| [series-file-error](f36c-series.html#series-file-error) | Series downloads | Close the sheet and retain results. |
-| [series-validation-error](f36c-series.html#series-validation-error) | Series downloads | Close the sheet; no unverified file opens. |
-| [series-format-error](f36c-series.html#series-format-error) | Series downloads | Close the sheet; retain complete files. |
-| [series-row-canceled](f36c-series.html#series-row-canceled) | Series downloads | Close the sheet; leave later items running. |
-| [series-canceled](f36c-series.html#series-canceled) | Series downloads canceled | Return to Series with saved availability updated. |
-| [series-complete](f36c-series.html#series-complete) | Series downloads complete | Return to Series; open a book only on a later explicit selection. |
-| [series-departure](f36c-series.html#series-departure) | Back to the caller | Return normally from the caller. |
+| [series-group-context](f36c-series.html#series-group-context) | `series.lua:102–157` · groups | Return to the previous Library context. |
+| [series-ready](f36c-series.html#series-ready) | `series.lua:53–92` · series | Return to the caller at its saved context; a reader caller retains its native position. |
+| [series-offline](f36c-series.html#series-offline) | `series.lua:53–92` · series | Return to the caller at its saved context; a reader caller retains its native position. |
+| [series-incomplete](f36c-series.html#series-incomplete) | `series.lua:53–92` · series | Return to the caller at its saved context; a reader caller retains its native position. |
+| [series-saved](f36c-series.html#series-saved) | `series.lua:53–92` · series | Return to the caller at its saved context; a reader caller retains its native position. |
+| [series-unknown](f36c-series.html#series-unknown) | `series.lua:53–92` · series | Return to the caller at its saved context; a reader caller retains its native position. |
+| [series-loading](f36c-series.html#series-loading) | `logic/series.lua:4–11; ko/series.lua:25–37` · series | Return to the existing caller; retire presentation. |
+| [series-not-saved](f36c-series.html#series-not-saved) | `logic/series.lua:4–11; ko/series.lua:25–37` · series | Return to the existing caller; retire presentation. |
+| [series-empty](f36c-series.html#series-empty) | `logic/series.lua:4–11; ko/series.lua:25–37` · series | Return to the existing caller; retire presentation. |
+| [series-error](f36c-series.html#series-error) | `logic/series.lua:4–11; ko/series.lua:25–37` · series | Return to the existing caller; retire presentation. |
+| [series-preview](f36c-series.html#series-preview) | `series.lua:284–311` · preview | Close the dialog and return to Series. |
+| [series-offline-preview](f36c-series.html#series-offline-preview) | `series.lua:293–297` · preview | Close the dialog and return to Series. |
+| [series-gap](f36c-series.html#series-gap) | `series.lua:288–310` · preview | Close the dialog and return to Series. |
+| [series-preview-ten](f36c-series.html#series-preview-ten) | `series.lua:289–311` · preview | Close the dialog and return to Series. |
+| [series-count](f36c-series.html#series-count) | `series.lua:299–307` · count | Cancel closes the editor to Series, because the preview was closed before opening it. Native Back first dismisses keyboard/input as appropriate. |
+| [series-count-invalid](f36c-series.html#series-count-invalid) | `series.lua:299–307` · count | Cancel closes the editor to Series, because the preview was closed before opening it. Native Back first dismisses keyboard/input as appropriate. |
+| [series-files](f36c-series.html#series-files) | `series.lua:258–279` · files | Close the dialog and return to Series. |
+| [series-review](f36c-series.html#series-review) | `series.lua:246–255` · review | The explicit Back button re-requests the preview; no job starts. |
+| [series-connect-failed](f36c-series.html#series-connect-failed) | `series.lua:295–296` · notice | Close the dialog and return to Series. |
+| [series-file-unavailable](f36c-series.html#series-file-unavailable) | `series.lua:260` · notice | Close the dialog and return to Series. |
+| [series-preview-error](f36c-series.html#series-preview-error) | `series.lua:287` · notice | Close the dialog and return to Series. |
+| [series-incomplete-notice](f36c-series.html#series-incomplete-notice) | `series.lua:287` · notice | Close the dialog and return to Series. |
+| [series-unavailable](f36c-series.html#series-unavailable) | `series.lua:188–190` · notice | Close the dialog and return to Series. |
+| [series-no-eligible](f36c-series.html#series-no-eligible) | `series.lua:288` · notice | Close the dialog and return to Series. |
+| [series-queue](f36c-series.html#series-queue) | `series.lua:192–234` · queue | Close the dialog and return to Series. |
+| [series-paused](f36c-series.html#series-paused) | `series.lua:203–216` · queue | Close the dialog and return to Series. |
+| [series-auth](f36c-series.html#series-auth) | `series.lua:203–216` · queue | Close the dialog and return to Series. |
+| [series-resume](f36c-series.html#series-resume) | `series.lua:203–216` · queue | Close the dialog and return to Series. |
+| [series-file-error](f36c-series.html#series-file-error) | `series.lua:192–217; SeriesTransfers.kt:51–62` · queue | Close the dialog and return to Series. |
+| [series-row-canceled](f36c-series.html#series-row-canceled) | `series.lua:194–201` · queue | Close the dialog and return to Series. |
+| [series-canceled](f36c-series.html#series-canceled) | `series.lua:213–218; SeriesTransfers.kt:51–74` · queue | Close the dialog and return to Series. |
+| [series-complete](f36c-series.html#series-complete) | `series.lua:192–234; SeriesTransfers.kt:51–62` · queue | Close the dialog and return to Series. |
 
-## Profile details and acceptance after approval
+## Action parity corrections
 
-X4 Pro uses the existing monochrome header, rows and action pills. The count
-keypad is a direct child docked below content/actions and above the footer.
-X4 Classic uses first-row or explicit action focus and Previous/Next/Select/Back;
-number input adjusts a digit, with bounds validation before Review. X3 keeps
-bounded text rows and the same actions, without cover bitmap allocation.
-Each state caption names initial focus and the exit. File review never selects
-an unsupported format; all Xteink transfers remain EPUB-only.
+- Preview lists exact selected titles/sizes and the actual available count.
+  Default N=3; integer range 1–10. Review files or explicit Connect and download N,
+  Change number, optional Start at earlier gap and Cancel are Android's controls.
+  Ten items remain in the same bounded scrollable dialog, without a new pager
+  route, Next-page button or extra confirmation.
+- Count input closes the old preview before opening. Cancel returns to Series,
+  not the previous preview. Invalid Review leaves the same input open; Android
+  adds neither an error screen nor a disabled Review label. Pro's numeric keyboard
+  remains docked at the bottom with content/actions visible above it.
+- File choice offers only supported options; a single option skips the chooser.
+  Final review includes selected files, sizes/unknown sizes, destination and any
+  No supported file · will fail line. Start downloads submits the exact token.
+  The explicit review Back button requests another preview.
+- Android notices have only Back. “Try again” in notice text is not another Retry
+  button. Changed preview/start errors use the existing notice; the first draft's
+  Review again screen is removed. Read-capability errors use the existing page
+  load error, not a separate unsupported destination.
+- Running/paused/terminal results update the same queue sheet. Paused queues show
+  Resume remaining when connected or Connect and resume remaining when offline,
+  including auth-loss pauses. Connection failure during resume leaves that same
+  sheet open. No sign-in redirect, recovery wizard or automatic resume is added.
+- Per-row Cancel affects one job. Cancel remaining preserves complete files.
+  Completed/canceled rows are disabled; Android can retain the Cancel suffix on
+  canceled row text, but it is not an active control. A terminal batch omits
+  Cancel remaining. Requested/saved/skipped/failed counts are service values.
+  Per-file format, validation and space failures remain queue-row status.
+- Back stops queue polling; late callbacks require the same host, series and
+  visible dialog. A departed dialog never reopens, and bulk completion never
+  opens a book or presents a completion popup. No separate departure, successful
+  download or cancellation confirmation screen is proposed.
 
-The gallery is static documentation: it supplies no network, parsing, file IO,
-queue writes or executable product controls. Proposed firmware acceptance uses
-F22 queries, F23 verified transfers, F25 scoped covers and F34 navigation through
-Library only. The service must expose bounded next-N preview/queue operations
-before UI can implement Android's semantics; UI must not reconstruct the plan
-by scanning paged results or dispatching unrelated single downloads.
+Library owns selection, current/last-finished anchors, contextual decimal and
+secondary-membership order, eligibility, safe destinations and durable queue
+policy. It skips read/local/active/recoverable jobs and never wraps. Earlier gaps
+require explicit choice and another preview. Incomplete membership disables bulk
+action with its reason while existing eligible single-book actions remain.
+Unknown bytes/device state stay unknown. UI does not reconstruct a plan by
+scanning pages or dispatching unrelated single downloads. One sync writer remains.
 
-After approval, host neutral snapshot/action tests and all three simulator
-profiles must cover every applicable state, count bounds, secondary membership,
-unknown size, account change, stale preview, Back/Cancel and late delivery.
-Paint performs zero service work. Three hardware builds must report actual
-application bytes, map/static-RAM deltas and at least 131,072 free slot bytes.
-This docs change has no firmware measurements or device acceptance claim.
+## Acceptance after presentation approval
 
-Maintainer hardware verification after implementation: on X4 Pro, X4 Classic
-and X3/C3 X4, open a saved series offline, navigate pages and return to the same
-caller/reader position. Preview N=1, 3 and 10; cancel before connection; exercise
-pause/resume, per-row/all cancellation and full-card/invalid-file errors. Expect
-completed files to remain and no automatic open after leaving the view. No EPUB
-cache format change or cache clearing is proposed. Agents do not access devices.
+X4 Classic uses logical focus/Select/Back; X3 uses bounded text equivalents.
+Pro uses existing row targets and the bottom-docked numeric keyboard. Scroll
+windows stay within the eleven-row/16 KiB Series-download snapshot budget;
+Series pages use bounded membership windows and deferred scoped covers. Painting
+performs no network, parsing, folder scan, queue write or cover acquisition.
+
+Host neutral snapshot/action tests and all three simulator profiles must cover
+count bounds, incomplete/secondary membership, unknown sizes, exact-token refusal,
+row/all cancellation, restart/resume, account changes and retired delivery.
+The maintainer should later verify offline Series → preview → Cancel/Back returns
+to the same caller/reader position on X4 Pro, X4 Classic and X3/C3 X4; then check
+N=1/3/10, explicit connection, pause/resume and per-book failures. Completed books
+must remain and leaving the sheet must prevent auto-open. Agents do not touch
+devices. No cache format change/reset is proposed.
+
+Before implementation can merge, three hardware images must report actual bin,
+map/static-RAM deltas and at least 131,072 free bytes per app slot. These docs
+neither build firmware nor claim hardware/simulator acceptance.
 
 ## Documentation validation
 
-Chromium checked all 99 device views at both 1200 px and 390 px widths: 198
-view checks, no content clipping, horizontal overflow, broken anchors or page
-errors. Series, count editor, preview, queue and error articles were rendered
-for visual inspection; button row and numeric focus match their captions, and
-touch numeric keypads remain docked above the footer. All 128 existing articles
-in the approved firmware gallery are byte-for-byte unchanged.
+Chromium checked all 96 device views at 1200 px and 390 px widths: **192 view
+checks**, no clipping, horizontal overflow, broken anchors or page errors.
+Checks also cover top-right All (n) placement, existing surface families,
+one-button notices, disabled canceled rows and bottom-docked numeric keyboards.
+The initial reused revision-1 probe expected a different keypad DOM parent;
+the revision-2 check measures its actual bottom edge against the footer and
+verifies that actions stay above it. Layout and focus were visually inspected
+for the grouped context, saved/offline Series, preview (including ten items),
+count editor, queue, per-book error and no-eligible notice on all three profiles.
+All **128 existing firmware-gallery articles are byte-for-byte unchanged**.
 
-Feature matrix checks: 4 passing. Android reference suites: 265 logic checks
-and 313 flow checks passing, plus 12 policy tests reported by the logic runner.
-The flow harness emitted two read-only `/settings` mkdir warnings but completed
-with zero failures. These are host/reference checks, not firmware acceptance.
-No firmware build, simulator scene or application-size measurement was performed
-for this docs-only proposal. Those checks remain mandatory for implementation.
+Repository branding: **3 passing**. Feature matrix: **4 passing**. Android
+reference suites: **265 logic checks**, **12 policy tests** and **313 flow checks**
+passing. The flow harness emitted two read-only `/settings` mkdir warnings but
+finished with zero failures. These checks validate docs and reference behavior;
+there is no firmware build, simulator or measured-size claim in this docs PR.

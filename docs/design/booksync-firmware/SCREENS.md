@@ -391,10 +391,13 @@ after a docs-only merge; private photographs are not included.
 
 ## F36c Series additions — NEEDS APPROVAL
 
-The [F36c state inventory](F36c-series.md) and
-[three-profile gallery](f36c-series.html) propose the missing X3 Series view,
-offline/back states, next-N preview/count/file review and download queue/error
-scenes. **All additions are NEEDS APPROVAL.** Home revision-16 normal X4 Series
-examples and existing B1–B5 approvals remain unchanged. Firmware F36c stays off
-pending these approvals and the Library service dependencies. No firmware or
-submodule pin is changed here; F36a/F36b are separate surfaces.
+The [F36c source-mapped inventory](F36c-series.md) and
+[three-profile gallery, revision 2](f36c-series.html) use the supplied 0.11 X4
+photo density: covers, large values/small labels and top-right icons. Preview
+headers place All (n) › at the top-right. States and controls map to existing
+Android Series/group/preview/input/file/review/notice/queue branches; no extra
+firmware-only route or completion/Back/error wizard is proposed.
+**All additions remain NEEDS APPROVAL**, including after this docs-only merge.
+Existing Home revision-16 and B1–B5 approvals remain unchanged. Firmware F36c
+stays off pending presentation approval and Library service dependencies.
+No firmware or submodule pin changes; F36a/F36b remain separate.
