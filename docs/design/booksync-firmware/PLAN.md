@@ -3,7 +3,7 @@
 27 November 2026. Implementation authorized by the maintainer; Home revision 16 is
 approved. Firmware B1–B5 mockups were approved on 27 Nov 2026 with the touch
 keyboard change recorded in [SCREENS.md](SCREENS.md). The revised slim B2
-upgrade notice is **NEEDS APPROVAL**; all other gallery groups retain their approval. This plan schedules work,
+upgrade notice is **APPROVED (2026-11-27)**; all other gallery groups retain their approval. This plan schedules work,
 not a release or permission to invent screens.
 Android 0.12 remains the semantic reference. X4 Pro, X4 Classic and X3/C3 X4 ship
 the same Library, durable state and widget meanings; X3 draws bounded text views.
@@ -184,7 +184,7 @@ include Tailnet/TLS/import code even before UI is complete.
 | F26b | Retained credentials/Wi-Fi import (already in flight); `import/Credentials.*` | F03/F06/F08/F15; after F14; parallel F26c; credentials stay private | Old/unknown/corrupt formats retained, secrets never exposed; two boots preserve sign-in/Wi-Fi | 2–8 |
 | F26c | Tailnet/NVS identity audit (already in flight); `import/Identity.*` | F03/F06/F08/F10; after F14; parallel F26b | Identical NVS keys, no key rederivation; two boots preserve pairing/device identity | 2–8 |
 | F28 | **0.11 bridge drain**: last 0.11 Xteink update sends every pending progress, stats, annotations/bookmarks and finish/state queue item to BookOrbit; offers 0.12 only with empty queues or no signed-in account; nothing deleted. Files in **BookSync integration repo: `xteink/` overlay on `main`**, not owned firmware | Legacy queues/writers and F31 old→bridge→0.12 ordering; independent of 0.12 import implementation; release later through normal test/device/release flow, never by this docs change | Per-queue failures/unknown outcomes retain pending items; restart/offline drain, signed-out exception preserves queues, no offer while any signed-in queue is pending | 0 on 0.12; 2–8 on 0.11 bridge |
-| F29 | Activate retained credentials/Wi-Fi/Tailnet imports only and once-only upgrade notice; `import/Activation.*`, `system/Bootstrap.*`; leave native reader SD files untouched | F26b/F26c/F05/F12; revised B2 notice NEEDS APPROVAL; F28 bridge precedes deployed upgrade; sync action uses F16/F18 | Cut every retained-import/activation/notice checkpoint; repeated boots preserve sign-in/pairing and native SD bytes, no duplicate notice; Now starts normal sync, Later keeps offline reading available | 3–8 |
+| F29 | Activate retained credentials/Wi-Fi/Tailnet imports only and once-only upgrade notice; `import/Activation.*`, `system/Bootstrap.*`; leave native reader SD files untouched | F26b/F26c/F05/F12; revised B2 notice APPROVED (2026-11-27); F28 bridge precedes deployed upgrade; sync action uses F16/F18 | Cut every retained-import/activation/notice checkpoint; repeated boots preserve sign-in/pairing and native SD bytes, no duplicate notice; Now starts normal sync, Later keeps offline reading available | 3–8 |
 | F30 | Signed OTA/feed parser and trust port; `system/Feed.*`, `UpdateVerify.*` | F02/F10/F14; parallel imports | Existing signature/root/withdrawal/redirect/chunk/reset cases; fake feed rejects corrupt/wrong-device app | 8–24 |
 | F31 | Unified version/bridge/source identity; `system/Version.*`, `UpdatePick.*`, packaging tests | F30 | All three asset stems, stable/preview/RC/test and legacy bridge ordering; old→bridge→0.12 simulated install choice | 2–6 |
 | F32 | Install/return admission and diagnostics; `system/Update.*`, `Diagnostics.*` | F11/F12/F29/F31 | Wrong board/map, incomplete image, no install while reading; deferred fake OTA return/recovery | 3–8 |
@@ -307,7 +307,7 @@ behavior on every reader. Device evidence cannot be replaced by simulator succes
 The maintainer approved the [firmware gallery](mockups.html) and
 [screen/state inventory](SCREENS.md) on **27 Nov 2026** (PR #202), with one
 change, verbatim: "On screen keyboard should always be on the bottom for touch".
-B1/B3/B4/B5 retain approval; the slim B2 revision is **NEEDS APPROVAL**.
+B1/B3/B4/B5 retain approval; the slim B2 revision is **APPROVED (2026-11-27)**.
 Retained service work may continue. Each approved UI slice may
 proceed when its corresponding service, test and slice dependencies are satisfied.
 The Q1–Q7 coordinator decisions are recorded in SCREENS.md.
@@ -321,7 +321,7 @@ dock at the bottom, with content and fields visible above; button views are unch
 | ID | Approved presentation coverage | Required service/test dependencies |
 |---|---|---|
 | B1 | Wi-Fi selection/password/join recovery; Tailnet pairing/status/route/logout/re-pair; C3 network wait/refusal/recovery | F10/F11 transport, NVS retention and leases; F12/F43 and fake-hardware tests |
-| B2 | **NEEDS APPROVAL (2026-11-27 revision):** once-only slim upgrade notice, retained Wi-Fi/sign-in/Tailscale pairing and native books/place, BookSync defaults, server restore with Sync from BookOrbit now / Later; existing queue/reset/downgrade views retained | F26b/F26c/F29 activation and notice checkpoint; F12 quiet gate; F16/F18 normal sync; F28 deployed bridge drain and F31 ordering; durable capacity policy |
+| B2 | **APPROVED (2026-11-27):** once-only slim upgrade notice, retained Wi-Fi/sign-in/Tailscale pairing and native books/place, BookSync defaults, server restore with Sync from BookOrbit now / Later; existing queue/reset/downgrade views retained | F26b/F26c/F29 activation and notice checkpoint; F12 quiet gate; F16/F18 normal sync; F28 deployed bridge drain and F31 ordering; durable capacity policy |
 | B3 | Firmware download/install/restart, trust/board rejection, interrupted update/recovery and compatible return controls | F30–F32 parser/trust/bridge, F29 retained-import activation proof and deferred-install tests |
 | B4 | Calibration, ruled lines/fonts, hardware shortcuts/frontlight schedules, PIN/security, USB/SD ownership and dictionary/search recovery | F38k/F41r/F43 service seams, retained engine/settings/data and native escape |
 | B5 | Persistent crash summary, local diagnostics export, recovery/reset confirmations, optional first-run and once-only Home upgrade news | F43 capture/dedup/read model; F29 for upgrade news; no automatic upload or presentation |

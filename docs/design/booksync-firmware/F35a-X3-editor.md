@@ -1,11 +1,10 @@
-# F35a X3 Home editor — NEEDS APPROVAL
+# F35a X3 Home editor — APPROVED (2026-11-27)
 
-Status: **NEEDS APPROVAL**. Merging this proposal does not approve its presentation.
-The approved Home design §3.5 specifies an X3 Settings list, but revision 16's
-screenshots/prototype illustrate only the X4 editor. F35a implements the shared
-service and approved X4 presentations; the X3 editor remains disabled.
+Status: **APPROVED (2026-11-27)** by the maintainer at approximately 18:45 PT.
+The Settings list and all six illustrated states are approved for F35a implementation
+on the shared editor service. Device acceptance remains pending.
 
-[Proposed X3 scenes](f35a-x3-editor.html). Synthetic data only. No keyboard.
+[Approved X3 scenes](f35a-x3-editor.html). Synthetic data only. No keyboard.
 
 - Entry: Settings → Home widgets. Previous/Next changes row focus; Select opens
   or activates; Back returns. Focus stays on a visible row after every operation.
