@@ -1,9 +1,11 @@
-# Reader-inline companion surfaces — NEEDS APPROVAL
+# Reader-inline companion surfaces — APPROVED (2026-11-27)
 
-This is a proposal for the Android 0.12 “No visible app switches” stretch outcome,
-not approval or implementation. [Mockups](reader-companion-surfaces-mockups.html)
-cover the new visible controls. Keep building the already approved reader menus,
-transfers and add-on behavior while this proposal awaits the maintainer.
+Maintainer approved the four [mocked states](reader-companion-surfaces-mockups.html)
+and this Android 0.12 scope on 2026-11-27. Approval includes the coordinator
+change: Reader Status and Reader Helpers use Library snapshots; only an explicit
+user-requested system action may depart and restore its still-current context.
+Permission never enables a helper, PIN stays in the protected companion flow,
+and background changes never show a sheet.
 
 ## Existing behavior and the real gap
 
@@ -60,8 +62,7 @@ stay in the reader”; it is not permission to hide or bypass those boundaries.
 - Android only in this slice. All three firmware platforms retain their separately
   planned settings surfaces; no firmware source or pin is changed by this proposal.
 
-## Approval requested
+## Approval recorded
 
-Approve the four mocked states, their wording and the bounded ordinary-action
-scope above. Until then, keep these new reader surfaces unbuilt and list this
-outcome as **NEEDS APPROVAL**. The existing explicit companion routes remain.
+The four mocked states, wording and bounded ordinary-action scope above are
+**APPROVED (2026-11-27)**. The existing explicit companion recovery routes remain.

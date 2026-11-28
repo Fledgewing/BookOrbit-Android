@@ -141,7 +141,7 @@ and any UI mockups still need approval before implementation.
 |---|---|---|---|---|
 | 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking BookSync downloads. | Android | idea | |
 | 8b | **BookSync plugin hooks the BookOrbit board** (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. 8a (the plugin replaces the user patch) shipped in 0.8.0. | Android | idea (board hooks superseded by W36 owned Home; menu cleanup remains separate) | [orbit-plugin](docs/design/orbit-plugin.md), [owned Home](docs/design/booksync-home/DESIGN.md) |
-| 9 | **No visible app switches**: ordinary BookSync status/helper actions stay in the reader; system/security and explicit other-app actions remain visible. | Android | designing (reader-inline surfaces NEEDS APPROVAL) | [proposal and mockups](docs/design/booksync-home/READER-COMPANION-SURFACES.md) |
+| 9 | **No visible app switches**: ordinary BookSync status/helper actions stay in the reader; system/security and explicit other-app actions remain visible. | Android | approved (2026-11-27; reader-inline surfaces and user-requested system-action/return-to-context coordinator) | [proposal and mockups](docs/design/booksync-home/READER-COMPANION-SURFACES.md) |
 
 ## Ideas
 
