@@ -6583,7 +6583,7 @@
         "android": {
           "status": "partial",
           "note": "Cached current/next contents, approximate next/end time and honest unknown states.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; six native checks and the 66-screen review pass.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-NEXT-STOP.md",

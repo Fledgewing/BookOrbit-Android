@@ -3,6 +3,7 @@
 """Cached native TOC capture, real local projection and all approved card spans."""
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 import time
@@ -30,11 +31,16 @@ def review(device,out):
             rendered();device.shot(out/('next-stop-'+str(i)+'.png'));checks+=1
         # Rich pace is a presentation double. Real borrowed-SQL pace and missing
         # identity are exercised by NextStopTest; the real TOC/IPC path ran above.
-        device.command('local t=Library._nextReview;LibraryAdapter.read=function(raw,...) if Cache.decode(raw).op=="local.nextstop" then return {state="ready",row_count=1,current="Now: A very long current contents title",next="Next: Another long contents title",to_next="≈ 25 min to next",to_end="≈ 1 h 24 min to end",remaining="3 contents entries left",source="Measured pace · this reader"},200 end;return t.read(raw,...) end;HomeHost.show();return true')
+        device.command('local t=Library._nextReview;local d=Library.settings.read("home_layout");d.pages[1].placements[1].w=2;d.pages[1].placements[1].h=2;Library.settings.write("home_layout",d);LibraryAdapter.read=function(raw,...) if Cache.decode(raw).op=="local.nextstop" then return {state="ready",row_count=1,current="Now: A very long current contents title",next="Next: Another long contents title",to_next="≈ 25 min to next",to_end="≈ 1 h 24 min to end",remaining="3 contents entries left",source="Measured pace · this reader"},200 end;return t.read(raw,...) end;HomeHost.show();return true')
         rendered();device.shot(out/'measured-pace.png');checks+=1
         device.command('local t=Library._nextReview;LibraryAdapter.read=function(raw,...) if Cache.decode(raw).op=="local.nextstop" then return {state="unavailable",row_count=1,reason="Open a book to see its next stop"},100 end;return t.read(raw,...) end;HomeHost.show();return true')
         rendered();device.shot(out/'no-book.png');checks+=1
         print(str(checks)+' native Next stop checks passed',flush=True)
+        pid=device.shell('pidof','org.koreader.launcher').split()[0]
+        log=device.shell('logcat','-d','--pid',pid,'-t','1200')
+        values=[float(v) for v in re.findall(r'BookSync local-widget.next-stop ([0-9.]+) ms',log)]
+        profile={'samples':len(values),'min_ms':min(values) if values else None,'max_ms':max(values) if values else None}
+        (out/'profile.json').write_text(json.dumps(profile,indent=2)+'\n');print(json.dumps(profile),flush=True)
     except Exception:
         device.shot(out/'failure.png');raise
     finally:

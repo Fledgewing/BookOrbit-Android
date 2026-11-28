@@ -41,7 +41,7 @@ separate, unapproved local completion/goal **settings** proposal.
 | Pages lifetime/today | Done after audit | Separate Today/lifetime timed page-visit card, attributed to this reader. A visit belongs to its start day; it is not an exact physical page-turn counter. [Implementation and verification](F12-RETAINED-METRICS.md). |
 | Glyph of the day | Done after audit | Daily Latin sample/name/code point and actual local font family, with a native missing-glyph probe. [Implementation and verification](F12-LOCAL-DECOR.md); nine native checks and the 65-screen review pass; physical acceptance remains. |
 | Monthly reading / Tree rings | Done after audit | Separate twelve-calendar-month totals/bar comparison, with previous-month duration and source coverage. [Implementation and verification](F12-RETAINED-METRICS.md). |
-| Next stop | Building | [Local cached TOC and measured pace](F12-NEXT-STOP.md); native acceptance pending. |
+| Next stop | Done after audit | [Local cached TOC and measured pace](F12-NEXT-STOP.md); six native checks and the 66-screen review pass; physical acceptance remains. |
 | Achievements | Not started | No achievement normalization/provider or installed card; retain earned/total, latest and next with progress, separating unsupported/off from zero. |
 
 Implementation order: expand neutral read models and cached adapter projections;

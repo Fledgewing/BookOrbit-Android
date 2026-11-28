@@ -29,4 +29,15 @@ A Lua flow checks the 10,000-entry cached lookup and verifies that no annotation
 resolution occurs. Native acceptance uses the actual cached TOC and companion;
 rich pace and no-book presentation states use temporary Library doubles.
 
+Combined validation: 895 JVM tests (zero failures/errors, four skipped), version
+verification, debug assembly and lint; 259 Lua logic / 291 flows; server/UI guards
+12/6, matrix four, emulator driver ten and pinned KOReader symbols. Six native
+checks and all 66 review screens pass. Smallest-span screenshots are clear;
+construction took 0–0.4 ms in 11 measured emulator spans (target 50 ms).
+
+The first native harness attempted its background projection with the book still
+foregrounded and correctly remained gated. The corrected test opens Home first;
+no production gate exemption was added. Rich-state presentation doubles are
+separate from the real cached-TOC / companion and borrowed-SQL tests.
+
 Physical acceptance, firmware implementation and publication remain pending.
