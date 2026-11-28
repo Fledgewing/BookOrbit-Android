@@ -6730,6 +6730,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-up-next",
+      "feature": "Retained Up next in series shelf (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Bounded saved server selection/rank, source/preset and counted See all.",
+          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UP-NEXT.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Up next shelf follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UP-NEXT.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Up next shelf follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UP-NEXT.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Up next shelf follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-UP-NEXT.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {
