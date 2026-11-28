@@ -29,7 +29,7 @@ so no Android outcome disappears during reconciliation.
 | Home editor add/remove/move/resize/pages/reset/atomic save | Done | `P/ko/home_editor.lua:19` creates the editor, `:153` renames, `:192` resizes, `:207` resets, `:213` saves through Library. |
 | Default owned Home, additive upgrade/news, signed-out shelves, one batch | Done | `P/ko/settings.lua:52` calls additive migration; `:65` persists migration/news together. `P/ko/home_host.lua:388` shows pending news; `:399` acknowledges once. The host owns paint batching. |
 | Widget layout engine and budgeted host contracts (paragraph) | Done | `P/logic/widget_registry.lua:5` binds per-widget budgets; `P/ko/home_host.lua:15` validates layouts; `P/ko/library_services.lua:84` atomically saves through LayoutStore. |
-| BookSync Home / complete staged reader-preset library / detail | Partly done | Owned Home/detail and the accepted widget set exist. `P/logic/widget_registry.lua:11`–`:28` is the actual installed semantic inventory; the design's full staged reader-preset mapping is broader. The [retained Home inventory audit](F12-HOME-INVENTORY.md) enumerates each missing metric/decor card, shelf/source, count/root and local control with source evidence. Series jobs and the six [retained metric cards](F12-RETAINED-METRICS.md) are now complete; local completion/goal settings are a separate approval gate. Do not label the full staged mapping shipped merely because the host exists. |
+| BookSync Home / complete staged reader-preset library / detail | Done after audit | The [retained inventory](F12-HOME-INVENTORY.md) now maps every approved retained card, source, root and local control to its implementation and verification. Thirty widget types are installed; Book list presets remain distinct selections rather than being counted as extra widget types. The approved read-only library is complete on Android. Local completion/goal settings, crash presentation and reader-inline companion surfaces remain separate approved follow-ups; physical acceptance and release remain pending. |
 | Widget-first shared Home editor (duplicate) | Done on Android | `P/ko/home_editor.lua:19` and Library layout services implement the Android editor. Firmware editor variants are outside this task. |
 | Tap to download on Home/lists/Series/detail | Done after audit | [Download jobs](F12-DOWNLOADS.md) adds bounded file/destination selection, progress, Cancel, explicit Resume, offline consent, missing-file recovery and departure-safe opening through Library. Streaming, linking and controls stay in their companion owners. Series next-N remains the separate row below. |
 | Series in order/read state/download next | Done after audit | Ordered membership and grouped progress plus [exact next-N previews and durable queues](F12-SERIES-DOWNLOADS.md) are implemented on Android; physical acceptance and firmware remain. |
@@ -37,16 +37,16 @@ so no Android outcome disappears during reconciliation.
 | Companion measured battery / usual-use / charges / Wi-Fi estimates | Done | `C/BatteryEstimate.kt:13` computes usual days; `:49` charges; `:107` snapshots; `:148` formats labels. Device measurement acceptance remains pending, not missing model code. |
 | In-book progress, info/details, cached stats, manual Sync | Done | `P/ko/reader_panel.lua:299` reads bounded progress; the top panel owns a user-invoked Sync with visible-panel callback checks. `P/ko/library.lua:339` dispatches current sync. Full owned specialist navigation is a separate row below. |
 | Reusable filter sheet / facets / chips / Home list action | Done | `P/ko/filter_sheet.lua:1` is the owned sheet; `P/ko/library.lua:345` reads companion facets; `P/ko/booklist_config.lua:22` reuses it. |
-| Reading statistics and Stats widgets / completion and goal settings | Partly done | `C/ReadingStats.kt:133` emits null local finish/target values; `:172` supplies remote goals only. There is no owned local completion ledger or local goal setting in `shared/settings/schema.json`. Existing server-first precedence and overlap-safe Today must remain. New setting controls need mockup approval before implementation. |
+| Reading statistics and Stats widgets / completion and goal settings | Done after audit | The maintainer approved the [settings design/mockups](F12-F-NOTES.md#local-completion-and-goal-settings) on 2026-11-27. [#233](https://github.com/Fledgewing/BookSync/pull/233) adds the companion-owned durable local completion ledger, exact Undo, provenance-qualified additive 0.11 import and a 1–999/Off yearly goal that carries its target forward. Account totals remain separate when overlap is unknown. Native settings and upgrade checks pass; physical acceptance remains. |
 | Library interface / neutral filters / adapters / cached fallback | Done for implemented Android operations | `P/ko/library.lua:254` owns budgets/read contexts; `C/LibraryReadModel.kt:45` publishes batches; `C/server/bookorbit/BookOrbitProjection.kt:120` implements saved projections. `tools/test/test-server-boundary.py` and `test-ui-boundary.py` enforce the boundary without skip lists. Missing commands are not permission to bypass it. |
 | Server-free plugin / lifecycle migration (duplicate) | Done | `C/server/bookorbit/CatalogWorkflow.kt:100` and the owned lifecycle import preserve queues; F12-Q2 step 5 retires the Lua adapter. The “parallel catalog/cover/finish pending” text is stale. |
 | Grouped reader settings, modes, battery, one update channel | Done | `P/ko/menu.lua:264` exposes mode/reset, `:336` Updates; `P/ko/settings_view.lua:126` pages sleep choices. Battery and Custom editors are integrated. Physical validation remains pending. |
-| Persistent deduplicated crash summary, never auto-upload | Not started | No crash-record store, uncaught-exception handler, startup dedupe or Library diagnostics projection exists in Android production sources. `P/ko/library_diagnostics.lua:2` only tests the sync path; `C/Pages.kt:18` is not crash persistence. There is no approved crash-summary screen/mockup: prepare a docs-only proposal and retain NEEDS APPROVAL for visible presentation. |
+| Persistent deduplicated crash summary, never auto-upload | Done after audit, approved Companion scope | The maintainer approved the [design/mockups](../crash-summary.md) on 2026-11-27. [#232](https://github.com/Fledgewing/BookSync/pull/232) adds an atomic private 8 KiB record, at most four deduplicated allowlisted fingerprints, exact previous-handler delegation and explicit Clear/Copy in Setup → Details. It never retains exception messages or uploads automatically. Native KOReader capture remains a separately designed handoff under the approved scope, recorded in the later roadmap. |
 | Add-on mode and setup checklist | Done after audit | Approved fallbacks are verified in [add-on mode](../addon-mode.md#android-012-fallback-verification). [Menu recommendations](F12-MENU-RECOMMENDATIONS.md) add the two missing descriptors, fix the initial-fetch pending deadlock, protect customized bindings and restore exact prior menu ownership on Undo. Physical acceptance remains. |
 | Unified in-book menus | Done after audit | [Owned reader navigation](F12-READER-NAVIGATION.md) implements cached Contents/saved-item windows, native page/percent and cancelable search, per-lifetime reversible hooks and native/plugin escape. Explicit enable/disable and the separate [add-on recommendation integration](F12-MENU-RECOMMENDATIONS.md) are implemented. Physical acceptance and firmware remain. |
-| No visible app switches (stretch) | Partly done / NEEDS APPROVAL | Background worker ownership and owned Home are implemented. The audit initially treated `C/Mode.kt:192` as a visible restart screen; `android/companion/app/src/main/AndroidManifest.xml:183` and `android/companion/app/src/main/res/values/styles.xml:25` show it is already transparent. The real ordinary-action gap is `P/ko/library_services.lua:35`–`:47` opening status/helpers/setup. [Reader-inline proposal and mockups](READER-COMPANION-SURFACES.md) are unapproved and remain unbuilt; explicit Android/security/other-app actions are retained. |
+| No visible app switches (stretch) | Done after audit, approved ordinary-action scope | The maintainer approved [reader-inline Status/Helpers and system-action return](READER-COMPANION-SURFACES.md) on 2026-11-27. [#234](https://github.com/Fledgewing/BookSync/pull/234) implements bounded Library snapshots, explicit helper controls, live permission/protection/dependency checks and book/menu-scoped return. Permission never enables a helper. Setup, security and explicit other-app actions retain their approved external routes. Background ownership and transparent restart were already implemented. |
 
-## Dependency order and UI gates
+## Dependency order and UI gates recorded at the first audit
 
 1. Reconcile stale roadmap statements in the audit PR; do not mark unreleased work shipped.
 2. Complete arbitrary-book commands and Series jobs through Library/adapter owners.
@@ -77,3 +77,67 @@ the picker’s bounded polling window. The ready row was cached, but the modal h
 no Library observer. [The source-picker repair](F12-SOURCE-PICKER.md) adds a neutral
 observer without replacing Home’s subscriber; a failing regression covers late
 arrival, covered dialogs and close. This completes the existing approved control.
+
+## Scope clarification for later backends
+
+The approved 0.12 adapter boundary is implemented for BookOrbit and local libraries.
+[DESIGN §6](DESIGN.md#6-small-adapter-boundary-proposed-not-a-frozen-protocol)
+explicitly says “Grimmory shaped, not claimed implemented”; the opening scope of
+[backend independence](../backend-independence.md) keeps new backends and the portable
+ledger in later phases with their own acceptance. The Next release row previously
+said “BookOrbit/Grimmory adapters”, which overstated this increment. It now names
+the implemented adapters and later-backend contracts. No Grimmory credential
+collection, backend or portable-ledger migration is claimed complete here.
+
+## Final outcome reconciliation
+
+Every Android outcome from the audited Next release table is either implemented
+or tracked in the approval/implementation ledger below. “Implemented” remains
+an unreleased feature-branch state; physical-reader acceptance is pending.
+The original source references and baseline test counts above stay anchored to
+`e44c9428`; follow-up notes and the retained inventory describe the later changes.
+
+| Approval gate | Merged docs-only proposal | Implementation state |
+|---|---|---|
+| Persistent crash summary | [#206](https://github.com/Fledgewing/BookSync/pull/206), [approved design/mockups](../crash-summary.md) | Approved 2026-11-27; [#232](https://github.com/Fledgewing/BookSync/pull/232) merged, Companion scope. |
+| Local completion ledger and device goal settings | [#207](https://github.com/Fledgewing/BookSync/pull/207), [approved design/mockups](F12-F-NOTES.md#local-completion-and-goal-settings) | Approved 2026-11-27; [#233](https://github.com/Fledgewing/BookSync/pull/233) merged. |
+| Ordinary companion status/helper screens inside the reader | [#211](https://github.com/Fledgewing/BookSync/pull/211), [approved design/mockups](READER-COMPANION-SURFACES.md) | Approved 2026-11-27; [#234](https://github.com/Fledgewing/BookSync/pull/234) merged, ordinary-action scope. |
+
+The target branch subsequently added the docs-only bedtime and Rest your eyes
+reminders outcome in [#231](https://github.com/Fledgewing/BookSync/pull/231) and
+[#236](https://github.com/Fledgewing/BookSync/pull/236). The [design and mockups](../reminders.md)
+were subsequently approved for Android as well as firmware in [#239](https://github.com/Fledgewing/BookSync/pull/239). This outcome was added after the pinned initial audit and is being implemented separately in [#242](https://github.com/Fledgewing/BookSync/pull/242) and the active Android reminder integration branch. It is not included in the completed 29-outcome claim or the test totals below; its Library delivery, reader UI and emulator acceptance remain pending.
+Firmware-only outcomes, including rows saying Android is unchanged, remain outside
+this Android task. No firmware files or pins, devices, releases, tags or workflow
+dispatches are part of these finish PRs.
+
+## Verification of the completed approved Android scope
+
+The combined Achievements and reader-companion code passes **954 JVM tests**, with
+**0 failures, 0 errors and 4 existing skips**; shared-version verification, debug
+assembly and lint pass. Lua passes **265 logic tests and 313 flows**. Boundary
+checks pass **12 server + 6 UI tests**, feature generation **4 tests**, and emulator
+host safety **14 tests**. Fixture limitations remain documented in the
+[native tools guide](../../../tools/e2e/android/README.md): native tests use an
+isolated ServerAdapter, while adapter protocol and durable-work behavior are JVM
+coverage and the pinned live server kit is a CI check.
+
+Native acceptance includes the **70-screen/action review with all 30 widget
+types**, **17 focused Achievements/year/series/Unopened checks**, **10 crash-summary
+checks**, **15 reader-companion checks**, **8 source/root checks**, **10 local
+goal/completion checks**, and **4 proven 0.11 completion-import checks**. The
+separate 0.11 Home upgrade and fresh-profile checks also pass. Proven import leaves
+the borrowed native sidecar and legacy finish queue byte-for-byte unchanged.
+Earlier per-outcome native evidence remains linked from the implementation notes.
+
+The final cold-profile review exposed test-driver assumptions, which are fixed:
+profile reset archives both fixture directories; Filter closes through its real
+callback; Home readiness includes every visible widget snapshot; immutable window
+bounds use indexed rows. The 20-second screen deadline remains. The Details-page
+unit test waits for asynchronous diagnostics rather than racing its loading frame.
+The reader-companion integration settles the permitted position-consent action
+before recording the page that a system-action return must preserve.
+
+These are feature-branch implementation and emulator results. Physical-reader
+acceptance, timing measurements and publication remain pending. The shared version
+retains the branch's existing identity; this work creates no release or tag.

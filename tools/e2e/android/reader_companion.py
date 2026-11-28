@@ -60,7 +60,13 @@ def review(device, out):
         device.command('if ReaderCompanionView.active then ReaderCompanionView.active:close() end;local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then click("Later") end;Library.companion.setupLater();Library.open({local_path="/storage/emulated/0/Books/001 Seedfall.epub"});return true')
         wait('return liveUI() and liveUI().document and liveUI().document.file:find("Seedfall",1,true) and "ready" or "pending"')
         configure("full")
-        device.command('Library._readerCompanionReviewPage=liveUI().document:getCurrentPage();return true')
+        # Position consent is an allowed reader action, separate from these sheets.
+        # Settle it before recording the page that system-action return must preserve.
+        wait('return not Net.inflight and not ReadingSync.busy and "ready" or "pending"')
+        accepted=device.command('if PositionPrompt.current then Library._readerCompanionExpectedPage=Library.position.geometry({remote={percentage=0.5}},liveUI(),"reading").remote_page;click("Yes");return "accepted" end;return "none"')
+        if accepted=="accepted":
+            wait('return liveUI().document:getCurrentPage()==Library._readerCompanionExpectedPage and "ready" or "pending"')
+        device.command('assert(not PositionPrompt.current);Library._readerCompanionExpectedPage=nil;Library._readerCompanionReviewPage=liveUI().document:getCurrentPage();return true')
         check("full-reader-status",'plugin:onOrbitOpenCompanion();local v=assert(ReaderCompanionView.active);assert(top()==v.dialog and v.page=="status");assert(#v.dialog.buttons<=9);return v.dialog.title')
         check("full-reader-helpers",callback("helpers")+'\n')
         device.command('local v=ReaderCompanionView.active;assert(v.snapshot.mode=="full");assert(v.snapshot.helpers[1].on and not v.snapshot.helpers[1].mutable);v:close();return true')
