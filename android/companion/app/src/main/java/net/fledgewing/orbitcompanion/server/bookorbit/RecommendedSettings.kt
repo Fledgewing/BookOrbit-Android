@@ -11,7 +11,9 @@ internal object RecommendedSettings {
         mapOf("id" to "g.sync_sleep","kind" to "gesture","key" to "hold_top_right_corner","ours" to mapOf("orbit_sync_and_sleep" to true),"label" to "Gesture: hold top-right corner"),
         mapOf("id" to "g.sync_all","kind" to "gesture","key" to "hold_top_left_corner","ours" to mapOf("bookorbit_sync_now" to true),"label" to "Gesture: hold top-left corner"),
         mapOf("id" to "g.this_book","kind" to "gesture","key" to "one_finger_swipe_bottom_edge_right","ours" to mapOf("bookorbit_this_book" to true),"label" to "Gesture: swipe right along the bottom edge"),
-        mapOf("id" to "g.apps","kind" to "gesture","key" to "two_finger_swipe_north","ours" to mapOf("orbit_open_apps" to true),"needs" to "apps","label" to "Gesture: two-finger swipe up")
+        mapOf("id" to "g.apps","kind" to "gesture","key" to "two_finger_swipe_north","ours" to mapOf("orbit_open_apps" to true),"needs" to "apps","label" to "Gesture: two-finger swipe up"),
+        mapOf("id" to "g.no_flip","kind" to "gesture","key" to "tap_top_left_corner","ours" to emptyMap<String,Any?>(),"label" to "Gesture: tap top-left corner"),
+        mapOf("id" to "o.clean_menus","kind" to "owned","key" to "clean_menus","ours" to true,"untouched_only" to true,"label" to "BookSync: Reading menus")
     ).map { item ->
         val labels=when(item["key"]) {
             "sync_forward" -> mapOf("1" to "Ask","2" to "Silent","3" to "Don't sync")

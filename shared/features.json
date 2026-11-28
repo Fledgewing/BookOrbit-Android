@@ -6157,17 +6157,17 @@
     },
     {
       "id": "android-addon-012-followups",
-      "feature": "Add-on install/update fallbacks and helper navigation (0.12)",
+      "feature": "Add-on fallbacks, helper navigation and menu recommendations (0.12; unreleased)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Android 0.12 adds permission-free manual install/download fallbacks, reader update-ready text, helper deep-link and separate sleep/screen-off choices",
-          "reason": "deliberately deferred: emulator/device acceptance and remaining owned-menu recommendation integration are tracked for 0.12; not released.",
+          "note": "Permission-free install/download, reader update-ready text, helper deep-link, separate sleep choices and ten-item recommendation review with reversible menu ownership.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; JVM, Lua and native emulator flows verify the approved Android behavior.",
           "evidence": [
             {
-              "path": "docs/design/addon-mode.md",
-              "line": 740
+              "path": "docs/design/booksync-home/F12-MENU-RECOMMENDATIONS.md",
+              "line": 1
             }
           ],
           "version": null
@@ -6209,7 +6209,7 @@
           "version": null
         }
       },
-      "deferred": "Physical acceptance and owned-menu recommendation integration."
+      "deferred": "Physical acceptance and publication."
     },
     {
       "id": "android-owned-download-jobs",
@@ -6323,7 +6323,7 @@
         "android": {
           "status": "partial",
           "note": "Owned Contents, saved items, page/percent and cancelable search; native advanced/plugin escape and reversible instance hooks.",
-          "reason": "deliberately deferred: physical acceptance and publication remain; automatic menu recommendations are the separate add-on outcome.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; automatic menu recommendations are implemented in the add-on outcome.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-READER-NAVIGATION.md",
@@ -6365,7 +6365,7 @@
           ]
         }
       },
-      "deferred": "Firmware, physical acceptance and the separate add-on recommendation integration."
+      "deferred": "Firmware, physical acceptance and publication."
     }
   ],
   "release_evidence": {

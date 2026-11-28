@@ -29,6 +29,7 @@ object ServerAdapters {
     }
     private val adapter = object : ServerAdapter {
         override val id = "fixture"
+        override fun recommendedSettings()=net.fledgewing.orbitcompanion.server.bookorbit.RecommendedSettings.items
         override fun owner() = OWNER.takeIf { signedIn }
         override fun state(): Map<String, Any?> = mapOf("signedIn" to signedIn, "owner" to owner(), "username" to "reader", "server" to "https://fixture.example.test",
             "account" to mapOf("set" to signedIn, "origin" to "user"),

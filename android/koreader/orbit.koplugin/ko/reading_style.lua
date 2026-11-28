@@ -328,8 +328,8 @@ function Library.installReaderMenus(ui)
     return #state.hooks>0
 end
 function Library.setReaderMenus(ui,enabled)
-    S.clean_menus=enabled==true;saveSettings()
-    if S.clean_menus then Library.installReaderMenus(ui) else Library.restoreReaderMenus(ui) end
+    S.clean_menus=enabled;saveSettings()
+    if S.clean_menus==true then Library.installReaderMenus(ui) else Library.restoreReaderMenus(ui) end
 end
 
 -- Bounded windows over native state that the reader has already loaded. Opening a

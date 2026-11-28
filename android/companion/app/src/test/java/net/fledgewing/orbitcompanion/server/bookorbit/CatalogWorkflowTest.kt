@@ -208,11 +208,11 @@ class CatalogWorkflowTest {
         assertEquals("reading",(w.worker.store.detail(7)!!.first as Map<*,*>)["readStatus"])
         assertTrue(w.calls.isEmpty());assertTrue(w.jobs().isEmpty())
     }
-    @Test fun nativeRecommendationLabelsAreProjectedAndAllEightRowsFitTheBudget() {
+    @Test fun nativeRecommendationLabelsAreProjectedAndAllTenRowsFitTheBudget() {
         val definitions=RecommendedSettings.items
         val observations=definitions.associate { it["id"] as String to mapOf("available" to true,"current" to it["ours"]) }
         val result=RecommendationPlan.evaluate(definitions,mapOf("observations" to observations))
-        assertEquals(8,(result["items"] as List<*>).size);assertTrue(LuaValue.encode(result).size<=16384)
+        assertEquals(10,(result["items"] as List<*>).size);assertTrue(LuaValue.encode(result).size<=16384)
         val row=(result["items"] as List<*>).map { it as Map<*,*> }.single { it["id"]=="g.sync_all" }
         assertEquals("BookSync: Sync all books",row["orbit"])
     }

@@ -132,11 +132,12 @@ Budgets.screens["settings-sleep-choices"].displayRows = 10
 Budgets.screens["catalog-refresh"] = budget(1,16384,50)
 Budgets.screens["catalog-refresh"].roundTrips = 0
 
--- One finish summary plus two selected cards; recommendation review has eight settings.
+-- One finish summary plus two selected cards; recommendation review has ten settings.
 Budgets.screens["end-of-book"] = budget(3,16384,50)
 Budgets.widgets["end-of-book"] = budget(3,16384,50)
-Budgets.screens["settings-recommendations"] = budget(8,16384,50)
-Budgets.widgets["recommendations"] = budget(8,16384,50)
+Budgets.screens["settings-recommendations"] = budget(10,16384,50)
+Budgets.screens["settings-recommendations"].displayRows=18
+Budgets.widgets["recommendations"] = budget(10,16384,50)
 Budgets.screens["copies-state"] = budget(1,16384,30)
 Budgets.screens["copies-state"].roundTrips = 0
 
