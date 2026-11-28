@@ -101,7 +101,7 @@ The original source references and baseline test counts above stay anchored to
 |---|---|---|
 | Persistent crash summary | [#206](https://github.com/Fledgewing/Orbify/pull/206), [approved design/mockups](../crash-summary.md) | Approved 2026-11-27; [#232](https://github.com/Fledgewing/Orbify/pull/232) merged, Companion scope. |
 | Local completion ledger and device goal settings | [#207](https://github.com/Fledgewing/Orbify/pull/207), [approved design/mockups](F12-F-NOTES.md#local-completion-and-goal-settings) | Approved 2026-11-27; [#233](https://github.com/Fledgewing/Orbify/pull/233) merged. |
-| Ordinary companion status/helper screens inside the reader | [#211](https://github.com/Fledgewing/Orbify/pull/211), [approved design/mockups](READER-COMPANION-SURFACES.md) | Approved 2026-11-27; [#234](https://github.com/Fledgewing/Orbify/pull/234) implements the ordinary-action scope. |
+| Ordinary companion status/helper screens inside the reader | [#211](https://github.com/Fledgewing/Orbify/pull/211), [approved design/mockups](READER-COMPANION-SURFACES.md) | Approved 2026-11-27; [#234](https://github.com/Fledgewing/Orbify/pull/234) merged, ordinary-action scope. |
 
 The target branch subsequently added the docs-only bedtime and Rest your eyes
 reminders outcome in [#231](https://github.com/Fledgewing/Orbify/pull/231) and
