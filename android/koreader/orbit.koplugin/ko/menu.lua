@@ -442,6 +442,12 @@ function OrbitAndroid:showSettings(group)
         if row.settings_group then items[#items+1]=row end
     end
     if group=="account" and not Library.settings.status("pin_locked") then return AccountView.open() end
+    local previous=SettingsView.active
+    while previous do
+        local parent=previous.parent
+        previous.onBack=nil;previous.parent=nil;previous:close()
+        previous=parent
+    end
     if group then
         for _,row in ipairs(items) do if row.settings_group==group then
             local make=row.sub_item_table_func
@@ -455,6 +461,17 @@ function OrbitAndroid:showSettings(group)
     local icons={account="settings-user",sync="sync",library="settings-download",reading="settings-type",home="home",sleep="settings-moon",updates="arrowU",about="info"}
     local subtitles={account="Account and logins",sync=SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()),library="Storage and downloaded books",reading="Fonts, margins and reading controls",home="BookSync Home",sleep="Cover and sleep screen choices",updates=SettingsUI.installed(PATCH_VERSION),about="BookSync "..PATCH_VERSION}
     return SettingsView.open("BookSync settings",function()
+        local paint=Library.paint("settings")
+        local account,storage,battery=paint:accountState(),paint:storage(),paint:battery()
+        paint:flush()
+        subtitles.account=AccountPlan.summary(account)
+        subtitles.library=storage.folder_label or "Choose a download folder"
+        local fonts=ReadingStyle.pair("font",Library.settings.read("reading_pairs"))
+        local margins=ReadingStyle.pair("margins",Library.settings.read("reading_pairs"))
+        subtitles.reading=ReadingStyle.presets.font[fonts[2]][1].." · "..ReadingStyle.presets.margins[margins[1]][1]:lower().." and "..ReadingStyle.presets.margins[margins[2]][1]:lower().." margins"
+        subtitles.sleep=SettingsUI.value(Library.settings.schema().byKey.sleep_mode,Library.settings.read("sleep_mode"))
+        subtitles.updates=SettingsUI.value(Library.settings.schema().byKey.update_channel,Library.settings.read("update_channel")).." channel · "..PATCH_VERSION
+        if battery.display and battery.display.level and battery.display.level:find("%d") then subtitles.sync=SettingsUI.modeLabel(Library.settings.read(),Library.settings.mode()).." · "..battery.display.level.." battery" end
         local rows={}
         for _,item in ipairs(items) do
             local id=item.settings_group
@@ -465,12 +482,9 @@ function OrbitAndroid:showSettings(group)
 end
 
 function OrbitAndroid:addToMainMenu(menu_items)
-    local entry = { text = _("BookSync"), sub_item_table_func = function()
-        Library.settings.refresh("menu")
-        Library.refreshDevice()
-        if Library.settings.status("pin_locked") then return self:settingsPresentation(self:lockedMenuItems()) end
-        UIManager:scheduleIn(0.5, function() self:maybeSetupPrompt("menu", "menu") end)
-        return self:settingsPresentation(self:menuItems())
+    local entry = { text = _("BookSync"), callback = function(menu)
+        if menu and menu.closeMenu then menu:closeMenu() end
+        self:showSettings()
     end }
     -- Its own top-level entry in Tools, the way plugins and user patches add menus: an item
     -- missing from the menu order goes to the menu its sorting_hint names

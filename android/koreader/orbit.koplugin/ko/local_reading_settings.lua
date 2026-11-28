@@ -20,9 +20,10 @@ function LocalReadingSettings.open()
             goal=SettingsPage.new{title="Local reading goal",subtitle="This reader only",rows={},onBack=close,
                 content=function(K,c,w,y,put)
                     local p=K.px
+                    local errorLabel=K.label(c,"",p(30),p(450),w-p(60),"small")
                     K.label(c,tostring(snapshot.year or ""),p(30),p(100),w-p(60),"number",{serif=true,bold=true})
                     K.label(c,"Books to finish on this reader",p(30),p(178),w-p(60),"title")
-                    put(K.button{text=value~="" and value or "Enter a number",w=p(180),h=p(72),variant="outline",callback=function()
+                    put(K.button{text=value,w=p(133),h=p(84),radius=0,size=20,bold=false,variant="outline",callback=function()
                         local input
                         input=require("ui/widget/inputdialog"):new{title="Books to finish",input=value,input_type="number",buttons={{{text="Cancel",callback=function() UIManager:close(input) end},
                             {text="Use",callback=function() value=input:getInputText();UIManager:close(input);paint() end}}}}
@@ -30,11 +31,11 @@ function LocalReadingSettings.open()
                         input:onShowKeyboard()
                     end},p(30),p(225),"goal-number")
                     K.label(c,"1–999 books. This reader only. Your account goal stays separate.",p(30),p(316),w-p(60),"body")
-                    put(K.button{text="Off",w=p(100),variant="outline",callback=function() close();Library.localReadingGoal(nil,apply) end},p(30),p(380),"goal-off")
-                    put(K.button{text="Save",w=p(120),callback=function()
+                    put(K.button{text="Off",w=p(95),h=p(84),radius=0,variant="outline",callback=function() close();Library.localReadingGoal(nil,apply) end},p(30),p(380),"goal-off")
+                    put(K.button{text="Save",w=p(115),h=p(84),radius=0,variant="outline",callback=function()
                         local n=tonumber(value)
                         if not n or n<1 or n>999 or n~=math.floor(n) then
-                            K.label(c,"Enter a number from 1 to 999.",p(30),p(450),w-p(60),"small");UIManager:setDirty(goal,"ui");return
+                            errorLabel:setText("Enter a number from 1 to 999.");UIManager:setDirty(goal,"ui");return
                         end
                         close();Library.localReadingGoal(value,apply)
                     end},p(142),p(380),"goal-save")

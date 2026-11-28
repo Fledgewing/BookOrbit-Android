@@ -453,7 +453,7 @@ package.preload["ui/geometry"] = function() return { new = plain } end
 package.preload["ui/gesturerange"] = function() return { new = plain } end
 package.preload["ui/font"] = function() return { getFace = function() return {} end } end
 package.preload["ui/size"] = function() return { padding = { large = 10 }, radius = { button = 0 }, line = { thick = 3 } } end
-package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1 } end
+package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1, Color8=function(n) return n end } end
 table.insert(package.loaders, 2, function(name)
     if type(name) == "string" and name:match("^ui/widget/") and not package.preload[name] then
         return function() return Widget:extend{} end
@@ -869,7 +869,12 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     ok(#items.bookorbit.sub_item_table == 0, "plugin menu untouched")
     local entry = items.orbit_android
     ok(entry and entry.text == "BookSync" and entry.sorting_hint == "tools", "Tools entry")
-    local sub = entry.sub_item_table_func()
+    local opened,closed=false,false
+    m.showSettings=function() opened=true end
+    entry.callback({closeMenu=function() closed=true end})
+    ok(opened and closed,"Tools routes into the owned settings page")
+    eq(entry.sub_item_table_func,nil,"BookSync has no stock settings submenu")
+    local sub = m:menuItems()
     ok(#sub >= 9, "items " .. #sub)
     local titles = {}
     for _, it in ipairs(sub) do if it.text then titles[it.text] = true end end

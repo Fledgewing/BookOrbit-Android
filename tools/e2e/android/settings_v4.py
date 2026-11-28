@@ -35,11 +35,18 @@ def review(d, out):
         v = int(d.command('return #SettingsView.active.dialog.buttons'))
         if group in ('sync', 'reading', 'sleep') and v > 1:
             # Capture every bounded page, retaining the exact production page partition.
+            page = 2
             while d.command('local b=SettingsView.active.dialog:getButtonById("next");return b and b.enabled and "more" or "done"') == 'more':
-                index = int(d.command('return SettingsView.active.offset'))
-                step('settings-' + group + '-' + str(index + 1), 'SettingsView.active.dialog:getButtonById("next"):onKitTap()')
+                index = page
+                page += 1
+                step('settings-' + group + '-' + str(index), 'SettingsView.active.dialog:getButtonById("next"):onKitTap()')
         clean()
-    step('account-off', 'AccountView.open()')
+    d.command('AccountView.open();AccountView.active:command("account.signOut",{});return true')
+    deadline = time.monotonic() + 40
+    while d.command('return AccountView.active.busy and "pending" or "ready"') != 'ready':
+        if time.monotonic() > deadline: raise TimeoutError('Sign-out did not finish')
+        time.sleep(.2)
+    step('account-off', 'assert(not AccountView.active.state.signedIn);AccountView.active:paint()')
     step('signin', 'AccountView.active:form("account")')
     step('signin-result', 'AccountView.active:command("account.signIn",{server="https://fixture.example.test",username="reader",password="fixture"})')
     deadline = time.monotonic() + 40
@@ -53,8 +60,11 @@ def review(d, out):
     step('signout', 'AccountView.active.page="signout";AccountView.active:paint()')
     clean()
     for key in ('font', 'spacing', 'contrast', 'margins'):
-        step('custom-' + key, 'plugin:showSettings("reading");CustomReading.open(' + json.dumps(key) + ',nil)')
+        step('custom-' + key, 'plugin:showSettings("reading");SettingsView.active.dialog:getButtonById("setting-' + str({'font': 2, 'margins': 4, 'spacing': 6, 'contrast': 8}[key]) + '"):onKitTap();assert(CustomReading.editor.key==' + json.dumps(key) + ')' )
         d.command('local e=CustomReading.editor;local before=Library.readingCustom("reading-custom-"..e.key);e:onStepMore();e:onStepLess();assert(ReadingStyle.label(Library.readingCustom("reading-custom-"..e.key),e.key)==ReadingStyle.label(before,e.key));CustomReading.close();return true')
+        clean()
+    for group, row in (('updates', 2), ('home', 4), ('reading', 1)):
+        step('choice-' + group, 'plugin:showSettings(' + json.dumps(group) + ');SettingsView.active.dialog:getButtonById("setting-' + str(row) + '"):onKitTap()')
         clean()
     step('goal-off', 'LocalReadingSettings.open()')
     deadline = time.monotonic() + 40
@@ -63,7 +73,7 @@ def review(d, out):
         time.sleep(.2)
     step('goal-editor', 'SettingsView.active.dialog:getButtonById("setting-1"):onKitTap()')
     step('goal-keyboard', 'top():getButtonById("goal-number"):onKitTap()')
-    d.command('local input=top();assert(input.input_type=="number");input:setInputText("12");input.buttons[1][2].callback();return true')
+    d.command('local input;for _,w in ipairs(UI._window_stack) do if w.widget.setInputText then input=w.widget end end;assert(input and input.input_type=="number");input:setInputText("12");input.buttons[1][2].callback();return true')
     step('goal-number', 'assert(top():getButtonById("goal-save"));top():getButtonById("goal-save"):onKitTap()')
     time.sleep(1)
     step('goal-on', 'SettingsView.active:paint()')

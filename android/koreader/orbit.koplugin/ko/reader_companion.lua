@@ -114,9 +114,19 @@ function V:paint()
             if b.id==helper.id then display[#display].text=helper.label;display[#display].toggle=helper.on end
         end end
     end
-    local dialog=SettingsPage.new{title=heading or title,subtitle=subtitle,rows=display,modal=true,
-        h=Device.screen:getWidth()/702*(#display*64+130),onBack=function() self:back() end}
-    dialog.buttons=buttons
+    local permission=self.page=="permission"
+    local scale=Device.screen:getWidth()/702
+    local dialog=SettingsPage.new{title=heading or title,subtitle=nil,intro=subtitle,
+        rows=permission and {} or display,modal=true,bottom=true,w=Device.screen:getWidth(),
+        h=math.min(Device.screen:getHeight(),scale*(permission and 440 or (#display*64+210))),onBack=function() self:back() end,
+        content=function(K,c,w,y,put)
+            if permission then
+                local p=K.px
+                put(K.button{text="Open Android settings",w=p(280),callback=buttons[1][1].callback},p(24),y,"permission")
+                put(K.button{text="Later",w=p(100),variant="outline",callback=buttons[2][1].callback},p(320),y,"later")
+                K.label(c,"No permission is accepted automatically.",p(24),y+p(75),w-p(48),"small")
+            end
+        end}
     dialog.buttons=buttons;dialog.focus=focus
     self:hide();self.dialog=dialog
     UIManager:show(dialog) -- gate: user action (status/helpers or valid explicit system-action return only)

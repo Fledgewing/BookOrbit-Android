@@ -25,6 +25,7 @@ return function(here,test,eq,ok)
         function manager:scheduleIn(_,fn) table.insert(self.scheduled,fn) end
         e.UIManager=manager
         function e.Device.screen:getWidth() return 1200 end
+        function e.Device.screen:getHeight() return 1600 end
         function e.Device.screen:scaleBySize(v) return v end
         e.SettingsPage={new=function(o) o.onClose=o.onBack;return o end}
         e.require=function(name)
@@ -46,7 +47,7 @@ return function(here,test,eq,ok)
     test("reader companion: missing/version worker uses existing problem without snapshot call",function()
         for _,message in ipairs({"BookSync Companion needed","Update BookSync Companion"}) do
             local e,V=world();e.Companion.workerProblem=function() return message end
-            local v=V.open();eq(e.reads,0);eq(e.decoded,0);ok(v.dialog.subtitle:find(message,1,true))
+            local v=V.open();eq(e.reads,0);eq(e.decoded,0);ok(v.dialog.intro:find(message,1,true))
         end
     end)
     test("reader companion: oversized and excess-row replies are unavailable before presentation",function()

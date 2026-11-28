@@ -37,7 +37,7 @@ function SettingsView:paint(attempt)
     assert(#items<=(Budgets.get("screens",self.screen).displayRows or Budgets.get("screens",self.screen).rows),"Settings display row budget exceeded")
     -- Reserve the title/navigation and a tall mode card. Every action is at least 50 px.
     local screen=Device.screen
-    local pageSize=self.screen=="settings" and 8 or math.max(1,math.min(10,math.floor((screen:getHeight()-screen:getWidth()/702*160)/(screen:getWidth()/702*73))))
+    local pageSize=self.screen=="settings" and 8 or self.screen=="settings-sync" and 8 or math.max(1,math.min(10,math.floor((screen:getHeight()-screen:getWidth()/702*160)/(screen:getWidth()/702*73))))
     self.offset=math.min(self.offset,math.max(0,math.floor((#items-1)/pageSize)*pageSize))
     if self.choiceFocus then
         self.choiceFocus=nil
@@ -77,7 +77,7 @@ function SettingsView:paint(attempt)
                     end,self.focus)
                 elseif row.callback then
                     local before=self.dialog
-                    row.callback()
+                    row.callback(row.keep_menu_open and self.dialog or nil)
                     if self.alive and self.dialog==before and UIManager:getTopmostVisibleWidget()==before then self:paint() end
                 end
             end}}
@@ -103,10 +103,13 @@ function SettingsView:paint(attempt)
             local name,value=(head or text):match("^(.-): (.+)$")
             display[#display+1]={id=b.id,text=name or head or text,sub=sub or (items[self.offset+#display+1] or {}).sub,icon=(items[self.offset+#display+1] or {}).icon,detail=value,
                 enabled=b.enabled,callback=b.callback,h=screen:getWidth()/702*(self.screen=="settings" and 105 or 73)}
+            if self.screen=="settings" and #display==1 then display[#display].h=screen:getWidth()/702*109.5 end
             local row=items[self.offset+#display]
+            if row and not row.callback and not row.card_action and not row.sub_item_table and not row.sub_item_table_func then display[#display].callback=nil;display[#display].enabled=true end
             if row and row.sub then display[#display].sub=row.sub end
-            if row and row.checked_func and not row.radio then display[#display].toggle=row.checked_func();display[#display].text=(head or text):gsub("^[●○] ","") end
+            if row and row.checked_func and not row.radio then display[#display].toggle=row.checked_func();display[#display].text=(head or text):gsub("^● ",""):gsub("^○ ","") end
             if row and row.radio then display[#display].detail=row.checked_func() and "●" or "○" end
+            if row and row.card_text then display[#display].card=true;display[#display].text="Mode";display[#display].h=screen:getWidth()/702*160;display[#display].cardChange=function(index) if b.enabled and row.sub_item_table[index] then row.sub_item_table[index].callback();self:paint() end end end
             if row and row.section then display[#display].h=screen:getWidth()/702*42;display[#display].callback=nil end
         end
     end
@@ -120,6 +123,7 @@ function SettingsView:paint(attempt)
                 put(K.button{text="›",w=p(52),variant="outline",enabled=self.offset+pageSize<#items,callback=nav[4].callback},w/2+p(60),screen:getHeight()-p(66),"next")
             end
         end}
+    dialog.updateItems=function() if self.alive and UIManager:getTopmostVisibleWidget()==self.dialog then self:paint() end end
     dialog.buttons=buttons
     dialog.focus={1,math.min(self.focus or 1,#buttons)}
     if self.dialog then UIManager:close(self.dialog) end

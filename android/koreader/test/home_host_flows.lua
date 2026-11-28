@@ -7,7 +7,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
         Widget.free=function() end
-        local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
+        local U={Font={getFace=function() return {} end},BB={Color8=function(n) return n end,COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
         U.Text.getSize=function(self) return {w=self.max_width or 0,h=20} end
         Widget.paintTo=function(self,bb,x,y)

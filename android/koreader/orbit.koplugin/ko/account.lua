@@ -13,14 +13,17 @@ function AccountView.open(kind)
     if AccountView.active then AccountView.active:close() end
     local v=setmetatable({alive=true,state=AccountView.read(),page="summary",focus=kind or "account"},{__index=AccountView})
     AccountView.active=v
-    if kind then v:form(kind) else v:paint() end
+    v:paint();if kind then v:form(kind) end
     return v
 end
 function AccountView:close()
     self.alive=false; self:retireCommand(); self.password=nil
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
+    if self.backdrop then UIManager:close(self.backdrop);self.backdrop=nil end
     if AccountView.active==self then AccountView.active=nil end
     Library.changed({kind="account"})
+    local settings=SettingsView and SettingsView.active
+    if settings and settings.alive and UIManager:getTopmostVisibleWidget()==settings.dialog then settings:paint() end
 end
 function AccountView:form(kind)
     self.kind=kind; self.page="form"; self.error=nil
@@ -145,9 +148,15 @@ function AccountView:paint()
         local b=line[1]
         local head,sub=b.text:match("^(.-) · (.*)$")
         local name,value=b.text:match("^(.-): (.+)$")
-        display[#display+1]={id=b.id,text=name or head or b.text,sub=sub,detail=value,callback=b.enabled and b.callback or nil,enabled=b.enabled}
+        display[#display+1]={id=b.id,text=name or head or b.text,sub=sub,detail=value,keyboard=self.page=="form" and (b.id=="server" or b.id=="username" or b.id=="password"),callback=b.enabled and b.callback or nil,enabled=b.enabled}
     end
     if self.page=="summary" and a.signedIn then
+        for i=#display,1,-1 do
+            local r=display[i]
+            if r.id=="address" then r.text="Your server";r.detail=a.server;r.enabled=true
+            elseif r.id=="close" then table.remove(display,i) end
+        end
+        table.insert(display,2,{text="What BookSync set up",sub="Sync: "..AccountPlan.status(AccountPlan.login(a,"sync")).." · OPDS: "..AccountPlan.status(AccountPlan.login(a,"opds"))})
         table.insert(display,1,{text="Connection",detail=a.connected==true and "Connected" or "Signed in"})
         table.insert(display,1,{text="Signed in as",detail=a.username or "reader"})
     end
@@ -165,20 +174,29 @@ function AccountView:paint()
         for _,r in ipairs(display) do r.h=Device.screen:getWidth()/702*52 end
     end
     local scale=Device.screen:getWidth()/702
-    local dialog=SettingsPage.new{title=heading or title,subtitle=modal and (self.kind=="account" and "Use your server account, once. BookSync then sets up sync and OPDS for you." or subtitle) or "BookSync settings",
-        modal=modal,h=modal and scale*(#display*52+190) or nil,rows=display,onBack=function() self:back() end,
+    local dialog=SettingsPage.new{title=heading or title,subtitle=modal and self.page=="form" and (self.kind=="account" and "Use your server account, once. BookSync then sets up sync and OPDS for you." or subtitle) or (not modal and "BookSync settings" or nil),
+        modal=modal,startY=self.page=="form" and scale*86 or nil,w=modal and scale*580 or nil,intro=modal and self.page~="form" and subtitle or nil,h=modal and scale*(#display*52+194+(self.page~="form" and 170 or 0)+(self.error and 35 or 0)) or nil,rows=display,onBack=function() self:back() end,
         content=function(K,c,w,y,put)
             if modal then
                 local p=K.px
-                K.label(c,self.error and self.error[1] or "Each row opens KOReader's keyboard.",p(24),y+p(7),w-p(48),"caption",{muted=true})
+                if self.page=="form" then
+                    K.label(c,self.error and self.error[1] or "Each row opens KOReader's keyboard.",p(24),y+p(7),w-p(48),"caption",{bold=self.error~=nil,muted=not self.error})
+                    if self.error then K.label(c,self.error[2],p(24),y+p(28),w-p(48),"caption") end
+                end
                 local aw=(w-p(48)-p(12)*(#actions-1)) / math.max(1,#actions)
-                for i,r in ipairs(actions) do put(K.button{text=r.text,w=aw,h=p(52),enabled=r.enabled,
-                    variant=i==#actions and "solid" or "outline",callback=r.callback},p(24)+(i-1)*(aw+p(12)),y+p(35),r.id) end
+                for i,r in ipairs(actions) do
+                    local button=K.button{text=r.text,w=aw,h=p(52),enabled=r.enabled,variant=i==#actions and "solid" or "outline",callback=r.callback}
+                    if r.enabled==false then button[1].background=K.tile;button[1].color=K.rule end
+                    put(button,p(24)+(i-1)*(aw+p(12)),y+p(self.error and 65 or 30),r.id)
+                end
             end
         end}
     dialog.buttons=buttons
     dialog.focus=focus
-    if self.dialog then UIManager:close(self.dialog) end
+    if modal and self.drawnPage=="summary" then self.backdrop=self.dialog
+    elseif self.dialog then UIManager:close(self.dialog) end
+    if not modal and self.backdrop then UIManager:close(self.backdrop);self.backdrop=nil end
+    self.drawnPage=self.page
     self.dialog=dialog
     UIManager:show(dialog) -- gate: user action (account form; completion requires visible initiating form)
     if self.state.pending and (self.attempt or 0)<6 then

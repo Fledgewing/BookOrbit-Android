@@ -47,7 +47,7 @@ return function(test,eq,ok,here,Cache)
         e.UIManager.close=function(_,d) if top==d then top=view.dialog end end
         e.SettingsPage={new=function(o)
             o.controls={}
-            local K={px=function(n) return n end,label=function() end,button=function(b) return b end}
+            local K={px=function(n) return n end,label=function() return {setText=function() end} end,button=function(b) return b end}
             o.content(K,{},702,0,function(b,_,_,id) o.controls[id]=b end)
             return o
         end}
