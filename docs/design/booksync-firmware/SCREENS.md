@@ -358,7 +358,7 @@ on 2026-11-27 (~18:45 PT): list, add, remove, reset, no space and save failure.
 Keep widget and Keep layout receive initial focus. F35a services, host tests,
 three-profile simulator scenes and maintainer device acceptance remain required.
 
-## F40w compact X4 Home widgets — NEEDS APPROVAL
+## F40w compact X4 Home widgets — APPROVED (2026-11-28)
 
 The [F40w inventory](F40w-widgets.md) and [compact gallery](f40w-widgets.html)
 replace #241's large main views with the smallest useful cards at 0.11 X4 density.
@@ -367,18 +367,19 @@ stays; no dedicated Library sources widget is added. Book list presets remain
 configurations of that type. Forecast and Battery stay. All (n) › links live in
 headers at the top-right; larger views are explicitly optional.
 
-Every new scene/state remains **NEEDS APPROVAL**. This is an X4 Pro / Classic
-review; it enables no X3 widget and changes no existing approval, firmware, pin,
+Maintainer approval at ~00:45 PT: “I approve all the screens / widgets”.
+All 30 types, every state and optional size at revised compact density are approved.
+This X4 Pro / Classic approval enables no X3 widget and changes no firmware, pin,
 default layout or native reader behavior.
 
-## F36a Library and lists — NEEDS APPROVAL
+## F36a Library and lists — APPROVED (2026-11-28)
 
 The [F36a proposal](F36a-library.md) and [three-profile gallery](f36a-library.html)
-add 30 Library/list state variants for review, including catalog counts, authors,
+add 30 Library/list state variants approved on 2026-11-28, including catalog counts, authors,
 series grouping, On card, saved Smart-scope lists, offline, nested Back,
-download consent/progress/cancel and errors. All additions **NEED APPROVAL**.
+download consent/progress/cancel and errors. All additions are **APPROVED (2026-11-28)**.
 The approved Home examples do not supply the complete X3 or three-profile state
-coverage. Missing presentations stay off. Existing approvals, F36b/F36c scope,
+coverage. The missing presentations are now approved. Existing approvals, F36b/F36c scope,
 firmware source and integration pin are unchanged.
 
 F36a photo-comparison revision: the supplied 0.11 X4 Library photograph governs
@@ -386,10 +387,9 @@ density and layout (Discover and Recently added cover rows above four compact
 half-width number tiles with top-right icons). All (n) › belongs at the top-right
 of each relevant header. Lists, Details handoffs and transfer states retain
 Android 0.12 behavior; no new destinations are proposed. Preparing/errors stay
-inline and completion updates the originating row. This remains **NEEDS APPROVAL**
-after a docs-only merge; private photographs are not included.
+inline and completion updates the originating row. This revised compact presentation is **APPROVED (2026-11-28)**; private photographs are not included.
 
-## F36c Series additions — NEEDS APPROVAL
+## F36c Series additions — APPROVED (2026-11-28)
 
 The [F36c source-mapped inventory](F36c-series.md) and
 [three-profile gallery, revision 2](f36c-series.html) use the supplied 0.11 X4
@@ -397,7 +397,7 @@ photo density: covers, large values/small labels and top-right icons. Preview
 headers place All (n) › at the top-right. States and controls map to existing
 Android Series/group/preview/input/file/review/notice/queue branches; no extra
 firmware-only route or completion/Back/error wizard is proposed.
-**All additions remain NEEDS APPROVAL**, including after this docs-only merge.
+**All additions are APPROVED (2026-11-28)** by the same maintainer ruling.
 Existing Home revision-16 and B1–B5 approvals remain unchanged. Firmware F36c
-stays off pending presentation approval and Library service dependencies.
+implementation still requires its Library service and test dependencies.
 No firmware or submodule pin changes; F36a/F36b remain separate.
