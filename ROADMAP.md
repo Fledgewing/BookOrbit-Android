@@ -158,3 +158,5 @@ and any UI mockups still need approval before implementation.
 | **One BookSync version from 0.12**: companion, plugin and all Xteink readers share a product version and release channel; previews retain unchanged platform builds, RC/stable converge with passing-test reuse by source fingerprint, and an old-scheme firmware bridge keeps OTA working across the transition. | Android, X4 Pro, X4, X3 | building (maintainer-approved W39; bridge release and device validation pending) | [unified version](docs/design/unified-version.md) |
 
 - Owned Android Storage, real Library storage figures and Collections, and download folder selection; Android building under the approved Home design; X4 Pro/X4/X3 deferred to firmware pass.
+
+- Shared BookSync UI kit and approved Home/editor presentation — Android building (approved Home design); X4 Pro/X4/X3 keep their owned firmware primitives in the firmware slices.

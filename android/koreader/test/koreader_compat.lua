@@ -130,11 +130,12 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo", "free" } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T }, "paintTo" } },
-    -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
+    -- Owned Home and shared kit: native rounded frames, explicit font faces and icons.
     { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
     { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
     { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus", {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
-    { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
+    { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F}, {"padding", F}, "getSize", "paintTo" } },
+    { "frontend/ui/widget/iconwidget.lua", { {"icon", F} } },
     -- Device-local Custom reading styles: quiet native setters and in-place Settings return.
     { "frontend/apps/reader/modules/readerfont.lua", { {"font_face", F}, {"font_base_weight", T}, {"line_spacing", T}, {"font_gamma", T} } },
     { "frontend/document/credocument.lua", { "setFontFace", "setFontBaseWeight", "setEmbeddedFonts", "setInterlineSpacePercent", "setGammaIndex", "engineInit" } },
@@ -182,7 +183,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free", {"Color8", T} } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRoundedRect", "paintRect", "writeToFile", "free", {"Color8", T} } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
