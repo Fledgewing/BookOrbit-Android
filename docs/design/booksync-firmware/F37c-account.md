@@ -10,6 +10,16 @@ are semantic/visual references, not missing X3 approval. This docs-only proposal
 adds those states; none is enabled in firmware. Merging this PR is not approval.
 No firmware source, integration pin, feature claim or release changes.
 
+## Review captures — NEEDS APPROVAL
+
+The complete gallery remains the state inventory. These representative captures
+show all three actual product frames directly in GitHub:
+
+- [Independent login summary](shots/f37c-logins-summary.png).
+- [Sync entry and bottom-docked Pro keyboard](shots/f37c-sync-entry.png).
+- [Mixed-origin sign-out](shots/f37c-signout-account-user.png).
+- [Origin result: separately entered logins kept](shots/f37c-origin-result-kept.png).
+
 ## Android 0.12 reference
 
 Reference commit: `ed740a0b` on BookSync `feature/0.12`.
