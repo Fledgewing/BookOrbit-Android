@@ -106,7 +106,7 @@ The original source references and baseline test counts above stay anchored to
 The target branch subsequently added the docs-only bedtime and Rest your eyes
 reminders outcome in [#231](https://github.com/Fledgewing/BookSync/pull/231) and
 [#236](https://github.com/Fledgewing/BookSync/pull/236). The [design and mockups](../reminders.md)
-remain NEEDS APPROVAL; no reminder setting or visible control is implemented.
+were subsequently approved for Android as well as firmware in [#239](https://github.com/Fledgewing/BookSync/pull/239). This outcome was added after the pinned initial audit and is being implemented separately in [#242](https://github.com/Fledgewing/BookSync/pull/242) and the active Android reminder integration branch. It is not included in the completed 29-outcome claim or the test totals below; its Library delivery, reader UI and emulator acceptance remain pending.
 Firmware-only outcomes, including rows saying Android is unchanged, remain outside
 this Android task. No firmware files or pins, devices, releases, tags or workflow
 dispatches are part of these finish PRs.
