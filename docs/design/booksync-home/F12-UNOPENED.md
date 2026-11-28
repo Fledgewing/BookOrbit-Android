@@ -66,3 +66,8 @@ Verification: **914 JVM tests**, zero failures/errors, four skips; shared-versio
 debug APK and lint pass. **262 Lua logic / 299 flows**, boundary guards **12/6**,
 feature matrix **4**, emulator driver **10**. Five native pool/list/Next/restart/Open
 checks pass, with screenshots inspected at the minimum card span.
+
+The existing **69-screen native review** also passes, including every registered
+widget, live reader settings, position consent, end-of-book Series navigation,
+refresh and offline continuity. The current companion process reports zero
+projection failures and zero SQLite lock exceptions.
