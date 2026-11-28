@@ -59,7 +59,7 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
             "status" to mapOf("read" to true,"write" to false))
         if(op in setOf("lists","collections")) return rows(emptyList<Any>())
         if(op=="sources") {
-            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","Finished",books.count { it["status"]=="finished" }),Triple("pickup","Pick back up",(books.count { it["status"] in setOf("reading","rereading") }-1).coerceAtLeast(0)))
+            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","All finished",books.count { it["status"]=="finished" }),Triple("pickup","Pick back up",(books.count { it["status"] in setOf("reading","rereading") }-1).coerceAtLeast(0)))
             val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
             val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
             val category=request["category"] as? String ?: "builtin"

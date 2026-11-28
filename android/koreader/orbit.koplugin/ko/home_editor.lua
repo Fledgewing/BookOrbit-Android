@@ -56,7 +56,7 @@ function HomeEditor.create(host)
         if self.picker then
             local ids=HomeEditor.available(host.caps)
             if not (host.caps and host.caps.catalog==false) then
-                for _i,preset in ipairs({"also","recent","wtr","finished","ondevice","pickup"}) do
+                for _i,preset in ipairs({"also","recent","wtr","finished","ondevice","pickup","year"}) do
                     if not (preset=="wtr" and host.caps.wantToRead==false or preset=="ondevice" and host.caps.onDevice==false) then ids[#ids+1]=preset end
                 end
             end

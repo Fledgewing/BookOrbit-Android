@@ -29,7 +29,7 @@ function HomeHostPlan.cardGeometry(p,rect,scale)
         or math.max(0,math.floor(available/rowH))
     return {w=w,h=h,compact=compact,pad=pad,shelf=shelf,rowH=rowH,capacity=capacity}
 end
-local sources = {pickup="pick-back-up",recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
+local sources = {year={kind="finished-year",key="current"},pickup="pick-back-up",recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
 function HomeHostPlan.need(p)
     local s=p.settings or {}
     if p.widget == "library" then return {op="library.summary",limit=1} end
@@ -40,7 +40,7 @@ function HomeHostPlan.need(p)
     -- Neutral context keys only; adapters interpret their opaque identities.
     if type(s.src) == "string" and s.src:match("^(%a+):") then
         local kind,key=s.src:match("^(%a+):(.+)$")
-        if kind=="list" or kind=="series" or kind=="author" or kind=="collection" or kind=="library" then source={kind=kind,key=key} end
+        if kind=="list" or kind=="series" or kind=="author" or kind=="collection" or kind=="library" or kind=="year" then source={kind=kind=="year" and "finished-year" or kind,key=key} end
     end
     assert(s.query == nil or type(s.query) == "table", "Invalid widget query")
     assert(s.limit == nil or type(s.limit) == "number" and s.limit >= 1, "Invalid widget limit")
@@ -69,7 +69,7 @@ function HomeHostPlan.snapshot(result, account)
     -- Setup is an actionable error within the registry's existing six-state contract.
     if setup then state="error" end
     local snapshot={state=state,setup=setup or nil,items=result.items or {},count=#(result.items or {}),
-        total=result.total, next=result.next, error=result.error, freshness=result.freshness,
+        total=result.total, next=result.next, context=result.context, error=result.error, freshness=result.freshness,
         data=not result.items and result or nil, bytes=#UIUtil.encode(result)}
     if #UIUtil.encode(snapshot)>Budgets.MAX_SNAPSHOT then
         snapshot={state="error",items={},count=0,error="Snapshot budget exceeded",data={state="error"},bytes=64}

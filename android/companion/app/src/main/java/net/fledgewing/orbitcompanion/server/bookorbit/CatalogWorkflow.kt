@@ -28,6 +28,14 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         tmp.outputStream().use { it.write(LuaValue.encode(state)); it.fd.sync() }
         check(); check(tmp.renameTo(file))
     }
+    private fun yearPending(book:Long?,date:String?) {
+        if(book==null) return
+        val pending=(state["year_pending"] as? Map<*,*>).orEmpty().toMutableMap()
+        pending.remove(book.toString())
+        if(date!=null && runCatching { java.time.LocalDate.parse(date) }.isSuccess) pending[book.toString()]=mapOf("book_id" to book,"date" to date,"at" to now())
+        while(pending.size>32) pending.remove(pending.entries.minByOrNull { number((it.value as? Map<*,*>)?.get("at")) ?: 0L }!!.key)
+        state["year_pending"]=pending
+    }
     private fun request(path:String,method:String="GET",body:Map<String,Any?>?=null):Map<*,*> {
         checkpoint();check()
         val r=transport.request(creds.server,path,method,body,mapOf("Accept" to "application/json","x-auth-user" to creds.user,"x-auth-key" to creds.key))
@@ -179,6 +187,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
         state["status_sequence"]=(number(state["status_sequence"]) ?: 0L)+1
         statusUndo[book.toString()]=mapOf("sequence" to state["status_sequence"],"token" to token,"document" to hash,"before_status" to previous,"before_native" to oldSummary?.filterKeys { it in setOf("status","modified") },"after_status" to target)
         while(statusUndo.size>32) statusUndo.remove(statusUndo.entries.minByOrNull { number((it.value as? Map<*,*>)?.get("sequence")) ?: 0L }!!.key)
+        yearPending(book,(nativeSummary?.get("modified") as? String).takeIf { target=="read" })
         save()
         applyStatusNative(job,args["open_path"] as? String)
         worker.patch(book,mapOf("readStatus" to target),true,false)
@@ -247,6 +256,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                         "token" to java.util.UUID.randomUUID().toString(),"created_at" to now(),"finished_on" to java.time.Instant.ofEpochSecond(now()).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString(),
                         "final_pos" to mapOf("percentage" to args["percentage"]),"status_seen" to status,"rating" to jobs[hash]?.get("rating"))
                 } else jobs.remove(hash)
+                yearPending(id(args),if(args["complete"]==true) jobs[hash]?.get("finished_on") as? String else null)
                 save()
                 id(args)?.let { book -> worker.patch(book,mapOf("readStatus" to if(args["complete"]==true) "read" else "reading",
                     "progressPercentage" to ((args["percentage"] as? Number)?.toDouble()?.times(100))),true,false) }

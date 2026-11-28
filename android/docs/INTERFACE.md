@@ -718,3 +718,10 @@ Unknown geometry or history remains explicit; no completion or account state is 
 `local.controls` accepts only cached native scalars and the last reading sync check
 (at/result/kind). It returns one row / 16 KiB. Actions recheck helper opt-in,
 capabilities and active work. No helper is enabled by rendering or tapping a control.
+
+### Saved finished-year sources
+
+Source `{kind="finished-year",key="current"|"YYYY"}` selects a bounded saved year
+selection plus qualified pending marks. Context carries year/account total and
+saved-selection coverage; window totals count only the displayed saved selection.
+Source projection revision 4 exposes archived years without reusing ready older lists.
