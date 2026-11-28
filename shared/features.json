@@ -1114,7 +1114,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "End sheet",
+          "note": "End sheet. V3 rebuilds the KOReader finish presentation with saved covers, metric placeholders, stars, next-book card and owned footer; native actions are retained and reader/custom subclasses keep their existing layout.",
           "reason": null,
           "evidence": [
             {
@@ -1126,7 +1126,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -1142,7 +1142,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -1158,7 +1158,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -1370,7 +1370,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Owned Smart Home and companion-materialized local state",
+          "note": "Owned Smart Home and companion-materialized local state Slice X1: signed-out local reading does not block Home; every KOReader Home recovery carries an explicit Home command. Opening the companion app retains its own visible task root.",
           "reason": null,
           "evidence": [
             {
@@ -1386,7 +1386,7 @@
         },
         "x4_pro": {
           "status": "partial",
-          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy; Slice X1 changes Android launcher/KOReader routing only",
           "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
           "evidence": [
             {
@@ -1398,7 +1398,7 @@
         },
         "x4": {
           "status": "partial",
-          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy; Slice X1 changes Android launcher/KOReader routing only",
           "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
           "evidence": [
             {
@@ -1410,7 +1410,7 @@
         },
         "x3": {
           "status": "partial",
-          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy; Slice X1 changes Android launcher/KOReader routing only",
           "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
           "evidence": [
             {
@@ -2845,8 +2845,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Companion-only private crash summaries: deduplication, reader-local times, explicit Clear and Copy for support in Setup → Details; never uploaded automatically",
-          "reason": "deliberately deferred: maintainer-approved Android scope (2026-11-27): uncaught Java/Kotlin Companion failures only; native KOReader crash handoff is deferred",
+          "note": "Private Companion crash fingerprints plus the last bounded KOReader Lua main-loop traceback; reader-local diagnostics in Setup → Details with explicit Clear and Copy for support; never uploaded automatically.",
+          "reason": "deliberately deferred: Slice X1 implements the Lua fatal handoff; native signals and OS process kills remain outside the Lua boundary. Device validation remains pending.",
           "evidence": [
             {
               "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CrashSummary.kt",
@@ -2865,7 +2865,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply",
+          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply; Slice X1 Lua diagnostics apply only to the Android KOReader process",
           "reason": null,
           "evidence": [
             {
@@ -2877,7 +2877,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply",
+          "note": "Existing S3 core-dump summary logged; no automatic remote upload; Android Companion Details controls do not apply; Slice X1 Lua diagnostics apply only to the Android KOReader process",
           "reason": null,
           "evidence": [
             {
@@ -2889,7 +2889,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Crash summary implementation is S3-only",
+          "note": "Crash summary implementation is S3-only; Slice X1 Lua diagnostics apply only to the Android KOReader process",
           "reason": "hardware: firmware core-dump implementation gated to S3; maintainer-approved Companion-only Android outcome does not add a C3 crash handoff",
           "evidence": [
             {
@@ -5338,8 +5338,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Reusable filter sheet wired into owned lists and Search, with Save as a Book list on Home (feature/0.12; unreleased)",
-          "reason": "deliberately deferred: device acceptance and richer grouped-list presentation follow the Android foundation",
+          "note": "Reusable filter sheet wired into owned lists and Search, with Save as a Book list on Home (feature/0.12; unreleased). V3 replaces the native button dialog with the owned kit refinement sheet and count projection; M8C-sized native emulator proof is recorded.",
+          "reason": "deliberately deferred: Physical reader acceptance remains pending; V3 verifies the approved presentation on an M8C-sized native emulator.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/filter_sheet.lua",
@@ -5350,7 +5350,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5361,7 +5361,7 @@
         "x4": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5372,7 +5372,7 @@
         "x3": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5389,8 +5389,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets. Fresh same-version startup avoids stale mismatch caching; revealed Home resumes pending updates and hero covers clear measured headings. V1 uses the shared native UI kit for the approved freshness/Search header, serif hero, two-row Also reading, icon-well Lists, counts, three-cover shelves and tab-dot footer; Stats internals remain in their separate slice.",
-          "reason": "deliberately deferred: real-device acceptance and the separate production-data/Stats integration remain; this Android presentation is unreleased",
+          "note": "Implemented on feature/0.12: approved §4 Home and Stats defaults for M8C installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets; local windows, stats and custom covers also work without a server owner Stats provenance clears measured title height on portrait tablets. Fresh same-version startup avoids stale mismatch caching; revealed Home resumes pending updates and hero covers clear measured headings. Slice X1: signed-out local reading does not block Home; every KOReader Home recovery carries an explicit Home command. Opening the companion app retains its own visible task root. V1 uses the shared native UI kit for the approved freshness/Search header, serif hero, two-row Also reading, icon-well Lists, counts, three-cover shelves and tab-dot footer. It consumes the published data unchanged; Stats/Battery widget rendering remains outside V1.",
+          "reason": "deliberately deferred: real-device acceptance; the Android native presentation is unreleased and V1 does not own Stats/Battery widget rendering",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
@@ -5401,7 +5401,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.; Slice X1 changes Android launcher/KOReader routing only V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
@@ -5412,7 +5412,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.; Slice X1 changes Android launcher/KOReader routing only V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
@@ -5423,7 +5423,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation. V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
+          "note": "Default Home cutover, upgrade news, device-specific default pages and filtered lists follow the Android build; device-local ownership follows in the firmware slice Android emulator review does not change this firmware implementation.; Slice X1 changes Android launcher/KOReader routing only V1 changes KOReader presentation only; the firmware clients use their owned renderers.",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this KOReader widget kit cannot run on ESP32 firmware, whose Home/editor implementation follows its own approved slices",
           "evidence": [
             {
@@ -5441,8 +5441,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page Device-local Series uses the same bounded ordered projection after sign-out.",
-          "reason": "deliberately deferred: bulk next-series download jobs, cached covers and device acceptance remain with the staged Android owners",
+          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page Device-local Series uses the same bounded ordered projection after sign-out. V3 uses the kit for the five-column Library, grouped cover shelves, Series header, segmented progress, next-three card and numbered cover rows; saved covers render natively.",
+          "reason": "deliberately deferred: physical reader acceptance remains pending; V3 renders saved covers and omits candidate byte sizes that the projection does not publish.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/series.lua",
@@ -5458,7 +5458,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5469,7 +5469,7 @@
         "x4": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5480,7 +5480,7 @@
         "x3": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5900,7 +5900,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection One-row Library captions fit the measured portrait-tablet tile height.",
+          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection One-row Library captions fit the measured portrait-tablet tile height. V3 adds the kit Storage header, large free-space figure, patterned rounded bars and cleanup rows; eligibility and sizes remain worker-owned.",
           "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
           "evidence": [
             {
@@ -5916,7 +5916,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5927,7 +5927,7 @@
         "x4": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5938,7 +5938,7 @@
         "x3": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -7180,7 +7180,7 @@
     {
       "feature": "crash",
       "roadmap": "Ideas — native KOReader crash handoff",
-      "note": "Native KOReader crash capture requires a separate bounded handoff; Android 0.12 summaries cover the Companion only."
+      "note": "Slice X1 adds a bounded Lua main-loop traceback handoff; native signals and OS kills remain deferred."
     }
   ],
   "limitations": [
