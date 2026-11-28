@@ -1,8 +1,9 @@
 # Bedtime and eye-rest reminders — BookSync 0.12
 
-**NEEDS APPROVAL — design and every mockup, 2026-11-27.** The maintainer has
-approved both reminder kinds for 0.12, the reminder-only scope and an explicit reading-gate
-exception. This proposal does not authorize implementation. It ships on Android
+**APPROVED (2026-11-27) — design and every mockup.** Maintainer approval at
+approximately 21:40 PT ("All approved") covers bedtime and Rest your eyes,
+the reminder-only scope and the explicit reading-gate exception. Implementation
+is authorized in the firmware R1 slices and the parallel Android slice. It ships on Android
 (KOReader plugin + required companion), X4 Pro, X4 Classic and X3 after design,
 simulator, size and device acceptance. No code or shipped-feature claim is added.
 
@@ -399,7 +400,7 @@ confirmation, full list, saving, save failure, recovered/unreadable storage,
 in-book due, missed, due over Home/menu, sleep unavailable/failure and future
 read-only detail; eye-rest Settings rows (Off/On), editor, interval picker,
 page sheet, Turn off failure and future managed sheet. The companion information row is an additional Android state.
-Every view and caption is **NEEDS APPROVAL**. Touch keyboards are direct screen
+Every view and caption is **APPROVED (2026-11-27)**. Touch keyboards are direct screen
 children at the bottom. The 480 × 800 gallery viewport follows the approved
 firmware gallery, not physical panel resolution or proof of font fit. Android
 uses rev-16 typography/actions at that review scale; actual tablet density and
@@ -495,6 +496,5 @@ they do not prove firmware behavior, device font fit or performance.
 Eye-rest follow-up QA: all 133 views (33 shared states × four platforms, plus
 the companion information row) pass the same 1500/1200/390 px clipping, overflow,
 anchor, page-error and bottom-keyboard checks. The new Off/On settings, editor,
-interval picker, page sheet, Turn off failure and future managed sheet are marked
-NEEDS APPROVAL. Representative eye-rest renders were visually inspected.
+interval picker, page sheet, Turn off failure and future managed sheet are **APPROVED (2026-11-27)**. Representative eye-rest renders were visually inspected.
 Repository branding, feature-reference checks and `git diff --check` pass.
