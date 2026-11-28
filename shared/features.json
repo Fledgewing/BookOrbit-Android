@@ -6635,7 +6635,7 @@
         "android": {
           "status": "partial",
           "note": "Reading-sync check result/age and guarded Wi-Fi, native Night and Rotate.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; six native checks and the 68-screen review pass.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-QUICK-CONTROLS.md",

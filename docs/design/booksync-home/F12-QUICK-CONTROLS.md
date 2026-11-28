@@ -45,4 +45,19 @@ This is an emulator limitation, not a physical rotation sign-off. The pinned bas
 `6e4bc81af4e04f78d81677a323a780a71b29702a`, `ffi/framebuffer_android.lua:65`–`:84`,
 [defines the native getter/request split](https://raw.githubusercontent.com/koreader/koreader-base/6e4bc81af4e04f78d81677a323a780a71b29702a/ffi/framebuffer_android.lua).
 
+A controls check after the full review exposed cross-handle cache write contention:
+33 fixture projection failures included SQLiteDatabaseLockedException. Cache locking
+had been per store instance. A deterministic two-handle JVM test fails on that
+implementation and passes with one canonical-database monitor covering initialization,
+transactions and close. The fix preserves schema/version and rollback semantics.
+The corrected build passes the full 68-screen review followed by the previously
+failing controls sequence, with zero fixture publication failures/lock exceptions
+in the captured current-process log. This was fixed before accepting the scenario.
+
+Validation: 899 JVM tests (zero failures/errors, four skipped), shared-version check,
+debug assembly and lint; 259 Lua logic / 292 flows; server/UI guards 12/6, matrix
+four, emulator driver ten and pinned native symbols. Six dedicated native checks
+include active Wi-Fi hold rejection and duplicate Sync suppression. Construction
+spans: Sync 0–0.2 ms and quick controls 0–0.5 ms (nine samples each; target 50 ms).
+
 Physical acceptance, firmware implementation and publication remain pending.

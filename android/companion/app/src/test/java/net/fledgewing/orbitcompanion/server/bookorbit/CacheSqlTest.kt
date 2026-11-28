@@ -31,6 +31,27 @@ class CacheSqlTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun separateHandlesOfTheSameDatabaseShareOneWriterOwnership() {
+        val root=Files.createTempDirectory("cache-sql-handles").toFile()
+        val pool=Executors.newFixedThreadPool(2)
+        val entered=CountDownLatch(1);val attempted=CountDownLatch(1);val completed=CountDownLatch(1);val release=CountDownLatch(1)
+        try {
+            CacheStore(root,{}, { JdbcSql(it,busyMs=0) }).use { first ->
+                CacheStore(root,{}, { JdbcSql(it,busyMs=0) }).use { second ->
+                    first.db();second.db()
+                    val outer=pool.submit { first.transaction { first.setMeta("outer","committed");entered.countDown();assertTrue(release.await(5,TimeUnit.SECONDS)) } }
+                    assertTrue(entered.await(5,TimeUnit.SECONDS))
+                    val patch=pool.submit { attempted.countDown();try { second.transaction { second.setMeta("other","committed") } } finally { completed.countDown() } }
+                    assertTrue(attempted.await(5,TimeUnit.SECONDS))
+                    try { assertFalse("another handle entered SQLite during the active write",completed.await(150,TimeUnit.MILLISECONDS)) }
+                    finally { release.countDown() }
+                    outer.get(5,TimeUnit.SECONDS);patch.get(5,TimeUnit.SECONDS)
+                    assertEquals("committed",first.meta("other"));assertEquals("committed",second.meta("outer"))
+                }
+            }
+        } finally { release.countDown();pool.shutdownNow();root.deleteRecursively() }
+    }
+
     @Test fun anotherThreadCannotJoinOrWriteThroughAnOpenTransaction() {
         val root = Files.createTempDirectory("cache-sql-threads").toFile()
         val pool = Executors.newSingleThreadExecutor()
