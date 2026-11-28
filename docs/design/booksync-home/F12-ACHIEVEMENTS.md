@@ -31,6 +31,10 @@ Three native checks pass with cached earned/total, latest/date and next/progress
 visible in all supported spans. Companion verification: 917 tests, zero failures
 and errors, four skipped; Lua: 262 logic and 301 flows passed. The emulator driver
 now handles only KOReader’s specific first-run color notice and exercises the new
-Achievements choice through editor add/resize/move/save.
+Achievements choice through editor add/resize/move/save. The integrated 70-screen
+review and 17 focused Achievements/year/series/Unopened checks pass, as do the
+separate 0.11 upgrade and fresh-profile migration checks. The Unopened driver
+chooses Later once if the existing setup reminder covers Home after restart;
+its projection and persistence assertions remain unchanged.
 
 Physical acceptance, firmware implementation and publication remain pending.

@@ -15,7 +15,13 @@ def review(device,out):
     out.mkdir(parents=True,exist_ok=True);device.wait_companion()
     def wait(code):
         end=time.monotonic()+45
-        while device.command(code)!="ready":
+        dismissed=False
+        while True:
+            state=device.command('local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then return "setup" end;'+code)
+            if state=="ready":return
+            if state=="setup":
+                if dismissed:raise AssertionError('Setup reminder repeated after Later')
+                device.command('click("Later");return true');dismissed=True
             if time.monotonic()>end:raise TimeoutError('Unopened projection not published')
             time.sleep(.2)
     wait('return LibraryAdapter.owner()=="emulator-fixture" and "ready" or "pending"')

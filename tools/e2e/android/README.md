@@ -34,7 +34,9 @@ python3 tools/e2e/android/test_driver.py
 ```
 
 Setup launches the companion once to initialize its status before opening KOReader.
-Dismiss KOReader's initial quickstart/color messages before the native review.
+The native review dismisses only KOReader's exact initial color-rendering notice.
+Other unexpected dialogs still fail the check; the Unopened restart flow may
+choose Later once on the existing setup reminder before checking the saved pick.
 
 `build.py` copies companion sources and shared inputs into an external directory,
 preserving strict Gradle verification. Only that disposable copy replaces the
