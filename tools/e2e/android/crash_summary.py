@@ -42,8 +42,9 @@ def review(device, apk, out):
                         device.shell("input", "tap", (a+c)//2, (b+d)//2); return True
             device.shell("input", "swipe", "600", "1400", "600", "400", "250")
         wait_for(find, "missing control: " + label)
+    # Each fixture launch needs a new task: its Details child can otherwise receive the intent.
     def details():
-        device.shell("am", "start", "-W", "-n", PACKAGE + "/.CrashFixtureActivity")
+        device.shell("am", "start", "-W", "-f", "0x18000000", "-n", PACKAGE + "/.CrashFixtureActivity")
         wait_for(lambda: "Companion crashes" in text() or scroll_to_crashes(), "Details did not load")
     def scroll_to_crashes():
         device.shell("input", "swipe", "600", "1400", "600", "400", "250")
@@ -53,7 +54,7 @@ def review(device, apk, out):
     # Clear only this disposable fixture's diagnostic file; no user profiles or reader files.
     device.shell("run-as", PACKAGE, "rm", "-f", "no_backup/companion-crashes.bin", "no_backup/fixture-clipboard.txt")
     # A foreground fixture launch resets Android's bad-process throttle from a prior intentional crash.
-    device.shell("am", "start", "-W", "-n", PACKAGE + "/.CrashFixtureActivity", "--ez", "reset", "true")
+    device.shell("am", "start", "-W", "-f", "0x18000000", "-n", PACKAGE + "/.CrashFixtureActivity", "--ez", "reset", "true")
     device.shell("am", "start", "-W", "-n", "org.koreader.launcher/.MainActivity")
     # Exercise the installed handler in a separate process while KOReader keeps the foreground book.
     device.command('Library.companion.setupLater();Library.open({local_path="/storage/emulated/0/Books/001 Seedfall.epub"});return true')
@@ -81,7 +82,7 @@ def review(device, apk, out):
     assert "Worker.run" in saved_text and "IllegalStateException" in saved_text
     device.shot(out / "saved-local-time.png")
     click("Copy for support")
-    device.shell("am", "start", "-W", "-n", PACKAGE + "/.CrashFixtureActivity", "--ez", "clipboard", "true")
+    device.shell("am", "start", "-W", "-f", "0x18000000", "-n", PACKAGE + "/.CrashFixtureActivity", "--ez", "clipboard", "true")
     def clipboard():
         try: return device.shell("run-as", PACKAGE, "cat", "no_backup/fixture-clipboard.txt")
         except subprocess.CalledProcessError: return ""
