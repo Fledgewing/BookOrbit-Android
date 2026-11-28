@@ -16,6 +16,7 @@ from run import Emulator
 def review(device, out):
     out.mkdir(parents=True,exist_ok=True)
     device.wait_companion()
+    device.dismiss_color_notice()
     device.command('Library.companion.setupLater();local w=top();if w and type(w.text)=="string" and w.text:find("setup steps",1,true) then click("Later") end;return true')
     time.sleep(1)
     device.command('Library.settings.refresh("emulator-review");return true')
@@ -39,9 +40,9 @@ def review(device, out):
     step("editor-picker",'click("Add widget");return true')
     # Close the picker/editor, then exercise a saved tablet override through its buttons.
     close()
-    step("editor-moved",'HomeEditor.show(HomeHost.active);click("+ Page");click("Add widget");click("Add");click("Size");click("1×2");click("→");click("↓");return true')
+    step("editor-moved",'HomeEditor.show(HomeHost.active);click("+ Page");assert(HomeEditor.available(HomeHost.active.caps)[1]=="achievements");click("Add widget");click("Add");click("Size");click("2×3");click("→");click("↓");return true')
     step("editor-saved",'click("Done");return true',
-         'local d=HomeHost.document();assert(#d.pages==3);local found=false;for i=1,#d.pages do for _,p in ipairs(Layout.editorPage(d,i).placements) do if p.widget=="battery" and p.x==1 and p.y==1 and p.w==1 and p.h==2 then found=true end end end;assert(found);return true')
+         'local d=HomeHost.document();assert(#d.pages==3);local found=false;for i=1,#d.pages do for _,p in ipairs(Layout.editorPage(d,i).placements) do if p.widget=="achievements" and p.x==1 and p.y==1 and p.w==2 and p.h==3 then found=true end end end;assert(found);return true')
     step("editor-reset",'HomeEditor.show(HomeHost.active);click("Reset");click("OK");click("Done");return true',
          'assert(#HomeHost.document().pages==2);return true')
     step("account",'AccountView.open();return AccountView.active.page')

@@ -36,6 +36,11 @@ class Emulator:
         while self.command('return Companion.workerProblem()==nil and "ready" or "pending"')!="ready":
             if time.monotonic()>=deadline: raise TimeoutError("matching companion status was not published")
             time.sleep(.2)
+    def dismiss_color_notice(self):
+        # KOReader's one-time native color notice can cover a fresh profile's Home.
+        # Dismiss only that exact notice, never an arbitrary dialog or reader sheet.
+        return self.command('local w=top();if w and type(w.text)=="string" and w.text:find("Documents will be rendered in color on this device.",1,true)==1 then UI:close(w);return "dismissed" end;return "absent"')
+
     def command(self,code,timeout=20):
         request_id=uuid.uuid4().hex
         with tempfile.TemporaryDirectory() as directory:

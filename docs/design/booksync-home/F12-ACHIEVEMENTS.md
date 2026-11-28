@@ -27,4 +27,10 @@ span and verify the neutral request and unavailable presentation. Native review
 uses the cached production adapter and all three permitted spans; unavailable
 states are separately exercised without adding a setting or permission flow.
 
+Three native checks pass with cached earned/total, latest/date and next/progress
+visible in all supported spans. Companion verification: 917 tests, zero failures
+and errors, four skipped; Lua: 262 logic and 301 flows passed. The emulator driver
+now handles only KOReader’s specific first-run color notice and exercises the new
+Achievements choice through editor add/resize/move/save.
+
 Physical acceptance, firmware implementation and publication remain pending.

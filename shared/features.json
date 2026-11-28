@@ -6847,7 +6847,7 @@
         "android": {
           "status": "partial",
           "note": "Cached earned/total, latest award/date and next progress with explicit availability.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; native emulator acceptance passed.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-ACHIEVEMENTS.md",

@@ -30,6 +30,14 @@ class EmulatorSafetyTest(unittest.TestCase):
         with patch('run.uuid.uuid4',return_value=Mock(hex=request)),patch('time.sleep'):
             with self.assertRaisesRegex(RuntimeError,'fixture failure'):device.command('error("fixture failure")')
 
+    def test_color_notice_dismissal_matches_only_the_specific_native_first_run_notice(self):
+        device=object.__new__(Emulator);device.command=Mock(return_value="absent")
+        self.assertEqual("absent",device.dismiss_color_notice())
+        code=device.command.call_args.args[0]
+        self.assertIn('Documents will be rendered in color on this device.',code)
+        self.assertIn('==1 then UI:close(w)',code)
+        self.assertNotIn('click(',code)
+
     def test_startup_wait_polls_readiness_without_repeating_a_ui_action(self):
         device=object.__new__(Emulator)
         device.command=Mock(side_effect=["pending","pending","ready"])
