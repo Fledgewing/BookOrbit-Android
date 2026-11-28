@@ -153,10 +153,11 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
 /**
  * The app's icon, SHOW_STATUS and the notification's target. Full mode: the launcher page is the
  * status page (docs/design/companion-settings.md §5.9), so this runs the first-run choice and the
- * "Setup needs you" prompt, then shows the launcher page. Add-on mode: this is the main page, the
+ * "Setup needs you" prompt, then renders the launcher page in its own task root. Add-on mode: this is the main page, the
  * same status and info (StatusPanel) under a Settings button.
  */
-class StatusActivity : EinkActivity() {
+class StatusActivity : LauncherActivity() {
+    override val rendersOnResume = false
     private var prompted = false
 
     override fun onNewIntent(next: Intent) {
@@ -179,8 +180,6 @@ class StatusActivity : EinkActivity() {
         super.onResume()
         if (isFinishing || openHelperLink()) return
         OrbitService.start(this)
-        // Back from Android's install prompt: "Android is checking the update…" while it verifies.
-        Updater.onPageResumed(this)
         // The first-run choice (docs/design/addon-mode.md §4.1): existing installs were set to
         // Full by the migration in OrbitService.start, so only a new install sees it.
         if (!prompted && Prefs(this).mode == null) {
@@ -191,17 +190,14 @@ class StatusActivity : EinkActivity() {
         // "Setup needs you": once per visit, only when a step needs the user or after an update.
         val prompt = !prompted && Attention.shouldPrompt(Attention.evaluate(this, "status page"), this)
         prompted = true
-        if (Prefs(this).mode != OrbitMode.ADDON) {
-            startActivity(Intent(this, LauncherActivity::class.java).putExtra("why_status", true))
-            if (prompt) startActivity(Intent(this, AttentionActivity::class.java))
-            finish()
-            return
-        }
+        // Keep the launcher entry as the visible task root. Finishing this root
+        // after a redirect can uncover the HOME task, which starts KOReader again.
         if (prompt) startActivity(Intent(this, AttentionActivity::class.java))
         render()
     }
 
-    private fun render() {
+    override fun render() {
+        if (Prefs(this).mode != OrbitMode.ADDON) return super.render()
         val root = page()
         root.addView(Ui.header(this, "BookSync Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
         StatusPanel.draw(this, root, wifiRow = true) { if (!isFinishing) render() }
@@ -679,7 +675,7 @@ object Setup {
         val signed = PluginReport.signedInRow(prefs.reportSignedIn, runningV)
         list.add(Check("library account", signed.done && !signed.pending,
             when { signed.pending -> "Checking… open KOReader once"; signed.done -> "Signed in"; else -> "Not signed in" },
-            pending = signed.pending, action = if (signed.pending) null else "Sign in", id = "signed_in", short = "Signed in") { a ->
+            pending = signed.pending, action = if (signed.pending) null else "Sign in", id = "signed_in", short = "Signed in", optional = true) { a ->
             Koreader.start(a, "setup: sign in to library", HomeCommands.SIGNIN)
         })
         val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts, runningV)

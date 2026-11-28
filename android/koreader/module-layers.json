@@ -493,5 +493,9 @@
   "ko/ui/gallery.lua": {
     "layer": "ui",
     "purpose": "Shared presentation primitives and explicit visual gallery."
+  },
+  "ko/ui/catalog.lua": {
+    "layer": "ui",
+    "purpose": "Owned catalog, filter, storage and finish composition over the shared UI kit."
   }
 }

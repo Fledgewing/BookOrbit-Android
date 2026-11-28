@@ -45,6 +45,7 @@ local UIManager = {
         for i = #W.shown, 1, -1 do if W.shown[i] == w then table.remove(W.shown, i) end end
         if w and w.dismiss_callback then w.dismiss_callback() end
     end,
+    handleInput = function(_, ...) return W.handle_input(...) end,
     forceRePaint = function() end,
     setDirty = function() end,
     -- Android: Device:canRestart is no, so a restart is quit + the companion's RELAUNCH.
@@ -135,7 +136,10 @@ local function class(base)
 end
 local Widget = class()
 Widget.__index = Widget
-function Widget:getSize() return {w=self.width or self.max_width or self.dimen and self.dimen.w or 20,h=self.height or self.dimen and self.dimen.h or 20} end
+function Widget:getSize()
+    if self.dimen then return self.dimen end
+    return {w=self.width or self.max_width or 20,h=self.height or 20}
+end
 
 -- A tiny JNI: objects are Lua tables, method ids are names.
 local env_fns = {
@@ -448,12 +452,12 @@ package.preload["datastorage"] = function() return { getSettingsDir = function()
 -- The rest of KOReader's widgets and ui helpers the sheets build with: stand-ins that keep their
 -- arguments (no layout, no drawing).
 local function plain(_, o) return o or {} end
-preload.device.screen = { getWidth = function() return 600 end, getHeight = function() return 800 end }
+preload.device.screen = { scaleBySize=function(_,n) return n end, getWidth = function() return 600 end, getHeight = function() return 800 end }
 package.preload["ui/geometry"] = function() return { new = plain } end
 package.preload["ui/gesturerange"] = function() return { new = plain } end
 package.preload["ui/font"] = function() return { getFace = function() return {} end } end
 package.preload["ui/size"] = function() return { padding = { large = 10 }, radius = { button = 0 }, line = { thick = 3 } } end
-package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1, Color8=function(n) return n end } end
+package.preload["ffi/blitbuffer"] = function() return { Color8=function(n) return n end, COLOR_BLACK = 0, COLOR_WHITE = 1 } end
 table.insert(package.loaders, 2, function(name)
     if type(name) == "string" and name:match("^ui/widget/") and not package.preload[name] then
         return function() return Widget:extend{} end
@@ -3324,6 +3328,25 @@ test("main-loop diagnostics: slow callbacks log, preserve returns/errors and can
     UIManager:nextTick(fn)
     UIManager:unschedule(fn)
     run(0.1)
+end)
+
+test("main-loop fatal: original Lua traceback is logged, persisted and rethrown", function()
+    local write,dir=RE.Store.writeFile,RE.Store.dir
+    local path,saved
+    RE.Store.dir=function() return "/fixture" end
+    RE.Store.writeFile=function(p,text) path,saved=p,text;return true end
+    W.handle_input=function(...) return nil,false,select("#",...) end
+    local a,b,c=UIManager:handleInput("x",nil)
+    eq(a,nil);eq(b,false);eq(c,2)
+    W.handle_input=function() error("fixture main loop cause") end
+    local success,err=pcall(UIManager.handleInput,UIManager)
+    eq(success,false);ok(err:find("fixture main loop cause",1,true));ok(err:find("stack traceback:",1,true))
+    eq(path,"/fixture/koreader-crash.txt");ok(saved:find("fixture main loop cause",1,true));ok(#saved<=4096)
+    RE.Store.writeFile=function() error("unwritable diagnostics") end
+    success,err=pcall(UIManager.handleInput,UIManager)
+    eq(success,false);ok(err:find("fixture main loop cause",1,true),"diagnostic failure preserves cause")
+    RE.Store.writeFile,RE.Store.dir=write,dir
+    W.handle_input=nil
 end)
 
 test("sqlite stress: the verdict line", function()

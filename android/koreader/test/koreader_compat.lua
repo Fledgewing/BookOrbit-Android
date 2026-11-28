@@ -72,7 +72,7 @@ local NEEDS = {
     { "frontend/ui/widget/infomessage.lua", { {"dismiss_callback", F} } },
     { "frontend/ui/trapper.lua", { "wrap", "info", "dismissableRunInSubprocess" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
-        "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
+        "handleInput", "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
         "sendEvent", "broadcastEvent", "_repaint", { "_window_stack", F }, { "_refresh_stack", F },
         { "refresh_methods", T } } },
     { "*", { "isConnected", "isWifiOn", "turnOnWifi", "turnOffWifi", "beforeWifiAction",
@@ -184,7 +184,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRoundedRect", "paintRect", "writeToFile", "free", {"Color8", T} } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRoundedRect", "paintBorder", "paintRect", "writeToFile", "free", {"Color8", T} } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
