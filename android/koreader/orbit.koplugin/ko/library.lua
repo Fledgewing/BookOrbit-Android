@@ -398,6 +398,13 @@ function Library.subscribe(callback)
         if Library.listener == callback then Library.listener=nil; LibraryAdapter.watch(false) end
     end
 end
+-- Modal consumers observe the same neutral updates without taking the host's slot.
+-- A forgotten modal cannot keep itself alive through this weak observer registry.
+Library.observers=setmetatable({},{__mode="k"})
+function Library.observe(callback)
+    Library.observers[callback]=true;Library.watchEvents()
+    return function() Library.observers[callback]=nil end
+end
 function Library.changed(event)
     local settings=SettingsView and SettingsView.active
     if settings and settings.alive and settings.screen=="settings-reading-statistics" and UIManager:getTopmostVisibleWidget()==settings.dialog then settings:paint() end
@@ -405,6 +412,7 @@ function Library.changed(event)
         local sheet=FinishUI.sheet;FinishUI.refreshSheet(sheet.ui,sheet.book)
     end
     if Library.listener then Library.listener(event) end
+    for callback in pairs(Library.observers) do callback(event) end
 end
 Library.unavailablePaths={}
 Library.unavailableOrder={}

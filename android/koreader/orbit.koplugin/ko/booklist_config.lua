@@ -7,6 +7,8 @@ function BookListConfig.new(context)
 end
 function BookListConfig:close()
     self.alive=false
+    if self.unobserve then self.unobserve();self.unobserve=nil end
+    if self.eventPaint then UIManager:unschedule(self.eventPaint);self.eventPaint=nil end
     if self.retry then UIManager:unschedule(self.retry); self.retry=nil end
     if self.filter then self.filter:close(false); self.filter=nil end
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
@@ -48,6 +50,18 @@ function BookListConfig:paint(attempt)
     local result
     local focus=1
     if self.sources then
+        if not self.unobserve then
+            self.unobserve=Library.observe(function()
+                if not self.alive or not self.sources or self.eventPaint then return end
+                self.eventPaint=function()
+                    if not self.alive or not self.sources then self.eventPaint=nil;return end
+                    if self.dialog and topWidget()==self.dialog and not reading() then
+                        self.eventPaint=nil;self:paint()
+                    else UIManager:scheduleIn(.5,self.eventPaint) end
+                end
+                UIManager:nextTick(self.eventPaint)
+            end)
+        end
         local paint=Library.paint("booklist-sources")
         result=paint:sources(self.category,self.offset,BookList.PAGE_SIZE,self.caps)
         self.metrics=paint:flush()

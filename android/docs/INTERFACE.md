@@ -738,3 +738,10 @@ Window/count/facet source `unopened` and one-row `local.dust` share a worker-own
 conservative native-evidence pool. Missing history is unavailable; current native
 path is excluded before selection. Daily Next stores only day/index in reader settings.
 Unmatched local rows explicitly disable account actions.
+
+### Reader modal invalidations
+
+`Library.observe(callback)` observes neutral Library changes without taking the
+host subscription. Its returned retirement function detaches the modal. Source
+pickers coalesce ready events and repaint only while visible and not reading;
+close cancels pending callbacks. No new intent or backend call is added.
