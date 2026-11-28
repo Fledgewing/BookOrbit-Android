@@ -1114,7 +1114,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "End sheet",
+          "note": "End sheet. V3 rebuilds the KOReader finish presentation with saved covers, metric placeholders, stars, next-book card and owned footer; native actions are retained and reader/custom subclasses keep their existing layout.",
           "reason": null,
           "evidence": [
             {
@@ -1126,7 +1126,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -1142,7 +1142,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -1158,7 +1158,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "End page; two suggestions configured",
+          "note": "End page; two suggestions configured. The V3 KOReader presentation repair does not change this firmware implementation.",
           "reason": null,
           "evidence": [
             {
@@ -5338,8 +5338,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Reusable filter sheet wired into owned lists and Search, with Save as a Book list on Home (feature/0.12; unreleased)",
-          "reason": "deliberately deferred: device acceptance and richer grouped-list presentation follow the Android foundation",
+          "note": "Reusable filter sheet wired into owned lists and Search, with Save as a Book list on Home (feature/0.12; unreleased). V3 replaces the native button dialog with the owned kit refinement sheet and count projection; M8C-sized native emulator proof is recorded.",
+          "reason": "deliberately deferred: Physical reader acceptance remains pending; V3 verifies the approved presentation on an M8C-sized native emulator.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/filter_sheet.lua",
@@ -5350,7 +5350,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5361,7 +5361,7 @@
         "x4": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5372,7 +5372,7 @@
         "x3": {
           "status": "missing",
           "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
-          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5441,8 +5441,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page Device-local Series uses the same bounded ordered projection after sign-out.",
-          "reason": "deliberately deferred: bulk next-series download jobs, cached covers and device acceptance remain with the staged Android owners",
+          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page Device-local Series uses the same bounded ordered projection after sign-out. V3 uses the kit for the five-column Library, grouped cover shelves, Series header, segmented progress, next-three card and numbered cover rows; saved covers render natively.",
+          "reason": "deliberately deferred: Device cover acquisition/extraction and physical reader acceptance remain pending; V3 renders saved covers and keeps missing byte sizes explicit.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/series.lua",
@@ -5458,7 +5458,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5469,7 +5469,7 @@
         "x4": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5480,7 +5480,7 @@
         "x3": {
           "status": "missing",
           "note": "Owned Series and grouped progress presentation follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5900,7 +5900,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection One-row Library captions fit the measured portrait-tablet tile height.",
+          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection One-row Library captions fit the measured portrait-tablet tile height. V3 adds the kit Storage header, large free-space figure, patterned rounded bars and cleanup rows; eligibility and sizes remain worker-owned.",
           "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
           "evidence": [
             {
@@ -5916,7 +5916,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5927,7 +5927,7 @@
         "x4": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
@@ -5938,7 +5938,7 @@
         "x3": {
           "status": "missing",
           "note": "Owned storage and Collections screens follow Android Android emulator review fixes follow in the deferred firmware implementation.",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows. V3 repairs KOReader presentation only; the approved Android-first staging remains in effect.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",

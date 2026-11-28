@@ -135,6 +135,7 @@ local function class(base)
 end
 local Widget = class()
 Widget.__index = Widget
+function Widget:getSize() return self.dimen or {w=self.width or self.max_width or 0,h=self.height or 20} end
 
 -- A tiny JNI: objects are Lua tables, method ids are names.
 local env_fns = {
@@ -447,12 +448,12 @@ package.preload["datastorage"] = function() return { getSettingsDir = function()
 -- The rest of KOReader's widgets and ui helpers the sheets build with: stand-ins that keep their
 -- arguments (no layout, no drawing).
 local function plain(_, o) return o or {} end
-preload.device.screen = { getWidth = function() return 600 end, getHeight = function() return 800 end }
+preload.device.screen = { scaleBySize=function(_,n) return n end, getWidth = function() return 600 end, getHeight = function() return 800 end }
 package.preload["ui/geometry"] = function() return { new = plain } end
 package.preload["ui/gesturerange"] = function() return { new = plain } end
 package.preload["ui/font"] = function() return { getFace = function() return {} end } end
 package.preload["ui/size"] = function() return { padding = { large = 10 }, radius = { button = 0 }, line = { thick = 3 } } end
-package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1 } end
+package.preload["ffi/blitbuffer"] = function() return { Color8=function(n) return n end, COLOR_BLACK = 0, COLOR_WHITE = 1 } end
 table.insert(package.loaders, 2, function(name)
     if type(name) == "string" and name:match("^ui/widget/") and not package.preload[name] then
         return function() return Widget:extend{} end

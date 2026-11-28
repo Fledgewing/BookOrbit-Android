@@ -141,6 +141,7 @@ function HomeHost.create()
         if self.widgetRefresh then UIManager:unschedule(self.widgetRefresh); self.widgetRefresh=nil end
         if self.series_key then return SeriesUI.paint(self) end
         if self.list_layout and self.filter.model.query.group~="none" and self.filter.model.query.group~=nil then return SeriesUI.groups(self) end
+        if self.list_layout then return CatalogUI.library(self) end
         local refreshDelay,pendingSnapshot
         local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
         local ready,caps=pcall(paint.capabilities,paint)
