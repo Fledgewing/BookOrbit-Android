@@ -180,7 +180,7 @@ open class LauncherActivity : EinkActivity() {
             root.addView(Ui.gap(this, 8))
         }
         val koFirst = !HomeApp.isApp(choice)
-        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 96 else 80, sp = if (koFirst) 26f else 22f) {
+        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) CompanionStyle.HERO_HEIGHT else 120, sp = if (koFirst) CompanionStyle.HERO_TYPE else CompanionStyle.TILE_TYPE) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
             } else {
@@ -192,7 +192,7 @@ open class LauncherActivity : EinkActivity() {
             append("Open KOReader\n")
             val s = length
             append(if (Prefs(this@LauncherActivity).homeButton == HomeButton.SMART) "back to your book" else "opens on library home")
-            setSpan(android.text.style.RelativeSizeSpan(0.65f), s, length, 0)
+            setSpan(android.text.style.RelativeSizeSpan(CompanionStyle.subtitleScale(if (koFirst) CompanionStyle.HERO_TYPE else CompanionStyle.TILE_TYPE)), s, length, 0)
             setSpan(android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), s, length, 0)
         }
         root.addView(open)
@@ -210,8 +210,8 @@ open class LauncherActivity : EinkActivity() {
         root.addView(
             Ui.weightRow(
                 this,
-                Ui.button(this, "⋯  Other apps", heightDp = 72) { startActivity(Intent(this, AppsActivity::class.java)) },
-                Ui.button(this, "⚙  Settings", heightDp = 72) { startActivity(Intent(this, SettingsActivity::class.java)) },
+                Ui.launcherTile(this, "⋯", "Other apps") { startActivity(Intent(this, AppsActivity::class.java)) },
+                Ui.launcherTile(this, "⚙", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) },
             ),
         )
         root.addView(Ui.gap(this, 12))
@@ -386,11 +386,10 @@ class AppsActivity : EinkActivity() {
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        val pager = TextView(this)
+        val pager = Ui.text(this, "", CompanionStyle.CAPTION)
         val prev = Ui.button(this, "‹ prev", heightDp = 72) { turn(-1) }
         val next = Ui.button(this, "next ›", heightDp = 72) { turn(+1) }
         pager.gravity = Gravity.CENTER
-        pager.textSize = 18f
         pager.setTextColor(Ui.INK)
         val footer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
