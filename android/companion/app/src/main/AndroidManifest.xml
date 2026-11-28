@@ -26,6 +26,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <application
+        android:name=".BookSyncApplication"
         android:requestLegacyExternalStorage="true"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"

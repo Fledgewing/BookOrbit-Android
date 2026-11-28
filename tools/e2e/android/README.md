@@ -128,3 +128,13 @@ bottom-docked touch keyboard, save/reopen/Off, native explicit finish/Undo/re-fi
 restart replay and offline local labels. `local_completion_upgrade.py` accepts the
 same legacy/current build arguments as `upgrade.py` and checks additive proven
 0.11 import without changing the borrowed sidecar or legacy queue.
+
+Companion crash summary: after setup on a disposable AVD, run
+`python3 tools/e2e/android/crash_summary.py --serial emulator-N --apk <fixture-apk>
+--out <evidence>`. The external builder alone installs `CrashFixture.kt` and its
+test manifest entries. Two uncaught synthetic exceptions in a disposable companion
+process exercise the production Application hook without touching KOReader. The
+flow verifies deduplication across process starts, uninterrupted foreground reading,
+reader-local time, explicit sanitized clipboard copy, Clear and reopen. It writes
+three screenshots and `review.json`; no intentional crash or unqualified adb runs
+against physical readers. Use a fresh AVD; it sets the fixture timezone to Los Angeles.
