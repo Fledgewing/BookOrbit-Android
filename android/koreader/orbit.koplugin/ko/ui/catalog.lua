@@ -30,7 +30,7 @@ function CatalogUI.kit()
         K.put(c,back,p(20),p(6))
         K.label(c,o.title,p(110),p(o.subtitle and 9 or 18),o.w-p(240),"medium",{bold=true})
         if o.subtitle then K.label(c,o.subtitle,p(110),p(35),o.w-p(240),"caption",{muted=true}) end
-        if o.filter then K.action(c,"Filter","filter",o.w-p(126),p(6),p(52),p(52),o.filter) end
+        if o.filter then K.action(c,"Filter","filter",o.w-p(126),p(6),p(52),p(52),o.filter,nil,o.filterActive) end
         if o.search then K.action(c,"Search","search",o.w-p(72),p(6),p(52),p(52),o.search) end
         K.separator(c,0,p(63),o.w,true)
         return back
@@ -117,7 +117,7 @@ function CatalogUI.library(host)
     host.list_result,host.list_limit=result,limit
     local c=K.canvas(w,h);local f=host.filter:header(result.total)
     K.header(c,{w=w,title=host.list_title,subtitle=f.subtitle,back=function() host:onClose() end,
-        filter=f.callback,search=function() host:search() end})
+        filter=f.callback,filterActive=f.active,search=function() host:search() end})
     local state,label=SeriesPlan.state(result);host.catalog_state=state
     if label then K.label(c,label,edge,p(68),w-2*edge,"caption",{muted=true}) end
     for i,b in ipairs(result.items or {}) do
@@ -206,7 +206,9 @@ function CatalogUI.finish(sheet)
     K.tokens.face.display="NotoSerif-Italic.ttf"
     K.label(c,"The End",p(140),p(76),sw-p(164),36,{serif=true})
     K.tokens.face.display=displayFace
-    K.label(c,(m.undo and "You finished " or "At the end of ")..(m.title or "your book"),p(140),p(128),sw-p(164),"body",{bold=true})
+    local prefix=K.text{text=m.undo and "You finished " or "At the end of ",w=sw-p(164),size="body"}
+    K.put(c,prefix,p(140),p(128))
+    K.label(c,m.title or "your book",p(140)+prefix:getSize().w,p(128),sw-p(164)-prefix:getSize().w,"body",{bold=true})
     K.label(c,m.status or "Finish status not saved yet",p(140),p(154),sw-p(256),"caption",{muted=true})
     if actions.status and actions.status.action then
         K.put(c,K.button{text=actions.status.label,w=p(m.undo and 104 or 160),h=p(36),variant="ghost",size="caption",callback=actions.status.action},sw-p(m.undo and 128 or 184),p(150))

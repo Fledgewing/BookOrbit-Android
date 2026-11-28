@@ -87,7 +87,9 @@ click("Download next 3");SeriesUI.download=download;assert(called==1);return tru
         if time.monotonic()>deadline: raise TimeoutError("synthetic book did not open")
         time.sleep(.2)
     step("end-of-book", '''local ui=require("apps/reader/readerui").instance;
-(ui.paging or ui.rolling):onGotoPage(ui.document:getPageCount());FinishUI.showSheet(ui,Library.nativeReader(ui));return true''',
+(ui.paging or ui.rolling):onGotoPage(ui.document:getPageCount());local b=Library.nativeReader(ui)
+if b.summary.rating then FinishUI.actions.star(ui,b,b.summary.rating) end
+FinishUI.showSheet(ui,Library.nativeReader(ui));return true''',
          'return FinishUI.sheet.model.pending and "pending" or "ready"')
     d.command('local s=FinishUI.sheet;assert(s.model.book.cover_path);assert(s.model.next.book.cover_path);assert(s.sheet_h<s.screen_h);return true')
     step("end-rated", 'click("Rate 4");return true',

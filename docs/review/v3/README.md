@@ -4,7 +4,7 @@ Approved reference left; native KOReader on the right. Captured on a dedicated A
 
 The `series-next-three` image is an additional bounded adapter-response specimen. Other captures use the companion projection. Choice sheets use the approved parent-sheet reference because dedicated picker crops are unavailable.
 
-Noto replaces unavailable Avenir/Iowan fonts. Fixture titles, covers, counts, progress and device capacity differ. Missing local per-book statistics are shown as dashes; unavailable byte sizes and Want-to-read writes are not invented. The existing undimmed backing-page contract is retained. Variable-sized grouped pages show the page number without guessing a page total.
+Noto replaces unavailable Avenir/Iowan fonts. Fixture titles, covers, counts, progress and device capacity differ. Unavailable per-book statistics are shown as dashes; unavailable byte sizes and Want-to-read writes are not invented. The existing undimmed backing-page contract is retained. Variable-sized grouped pages show the page number without guessing a page total.
 
 ## library
 
@@ -74,7 +74,7 @@ Actual emulator capacity and eligible actions. Rows with no eligible files are o
 
 ## end-of-book
 
-Manual unmarked finish state; the native Mark action stays available. Saved covers are joined in one bounded worker batch. Local fixture per-book stats are unavailable, so the four metrics show dashes.
+Manual unmarked finish state; the native Mark action stays available. Saved covers are joined in one bounded worker batch. Metrics use the saved local reading history; unavailable or unfinished measurements remain dashes.
 
 ![end-of-book](end-of-book.webp)
 

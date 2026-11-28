@@ -13,7 +13,7 @@ object ServerAdapters {
     private var context: Context? = null
     private val root get() = Worker.root()
     private val deviceSnapshot=ThreadLocal<DeviceLibrary>()
-    private fun newBooks()=DeviceLibrary(listOf(File(android.os.Environment.getExternalStorageDirectory(), "Books")))
+    private fun newBooks()=DeviceLibrary(listOf(File(android.os.Environment.getExternalStorageDirectory(), "Books")), root)
     private val books get() = deviceSnapshot.get() ?: newBooks()
     private fun <T> readBatch(block:()->T):T {
         val previous=deviceSnapshot.get();deviceSnapshot.set(newBooks())

@@ -65,7 +65,7 @@ function SeriesUI.groups(host)
     local result=paint:groups(settings.source,settings.query,settings.offset,24,settings.exclude_current,covers,count)
     host.list_result,host.list_limit=result,#(result.items or {})
     local c=K.canvas(w,h);local edge=p(24);local f=host.filter:header(result.total)
-    K.header(c,{w=w,title=host.list_title,subtitle=f.subtitle,back=function() host:onClose() end,search=function() host:search() end,filter=f.callback})
+    K.header(c,{w=w,title=host.list_title,subtitle=f.subtitle,back=function() host:onClose() end,search=function() host:search() end,filter=f.callback,filterActive=f.active})
     local x=edge
     for _,chip in ipairs(f.chips) do
         local width=K.text{text=chip.label,w=w-2*edge,size="small",bold=true}:getSize().w+p(42)
