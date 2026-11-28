@@ -72,7 +72,7 @@ local NEEDS = {
     { "frontend/ui/widget/infomessage.lua", { {"dismiss_callback", F} } },
     { "frontend/ui/trapper.lua", { "wrap", "info", "dismissableRunInSubprocess" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
-        "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
+        "handleInput", "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
         "sendEvent", "broadcastEvent", "_repaint", { "_window_stack", F }, { "_refresh_stack", F },
         { "refresh_methods", T } } },
     { "*", { "isConnected", "isWifiOn", "turnOnWifi", "turnOffWifi", "beforeWifiAction",
