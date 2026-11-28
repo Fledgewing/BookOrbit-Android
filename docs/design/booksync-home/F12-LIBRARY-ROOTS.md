@@ -28,6 +28,10 @@ Existing saved layouts, titles and source identities remain valid.
 
 ## Verification
 
+The combined branch passes 885 companion tests (zero failures/errors, four
+skipped), shared-version verification, debug build and lint; 258 Lua logic and
+288 flow tests; server/UI guards 12/6 and feature matrix four.
+
 Two new adapter tests cover opaque account isolation, pagination, membership,
 capability gating and incomplete-versus-known-zero root counts. The existing
 local-device series test now also checks neutral source/count projection and
@@ -48,3 +52,11 @@ The native flow checks the real local companion RPC, then uses a temporary Libra
 snapshot double for rich server states while keeping the production native roots,
 source picker, pagination and list routing. Remote adapter semantics are JVM-tested.
 Firmware, physical-reader acceptance and publication remain outside this slice.
+
+The first broad native review timed out receiving the Preview-channel action,
+although the native action had applied. The process remained alive and the same
+callback measured about 6 ms in isolation; the exact timeout cause was not
+reproduced. The test-only driver now correlates requests/responses, publishes each
+response atomically and prevents reentrant polling. Ten driver tests include stale,
+incomplete and foreign-error responses. The full native flow runs after JVM checks;
+failed evidence remains available, without an automatic scenario retry.
