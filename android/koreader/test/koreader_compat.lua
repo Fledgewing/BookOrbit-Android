@@ -43,15 +43,20 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/apps/reader/modules/readerpagemap.lua", { "wantsPageLabels", "cleanPageLabel", "getPageLabelProps" } },
+    { "frontend/apps/reader/modules/readerlink.lua", { "addCurrentLocationToStack", "onGotoLink" } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "onGotoXPointer" } },
+    { "frontend/document/koptinterface.lua", { "nativeToPageRectTransform" } },
+
     { "frontend/device/android/device.lua", { {"home_dir", F} } },
     -- Library's native reader-control adapter (pin documented in G-READER-NOTES.md).
     { "frontend/apps/reader/modules/readertoc.lua", { "onShowToc", {"toc", F} } },
-    { "frontend/apps/reader/modules/readerannotation.lua", { {"annotations", F} } },
+    { "frontend/apps/reader/modules/readerannotation.lua", { {"annotations", F}, "getPageRef" } },
     { "frontend/apps/reader/modules/readerview.lua", { {"dogear_visible", F} } },
-    { "frontend/apps/reader/modules/readerbookmark.lua", { "onShowBookmark", "onToggleBookmark", "getBookmarkPageNumber" } },
+    { "frontend/apps/reader/modules/readerbookmark.lua", { "onShowBookmark", "onToggleBookmark", "getBookmarkPageNumber", "getBookmarkPageString", "gotoBookmark" } },
     { "frontend/apps/reader/modules/readergoto.lua", { "onShowGotoDialog" } },
     { "frontend/apps/reader/modules/readersearch.lua", { "onShowFulltextSearchInput" } },
-    { "frontend/apps/reader/modules/readerconfig.lua", { "onShowConfigMenu", "onCloseConfigMenu" } },
+    { "frontend/apps/reader/modules/readerconfig.lua", { "onShowConfigMenu", "onCloseConfigMenu", "onTapShowConfigMenu", "onSwipeShowConfigMenu" } },
     { "frontend/apps/reader/modules/readerrolling.lua", { "onGotoPercent", "onGotoNextChapter", "onGotoPrevChapter", "onSetStatusLine", {"current_page", F} } },
     { "frontend/apps/reader/modules/readerpaging.lua", { "onGotoPercentage", "onGotoNextChapter", "onGotoPrevChapter" } },
     { "frontend/apps/reader/modules/readerfont.lua", { "onSetFontSize" } },
@@ -64,7 +69,8 @@ local NEEDS = {
     { "frontend/ui/widget/touchmenu.lua", { "init", {"tab_item_table", F} } },
     { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose", {"tap_close_callback", F} } },
     { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },
-    { "frontend/ui/trapper.lua", { "wrap", "info" } },
+    { "frontend/ui/widget/infomessage.lua", { {"dismiss_callback", F} } },
+    { "frontend/ui/trapper.lua", { "wrap", "info", "dismissableRunInSubprocess" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
         "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
         "sendEvent", "broadcastEvent", "_repaint", { "_window_stack", F }, { "_refresh_stack", F },
@@ -87,7 +93,7 @@ local NEEDS = {
     { "frontend/apps/filemanager/filemanager.lua", { { "instance", F }, "setRotationMode", "onSetRotationMode",
         { "lock_rotation", T } } },
     { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
-    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu", "onTapShowMenu", "onSwipeShowMenu",
+    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu", "onTapShowMenu", "onSwipeShowMenu", "onPressMenu", "onKeyPressShowMenu",
         { "menu_container", F } } },
     { "frontend/ui/widget/progresswidget.lua", { {"percentage", F}, {"ticks", F}, {"bordersize", F}, {"margin_h", F}, {"margin_v", F}, {"radius", F} } },
     { "frontend/ui/widget/container/rightcontainer.lua", { {"RightContainer", T} } },
@@ -150,7 +156,7 @@ local NEEDS = {
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
     -- OrbiSmart (ko/orbismart.lua): places in this layout's pages, and the Yes / No popup (its
     -- Back / tap outside runs cancel_callback).
-    { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage", "setPageMargins" } },
+    { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage", "setPageMargins", "findAllText", "getTextFromXPointers" } },
     { "frontend/apps/reader/modules/readerpaging.lua", { "onInitScrollPageStates" } },
     { "frontend/ui/widget/confirmbox.lua", { { "ok_text", F }, { "cancel_text", F }, { "cancel_callback", F },
         { "self.cancel_callback()", T } } },

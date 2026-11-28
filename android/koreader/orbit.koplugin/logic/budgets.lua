@@ -164,3 +164,7 @@ Budgets.screens["download-job"].displayRows = 4
 -- One Series summary and at most ten exact file/job rows.
 Budgets.screens["series-downloads"] = budget(11,16384,50)
 Budgets.screens["series-downloads"].displayRows=15
+
+-- Cached native navigation: one summary plus eight rows, no render-time IO.
+Budgets.screens["reader-navigation"] = budget(9,16384,50)
+Budgets.screens["reader-navigation"].roundTrips=0

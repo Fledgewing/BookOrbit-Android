@@ -6314,6 +6314,58 @@
         }
       },
       "deferred": "Firmware and physical reader acceptance."
+    },
+    {
+      "id": "android-owned-reader-navigation",
+      "feature": "Owned reader navigation and reversible native menu hooks (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Owned Contents, saved items, page/percent and cancelable search; native advanced/plugin escape and reversible instance hooks.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; automatic menu recommendations are the separate add-on outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-READER-NAVIGATION.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned reader navigation follows the approved Android-first implementation.",
+          "reason": "deliberately deferred: firmware is outside this Android outcome; device implementation and acceptance remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-READER-NAVIGATION.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned reader navigation follows the approved Android-first implementation.",
+          "reason": "deliberately deferred: firmware is outside this Android outcome; device implementation and acceptance remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-READER-NAVIGATION.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned reader navigation follows the approved Android-first implementation.",
+          "reason": "deliberately deferred: firmware is outside this Android outcome; device implementation and acceptance remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-READER-NAVIGATION.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Firmware, physical acceptance and the separate add-on recommendation integration."
     }
   ],
   "release_evidence": {

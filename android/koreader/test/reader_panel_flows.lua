@@ -10,12 +10,16 @@ return function(here, test, ok, eq, audit)
             return c
         end
         local Widget=class()
+        function Widget:onShowKeyboard() end
+        function Widget:getInputText() return self.input or "" end
         W.face={hash="fixture",ftsize={getEmboldenHalfStrength=function(_,factor) return factor end}}
         local ui={document={file="/books/fixture.epub",info={number_of_pages=200}},view={state={page=124}},menu={}}
         local Menu={onShowMenu=function() W.stock=(W.stock or 0)+1; return "native" end,
-            onTapShowMenu=function() error("compound native menu must not run") end,
-            onSwipeShowMenu=function() error("compound native swipe must not run") end}
-        local Config={onShowConfigMenu=function() W.stock_config=true end}
+            onTapShowMenu=function(_,...) W.stock_taps=(W.stock_taps or 0)+1;W.tap_args=W.E.UIUtil.pack(...);return "native-tap" end,
+            onSwipeShowMenu=function() W.stock_swipes=(W.stock_swipes or 0)+1;return "native-swipe" end}
+        local Config={onShowConfigMenu=function() W.stock_config=true end,
+            onTapShowConfigMenu=function(self) return self:onShowConfigMenu() end,
+            onSwipeShowConfigMenu=function(self) return self:onShowConfigMenu() end}
         ui.config=setmetatable({ui=ui},{__index=Config})
         ui.menu=setmetatable({ui=ui},{__index=Menu})
         W.book={items={{key="opaque",title="The Moon",authors={"A"},progress=62,
@@ -25,7 +29,7 @@ return function(here, test, ok, eq, audit)
         W.caps={progress={syncCurrent=true}}
         W.battery={hours_usual_use=54,display={page_estimate="≈ 2 d 6 h left at your usual use"}}
         local E=setmetatable({now_s=function() return 1 end, log=function(s) W.logs[#W.logs+1]=s end,
-            S={}, G_reader_settings={readSetting=function() return nil end}, saveSettings=function() end,
+            S={clean_menus=true}, G_reader_settings={readSetting=function() return nil end}, saveSettings=function() end,
             BatteryUI={show=function() W.battery_opened=true end},
             state={}, OrbitAndroid={menuItems=function() return {} end,onCloseWidget=function() end},
             LibraryAdapter={readerPosition=function() return W.native end,read=function(request)
@@ -49,7 +53,7 @@ return function(here, test, ok, eq, audit)
             if name=="device" then return {hasFrontlight=function() return W.hardware end,hasNaturalLight=function() return W.warmth_supported end,
                 getPowerDevice=function() return W.power end,screen={getWidth=function() return 600*(W.scale or 1) end,getHeight=function() return 800*(W.scale or 1) end,scaleBySize=function(_,n) return math.ceil(n*(W.scale or 1)) end}} end
             if name=="document/credocument" then return {engineInit=function() return {getFontFaceFilenameAndFaceIndex=function(face) return face .. ".ttf",0 end} end} end
-            if name=="ui/event" then return {new=function(_,name) return {name=name} end} end
+            if name=="ui/event" then return {new=function(_,name,...) return {name=name,...} end} end
             if name=="apps/reader/modules/readermenu" then return Menu end
             if name=="apps/reader/modules/readerconfig" then return Config end
             if name=="ui/geometry" or name=="ui/gesturerange" then return {new=function(_,t) return t end} end
@@ -73,6 +77,9 @@ return function(here, test, ok, eq, audit)
                 return context
             end
         end
+        W.nativeMenuClass=Menu
+        E.Library.readerHookOrigin=function() return true end
+        E.Library.installReaderMenus(ui)
         W.ui=ui
         return W,E
     end
@@ -85,10 +92,41 @@ return function(here, test, ok, eq, audit)
         end
         error("missing reader row "..text)
     end
+    test("reader hooks: instance lifetime, repeated install, disable and third-party chain",function()
+        local W,E=world();local ui=W.ui
+        local first=ui.menu.onTapShowMenu
+        E.Library.installReaderMenus(ui);eq(first,ui.menu.onTapShowMenu)
+        ok(W.nativeMenuClass.onTapShowMenu~=first,"native class is never patched")
+        E.Library.setReaderMenus(ui,false);eq(rawget(ui.menu,"onTapShowMenu"),nil)
+        eq(ui.menu:onTapShowMenu("gesture",nil,7),"native-tap")
+        eq(W.tap_args.n,3);eq(W.tap_args[3],7)
+        E.Library.setReaderMenus(ui,true)
+        local owned=ui.menu.onTapShowMenu
+        local external=function(self,...) W.other=(W.other or 0)+1;return owned(self,...) end
+        ui.menu.onTapShowMenu=external
+        eq(ui.menu:onTapShowMenu("custom"),"native-tap");eq(W.other,1)
+        E.Library.restoreReaderMenus(ui);eq(ui.menu.onTapShowMenu,external)
+        eq(ui.menu:onTapShowMenu("custom"),"native-tap");eq(W.other,2)
+        eq(E.ReaderPanel.sheet,nil)
+    end)
+    test("reader hooks: combined stock path bypasses both owned entry points and preserves hidden build",function()
+        local W,E=world();local ui=W.ui
+        W.nativeMenuClass.onShowMenu=function(self,tab,hidden)
+            W.hidden=hidden;W.tab=tab
+            if not hidden then self.ui.config:onTapShowConfigMenu() end
+            return "native-combined"
+        end
+        eq(E.ReaderPanel.stockMenu(ui.menu,"tools",true),"native-combined");eq(W.hidden,true);eq(W.tab,"tools")
+        eq(E.ReaderPanel.stockMenu(ui.menu,"tools",false),"native-combined");eq(W.stock_config,true)
+        eq(E.ReaderPanel.sheet,nil,"stock combined path never recursively opens an owned panel")
+        local close=setmetatable({ui=ui},{__index=E.OrbitAndroid})
+        close:onCloseDocument();eq(ui.booksync_reader_menu_hooks,nil)
+        eq(rawget(ui.config,"onTapShowConfigMenu"),nil)
+    end)
     test("reader panel: bounded cached data, plain bar and one companion batch",function()
         local W,E=world()
         W.native=0.73
-        eq(W.ui.menu:onShowMenu(),true)
+        eq(W.ui.menu:onTapShowMenu(),true)
         eq(W.native_input,0.73,"cached native position goes through the library request")
         eq(W.trips,1); eq(#W.batch,4); eq(W.syncs,0)
         eq(table.concat(W.reads,","),"reader,battery,reader.controls,capabilities")
@@ -188,10 +226,18 @@ return function(here, test, ok, eq, audit)
             eq(rows[1].choices[4].text,"Add bookmark")
             local names={}; for _,cell in ipairs(rows[2].choices) do names[#names+1]=cell.text end
             eq(table.concat(names,","),"Contents,Bookmarks,Search,Go to,Book info,KOReader menu")
-            row(E,pair[1]).action(); eq(W.action,pair[2])
+            row(E,pair[1]).action()
+            if pair[1]=="Contents" or pair[1]=="Bookmarks" then
+                eq(E.ReaderPanel.sheet.screen,"reader-navigation")
+                row(E,pair[1]=="Contents" and "Native Contents options…" or "Edit saved items in KOReader…").action()
+            else
+                local input=W.shown[#W.shown]
+                if pair[1]=="Search" then input.buttons[1][2].callback() else input.buttons[2][1].callback() end
+            end
+            eq(W.action,pair[2])
         end
         W.ui.menu:onSwipeShowMenu({direction="south"}); eq(E.ReaderPanel.sheet.screen,"reader-top-panel")
-        W.ui.config:onShowConfigMenu(); eq(E.ReaderPanel.sheet.screen,"reader-bottom-panel")
+        W.ui.config:onTapShowConfigMenu(); eq(E.ReaderPanel.sheet.screen,"reader-bottom-panel")
         row(E,"More reading settings…").action(); eq(W.stock_config,true); eq(E.ReaderPanel.sheet,nil)
     end)
     test("reader bottom: separate anchor, bounded ticks, scrub touch, chapter keys and Back release",function()
@@ -517,6 +563,114 @@ return function(here, test, ok, eq, audit)
         eq(rows[3].face,"Fixture Serif"); eq(rows[3].text,"● Fixture Serif (copied)")
         E.CustomReading.close(); E.Library.readingSave(previous,ui)
         eq(E.Library.readingCustom().face,nil); eq(E.Library.readingCustom().fontIndex,4,"Undo keeps the previous font index")
+    end)
+
+    test("reader navigation: cached slices preserve hierarchy and labels without scanning distant entries",function()
+        local W,E=world();local ui=W.ui
+        local inaccessible=setmetatable({}, {__index=function() error("read outside native window") end})
+        local toc={};for i=1,10000 do toc[i]=inaccessible end
+        for i=5001,5008 do toc[i]={title="Chapter "..i,depth=3,page=i,xpointer="xp"..i} end
+        ui.toc={toc=toc,fillToc=function() error("must not load the document TOC") end}
+        ui.annotation={getPageRef=function(_,xp,page) eq(xp,"xp"..page);return "["..page.."]2" end}
+        local result=E.Library.readerWindow(ui,"contents",5000,8)
+        eq(#result.items,8);eq(result.total,10000);eq(result.next,5008);eq(result.items[1].depth,2)
+        eq(result.items[1].location,"[5001]2");ok(#E.UIUtil.encode(result)<16384)
+        ui.toc.toc=nil;eq(E.Library.readerWindow(ui,"contents",0,8).unavailable,true)
+    end)
+    test("reader navigation: exact native locators and history reject stale rows or another book",function()
+        local W,E=world();local ui=W.ui;local history=0
+        ui.link={addCurrentLocationToStack=function() history=history+1 end}
+        ui.handleEvent=function(_,event) W.event=event end
+        ui.toc={toc={{title="Part",depth=1,xpointer="/body/part",page=20},{title="Chapter",depth=2,page=30}}}
+        local view=E.Library.readerWindow(ui,"contents",0,8)
+        ok(E.Library.readerNavigate(ui,view.token,1));eq(W.event.name,"GotoXPointer");eq(W.event[1],"/body/part");eq(history,1)
+        ui.toc.toc[2]={title="Changed",page=40};ok(not E.Library.readerNavigate(ui,view.token,2));eq(history,1)
+        local nextView=E.Library.readerWindow(ui,"contents",0,8)
+        ok(not E.Library.readerNavigate(ui,view.token,1));ok(E.Library.readerNavigate(ui,nextView.token,2));eq(W.event[1],40)
+        ui.document={file="another.epub"};ok(not E.Library.readerNavigate(ui,nextView.token,1));eq(history,2)
+    end)
+    test("reader saved items: bookmarks and highlights share a bounded native list and retain editing escape",function()
+        local W,E=world();local ui=W.ui
+        ui.annotation={annotations={{page="bookmark-xp",text="Saved page"},{page="highlight-xp",pos0="highlight-start",drawer="lighten",text="Passage",notes="Private note"}}}
+        local history=0;ui.link={addCurrentLocationToStack=function() history=history+1 end}
+        ui.bookmark={getBookmarkPageString=function(_,page) return page=="bookmark-xp" and "iv" or "[7]2" end,
+            gotoBookmark=function(_,page,marker) W.destination={page,marker} end,
+            onShowBookmark=function() W.editor=true end}
+        local result=E.Library.readerWindow(ui,"annotations",0,8)
+        eq(result.items[1].location,"iv");ok(result.items[1].title:find("Bookmark",1,true));ok(result.items[2].title:find("Highlight",1,true))
+        ok(E.Library.readerNavigate(ui,result.token,2));eq(W.destination[1],"highlight-xp");eq(W.destination[2],"highlight-start");eq(history,1)
+        E.ReaderPanel.navigation(ui,"annotations");row(E,"Edit saved items in KOReader…").action();ok(W.editor)
+        eq(#ui.annotation.annotations,2);eq(ui.annotation.annotations[2].notes,"Private note")
+    end)
+    test("reader Go to: page bounds, printed labels and percent semantics retain history",function()
+        local W,E=world();local ui=W.ui;local history=0
+        ui.link={addCurrentLocationToStack=function() history=history+1 end};ui.handleEvent=function(_,event) W.event=event end
+        for _,text in ipairs({"0","201","+2","-1","1.5","invalid"}) do ok(not E.Library.readerGo(ui,text,false)) end
+        eq(history,0);ok(E.Library.readerGo(ui,"200",false));eq(W.event[1],200);eq(history,1)
+        ui.rolling={onGotoPercent=function(_,n) W.percent=n;return true end}
+        ok(E.Library.readerGo(ui,"0",true));eq(W.percent,0);ok(E.Library.readerGo(ui,"100",true));eq(W.percent,100)
+        ok(not E.Library.readerGo(ui,"101",true));eq(history,3)
+        ui.pagemap={wantsPageLabels=function() return true end,cleanPageLabel=function(_,s) return s:lower() end,getPageLabelProps=function(_,s) if s=="iv" then return "iv",4 end end}
+        ok(E.Library.readerGo(ui,"IV",false));eq(W.event[1],4);eq(history,4)
+    end)
+    test("reader search: native subprocess cap, cancellation, errors and stale book guard",function()
+        local W,E=world();local ui=W.ui;local original=E.require
+        local pending,completed=true,true
+        local trap={wrap=function(_,work) pending=work end,dismissableRunInSubprocess=function(_,work) return completed,completed and work() or nil end}
+        E.require=function(name) if name=="ui/trapper" then return trap end;return original(name) end
+        ui.document.findAllText=function(_,query,caseInsensitive,context,maximum,regex,flags)
+            eq(query,"needle");eq(caseInsensitive,true);eq(context,8);eq(maximum,128);eq(regex,false);eq(flags,255)
+            return {{start="match-xp",["end"]="match-end",matched_text="needle",prev_text="before",next_text="after"}}
+        end
+        local answer
+        ok(E.Library.readerSearch(ui,"needle",{},function(okay) answer=okay end));eq(answer,nil);pending();eq(answer,true)
+        local result=E.Library.readerWindow(ui,"search",0,8);eq(result.total,1);eq(result.query,"needle")
+        local history=0;ui.link={addCurrentLocationToStack=function() history=history+1 end}
+        ui.rolling={onGotoXPointer=function(_,xp,marker) eq(xp,"match-xp");eq(marker,xp) end}
+        ui.document.getTextFromXPointers=function(_,a,b,mark) eq(a,"match-xp");eq(b,"match-end");eq(mark,true) end
+        ok(E.Library.readerNavigate(ui,result.token,1));eq(history,1)
+        completed=false;answer=nil;E.Library.readerSearch(ui,"needle",{},function(v) answer=v end);pending();eq(answer,false)
+        completed=true;ui.document.findAllText=function() error("native failure") end
+        E.Library.readerSearch(ui,"needle",{},function(v) answer=v end);pending();eq(answer,true);eq(E.Library.readerWindow(ui,"search",0,8).error,true)
+        answer=nil;E.Library.readerSearch(ui,"needle",{},function(v) answer=v end);ui.document={file="new.epub"};pending();eq(answer,false)
+    end)
+
+    test("reader search: worker bounds retained matches, context and private result bytes",function()
+        local W,E=world();local ui=W.ui;local original=E.require
+        local trap={wrap=function(_,work) work() end,dismissableRunInSubprocess=function(_,work) return true,work() end}
+        E.require=function(name) if name=="ui/trapper" then return trap end;return original(name) end
+        ui.document.findAllText=function()
+            local rows={};for i=1,300 do rows[i]={start="xp"..i,["end"]="end"..i,matched_text=string.rep("x",10000),prev_text=string.rep("y",10000)} end;return rows
+        end
+        E.Library.readerSearch(ui,"bounded",{},function(v) ok(v) end)
+        eq(#ui.booksync_search.results,128);eq(#ui.booksync_search.results[1].matched_text,160)
+        ok(#E.UIUtil.encode(ui.booksync_search.results)<262144)
+        ui.document.findAllText=function() return {{start=string.rep("x",4097)}} end
+        E.Library.readerSearch(ui,"bounded",{},function(v) ok(v) end);eq(ui.booksync_search.error,true)
+    end)
+    test("reader search: paged navigation keeps one history entry and bounded native highlights",function()
+        local W,E=world();local ui=W.ui;local history,boxes=0,0
+        ui.paging={};ui.view.highlight={temp={}}
+        ui.link={addCurrentLocationToStack=function() history=history+1 end,onGotoLink=function(_,link,neglect) eq(link.page,2);eq(neglect,true) end}
+        ui.document.nativeToPageRectTransform=function(_,page,box) eq(page,3);boxes=boxes+1;return box end
+        local raw={};for i=1,100 do raw[i]={x=i,y=2,w=3,h=4} end
+        ui.booksync_search={document=ui.document,file=ui.document.file,query="paged",results={{start=3,boxes=raw}}}
+        local result=E.Library.readerWindow(ui,"search",0,8)
+        ok(E.Library.readerNavigate(ui,result.token,1));eq(history,1);eq(boxes,64);eq(#ui.view.highlight.temp[3],64)
+    end)
+
+    test("reader panels: short native viewports retain the stock escape without clipping or crashing",function()
+        local W,E=world();local original=E.require
+        E.require=function(name)
+            local result=original(name)
+            if name=="device" then result.screen.getHeight=function() return 100 end end
+            return result
+        end
+        E.ReaderPanel.show(W.ui,"reader-bottom-panel")
+        eq(E.ReaderPanel.sheet,nil);ok(W.stock_config)
+        W.ui.toc={toc={{page=1,title="Chapter"}},onShowToc=function() W.native_toc=true end}
+        E.ReaderPanel.navigation(W.ui,"contents")
+        eq(E.ReaderPanel.sheet,nil);ok(W.native_toc)
     end)
 
 end

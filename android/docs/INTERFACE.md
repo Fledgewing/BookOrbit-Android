@@ -656,3 +656,14 @@ summary plus at most ten job rows (16 KiB). Status and Cancel bypass transfer IO
 the adapter yields between sequential files. Root, file and variant freeze before
 running. Restart requires explicit Resume; bulk never opens books. This contains
 no new plugin-side server vocabulary or transport.
+
+### Native reader navigation (0.12)
+
+Library owns bounded windows over already-loaded native TOC/annotations and exact
+locator navigation. One summary plus eight rows / 16 KiB; UI geometry can request
+fewer. Session tokens reject document/list/item changes. Basic page/percent actions
+retain native history and page labels. Literal search runs in a native cancelable
+subprocess, retaining at most 128 matches and 256 KiB privately, then exposing
+visible windows. Native advanced editing/search remains reachable. Menu hooks are
+per ReaderUI lifetime, obey `clean_menus`, preserve third-party ownership and leave
+invisible menu construction intact.

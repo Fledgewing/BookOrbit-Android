@@ -113,3 +113,11 @@ Series queues: `python3 tools/e2e/android/series_downloads.py --serial emulator-
 choices, queue and per-row/all cancellation without auto-opening. The fixture
 executes the production durable Series/transfer control planes with synthetic bytes.
 JVM tests cover actual protocol, catalog coverage, restart and offline recovery.
+
+
+Reader navigation: after setup, `python3 tools/e2e/android/reader_navigation.py
+--serial emulator-N --out <evidence>` exercises native menu hooks/escape and cached
+Contents, annotations, page/percent and search. It includes landscape and a generated
+twenty-chapter/8,000-paragraph EPUB outside the fixed 59-book fixture library,
+asynchronous search and cancellation. Native annotations are toggled back to their
+prior bookmark state. Menu enablement and rotation are restored.
