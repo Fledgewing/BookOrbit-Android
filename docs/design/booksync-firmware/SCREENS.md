@@ -3,8 +3,8 @@
 Status: **approved — 27 Nov 2026**, with the keyboard change. The maintainer
 approved [the firmware mockups](mockups.html) on `feature/0.12` (PR #202), with
 one change, verbatim: "On screen keyboard should always be on the bottom for touch".
-B1/B3/B4/B5 retain that approval. The slim **B2 revision (2026-11-27) NEEDS
-APPROVAL**; prior B2 import presentation is superseded, subject to slice dependencies.
+B1/B3/B4/B5 retain that approval. The maintainer approved the slim **B2 revision
+on 2026-11-27 (~18:45 PT)**; prior B2 import presentation is superseded, subject to slice dependencies.
 [Gallery](mockups.html) · [plan](PLAN.md) · [approved Home revision 16](../booksync-home/DESIGN.md).
 Each row below links one screen/state, with all three device views and captions.
 Implementation expands per state/control into the plan’s small UI slices; service work
@@ -33,7 +33,7 @@ Paths beginning `src/` refer to that stable commit, not the working checkout.
 - **B1 route restyle** — [`xteink/tailnet/ui/TailnetSettingsActivity.cpp:349`](../../../xteink/tailnet/ui/TailnetSettingsActivity.cpp#L349). Existing automatic, match-library and fixed-region choices are restyled. Region names here are synthetic; actual names come from Library.
 - **B1 connection restyle** — [`xteink/tailnet/ui/TailnetSettingsActivity.cpp:95`](../../../xteink/tailnet/ui/TailnetSettingsActivity.cpp#L95). Existing enable, logout confirmation and re-pair behaviour is restyled; library sign-in stays separate.
 - **B1 network recovery proposal** — [`xteink/tailnet/ui/TailnetNetPhase.cpp:1`](../../../xteink/tailnet/ui/TailnetNetPhase.cpp#L1). New quiet recovery replaces legacy C3 activity/restart routing. A connection never parks or restarts foreground reading.
-- **B2 slim upgrade proposal — NEEDS APPROVAL (2026-11-27)** — [plan decision](PLAN.md#slim-upgrade-decision--2026-11-27). F26b/F26c retain credentials/Wi-Fi and Tailnet/NVS identity; F29 activates only these and presents the once-only notice. CrossInk native SD files remain untouched; F16/F18 restore server data through normal sync.
+- **B2 slim upgrade notice — APPROVED (2026-11-27)** — [plan decision](PLAN.md#slim-upgrade-decision--2026-11-27). F26b/F26c retain credentials/Wi-Fi and Tailnet/NVS identity; F29 activates only these and presents the once-only notice. CrossInk native SD files remain untouched; F16/F18 restore server data through normal sync.
 - **B2 capacity proposal** — [`docs/design/booksync-firmware/PLAN.md:139`](../../../docs/design/booksync-firmware/PLAN.md#L139). New durable-queue presentation; legacy queues are policy references, not a safe migration or capacity UI.
 - **B2 scoped reset proposal** — [`docs/design/booksync-firmware/PLAN.md:267`](../../../docs/design/booksync-firmware/PLAN.md#L267). New settings-only reset proposal; it does not discard queued work or reset pairing. Broader reset is not offered.
 - **B2 downgrade warning proposal** — [`docs/design/booksync-firmware/PLAN.md:291`](../../../docs/design/booksync-firmware/PLAN.md#L291). New warning; older software cannot reverse remote writes or guarantee that new saved records are readable.
@@ -277,7 +277,7 @@ them on 27 Nov 2026; the maintainer's requested change is recorded above.
 
 - **Q1 — Pairing on button readers:** Keep the existing QR, live link and manual Check; no phone-assisted handoff.
 - **Q2 — Queue at capacity:** Read-only saved-books path at capacity; operations that can't record durably are blocked with a message; never evict unacknowledged work.
-- **Q3 — Retained imports (slim revision, 2026-11-27):** Only credentials/Wi-Fi and Tailnet identity activate; preserve unreadable originals. No reading-record or queue replay on 0.12. B2 revision NEEDS APPROVAL.
+- **Q3 — Retained imports (slim revision, 2026-11-27):** Only credentials/Wi-Fi and Tailnet identity activate; preserve unreadable originals. No reading-record or queue replay on 0.12. B2 revision APPROVED (2026-11-27).
 - **Q4 — Reset and forgotten code:** Approve settings-only reset, one-boot basic settings and a separate verified forgot-code recovery; nothing erases books or sign-ins.
 - **Q5 — Rollback admission:** Offer Return to previous only for versions proven compatible after F29/F32; otherwise show Previous version unavailable.
 - **Q6 — Diagnostic scope and retention:** Local redacted export to SD, keep the last 5 reports, user can delete them; X3 gets a bounded summary.
@@ -315,7 +315,7 @@ no clipped content, broken gallery anchors, page errors or horizontal overflow a
 1200 px and 390 px widths. The three new notice views were rendered and visually
 inspected. All 107 articles outside B2 are byte-for-byte unchanged; existing frame
 styles are unchanged. Branding and feature-reference checks pass. This verifies
-the documentation rendering, not firmware behavior, device fit or B2 approval.
+the documentation rendering, not firmware behavior or device fit. B2 was subsequently approved on 2026-11-27 (~18:45 PT).
 
 ## F37a account additions — NEEDS APPROVAL
 
@@ -349,3 +349,10 @@ clears transient fields; closed forms never repaint or reopen, even if account
 authentication subsequently succeeds. Account changes invalidate old deliveries.
 Approval does not waive F15/F12 tests, the sole-writer boundary, firmware size
 gates or maintainer hardware acceptance. F37b/F37c remain separate slices.
+
+## F35a X3 Home widgets — APPROVED (2026-11-27)
+
+The maintainer approved the [Settings list and its six states](F35a-X3-editor.md)
+on 2026-11-27 (~18:45 PT): list, add, remove, reset, no space and save failure.
+Keep widget and Keep layout receive initial focus. F35a services, host tests,
+three-profile simulator scenes and maintainer device acceptance remain required.
