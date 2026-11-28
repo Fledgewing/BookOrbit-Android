@@ -51,3 +51,13 @@ keys, while the companion literal parser represents map keys as strings. The
 initial positional-only fixtures missed it. A native-format regression fails
 before the repair; the reader now accepts only contiguous canonical numeric keys,
 rejecting gaps and alternate spellings. Parsing remains literal-only and read-only.
+
+A separate cold-window integration case left Home on a placeholder after the
+worker had published its ready result. Home now adds at most twenty one-second retries for pending snapshots while
+frontmost, then keeps the ordinary widget cadence; known unavailable states
+keep their explicit Retry action. Hidden/reading hosts perform no retry reads,
+ready data restores the widget cadence, and closing Home cancels the timer. A Lua
+regression fails before this repair and verifies recovery, bounds, covering dialogs
+and explicit Retry. The native fixture flushes its existing synthetic history
+before the pool scenario. Shape probes stayed in disposable fixture builds and
+were removed from the source.

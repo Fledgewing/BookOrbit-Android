@@ -143,6 +143,31 @@ return function(test,eq,ok,E,W,Widget)
         controller:smartHome("command",nil,"smart");eq(host.list_layout,nil)
         eq(E.HomeHost.active,host);eq(ui.document.file,"/fixture/current.epub")
     end) end)
+    test('Home cold snapshot: bounded visible retries recover a missed ready notification',function()
+        withHost(function(batches)
+            local read=E.LibraryAdapter.read;local ready=false
+            E.LibraryAdapter.read=function(raw,...)
+                local a=E.Cache.decode(raw)
+                if a.op=='window' and a.source=='unopened' then
+                    if not ready then return nil end
+                    return {items={},total=0,freshness={saved=true}},80
+                end
+                return read(raw,...)
+            end
+            E.S.home_layout=E.Layout.default();E.S.home_layout.pages={{id='cold',tab='Home',name='Cold',placements={{instance='cold',widget='booklist',version=1,x=0,y=0,w=2,h=3,settings=E.BookList.preset('unopened')}}}}
+            local h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            ok(h.widgetRefresh,'a cold miss must have a bounded local retry')
+            local before=#batches;W.shown={};h.widgetRefresh();eq(#batches,before)
+            W.shown={h};ready=true;h.widgetRefresh();ok(h.redraw);h.redraw()
+            eq(E.Cache.decode(h.signatures.cold).total,0);eq(h.widgetRefresh,nil)
+            h:onCloseWidget();ready=false
+            h=E.HomeHost.create();E.HomeHost.active=h;W.shown={h}
+            for i=1,20 do if h.widgetRefresh then h.widgetRefresh();if h.redraw then h.redraw() end end end
+            eq(h.widgetRefresh,nil,'a missing worker cannot create an unbounded retry loop')
+            h:dispatch('retry');ok(h.widgetRefresh,'explicit Retry starts a fresh bounded attempt')
+            h:onCloseWidget();E.LibraryAdapter.read=read
+        end)
+    end)
     test('Home visibility: immediate gate reports survive zero measurement counts and restore reading',function()
         withHost(function()
             local send,foreground=E.Companion.send,E.Library.isForeground
