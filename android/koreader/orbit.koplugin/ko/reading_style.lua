@@ -140,7 +140,7 @@ end
 
 -- Native reader controls stay behind Library, like the existing style adapter above.
 -- Only bounded, already-loaded native state is copied; no TOC load or sidecar read.
-function Library.readerInput(ui)
+function Library.readerInput(ui,summaryOnly)
     local finish=span("controls-input")
     local view=ui.view or {}
     local total=ui.document.info and ui.document.info.number_of_pages
@@ -150,7 +150,6 @@ function Library.readerInput(ui)
     -- needs sampling. It is already a cached scalar, with no anchor lookup.
     if input.marked and type(page)=="number" then input.bookmarks[1]=page end
     local toc=ui.toc and ui.toc.toc or {}
-    local annotations=ui.annotation and ui.annotation.annotations or {}
     input.chapter_total=#toc
     -- Cached TOC is ordered by native page. A bounded binary lookup identifies
     -- the current chapter without a full-table walk, even for very large books.
@@ -166,6 +165,22 @@ function Library.readerInput(ui)
         input.chapter_index=index
         input.chapter_title=type(toc[index].title)=="string" and toc[index].title:sub(1,256) or nil
     end
+    if summaryOnly then
+        input.path=type(ui.document.file)=="string" and ui.document.file:sub(1,4096) or nil
+        input.md5=ui.doc_settings and ui.doc_settings:readSetting("partial_md5_checksum")
+        input.toc_loaded=ui.toc and type(ui.toc.toc)=="table" or false
+        input.chapter_exact=low>high and type(page)=="number"
+        if input.chapter_exact then
+            local nextEntry=toc[index+1]
+            input.next_exists=nextEntry~=nil
+            if nextEntry and type(nextEntry.page)=="number" and nextEntry.page>page then
+                input.next_page=nextEntry.page
+                input.next_title=type(nextEntry.title)=="string" and nextEntry.title:sub(1,256) or nil
+            end
+        end
+        finish();return input
+    end
+    local annotations=ui.annotation and ui.annotation.annotations or {}
     -- The companion owns marker projection. Copy at most 64 cached scalar entries
     -- per kind, sampled across long books rather than scanning the document.
     for i=1,math.min(Budgets.readerControls.markersPerKind,#toc) do

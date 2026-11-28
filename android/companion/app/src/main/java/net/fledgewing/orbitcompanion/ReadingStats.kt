@@ -30,9 +30,9 @@ object ReadingStats {
     /** Measured fractional-page pace survives layout changes (page_stat_data.total_pages).
      * Five sane visits are required; missing identity/locator/pace never becomes a guess. */
     fun forecast(db: Sql, md5: String, fraction: Double?, now: Long, dailySeconds: Long,
-                 zone: ZoneId = ZoneId.systemDefault()): Map<String, Any?> {
+                 zone: ZoneId = ZoneId.systemDefault(), includePace: Boolean = false): Map<String, Any?> {
         if (fraction == null || !fraction.isFinite() || fraction !in 0.0..1.0) return emptyMap()
-        if (fraction == 1.0) return mapOf("time_left" to "Finished", "finish_forecast" to "Finished")
+        if (fraction == 1.0) return mapOf("time_left" to "Finished", "finish_forecast" to "Finished") + (if(includePace) mapOf("remaining_seconds" to 0L) else emptyMap())
         val pace = db.query("""SELECT COUNT(*),SUM(p.duration),SUM(1.0/p.total_pages)
             FROM page_stat_data p JOIN book b ON b.id=p.id_book
             WHERE b.md5=? AND p.total_pages>0 AND p.page BETWEEN 1 AND p.total_pages
@@ -47,9 +47,10 @@ object ReadingStats {
         val duration = if (minutes>=60) "${minutes/60} h ${minutes%60} m left" else "$minutes m left"
         val days = if (dailySeconds>0) kotlin.math.ceil(remaining.toDouble()/dailySeconds).toLong() else null
         val date = days?.takeIf { it<=36500 }?.let { Instant.ofEpochSecond(now).atZone(zone).toLocalDate().plusDays(it) }
-        return mapOf("time_left" to LuaValue.str(duration), "finish_forecast" to date?.let {
+        val result=mapOf("time_left" to LuaValue.str(duration), "finish_forecast" to date?.let {
             LuaValue.str("Done by " + it.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM"))) },
             "forecast_source" to "this reader")
+        return result + if(includePace) mapOf("remaining_seconds" to remaining,"seconds_per_fraction" to pace.second/pace.third) else emptyMap()
     }
     private fun unavailable(state: String) = mapOf<String, Any?>("state" to state, "freshness" to mapOf("saved" to false, "origin" to "local-reader"))
 

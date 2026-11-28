@@ -6574,6 +6574,58 @@
         }
       },
       "deferred": "Native/physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-next-stop",
+      "feature": "Local Next stop with cached contents and measured pace (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Cached current/next contents, approximate next/end time and honest unknown states.",
+          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-NEXT-STOP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Local Next stop follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-NEXT-STOP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Local Next stop follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-NEXT-STOP.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Local Next stop follows Android-first.",
+          "reason": "deliberately deferred: firmware implementation and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-NEXT-STOP.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

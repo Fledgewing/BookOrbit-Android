@@ -316,6 +316,22 @@ return function(here, test, ok, eq, audit)
         eq(E.ReaderPanelPlan.fontSize(27,1),16); eq(E.ReaderPanelPlan.fontSize(16,-1),27)
         eq(E.ReaderPanelPlan.fontSize(23,1),24)
     end)
+    test("next stop: cached binary summary skips annotation resolution and missing TOC is honest",function()
+        local W,E=world()
+        W.ui.document.file="/fixture/long.epub"
+        W.ui.toc={toc={}}
+        for i=1,10000 do W.ui.toc.toc[i]={page=i,title="Entry "..i} end
+        W.ui.annotation={annotations=setmetatable({},{__index=function() error("must not read annotations") end})}
+        W.ui.bookmark={getBookmarkPageNumber=function() error("must not resolve bookmarks") end}
+        local input=E.Library.readerInput(W.ui,true)
+        eq(input.page,124);eq(input.chapter_index,124);eq(input.chapter_total,10000)
+        eq(input.next_page,125);eq(input.next_title,"Entry 125");eq(input.chapter_exact,true)
+        eq(input.toc_loaded,true);eq(input.next_exists,true);eq(#input.chapters,0);eq(#input.bookmarks,0)
+        W.ui.toc={}
+        input=E.Library.readerInput(W.ui,true);eq(input.toc_loaded,false);eq(input.chapter_total,0)
+        W.ui.toc={toc={{page="unresolved"}}}
+        input=E.Library.readerInput(W.ui,true);eq(input.chapter_exact,false);eq(input.next_page,nil)
+    end)
     test("reader controls: owned strip toggles use existing status session",function()
         local W,E=world()
         local session={ui=W.ui,bottom_visible=true}

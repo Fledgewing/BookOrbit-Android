@@ -24,6 +24,8 @@ end
 widget("monthly-reading","reading.metrics",{{4,2},{4,3}},{{2,3}})
 WidgetRegistry["monthly-reading"].refreshSeconds=60
 widget("finish-forecast","books.query",{{2,2},{4,2}},{{2,2}})
+widget("next-stop","local.nextstop",{{2,2},{4,2},{4,3}},{{2,2}})
+WidgetRegistry["next-stop"].localOnly=true;WidgetRegistry["next-stop"].refreshSeconds=60
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 for _,id in ipairs({"moon","glyph"}) do
     widget(id,"local."..id,{{2,2},{2,3},{4,2}},{{2,2}})
@@ -74,6 +76,7 @@ local descriptions={
     word={"Word of the day","A daily word from your KOReader vocabulary."},
     light={"Light","Control this reader's frontlight."},
     buddy={"Reading buddy","A reading message from activity on this reader."},
+    ["next-stop"]={"Next stop","Current and next contents entries with measured time to next and end."},
     clock={"Clock","The time on your Home page."},
 }
 for id,copy in pairs(descriptions) do WidgetRegistry[id].name=copy[1]; WidgetRegistry[id].description=copy[2] end

@@ -77,6 +77,7 @@ class LibraryReadModel(
                     "reading.stats" -> stats
                     "reading.metrics" -> RetainedMetrics.snapshot(stats,clock(),AccountStats.zone(account))
                     "local.moon","local.glyph" -> LocalDecor.snapshot(args["op"].toString().removePrefix("local."),clock())
+                    "local.nextstop" -> NextStop.read(args["native"] as? Map<*,*> ?: emptyMap<Any,Any>(),java.io.File(store.root.parentFile,"statistics.sqlite3"),clock())
                     "local.word" -> LocalWidgets.word(vocabulary(), clock())
                     "local.buddy" -> LocalWidgets.buddy(localStats)
                     "local.light" -> LocalWidgets.light(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())

@@ -1,6 +1,9 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Local native access stays behind Library; the host alone requests projections.
 function Library.localWidgetNeed(id)
+    if id=="next-stop" then
+        local ui=liveUI();return {op="local.nextstop",limit=1,native=ui and ui.document and Library.readerInput(ui,true) or {}}
+    end
     if id=="recommended" or id=="discover" then
         return {op="personal.reading",kind=id,limit=1,pick=id=="discover" and (S.home_discover_pick or 0) or nil}
     end
