@@ -1,0 +1,50 @@
+<!doctype html><meta charset="utf-8"><title>Slice X3 · Stats and Battery</title><style>body{font:16px system-ui;margin:32px;max-width:1600px;background:#eee;color:#111}article{margin:32px 0;padding:16px;background:white}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}img{width:100%;height:auto}.sizes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.sizes figure{margin:0;padding:10px;background:#fff}li{margin:10px 0}</style><h1>Slice X3 · measured Stats and Battery cards</h1><p>Android 14 ARM64, own disposable AVD, 1404 × 1872 at 300 dpi. KOReader v2026.07.1 and tools/e2e fake ServerAdapter. Approved crop left; native rendering right. Every text box is checked against every other text box and the card bounds with real KOReader fonts.</p>
+<h2>Remaining differences and reasons</h2><ul>
+<li>KOReader ships Noto Sans regular/bold; the approved browser mockup uses Avenir Next. This slice preserves the design-unit sizes, weight hierarchy and gray captions. Exact Avenir needs an approved font asset and bundle wiring outside the three owned modules.</li>
+<li>The existing Home host reserves 120 KOReader units above the grid instead of the mockup’s 76 CSS units. Its header controls and pager are outside this slice. This makes the live default cards shorter; the running-streak footer and last-charge line drop when their measured boxes cannot fit. The isolated card comparisons use the exact approved pixel dimensions.</li>
+<li>Native chart data is synthetic. The populated fixture has 59 books and covers, six books in progress, five finished, and 58 days / 1,168 timed visits. The full visual comparison deliberately supplies the mockup’s ready-to-draw metric values to the native widgets; the unmodified provider capture is retained as stats.png. Recently-added data remains unsupported by the fixture’s DeviceLibrary.</li>
+<li>The existing registry supports smaller variants. Those omit secondary copy at the same type sizes. Battery uses a plain-string estimate (uniform weight within the estimate) and its legacy inline navigation chevron; the records footer has no flame or seven decorative dots. These remain visual differences in this scoped geometry fix.</li>
+<li>The large Battery variant retains the existing text projection for primary estimates, rate columns and charge history. Its daily mini-chart and per-100-pages composition were not added in this scoped geometry fix.</li>
+</ul>
+<article><h2>Stats · full Home host</h2><div class="pair"><div>Approved<img src="approved-stats.png"></div><div>Native<img src="stats-fixture.png"></div></div></article>
+<article><h2>year-in-reading</h2><div class="pair"><div>Approved<img src="approved-year-in-reading.png"></div><div>Native<img src="year-in-reading-mockup.png"></div></div></article>
+<article><h2>battery</h2><div class="pair"><div>Approved<img src="approved-battery.png"></div><div>Native<img src="battery-mockup.png"></div></div></article>
+<article><h2>when-you-read</h2><div class="pair"><div>Approved<img src="approved-when-you-read.png"></div><div>Native<img src="when-you-read-mockup.png"></div></div></article>
+<article><h2>this-week</h2><div class="pair"><div>Approved<img src="approved-this-week.png"></div><div>Native<img src="this-week-mockup.png"></div></div></article>
+<article><h2>reading-records</h2><div class="pair"><div>Approved<img src="approved-reading-records.png"></div><div>Native<img src="reading-records-mockup.png"></div></div></article>
+<h2>Every registered Android size · native render and measured bounds</h2><p>These use the actual HomeHostPlan rectangles on this AVD, including the current header/pager allocation. <a href="native-bounds.lua">Measured boxes for all 39 cases</a> · <a href="native-check.py">Reproduction driver</a> · <a href="stats.png">Unmodified provider capture</a>.</p><div class="sizes">
+<figure><figcaption>battery-1x2</figcaption><img src="battery-1x2.png"></figure>
+<figure><figcaption>battery-2x1</figcaption><img src="battery-2x1.png"></figure>
+<figure><figcaption>battery-2x2</figcaption><img src="battery-2x2.png"></figure>
+<figure><figcaption>battery-2x3</figcaption><img src="battery-2x3.png"></figure>
+<figure><figcaption>battery-4x2</figcaption><img src="battery-4x2.png"></figure>
+<figure><figcaption>battery-4x3</figcaption><img src="battery-4x3.png"></figure>
+<figure><figcaption>monthly-reading-4x2</figcaption><img src="monthly-reading-4x2.png"></figure>
+<figure><figcaption>monthly-reading-4x3</figcaption><img src="monthly-reading-4x3.png"></figure>
+<figure><figcaption>pages-read-2x2</figcaption><img src="pages-read-2x2.png"></figure>
+<figure><figcaption>pages-read-2x3</figcaption><img src="pages-read-2x3.png"></figure>
+<figure><figcaption>pages-read-4x2</figcaption><img src="pages-read-4x2.png"></figure>
+<figure><figcaption>reading-goal-2x2</figcaption><img src="reading-goal-2x2.png"></figure>
+<figure><figcaption>reading-goal-2x3</figcaption><img src="reading-goal-2x3.png"></figure>
+<figure><figcaption>reading-goal-4x2</figcaption><img src="reading-goal-4x2.png"></figure>
+<figure><figcaption>reading-records-2x2</figcaption><img src="reading-records-2x2.png"></figure>
+<figure><figcaption>reading-records-2x3</figcaption><img src="reading-records-2x3.png"></figure>
+<figure><figcaption>reading-records-3x2</figcaption><img src="reading-records-3x2.png"></figure>
+<figure><figcaption>reading-records-4x1</figcaption><img src="reading-records-4x1.png"></figure>
+<figure><figcaption>reading-streak-2x2</figcaption><img src="reading-streak-2x2.png"></figure>
+<figure><figcaption>reading-streak-2x3</figcaption><img src="reading-streak-2x3.png"></figure>
+<figure><figcaption>reading-streak-4x2</figcaption><img src="reading-streak-4x2.png"></figure>
+<figure><figcaption>this-week-1x2</figcaption><img src="this-week-1x2.png"></figure>
+<figure><figcaption>this-week-2x1</figcaption><img src="this-week-2x1.png"></figure>
+<figure><figcaption>this-week-2x2</figcaption><img src="this-week-2x2.png"></figure>
+<figure><figcaption>this-week-2x3</figcaption><img src="this-week-2x3.png"></figure>
+<figure><figcaption>today-2x2</figcaption><img src="today-2x2.png"></figure>
+<figure><figcaption>today-2x3</figcaption><img src="today-2x3.png"></figure>
+<figure><figcaption>today-4x2</figcaption><img src="today-4x2.png"></figure>
+<figure><figcaption>when-you-read-2x1</figcaption><img src="when-you-read-2x1.png"></figure>
+<figure><figcaption>when-you-read-2x2</figcaption><img src="when-you-read-2x2.png"></figure>
+<figure><figcaption>when-you-read-2x3</figcaption><img src="when-you-read-2x3.png"></figure>
+<figure><figcaption>when-you-read-4x1</figcaption><img src="when-you-read-4x1.png"></figure>
+<figure><figcaption>year-in-reading-4x2</figcaption><img src="year-in-reading-4x2.png"></figure>
+<figure><figcaption>year-in-reading-4x3</figcaption><img src="year-in-reading-4x3.png"></figure>
+</div>

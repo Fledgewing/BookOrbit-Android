@@ -1,0 +1,8 @@
+{
+  "books": 59,
+  "in_progress": 6,
+  "finished": 5,
+  "covers": 59,
+  "history_days": 58,
+  "note": "Synthetic fixture; recently-added remains unsupported by DeviceLibrary even with new books."
+}
