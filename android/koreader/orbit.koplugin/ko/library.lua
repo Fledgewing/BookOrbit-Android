@@ -201,7 +201,7 @@ function LibraryAdapter.command(op,args,callback,policy)
         if not wanted() then return end
         local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SERVER_RESULT",{id=id})
         local body=result and result.body
-        if type(body)~="string" or #body>Budgets.MAX_SNAPSHOT then settle({error="unavailable"});return end
+        if type(body)~="string" or #body>(policy.maxBytes or Budgets.MAX_SNAPSHOT) then settle({error="unavailable"});return end
         local decoded=Cache.decode(body)
         if type(decoded)~="table" then settle({error="invalid"});return end
         -- 120 seconds bounds pending waits. An overdue ready reply still counts
@@ -238,12 +238,12 @@ local function command(id, run)
 end
 -- Device effects outlive their initiating page. Retiring this presentation drops
 -- its callback while the device-lifetime ticket still adopts the durable result.
-local function deviceCommand(op,args,effect,done)
+local function deviceCommand(op,args,effect,done,maxBytes)
     local accepted=LibraryAdapter.command(op,args,function(result)
         effect(result)
         local callback=done;done=nil
         if callback then callback(result) end
-    end,{kind="device"})
+    end,{kind="device",maxBytes=maxBytes})
     return accepted,function() done=nil end
 end
 function Library.fullRefresh() return command("full-refresh", LibraryAdapter.fullRefresh) end
@@ -1125,6 +1125,6 @@ end
 function Library.remindersCommand(op,args,done)
     assert(({draft=true,list=true,retry=true,runtime=true,add=true,edit=true,setEnabled=true,delete=true,claimDue=true,respond=true,sleep=true})[op],"Unknown reminder operation")
     return command("reminders."..op,function()
-        return deviceCommand("reminders."..op,args,function() end,done)
+        return deviceCommand("reminders."..op,args,function() end,done,(op=="draft" or op=="claimDue") and 1024 or 8192)
     end)
 end

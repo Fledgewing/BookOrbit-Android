@@ -243,6 +243,10 @@
     "layer": "internal",
     "purpose": "Observation, comparison and checkpointing; review screen is recommendations."
   },
+  "ko/reminders.lua": {
+    "layer": "ui",
+    "purpose": "Reminder settings drafts and claimed sheets over the Library interface."
+  },
   "ko/retirement.lua": {
     "layer": "internal",
     "purpose": "Private runtime/transport/persistence service."

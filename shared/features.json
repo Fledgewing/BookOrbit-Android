@@ -6946,6 +6946,110 @@
         }
       },
       "deferred": "Physical acceptance and publication; firmware settings remain in their separately planned surfaces."
+    },
+    {
+      "id": "android-bedtime-reminders",
+      "feature": "Device-local bedtime reminders (0.12.1; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Eight local bedtime schedules, recurrence, missed window, snooze, durable claims and explicit native Sleep.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; physical acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Reminders.kt",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance and publication; firmware implementation and profile acceptance in its own approved work."
+    },
+    {
+      "id": "android-eye-rest-reminders",
+      "feature": "Rest your eyes reminders (0.12.1; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Singleton 20/30/45/60-minute active-reading interval, five-minute reset, quiet Done/Turn off sheet and bedtime priority.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; physical acceptance and publication remain.",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/reminders.lua",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Approved cross-platform implementation is tracked separately.",
+          "reason": "deliberately deferred: maintainer moved this to 0.12.1; the firmware worker owns implementation and profile acceptance; this PR implements Android only.",
+          "evidence": [
+            {
+              "path": "docs/design/reminders.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance and publication; firmware implementation and profile acceptance in its own approved work."
     }
   ],
   "release_evidence": {

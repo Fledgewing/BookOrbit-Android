@@ -319,6 +319,8 @@ function OrbitAndroid:menuItems()
         group("reading", "Reading", function()
             local out = CustomReading.settingsRows(self.ui)
             out[#out+1]=action("Reading statistics",LocalReadingSettings.open)
+            local reminders=action("Reminders",RemindersUI.open);reminders.read_only=true -- local route stays available without PIN
+            out[#out+1]=reminders
             out[#out+1]={text="BookSync reading menus",checked_func=Library.readerMenusEnabled,callback=function()
                 Library.setReaderMenus(self.ui,not Library.readerMenusEnabled())
             end}

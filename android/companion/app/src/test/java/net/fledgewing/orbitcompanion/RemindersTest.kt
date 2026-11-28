@@ -10,17 +10,17 @@ import java.util.UUID
 
 class RemindersTest {
     private class Memory : Reminders.Store {
-        var state=Reminders.State(); var writes=0; var fail=false
+        var state=Reminders.State(); var writes=0; var fail=false; var afterCommit=false
         override fun load()=state
-        override fun save(state: Reminders.State) { if(fail) throw IllegalStateException("full"); this.state=state; writes++ }
+        override fun save(state: Reminders.State) { if(fail) throw IllegalStateException("full"); this.state=state; writes++;if(afterCommit) throw IllegalStateException("commit uncertain") }
     }
     private class Fixture {
         val store=Memory(); var wall=Instant.parse("2026-11-27T20:00:00Z").toEpochMilli(); var elapsed=0L
-        var zone=ZoneId.of("UTC"); var last=0L; var page=true; var visible=true; var sleep=false; var modal=false; var owner="A"; var known=true
+        var zone=ZoneId.of("UTC"); var last=0L; var page=true; var visible=true; var sleep=false; var modal=false; var presenting=false; var owner="A"; var known=true
         var service=Reminders(store,{wall},{elapsed},{zone})
         fun tick(ms: Long=0,input: Boolean=false) { elapsed+=ms; wall+=ms; if(input) last=elapsed; update() }
-        fun update()=service.activity(Reminders.Runtime(owner,visible,sleep,page,modal,last,known))
-        fun add(minute:Int=1201,days:Int=127,message:String?=null)=service.add("time",true,minute,days,message,null,UUID.randomUUID().toString())
+        fun update()=service.activity(Reminders.Runtime(owner,visible,sleep,page,modal,last,known,presenting))
+        fun add(minute:Int=1201,days:Int=127,message:String?=null)=service.add("time",true,minute,days,message,null,"a:${service.revision()}:${UUID.randomUUID()}")
         fun interval(minutes:Int=20) {service.edit(Reminders.INTERVAL,service.records().first {it.id==Reminders.INTERVAL}.revision,"interval",true,null,null,null,minutes,UUID.randomUUID().toString());update()}
         fun read(ms:Long) { var remaining=ms;while(remaining>0) {val step=minOf(remaining,60000);tick(step,true);remaining-=step} }
         fun claim():Reminders.Grant?=service.candidates().firstOrNull()?.let {service.claim(it.event,owner)}
@@ -49,12 +49,23 @@ class RemindersTest {
         assertEquals("<b>plain</b>",f.add(message="<b>plain</b>").message)
     }
     @Test fun capacityAndMutationReplay() {
-        val f=Fixture();val first=f.service.add("time",true,1201,127,null,null,"same")
-        assertEquals(first,f.service.add("time",true,1201,127,null,null,"same"))
+        val f=Fixture();val first=f.service.add("time",true,1201,127,null,null,"a:0:same")
+        assertEquals(first,f.service.add("time",true,1201,127,null,null,"a:0:same"))
         repeat(7) {f.add()};assertEquals(9,f.service.records().size)
         invalid {f.add()};f.interval(30);assertEquals(9,f.service.records().size)
         f.service.delete(first.id,first.revision,"delete");f.service.delete(first.id,first.revision,"delete")
         assertEquals(8,f.service.records().size)
+    }
+    @Test fun oldAddReceiptCannotDuplicateAnEditedOrDeletedRecord() {
+        val f=Fixture();val key="a:0:create"
+        val r=f.service.add("time",true,1201,127,null,null,key)
+        val edited=f.service.setEnabled(r.id,1,false,"edit")
+        assertEquals(edited,f.service.add("time",true,1201,127,null,null,key))
+        f.service.delete(r.id,edited.revision,"delete")
+        // Many newer creates/deletes do not require an unbounded tombstone history.
+        repeat(20) {val next=f.add();f.service.delete(next.id,1,"delete-$it")}
+        invalid {f.service.add("time",true,1201,127,null,null,key)}
+        assertEquals(1,f.service.records().size)
     }
     @Test fun revisionsSourcesAndKindsCannotBeForged() {
         val f=Fixture();val r=f.add()
@@ -64,6 +75,17 @@ class RemindersTest {
         invalid {f.service.edit(r.id,1,"interval",true,null,null,null,20,"x")}
         val changed=f.service.setEnabled(r.id,1,false,"off")
         assertEquals(changed,f.service.setEnabled(r.id,1,false,"off"))
+    }
+    @Test fun ambiguousCommitReconcilesBeforeAnyRetry() {
+        val f=Fixture();f.store.afterCommit=true
+        val r=f.service.add("time",true,1201,127,null,null,"a:0:create")
+        assertEquals(r,f.service.add("time",true,1201,127,null,null,"a:0:create"));assertEquals(1,f.store.writes)
+        f.update();f.tick(60000,true);val g=f.claim()!!;assertTrue(f.service.respond(g,"snooze10").accepted)
+        assertFalse(f.service.respond(g,"snooze10").accepted);assertEquals(3,f.store.writes)
+    }
+    @Test fun forwardJumpOffersOnlyCurrentEligibleOccurrence() {
+        val f=Fixture();f.add();f.update();f.tick(4*86400000L+120000,true)
+        assertEquals("2026-12-01",f.claim()!!.due.original)
     }
     @Test fun saveFailureLeavesScheduleAndRevisionUntouched() {
         val f=Fixture();val r=f.add();val before=f.service.records();f.store.fail=true
@@ -129,6 +151,13 @@ class RemindersTest {
         }
         assertEquals(3,f.claim()!!.due.sequence)
     }
+    @Test fun snoozeGrantUsesElapsedExpiryAcrossAClockCorrection() {
+        val f=Fixture();f.add();f.update();f.tick(60000,true);f.service.respond(f.claim()!!,"snooze10")
+        f.tick(600000,true);val g=f.claim()!!;f.wall+=86400000
+        assertTrue(f.service.drawable(g));f.elapsed+=3600001
+        assertFalse(f.service.drawable(g));assertFalse(f.service.respond(g,"sleep",true).sleep)
+        f.service.retire(g);assertFalse(f.service.valid(g))
+    }
     @Test fun snoozeRestartUsesWallAndKnownClock() {
         val f=Fixture();f.add();f.update();f.tick(60000,true);f.service.respond(f.claim()!!,"snooze10")
         f.tick(600000,true);f.known=false;f.restart();assertNull(f.claim())
@@ -149,6 +178,26 @@ class RemindersTest {
         assertTrue(f.service.respond(g,"sleep",true).sleep)
         assertFalse(f.service.respond(g,"sleep",true).sleep)
     }
+    @Test fun failedSleepCheckpointStillAllowsDismissOrSnoozeWithoutAnotherSleepIntent() {
+        for(action in listOf("gotIt","snooze10")) {
+            val f=Fixture();f.add();f.update();f.tick(60000,true);val g=f.claim()!!
+            f.presenting=true;f.update()
+            assertTrue(f.service.respond(g,"sleep",true).sleep)
+            val writes=f.store.writes
+            assertTrue(f.service.valid(g))
+            assertFalse(f.service.respond(g,"sleep",true).sleep)
+            assertEquals(writes,f.store.writes)
+            if(action=="snooze10") {
+                f.store.fail=true
+                try {f.service.respond(g,action);fail()} catch(_:IllegalStateException) {}
+                assertTrue(f.service.valid(g));f.store.fail=false
+            }
+            assertTrue(f.service.respond(g,action).accepted)
+            assertFalse(f.service.valid(g));assertFalse(f.service.respond(g,"sleep",true).sleep)
+            f.presenting=false;f.update();f.tick(600000,true)
+            assertEquals(action=="snooze10",f.claim()!=null)
+        }
+    }
     @Test fun wrongKindActionsRejected() {
         val f=Fixture();f.add();f.update();f.tick(60000,true);val g=f.claim()!!
         for(action in listOf("done","turnOff","lock","close")) invalid {f.service.respond(g,action)}
@@ -166,7 +215,12 @@ class RemindersTest {
     }
     @Test fun lateDrawExpiresButVisibleSheetCanStillRespond() {
         val f=Fixture();f.add();f.update();f.tick(60000,true);val g=f.claim()!!
-        f.tick(3601000,true);assertFalse(f.service.drawable(g));assertTrue(f.service.respond(g,"gotIt").accepted)
+        f.presenting=true;f.update();f.tick(3601000,true);assertFalse(f.service.drawable(g));assertTrue(f.service.respond(g,"gotIt").accepted)
+    }
+    @Test fun undrawnGrantTimeoutCannotBlockOtherRemindersOrDrawLate() {
+        val f=Fixture();repeat(2) {f.add()};f.update();f.tick(60000,true);val g=f.claim()!!
+        f.tick(120001,true);assertFalse(f.service.valid(g));assertFalse(f.service.drawable(g));assertNull(f.claim())
+        f.tick(1,true);assertNotEquals(g.due.id,f.claim()!!.due.id)
     }
     @Test fun ownerAtoBtoANeverRevivesGrant() {
         val f=Fixture();f.add();f.update();f.tick(60000,true);val g=f.claim()!!
@@ -189,11 +243,27 @@ class RemindersTest {
             f.tick(1,true);assertNotNull(f.claim())
         }
     }
+    @Test fun lifecycleCaptureTimeExcludesPausedTimeEvenIfWorkerRunsAfterResume() {
+        val f=Fixture();f.interval();f.read(19*60000L)
+        val start=f.elapsed;f.elapsed+=120000;f.wall+=120000
+        f.service.activity(Reminders.Runtime("A",true,false,false,false,start,at=start))
+        f.service.activity(Reminders.Runtime("A",true,false,true,false,f.elapsed,at=f.elapsed))
+        assertNull(f.claim());f.last=f.elapsed;f.read(60000);assertNotNull(f.claim())
+    }
     @Test fun intervalPauseFourFiftyNinePreservesAndFiveResets() {
         for(gap in listOf(299999L,300000L)) {
             val f=Fixture();f.interval();f.read(19*60000L);f.page=false;f.update();f.tick(gap)
             f.page=true;f.tick(0,true);f.read(60000)
             assertEquals(gap<300000,f.claim()!=null)
+        }
+    }
+    @Test fun idleGapContinuesAcrossShortMenuHiddenAndSleepPausesBeforeResumeInput() {
+        for(mode in listOf("menu","hidden","sleep")) {
+            val f=Fixture();f.interval();f.read(15*60000L);f.tick(4*60000L)
+            when(mode) {"menu"->f.page=false;"hidden"->f.visible=false;else->f.sleep=true};f.update()
+            f.tick(60000);f.page=true;f.visible=true;f.sleep=false;f.tick(0,true)
+            f.read(60000);assertNull(mode,f.claim())
+            f.read(19*60000L);assertNotNull(mode,f.claim())
         }
     }
     @Test fun idleBoundaryResetsBeforeDueEvenWithResumeInput() {
@@ -210,6 +280,10 @@ class RemindersTest {
             assertNull(f.service.claim(event.event,"A"));f.visible=true;f.sleep=false;f.modal=false;f.page=true;f.tick(1,true)
             assertNull(f.claim());f.read(20*60000L);assertNotNull(f.claim())
         }
+    }
+    @Test fun menuAtThresholdBeforePublicationConsumesInterval() {
+        val f=Fixture();f.interval();f.read(19*60000L);f.page=false;f.tick(60000,true)
+        f.page=true;f.tick(1,true);assertNull(f.claim());f.read(20*60000L);assertNotNull(f.claim())
     }
     @Test fun unknownClockAndJumpsDoNotAffectInterval() {
         val f=Fixture();f.interval();f.known=false;f.wall-=100000000;f.zone=ZoneId.of("Asia/Tokyo");f.read(20*60000L)
@@ -228,6 +302,11 @@ class RemindersTest {
         try {f.service.respond(g,"turnOff");fail()} catch(_:IllegalStateException) {}
         assertTrue(f.service.valid(g));assertTrue(f.service.records().single().enabled)
         f.store.fail=false;assertTrue(f.service.respond(g,"turnOff").accepted);f.restart();assertFalse(f.service.records().single().enabled)
+    }
+    @Test fun visibleEyeSheetNeverHasAnIdleTimedClose() {
+        val f=Fixture();f.interval();f.read(20*60000L);val g=f.claim()!!
+        f.presenting=true;f.update();f.tick(10*60000L)
+        assertTrue(f.service.valid(g));assertTrue(f.service.respond(g,"done").accepted)
     }
     @Test fun intervalRejectsTimeActions() {
         val f=Fixture();f.interval();f.read(20*60000L);val g=f.claim()!!
@@ -263,6 +342,13 @@ class RemindersTest {
         val zone=ZoneId.of("America/Los_Angeles")
         assertEquals(Instant.parse("2026-03-08T10:00:00Z").toEpochMilli(),Reminders.scheduled(LocalDate.parse("2026-03-08"),150,zone))
         assertEquals(Instant.parse("2026-11-01T08:30:00Z").toEpochMilli(),Reminders.scheduled(LocalDate.parse("2026-11-01"),90,zone))
+    }
+    @Test fun timeInputUsesDeviceFormatAndRejectsInvalidFields() {
+        assertEquals(0,Reminders.parseTime("12:00 AM",true));assertEquals(720,Reminders.parseTime("12:00 PM",true))
+        assertEquals(1260,Reminders.parseTime("9:00 PM",true));assertEquals(1260,Reminders.parseTime("21:00",false))
+        assertEquals(1439,Reminders.parseTime("23:59",false))
+        for(input in listOf("24:00","-1:00","12:60","20:01 PM","12:01:00","1:1","NaN","<b>21:00</b>")) invalid {Reminders.parseTime(input,false)}
+        for(input in listOf("00:00 AM","13:00 PM","9:00","9:00 XX","9:60 PM")) invalid {Reminders.parseTime(input,true)}
     }
     @Test fun formattingIsDisplayOnlyAndBounded() {
         val f=Fixture();repeat(8) {f.add(1260,message="😀".repeat(60))};val before=f.store.state

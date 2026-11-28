@@ -43,6 +43,10 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/ui/widget/container/inputcontainer.lua", { {"stop_events_propagation", T} } },
+    { "frontend/docsettings.lua", { {"function DocSettings:flush(data, no_custom_metadata)", T} } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "onSaveSettings" } },
+    { "frontend/apps/reader/modules/readerpaging.lua", { "onSaveSettings" } },
     { "frontend/ui/time.lua", { "boottime" } },
     { "frontend/ui/uimanager.lua", { "handleInputEvent" } },
     { "frontend/apps/reader/modules/readerpagemap.lua", { "wantsPageLabels", "cleanPageLabel", "getPageLabelProps" } },

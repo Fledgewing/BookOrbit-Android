@@ -1,6 +1,7 @@
 package net.fledgewing.orbitcompanion
 
 import android.content.Context
+import android.os.SystemClock
 import java.io.File
 
 /** Trusted-provider commands: inputs/results are neutral and bounded; typed secrets are transient inputs, never results or retained jobs. */
@@ -11,7 +12,7 @@ object ServerCommands {
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
         require(op in setOf("reader.companion","reminders.draft","reminders.list","reminders.retry","reminders.runtime","reminders.add","reminders.edit","reminders.setEnabled","reminders.delete","reminders.claimDue","reminders.respond","reminders.sleep","reading.local.read","reading.local.goal","reading.local.event","reading.local.prepare","device.sleep","storage.free","storage.folder","storage.refresh","storage.remove.preview","storage.remove","sync.verify.next","sync.verify.result","sync.activate","sync.capture","sync.pull","sync.decide","sync.answer","sync.override","sync.drain","sync.read","sync.write","catalog.window","catalog.control","catalog.action","settings.recommendations","covers.acquire","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
         val id = java.util.UUID.randomUUID().toString()

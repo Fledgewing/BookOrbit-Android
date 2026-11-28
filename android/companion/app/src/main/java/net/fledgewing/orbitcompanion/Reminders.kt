@@ -27,13 +27,13 @@ class Reminders(private val store: Store, private val wall: () -> Long,
     }
     data class Snooze(val original: String, val due: Long, val sequence: Int)
     data class State(val records: List<Record> = listOf(Record(INTERVAL, "interval", intervalMinutes=20)),
-        val deletedId: String? = null, val deletion: String? = null)
+        val deletedId: String? = null, val deletion: String? = null, val generation: Long = 0)
     data class Runtime(val owner: String, val visible: Boolean, val sleeping: Boolean,
-        val page: Boolean, val modal: Boolean, val lastInput: Long, val knownClock: Boolean = true, val presenting: Boolean = false)
+        val page: Boolean, val modal: Boolean, val lastInput: Long, val knownClock: Boolean = true, val presenting: Boolean = false, val at: Long? = null)
     data class Due(val event: String, val id: String, val revision: Long, val kind: String,
         val original: String, val due: Long, val expiry: Long, val sequence: Int = 0,
-        val session: String? = null, val missed: Boolean = false)
-    data class Grant(val token: String, val owner: String, val due: Due)
+        val session: String? = null, val missed: Boolean = false, val elapsedExpiry: Long? = null)
+    data class Grant(val token: String, val owner: String, val due: Due, val issuedAt: Long)
     data class Response(val accepted: Boolean, val sleep: Boolean = false)
     companion object {
         const val INTERVAL = "local:eye-rest"
@@ -49,7 +49,7 @@ class Reminders(private val store: Store, private val wall: () -> Long,
             require(r.mutation==null || r.mutation.length in 1..64)
             require(r.response==null || r.response.length in 1..128)
             if(r.highWater!=null) { require(r.highWater.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}"))); LocalDate.parse(r.highWater) }
-            r.snooze?.let { require(it.original.length in 1..80 && it.due>=0 && it.sequence in 1..1000000) }
+            r.snooze?.let { require(it.original.length in 1..80 && it.due>=0 && it.sequence in 1 until Int.MAX_VALUE) }
             when(r.kind) {
                 "time" -> {
                     require(r.id!=INTERVAL && r.minuteOfDay in 0..1439 && r.days in 1..127 && r.intervalMinutes==null)
@@ -62,12 +62,21 @@ class Reminders(private val store: Store, private val wall: () -> Long,
             }
         }
         fun validate(s: State) {
+            require(s.generation in 0..9007199254740990L)
             require(s.records.size in 1..9 && s.records.count {it.kind=="time"}<=8 && s.records.count {it.id==INTERVAL}==1)
             require(s.records.map {it.id}.distinct().size==s.records.size)
             s.records.forEach(::validate)
             require(s.deletion==null || s.deletion.length in 1..64)
             require((s.deletion==null)==(s.deletedId==null))
             require(s.deletedId==null || s.deletedId.matches(Regex("local:[0-9a-f-]{36}")))
+        }
+        fun parseTime(input: String, twelveHour: Boolean): Int {
+            val pattern=if(twelveHour) Regex("([0-9]{1,2}):([0-9]{2}) (AM|PM)",RegexOption.IGNORE_CASE) else Regex("([0-9]{1,2}):([0-9]{2})")
+            val match=pattern.matchEntire(input.trim()) ?: throw IllegalArgumentException("time")
+            val hour=match.groupValues[1].toInt();val minute=match.groupValues[2].toInt()
+            require(minute in 0..59 && hour in if(twelveHour) 1..12 else 0..23)
+            val h=if(twelveHour) hour%12+(if(match.groupValues[3].equals("PM",true)) 12 else 0) else hour
+            return h*60+minute
         }
         /** Gaps use their first valid minute, overlaps their first instant. */
         fun scheduled(date: LocalDate, minute: Int, zone: ZoneId): Long {
@@ -88,7 +97,22 @@ class Reminders(private val store: Store, private val wall: () -> Long,
     private var grant: Grant?=null
     private var waitForInput: Long?=null
     private val snoozeElapsed=mutableMapOf<String,Pair<Int,Long>>()
-    private fun persist(next: State) { validate(next); store.save(next); state=next }
+    private var storageUnknown=false
+    private fun persist(next: State) {
+        check(!storageUnknown)
+        validate(next)
+        try {store.save(next)} catch(e:Exception) {
+            // An OS commit error may be reported after publication. Reconcile the
+            // bounded durable record before another claim or idempotent retry.
+            val durable=runCatching {store.load().also(::validate)}
+            if(durable.isFailure) {storageUnknown=true;throw e}
+            state=durable.getOrThrow()
+            if(state!=next) throw e
+        }
+        state=next
+    }
+    fun storageReady(): Boolean = !storageUnknown
+    fun revision(): Long = state.generation
     fun records(): List<Record> = state.records.toList()
     private fun record(id: String)=state.records.firstOrNull {it.id==id} ?: throw IllegalArgumentException("missing")
     private fun key(value: String) = require(value.length in 1..64)
@@ -100,11 +124,14 @@ class Reminders(private val store: Store, private val wall: () -> Long,
     }
     fun add(kind: String, enabled: Boolean, minute: Int?, days: Int?, message: String?, interval: Int?, mutation: String): Record {
         key(mutation); require(kind=="time")
-        state.records.firstOrNull {it.mutation==mutation}?.let { return it }
+        val id="local:"+UUID.nameUUIDFromBytes(("booksync-reminder:"+mutation).toByteArray(Charsets.UTF_8))
+        state.records.firstOrNull {it.id==id}?.let { return it }
+        val base=Regex("a:([0-9]+):.{1,40}").matchEntire(mutation)?.groupValues?.get(1)?.toLongOrNull()
+        require(base==state.generation) { "conflict" }
         require(state.records.count {it.kind=="time"}<8) { "limit" }
-        val r=Record("local:${token()}",kind,enabled=enabled,minuteOfDay=minute,days=days,message=message,
+        val r=Record(id,kind,enabled=enabled,minuteOfDay=minute,days=days,message=message,
             intervalMinutes=interval,after=wall(),mutation=mutation)
-        validate(r); persist(state.copy(records=state.records+r)); return r
+        validate(r); persist(state.copy(records=state.records+r,generation=state.generation+1)); return r
     }
     fun edit(id: String, revision: Long, kind: String, enabled: Boolean, minute: Int?, days: Int?, message: String?, interval: Int?, mutation: String): Record {
         key(mutation); val old=record(id)
@@ -112,7 +139,7 @@ class Reminders(private val store: Store, private val wall: () -> Long,
         require(old.revision==revision) { "conflict" }; require(old.kind==kind)
         val r=old.copy(revision=revision+1,enabled=enabled,minuteOfDay=minute,days=days,message=message,
             intervalMinutes=interval,after=wall(),snooze=null,mutation=mutation,response=null)
-        validate(r); persist(state.copy(records=state.records.map {if(it.id==id) r else it})); changed(id); return r
+        validate(r); persist(state.copy(records=state.records.map {if(it.id==id) r else it},generation=state.generation+1)); changed(id); return r
     }
     fun setEnabled(id: String, revision: Long, enabled: Boolean, mutation: String): Record {
         val r=record(id)
@@ -122,12 +149,15 @@ class Reminders(private val store: Store, private val wall: () -> Long,
         key(mutation)
         if(state.deletedId==id && state.deletion==mutation) return
         val r=record(id); require(r.kind=="time" && r.revision==revision)
-        persist(state.copy(records=state.records.filter {it.id!=id},deletedId=id,deletion=mutation)); changed(id)
+        persist(state.copy(records=state.records.filter {it.id!=id},deletedId=id,deletion=mutation,generation=state.generation+1)); changed(id)
     }
     /** Lifecycle transitions arrive before resumed input, so an input cannot hide a break.
      * Tick runs even without input, but never repaints and never persists. */
     fun activity(next: Runtime) {
-        val now=elapsed(); require(next.lastInput<=now && now>=previousAt)
+        val now=next.at ?: elapsed()
+        require(next.lastInput<=now)
+        if(runtime==null) previousAt=now
+        if(now<previousAt) return // an older captured lifecycle publication cannot rewind time
         val old=runtime
         val oldActive=old!=null && old.visible && !old.sleeping && old.page && !old.modal && !old.presenting && grant==null
         // Gap starts at the idle boundary, or when a lifecycle pause began. Active reading
@@ -137,14 +167,18 @@ class Reminders(private val store: Store, private val wall: () -> Long,
             if(now>=idleBoundary) { resetInterval(); gapAt=idleBoundary }
             else activeMs+=(now-previousAt)
         } else if(gapAt==null) gapAt=previousAt
+        // Inactivity is one gap across lifecycle boundaries. A short pause must
+        // not hide the preceding idle page time when the resume key is fresh.
+        if(old!=null && now-old.lastInput>=BREAK) resetInterval()
         if(gapAt?.let {now-it>=BREAK}==true) resetInterval()
         if(grant!=null && (old?.owner!=next.owner || !next.visible || next.sleeping || next.modal ||
             grant!!.due.kind=="interval" && !next.page)) { grant=null; resetInterval() }
         if(old!=null && old.owner!=next.owner) { grant=null; intervalDue=null }
         runtime=next; previousAt=now
+        grant?.takeIf {!next.presenting && !drawable(it)}?.let(::retire)
         val active=next.visible && !next.sleeping && next.page && !next.modal && !next.presenting && grant==null && now-next.lastInput<BREAK
         if(active) gapAt=null else if(gapAt==null) gapAt=now
-        if(!active && intervalDue!=null) resetInterval()
+        if(!active && (intervalDue!=null || record(INTERVAL).let {it.enabled && activeMs>=it.intervalMinutes!!*MINUTE})) resetInterval()
         if(waitForInput!=null && next.lastInput>waitForInput!!) waitForInput=null
         val interval=record(INTERVAL)
         if(active && interval.enabled && intervalDue==null && activeMs>=interval.intervalMinutes!!*MINUTE) {
@@ -167,11 +201,12 @@ class Reminders(private val store: Store, private val wall: () -> Long,
             val live=snoozeElapsed[r.id]?.takeIf {it.first==s.sequence}
             val late=if(live==null) now-s.due else elapsed()-live.second
             if(late in 0..WINDOW) options+=Due("${r.id}:${s.original}:s${s.sequence}",r.id,r.revision,"time",s.original,
-                if(live==null) s.due else now-late,if(live==null) s.due+WINDOW else now-late+WINDOW,s.sequence,missed=late>=MINUTE)
+                if(live==null) s.due else now-late,if(live==null) s.due+WINDOW else now-late+WINDOW,s.sequence,missed=late>=MINUTE,elapsedExpiry=live?.second?.plus(WINDOW))
         }
         return options.minWithOrNull(compareBy<Due> {it.due}.thenBy {it.event})
     }
     fun candidates(): List<Due> {
+        if(storageUnknown) return emptyList()
         val rt=runtime ?: return emptyList()
         if(!rt.visible || rt.sleeping || grant!=null) return emptyList()
         val times=if(rt.knownClock) state.records.filter {it.kind=="time"}.mapNotNull {timeCandidate(it,wall())}
@@ -190,31 +225,42 @@ class Reminders(private val store: Store, private val wall: () -> Long,
                 snooze=if(due.sequence>0) null else r.snooze)
             persist(state.copy(records=state.records.map {if(it.id==r.id) next else it}))
         } else intervalDue=null
-        return Grant(token(),owner,due).also {grant=it; gapAt=elapsed()}
+        return Grant(token(),owner,due,elapsed()).also {grant=it; gapAt=elapsed()}
     }
     /** Revalidate on the main-loop draw after the worker returns. Not a new draw grant. */
     fun valid(value: Grant): Boolean {
         val rt=runtime ?: return false
-        return grant==value && rt.owner==value.owner && rt.visible && !rt.sleeping && !rt.modal &&
-            (value.due.kind=="time" && rt.knownClock || value.due.kind=="interval" && rt.page && elapsed()-rt.lastInput<BREAK) &&
+        return grant==value && (rt.presenting || elapsed()-value.issuedAt<=120000) && rt.owner==value.owner && rt.visible && !rt.sleeping && !rt.modal &&
+            (value.due.kind=="time" && rt.knownClock || value.due.kind=="interval" && rt.page && (rt.presenting || elapsed()-rt.lastInput<BREAK)) &&
             record(value.due.id).let {it.enabled && it.revision==value.due.revision}
     }
-    fun drawable(value: Grant): Boolean = valid(value) && (value.due.kind=="interval" || wall()<=value.due.expiry)
+    fun drawable(value: Grant): Boolean = valid(value) && (value.due.kind=="interval" ||
+        value.due.elapsedExpiry?.let {elapsed()<=it} ?: (wall()<=value.due.expiry))
+    fun retire(value: Grant) {
+        if(grant!=value) return
+        grant=null;waitForInput=runtime?.lastInput
+        if(value.due.kind=="interval") resetInterval()
+    }
     fun respond(value: Grant, action: String, sleepAvailable: Boolean = false): Response {
-        if(!valid(value)) return Response(false)
+        if(!valid(value) || runtime?.presenting!=true && !drawable(value)) return Response(false)
         val r=record(value.due.id)
         val interval=r.kind=="interval"
         require(action in if(interval) setOf("done","turnOff") else setOf("gotIt","snooze10","sleep"))
         if(action=="sleep" && !sleepAvailable) return Response(false)
+        if(action=="sleep" && r.response==value.token) return Response(false)
         if(interval) {
             if(action=="turnOff") setEnabled(r.id,r.revision,false,value.token.take(64))
             resetInterval()
         } else {
+            val targetElapsed=elapsed()+10*MINUTE
             val s=if(action=="snooze10") Snooze(value.due.original,wall()+10*MINUTE,value.due.sequence+1) else r.snooze
             val next=r.copy(snooze=s,response=value.token)
             persist(state.copy(records=state.records.map {if(it.id==r.id) next else it}))
-            if(action=="snooze10") snoozeElapsed[r.id]=s!!.sequence to elapsed()+10*MINUTE
+            if(action=="snooze10") snoozeElapsed[r.id]=s!!.sequence to targetElapsed
         }
+        // Sleep is checkpointed before its one-use native intent. Keep the visible
+        // grant until native success, so failure still permits Got it or snooze.
+        if(action=="sleep") return Response(true,true)
         grant=null; waitForInput=runtime!!.lastInput; previousAt=elapsed(); gapAt=elapsed()
         return Response(true,action=="sleep")
     }
@@ -229,8 +275,9 @@ class Reminders(private val store: Store, private val wall: () -> Long,
                 "detail" to LuaValue.str(if(r.kind=="interval") "Every ${r.intervalMinutes} minutes of reading" else days!!))
     }
     fun snapshot(twelveHour: Boolean, locale: Locale = Locale.getDefault()): Map<String,Any?> {
+        check(storageReady())
         val rows=state.records.map {presentation(it,twelveHour,locale)}
-        val result=mapOf("items" to rows,"clockStatus" to if(runtime?.knownClock!=false) "known" else "unknown", "timeLimit" to 8,"timeCount" to state.records.count {it.kind=="time"},"state" to "ready")
+        val result=mapOf("revision" to state.generation,"items" to rows,"clockStatus" to if(runtime?.knownClock!=false) "known" else "unknown", "timeLimit" to 8,"timeCount" to state.records.count {it.kind=="time"},"state" to "ready")
         check(LuaValue.encode(result).size<=8192)
         return result
     }

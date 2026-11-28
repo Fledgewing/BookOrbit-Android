@@ -1,4 +1,4 @@
-# Bedtime and eye-rest reminders — BookSync 0.12
+# Bedtime and eye-rest reminders — BookSync 0.12.1
 
 **APPROVED (2026-11-27) — design and every mockup.** Maintainer approval at
 approximately 21:40 PT ("All approved") covers bedtime and Rest your eyes,
@@ -7,7 +7,11 @@ is authorized in the firmware R1 slices and the parallel Android slice. It ships
 (KOReader plugin + required companion), X4 Pro, X4 Classic and X3 after design,
 simulator, size and device acceptance. No code or shipped-feature claim is added.
 
-[Static gallery](reminders-mockups.html) · [0.12 roadmap](../../ROADMAP.md)
+**Release scope:** the maintainer deferred bedtime and Rest your eyes to **0.12.1**.
+The inert policy classes in #242 remain on 0.12; all delivery and UI implementation
+targets `feature/0.12.1`.
+
+[Static gallery](reminders-mockups.html) · [0.12.1 roadmap](../../ROADMAP.md)
 
 ## Outcome and settled decisions
 
@@ -30,11 +34,11 @@ characters and 240 UTF-8 bytes; reject controls and newlines, never interpret ma
 The first source is local to the device. A future source may supply reminders
 through the same capability; the UI never chooses a storage path or server.
 Family controls, provisioning, authentication, remote editing and enforcement are
-**not built in 0.12**. No local PIN is introduced. The local Reminders route must
+**not built in 0.12.1**. No local PIN is introduced. The local Reminders route must
 remain reachable without unlocking unrelated Kids/PIN or protected settings.
 
 A second kind, **Rest your eyes** (`kind=interval`), ships alongside bedtime
-reminders in 0.12 on all four platforms. It is one device-local setting, **Off**
+reminders in 0.12.1 on all four platforms. It is one device-local setting, **Off**
 by default, with an interval of **20, 30, 45 or 60 minutes** (default **20**,
 following the maintainer's 20-20-20 rule choice). It does not use one of the eight
 bedtime slots. There is no custom eye-rest message, day picker, snooze, Sleep or
@@ -108,7 +112,7 @@ No per-page IPC, file writes, directory scans or server calls are introduced.
 ### Future-source seam
 
 Providers register inside Library, declare source identity/capabilities and
-publish bounded neutral records/events. Only local registers in 0.12. A later
+publish bounded neutral records/events. Only local registers in 0.12.1. A later
 family adapter owns credentials, policy, protected updates, revocation and source
 revision handling. A source string is a label, **not proof of authority**. No UI,
 import file or unauthenticated remote message may create family authority.
@@ -123,8 +127,8 @@ action against the existing read-only source rule without creating a local overr
 change needs a separate approved design. Aggregate limit remains eight time reminders and one interval setting, across
 sources; future admission must reject excess explicitly, never evict existing
 local reminders. Provider priority/conflict/provisioning design is deferred.
-The gallery labels this example **Future: not built in 0.12**; no family row or
-family settings appears on an actual 0.12 installation.
+The gallery labels this example **Future: not built in 0.12.1**; no family row or
+family settings appears on an actual 0.12.1 installation.
 
 ## Reading-gate exception and bedtime presentation
 
@@ -450,7 +454,7 @@ claimed to exist in this PR.
   cannot exercise the gate exception or native sleep.
 - Source fakes: local CRUD; future non-local read-only projection; forged family
   writes/toggles/deletes fail in service; capacity overflow never evicts. No live
-  family registration/credentials/server calls in 0.12.
+  family registration/credentials/server calls in 0.12.1.
 - Gate guards on both Android sides and F12: only valid reminder claims permit a
   reminder draw while reading. All existing update/restart/network/news negatives
   remain. Book/position/other-modal transitions revalidate before draw; hidden

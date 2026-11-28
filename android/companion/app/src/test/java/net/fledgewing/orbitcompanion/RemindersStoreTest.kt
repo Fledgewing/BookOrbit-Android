@@ -32,7 +32,7 @@ class RemindersStoreTest {
     }
     @Test fun unknownVersionAndMalformedFieldsRejected() {
         val raw=RemindersStore.encode(Reminders.State()).toString(Charsets.UTF_8)
-        for(bad in listOf(raw.replace("\"version\":1","\"version\":2"),raw.replace("\"interval\":20","\"interval\":21"),raw.replace("local:eye-rest","family:eye-rest"),"{}")) {
+        for(bad in listOf(raw.replace("\"version\":1","\"version\":2"),raw.replace("\"interval\":20","\"interval\":21"),raw.replace("\"interval\":20","\"interval\":20.5"),raw.replace("\"enabled\":false","\"enabled\":\"false\""),raw.replace("local:eye-rest","family:eye-rest"),raw.replace("\"kind\":\"interval\"","\"kind\":\"interval\",\"source\":\"family\""),"{}")) {
             try {RemindersStore.decode(bad.toByteArray());fail(bad)} catch(_:Exception) {}
         }
     }

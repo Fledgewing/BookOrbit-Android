@@ -10,6 +10,10 @@ end
 function PositionPrompt.present(result,ui)
     if not result or result.stale or not (ui and ui.document) or liveUI()~=ui then return end
     if result.applied~="ask" then return end
+    local document=ui.document
+    if Library.reminders and Library.reminders.deferPosition(function()
+        if ui.document==document then PositionPrompt.present(result,ui) end
+    end) then return end
     local remote=result.remote or {}
     if PositionPrompt.current and PositionPrompt.current.token==result.token then return end
     PositionPrompt.close()
