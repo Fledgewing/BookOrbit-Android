@@ -99,11 +99,13 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     local hero=p.widget == "continue-reading" and ready
     local heading
     local title=type((p.settings or {}).title) == "string" and p.settings.title or (p.widget == "continue-reading" and "Continue reading" or p.widget == "lists" and "Lists" or "Shelf")
+    if snapshot.context and snapshot.context.title then title=snapshot.context.title end
     if compact then
         -- One horizontal band keeps both actions large in a one-row tile.
         HomeWidgets.button(canvas,_(title).." ›",pad,math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch("all") end)
     elseif hero or p.widget == "lists" then heading=HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad-(hero and scale(50) or 0),18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
+    if not compact and snapshot.context and snapshot.context.coverage then HomeWidgets.text(canvas,snapshot.context.coverage,pad,pad+scale(40),w-2*pad,10) end
     if not ready then
         local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or p.widget == "lists" and "No lists yet" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
         if not compact then HomeWidgets.text(canvas,_(snapshot.setup and "Sign in to load your library" or labels[snapshot.state] or "Unavailable"),pad,pad+scale(58),w-2*pad,16) end

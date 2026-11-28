@@ -24,6 +24,13 @@ return function(test,eq,ok,E,W,Widget,withHost)
             return {items=rows,total=a.category=="builtin" and 6 or 13,next=a.category~="builtin" and a.offset<12 and a.offset+6 or nil,freshness={saved=true}},900
         end
     end
+    test("Book list year: native request and immutable context retain saved-selection semantics",function()
+        local cfg=E.BookList.choose(E.BookList.preset('year'),{src='year:2025',title='Finished in 2025',default_sort=0})
+        local need=E.HomeHostPlan.need({widget='booklist',settings=cfg})
+        eq(need.source.kind,'finished-year');eq(need.source.key,'2025');eq(need.query.sort,nil)
+        local snap=E.HomeHostPlan.snapshot({items={{title='Saved'}},total=1,context={title='2025 · 100 total',coverage='Saved selection'},freshness={saved=true}})
+        eq(snap.context.title,'2025 · 100 total');eq(pcall(function() snap.context.title='bad' end),false)
+    end)
     test("Book list editor: every source, paged counted windows and filter return",function()
         withHost(function(batches,reads)
             sources(reads)

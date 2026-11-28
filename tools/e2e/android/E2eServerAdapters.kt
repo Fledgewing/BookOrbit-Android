@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import java.io.File
 import net.fledgewing.orbitcompanion.server.bookorbit.CatalogTransfers
+import net.fledgewing.orbitcompanion.server.bookorbit.RetainedFixture
 import net.fledgewing.orbitcompanion.server.bookorbit.SeriesTransfers
 
 /** Compiled only in the disposable emulator build. Never added to app source sets. */
@@ -44,7 +45,14 @@ object ServerAdapters {
         }
         override fun signOut() { prefs.edit().putBoolean("signedIn", false).commit() }
         override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
-            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("series" to mapOf("read" to true,"downloadNext" to true),"download" to true,"lists" to mapOf("read" to true,"save" to false))
+            if(RetainedFixture.handles(request)) return RetainedFixture.project(root,owner,request)
+            if(request["op"]=="sources" && (request["category"] ?: "builtin")=="builtin") {
+                val options=(books.project(DeviceLibrary.OWNER,mapOf("op" to "sources","category" to "builtin","limit" to 6))["items"] as List<*>).filterNotNull()+RetainedFixture.options(root,owner)
+                val offset=(request["offset"] as? Number)?.toInt() ?: 0;val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
+                val rows=options.drop(offset).take(limit)
+                return mapOf("items" to rows,"total" to options.size,"next" to (offset+rows.size).takeIf { it<options.size },"freshness" to mapOf("saved" to true))
+            }
+            if(request["op"]=="capabilities") return books.capabilities(DeviceLibrary.OWNER)+mapOf("retainedFinishedYears" to true,"series" to mapOf("read" to true,"downloadNext" to true),"download" to true,"lists" to mapOf("read" to true,"save" to false))
             if(request["op"]=="lists") return mapOf("items" to listOf(mapOf("key" to "fixture-list","title" to "Fixture shelf","count" to 59)),"freshness" to mapOf("saved" to true))
             return books.project(DeviceLibrary.OWNER, request)
         }
@@ -85,7 +93,7 @@ object ServerAdapters {
             } catch(e:ServerFailure) { done(null,e.kind) }
         }
         override fun captureLifecycle(capture: Map<*, *>): Pair<String, ByteArray> =
-            "fixture-document" to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))
+            ("fixture-document-" + java.security.MessageDigest.getInstance("SHA-256").digest((capture["path"] as? String ?: "fixture").toByteArray()).joinToString("") { "%02x".format(it) }) to LuaValue.encode(mapOf("percentage" to capture["percentage"], "position" to capture["position"], "capturedAt" to System.currentTimeMillis()/1000))
         override fun position(document: String, update: Map<String, Any?>?): Map<String, Any?> {
             val file=File(requireNotNull(context).filesDir,"e2e-position.lua")
             if(update!=null) {

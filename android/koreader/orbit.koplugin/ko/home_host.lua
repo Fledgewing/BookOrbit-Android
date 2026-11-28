@@ -520,7 +520,7 @@ function HomeHost.create()
         if self.filter then self.filter:close(false); self.filter=nil end
         if self.unsubscribe then self.unsubscribe(); self.unsubscribe=nil end
         if self.redraw then UIManager:unschedule(self.redraw); self.redraw=nil end
-        if HomeHost.active == self then HomeHost.active=nil end
+        if HomeHost.active == self then HomeHost.active=nil;Library.homeVisibilityChanged(false) end
     end
     return Host:new{}
 end
@@ -540,6 +540,7 @@ function HomeHost.show()
     if not ok then error(host) end
     HomeHost.active=host
     UIManager:show(host) -- gate: user action (Home command or menu)
+    Library.homeVisibilityChanged(true)
     if Library.settings.read("news_012_pending") then HomeHost.whatsNew() end
     return true
 end

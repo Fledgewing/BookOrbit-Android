@@ -273,7 +273,7 @@ function Library:read(op, args)
     args.op = op
     -- A ready pre-upgrade view has no root counts/extended source vocabulary.
     -- A new cache identity materializes the changed neutral shape immediately.
-    if op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=3 end
+    if op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=4 end
     local remainingRows=math.min(self.budget.rows-self.usage.rows,self.screen_budget.rows-self.metrics.rows)
     local remainingBytes=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
     assert(remainingRows>=1 and remainingBytes>=1,"Library caller budget exhausted")

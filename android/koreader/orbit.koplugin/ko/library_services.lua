@@ -1,5 +1,11 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Deliberate UI-facing services. Backends retain their existing behavior and ownership.
+-- Immediate foreground handoff; the five-minute measurement timer is not a UI gate.
+function Library.homeVisibilityChanged(visible)
+    local ui=liveUI()
+    return Companion.send(Companion.ACTION.STATS,{reason=visible and "home" or "home-close",
+        visibility_only="1",open=ui and ui.document and "1" or "0",reading=reading() and "1" or "0"})
+end
 Library.settings={}
 function Library.settings.read(key)
     -- Borrowed immutable values preserve layout array metadata; edits use complete settings intents.

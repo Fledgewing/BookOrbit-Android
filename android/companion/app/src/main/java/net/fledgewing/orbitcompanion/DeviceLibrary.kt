@@ -54,12 +54,13 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val fresh=mapOf("saved" to true,"origin" to "local-device")
         fun rows(items: List<*>) = mapOf("items" to items,"freshness" to fresh)
         val op=request["op"]
-        if(op=="capabilities") return mapOf("onDevice" to true,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,
+        if((request["source"] as? Map<*,*>)?.get("kind")=="finished-year") return unsupported()
+        if(op=="capabilities") return mapOf("onDevice" to true,"retainedFinishedYears" to false,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,
             "lists" to mapOf("read" to false,"save" to false),"wantToRead" to false,"progress" to mapOf("read" to true,"write" to false),
             "status" to mapOf("read" to true,"write" to false))
         if(op in setOf("lists","collections")) return rows(emptyList<Any>())
         if(op=="sources") {
-            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","Finished",books.count { it["status"]=="finished" }),Triple("pickup","Pick back up",(books.count { it["status"] in setOf("reading","rereading") }-1).coerceAtLeast(0)))
+            val definitions=listOf(Triple("device","On this device",books.size),Triple("reading","Reading now",books.count { it["status"]=="reading" }),Triple("finished","All finished",books.count { it["status"]=="finished" }),Triple("pickup","Pick back up",(books.count { it["status"] in setOf("reading","rereading") }-1).coerceAtLeast(0)))
             val offset=((request["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
             val limit=((request["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
             val category=request["category"] as? String ?: "builtin"

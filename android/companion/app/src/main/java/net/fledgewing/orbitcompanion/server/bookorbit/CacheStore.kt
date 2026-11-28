@@ -38,6 +38,7 @@ class CacheStore(override val root: File, private val log: (String) -> Unit = { 
         sql = s
         BulkCatalog.initialize(s)
         LibraryReadModel.initialize(s)
+        FinishedYears.initialize(s)
         s
     }
 
@@ -59,7 +60,7 @@ class CacheStore(override val root: File, private val log: (String) -> Unit = { 
 
     /** Another account or server: everything goes (the cache, the run's jobs and the pickers' tables). */
     fun wipe(why: String) {
-        transaction { (TABLES + BulkCatalog.tables + "library_views").forEach { db().exec("DELETE FROM $it") } }
+        transaction { (TABLES + BulkCatalog.tables + listOf("library_views",FinishedYears.TABLE,FinishedYears.ACKS)).forEach { db().exec("DELETE FROM $it") } }
         log("store: cleared ($why)")
     }
 
@@ -102,6 +103,10 @@ class CacheStore(override val root: File, private val log: (String) -> Unit = { 
     }
 
     fun putEntry(key: String, path: String, body: Any?, at: Long, home: Boolean = MirrorLogic.isHome(path)) {
+        if(path=="/koreader/plugin/catalog/dashboard") {
+            db().query("SELECT body,fetched_at FROM entries WHERE key=?",u(key)) { it.bytes(0) to it.long(1) }.firstOrNull()?.let { (old,saved) -> if(old!=null) FinishedYears.capture(this,path,LuaValue.parse(old),saved ?: at) }
+            FinishedYears.capture(this,path,body,at)
+        }
         val bytes = LuaValue.encode(body)
         db().exec("INSERT OR REPLACE INTO entries (key, path, body, fetched_at, validated_at, home, stale, bytes) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
             u(key), u(path), bytes, at, at, if (home) 1L else null, bytes.size.toLong())

@@ -259,6 +259,8 @@ class StatsRecorder(private val ctx: Context, private val prefs: Prefs) {
 
     /** A STATS batch from the patch: counts for the time before it, and the book now open (or none). */
     fun onStats(i: Intent) {
+        // Reading.onStats already consumed this lifecycle-only gate update.
+        if(i.getStringExtra("visibility_only")=="1") return
         fun n(k: String) = i.getStringExtra(k)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val c = i.getStringExtra("content")?.takeIf { it in setOf("text", "comic", "webtoon", "pdf") }
         content = if (i.getStringExtra("open") == "1") c else null

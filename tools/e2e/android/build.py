@@ -29,6 +29,8 @@ def build(out: Path):
     composition=sources / "ServerAdapters.kt"
     composition.write_text(composition.read_text().replace("object ServerAdapters {", "object ShippingServerAdapters {",1))
     shutil.copyfile(Path(__file__).with_name("E2eServerAdapters.kt"),sources / "E2eServerAdapters.kt")
+    fixture=Path(__file__).parent/"server/bookorbit/RetainedFixture.kt"
+    if fixture.is_file(): shutil.copyfile(fixture,sources/"server/bookorbit/RetainedFixture.kt")
     subprocess.run(["./gradlew", "assembleDebug"],cwd=destination,check=True)
     return destination / "app/build/outputs/apk/debug/app-debug.apk"
 
