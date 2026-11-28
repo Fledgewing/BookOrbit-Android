@@ -367,3 +367,14 @@ and document each firmware difference, including X3 text layouts.
 All additions are **NEEDS APPROVAL**. Existing Home revision-16 and B1–B5
 approvals remain unchanged; placeholder cards do not approve new widget content.
 No firmware implementation or pin update is included.
+
+## F36b detail additions — NEEDS APPROVAL
+
+The [detail/actions inventory](F36b-DETAIL.md) and
+[three-profile gallery](f36b-detail.html) propose missing X3 detail and
+three-profile offline, download/cancel/error, status/Undo, removal and Back
+states. All additions are **NEEDS APPROVAL**. Existing revision-16 X4 detail
+approval remains unchanged. Firmware F36b presentation stays off pending these
+approvals and the public Library detail/F20/removal contracts. F36a/F36c and
+F20 recovery proposals remain separate. No firmware pin or shipped feature cell
+changes are included.
