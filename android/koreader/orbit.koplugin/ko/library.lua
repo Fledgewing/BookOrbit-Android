@@ -274,7 +274,7 @@ function Library:read(op, args)
     -- A ready pre-upgrade view has no root counts/extended source vocabulary.
     -- A new cache identity materializes the changed neutral shape immediately.
     if (op=="window" or op=="counts" or op=="facets" or op=="groups") and args.source=="unopened" then local ui=liveUI();args.exclude_path=ui and ui.document and ui.document.file end
-    if op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=6 end
+    if op=="reader" or op=="reader.controls" then args.projection=2 elseif op=="library.summary" then args.projection=2 elseif op=="sources" then args.projection=6 end
     local remainingRows=math.min(self.budget.rows-self.usage.rows,self.screen_budget.rows-self.metrics.rows)
     local remainingBytes=math.min(self.budget.bytes-self.usage.bytes,self.screen_budget.bytes-self.metrics.bytes)
     assert(remainingRows>=1 and remainingBytes>=1,"Library caller budget exhausted")

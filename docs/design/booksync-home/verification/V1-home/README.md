@@ -51,8 +51,8 @@ Native cover specimen without a local file; the default fixture is fully on devi
 - Native `ui_kit.py`: 15 component renders plus bold Search / muted regular count.
 - Native `home.py`: default spans, ready views/covers, zero-query editor/picker,
   real move and next-fitting-size callbacks, saved layout persistence.
-- Lua flows: 320 passed, 0 failed.
-- Lua logic: 270 passed, 0 failed, plus 13 focused presentation assertions.
+- Lua flows: 325 passed, 0 failed.
+- Lua logic: 275 passed, 0 failed, plus 13 focused presentation assertions.
 - KOReader source-symbol compatibility passed at pinned `9192014` (the optional
   koreader-base FFI static check was skipped); native FFI rendering ran on Android.
 - Feature-matrix checks: 4 passed.

@@ -11,7 +11,7 @@ class DeviceLibrary(
     private val cache: File? = null,
     private val clock: () -> Long = { System.currentTimeMillis()/1000 },
     private val bookStats: (Map<*, *>) -> Map<String, Any?> = { entry ->
-        cache?.let { ReaderBookStats.read(it, entry) } ?: mapOf("available" to false)
+        cache?.let { ReaderBookStats.read(it, entry, now=clock()) } ?: mapOf("available" to false)
     },
 ) : ServerAdapter {
     override val id = "device"
@@ -33,7 +33,7 @@ class DeviceLibrary(
     }
     private val firstSeen by lazy { DeviceLibraryIndex(cache?.let { File(it,"device-library.properties") },clock) }
     private val covers by lazy { cache?.let { LocalBookCovers(File(it,"local-covers")) } }
-    private val books by lazy { files(roots).map { book(it) }.toList().also { firstSeen.flush() } }
+    private val books by lazy { files(roots).map { book(it) }.toList().also { firstSeen.rememberSeries(it);firstSeen.flush() } }
     private fun sidecar(file: File) = File(file.parentFile,"${file.nameWithoutExtension}.sdr")
     private fun book(file: File, background: Boolean = true): Map<String,Any?> {
         if(background) BulkWork.checkpoint()
@@ -129,7 +129,7 @@ class DeviceLibrary(
                 "progress","status" -> row + mapOf("freshness" to fresh)
                 "reader" -> {
                     val current=(request["native_progress"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
-                    val enriched=row+mapOf("stats" to bookStats(mapOf("md5" to row["md5"],"path" to row["local_path"])))
+                    val enriched=row+mapOf("series_total" to firstSeen.seriesCount(row["series_key"] as? String),"stats" to bookStats(mapOf("md5" to row["md5"],"path" to row["local_path"])))
                     rows(listOf(if(current==null) enriched else enriched+mapOf("progress" to current*100,"progress_origin" to "local-reader")))
                 }
                 else -> rows(listOf(row+mapOf("stats" to bookStats(mapOf("md5" to row["md5"],"path" to row["local_path"])))))
