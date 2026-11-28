@@ -121,3 +121,10 @@ Contents, annotations, page/percent and search. It includes landscape and a gene
 twenty-chapter/8,000-paragraph EPUB outside the fixed 59-book fixture library,
 asynchronous search and cancellation. Native annotations are toggled back to their
 prior bookmark state. Menu enablement and rotation are restored.
+
+Local completion and yearly goal: `python3 tools/e2e/android/local_completion.py
+--serial emulator-N --out <evidence>` exercises the real numeric input and
+bottom-docked touch keyboard, save/reopen/Off, native explicit finish/Undo/re-finish,
+restart replay and offline local labels. `local_completion_upgrade.py` accepts the
+same legacy/current build arguments as `upgrade.py` and checks additive proven
+0.11 import without changing the borrowed sidecar or legacy queue.

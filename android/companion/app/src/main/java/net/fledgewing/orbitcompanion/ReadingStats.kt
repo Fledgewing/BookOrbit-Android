@@ -135,6 +135,15 @@ object ReadingStats {
                 "books_this_year" to null, "target" to null, "completion_available" to false))
     }
 
+    fun withLocalCompletion(local: Map<String, Any?>, completion: Map<String, Any?>): Map<String, Any?> {
+        if (completion["books_this_year"] == null) return local
+        val records = (local["records"] as? Map<*, *>).orEmpty().entries.associate { it.key.toString() to it.value }
+        val goal = (local["goal"] as? Map<*, *>).orEmpty().entries.associate { it.key.toString() to it.value }
+        return local + mapOf("state" to "ready", "freshness" to mapOf("saved" to true,"origin" to "local-reader"), "local_goal" to completion,
+            "records" to (records + ("books_this_year" to completion["books_this_year"])),
+            "goal" to (goal + completion.filterKeys { it in setOf("year", "target", "books_this_year", "completion_available") }))
+    }
+
     /** Per-field precedence; never infer overlap from fetch time or max(local, server). */
     fun combine(local: Map<String, Any?>, remote: RemoteReadingStats?, now: Long,
                 zone: ZoneId = ZoneId.systemDefault(), enabled: Set<String> = setOf("days", "streak", "goal", "finished")): Map<String, Any?> {
@@ -181,6 +190,15 @@ object ReadingStats {
             if (sources.values.any { it == "all your devices" }) {
                 out["state"] = "ready"
                 out["freshness"] = mapOf("saved" to true, "origin" to "cached-remote", "at" to remote.at)
+            }
+        }
+        // Goals and completion counts form a source pair. A partial account pair stays
+        // partial; its missing half must never borrow from the device-local pair.
+        if (local["local_goal"] != null && (sources["goal"] == "all your devices" || sources["finished"] == "all your devices")) {
+            if (sources["goal"] != "all your devices") goal["target"] = null
+            if (sources["finished"] != "all your devices") {
+                goal["books_this_year"] = null
+                goal["completion_available"] = false
             }
         }
         // Server-only accounts still get bounded, explicitly absent local fields.

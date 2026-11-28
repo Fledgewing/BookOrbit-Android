@@ -188,3 +188,46 @@ restart, additive 0.11 import, invalid dates, local midnight/year/DST, target ra
 off/new-year carryover state, source pairing and unknown overlap. Emulator flows set/reopen/
 disable a goal, finish/Undo/reopen, check labels offline and preserve existing
 0.11 state on upgrade. No real reader or publication is part of this follow-up.
+
+### Android implementation and review evidence
+
+The approved local slice uses `LocalCompletion.kt` behind Library. Its additive
+`booksync-local-reading.sqlite3` survives account cache wipes and retains yearly
+Off/target history. A covering date index counts only active document completions;
+10,001-record regression coverage keeps the published summary below 16 KiB.
+The companion reads the legacy queue once per source revision and imports only a
+matching digest, native `complete` summary, strict nonfuture date, and finish-job
+creation date on the same local calendar day. Queue and sidecars remain untouched.
+Missing provenance stays unknown. Later imports cannot replace native intent or Undo.
+
+Native intent stores a wall-clock timestamp, stable token and ordered revision in
+already-loaded reader settings, then checkpoints through Library even while reading.
+The monotonic KOReader timing clock is used only for spans, never calendar dates.
+Replay is idempotent; newer Undo/re-finish wins. Automatic end-sheet marking does
+not produce a new local completion. Explicit card marks of downloaded books use
+the existing workflow's durable token and phase checkpoint; card Undo restores the
+prior local date, including unknown. Remote catalog refreshes never create events.
+
+At pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`frontend/apps/reader/modules/readerstatus.lua:212-218` implements native mark-book
+status and summary dates. `frontend/ui/widget/inputdialog.lua:465-472` reserves the
+keyboard height below the dialog; the numeric input uses that existing widget.
+The touch keyboard remains docked at the bottom. Reader and companion Settings
+show the local pair only; partial account goal/count snapshots never borrow the
+missing half from this pair. Account writes and overlap rules are unchanged.
+
+The named `settings-reading-statistics` budget is one materialized row, 16 KiB,
+three display rows and one batch, with zero render network or subprocess work.
+An explicit reader-opened statistics menu may read that bounded local snapshot
+while reading; completion callbacks never open a screen. Numeric validation and
+all ledger IO remain in the companion. Emulator checks live in
+`tools/e2e/android/local_completion.py` and `local_completion_upgrade.py`; host
+coverage includes calendar/year/DST, invalid target/date, provenance, replay,
+reordering, card Undo, source pairing, Settings lock behavior and large history.
+Emulator evidence is separate from physical device acceptance.
+
+Native emulator evidence (Android 14, synthetic library): 10 completion/goal
+checks and 4 upgrade checks pass. See the [bottom-docked numeric keyboard](evidence/local-completion/number-keyboard-bottom.png),
+[offline local pair](evidence/local-completion/offline-local-summary.png), and
+[proven 0.11 upgrade count](evidence/local-completion/upgrade-local-count.png).
+The upgrade checks compare the source queue and sidecar byte-for-byte.

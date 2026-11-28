@@ -5270,8 +5270,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "0.12 account-first days, hours, weekly sessions, finished counts and goals; cached connector fallback with per-field provenance, integrated into Home with one shared snapshot per paint",
-          "reason": "deliberately deferred: Android build authorised 2026-11-25; device acceptance and local finish/goal settings remain pending. No server inclusion watermark: local today stays separate.",
+          "note": "0.12 account-first days, hours, weekly sessions, finished counts and goals; cached connector fallback with per-field provenance, integrated into Home with one shared snapshot per paint; approved device-local completion ledger and 1–999 yearly goal in reader and companion Settings, same-target yearly carryover, Off stays Off, separate local/account pairs",
+          "reason": "deliberately deferred: Android implementation authorised 2026-11-27; physical acceptance and release pending. No server inclusion watermark: local today stays separate.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5290,8 +5290,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred; local completion ledger and yearly goal settings follow the firmware slice",
+          "reason": "deliberately deferred: maintainer approved Android first on 2026-11-27; firmware follows later.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5302,8 +5302,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred; local completion ledger and yearly goal settings follow the firmware slice",
+          "reason": "deliberately deferred: maintainer approved Android first on 2026-11-27; firmware follows later.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5314,8 +5314,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "note": "Home-integrated account-first Stats follow Android; firmware implementation deferred; local completion ledger and yearly goal settings follow the firmware slice",
+          "reason": "deliberately deferred: maintainer approved Android first on 2026-11-27; firmware follows later; X3 also requires measured flash fit.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5325,7 +5325,7 @@
           "version": null
         }
       },
-      "deferred": "Device acceptance, local finish ledger and goal settings; firmware renderers."
+      "deferred": "Physical acceptance and firmware renderers, completion ledger and yearly goal settings."
     },
     {
       "id": "filter-sheet",

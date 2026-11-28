@@ -1181,6 +1181,7 @@ dofile(here .. "/test_delivery.lua")(test, eq, ok, here, M.Cache)
 dofile(here .. "/test_storage.lua")(test, eq, ok, here)
 dofile(here .. "/test_battery.lua")(test, eq, ok, here)
 
+dofile(here .. "/test_local_completion.lua")(test, eq, ok, here, M.Cache)
 dofile(here .. "/test_reading_stats.lua")(test, eq, ok, here, M.Cache)
 
 dofile(here .. "/test_reading_style.lua")(test, eq, ok, here, M)

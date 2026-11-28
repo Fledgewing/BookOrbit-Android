@@ -29,7 +29,7 @@ function LibraryAdapter.read(request,op,maxBytes,screen)
     end
     -- Explicit reader surfaces may read one bounded local snapshot while the book
     -- stays foreground. Background reads retain Store's memo-only reading rule.
-    local user_surface=screen=="reader-top-panel" or screen=="reader-bottom-panel" or screen=="book-info" or screen=="details" or screen=="end-of-book"
+    local user_surface=screen=="reader-top-panel" or screen=="reader-bottom-panel" or screen=="book-info" or screen=="details" or screen=="end-of-book" or screen=="settings-reading-statistics"
     local result, bytes = Store.library(owner, request, maxBytes, user_surface)
     local decodedBytes=bytes or 0
     if type(result)~="table" then result=nil end
@@ -399,6 +399,8 @@ function Library.subscribe(callback)
     end
 end
 function Library.changed(event)
+    local settings=SettingsView and SettingsView.active
+    if settings and settings.alive and settings.screen=="settings-reading-statistics" and UIManager:getTopmostVisibleWidget()==settings.dialog then settings:paint() end
     if FinishUI and FinishUI.sheet and event.kind=="library" then
         local sheet=FinishUI.sheet;FinishUI.refreshSheet(sheet.ui,sheet.book)
     end
@@ -1062,4 +1064,35 @@ Library.compatEvent=function(ev)
             UIManager:show(InfoMessage:new{text="Downloaded: "..tostring(ev.title or "Book"),timeout=3}) -- gate: Gate.show
         end) end
     end
+end
+
+-- Persist native intent before dispatch; retries after restart carry the same revision.
+function Library.localCompletion(ui, automatic)
+    if automatic then return end
+    local b=Library.nativeReader(ui); if not b then return end
+    local previous=ui.doc_settings:readSetting("booksync_local_completion") or {}
+    local revision=math.max(tonumber(previous.revision) or 0,tonumber(ui.doc_settings:readSetting("booksync_local_completion_revision")) or 0,math.floor(os.time()*1000000+(now_s()%1)*1000000))+1
+    local event={document=b.digest,revision=revision,token=b.digest..":"..string.format("%.0f",revision),
+        complete=b.summary.status=="complete",at=os.time()}
+    ui.doc_settings:saveSetting("booksync_local_completion",event)
+    Library.sendLocalCompletion(event,ui.doc_settings)
+end
+function Library.sendLocalCompletion(event,settings)
+    return deviceCommand("reading.local.event",event,function(result)
+        if settings and result.revision then settings:saveSetting("booksync_local_completion_revision",result.revision) end
+        Library.retry()
+    end)
+end
+function Library.prepareLocalCompletion(ui)
+    local b=Library.nativeReader(ui); if not b then return end
+    local event=ui.doc_settings:readSetting("booksync_local_completion")
+    if type(event)=="table" then Library.sendLocalCompletion(event,ui.doc_settings)
+    else deviceCommand("reading.local.prepare",{document=b.digest,summary=b.summary},function(result)
+        if result.revision then ui.doc_settings:saveSetting("booksync_local_completion_revision",result.revision) end
+        Library.retry()
+    end) end
+end
+function Library:localReading() return self:read("reading.local",{limit=1}) end
+function Library.localReadingGoal(target,done)
+    return deviceCommand("reading.local.goal",{target=target},function() Library.retry() end,done)
 end
