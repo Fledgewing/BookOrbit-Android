@@ -74,6 +74,12 @@ return function(here,test,eq,ok)
             eq(v.snapshot.helpers[3].permission,false);eq(v.snapshot.helpers[3].on,false)
         end
     end)
+    test("reader companion: return restores the initiating status control focus",function()
+        local e,V,m=world();local v=V.open("status")
+        v.dialog.buttons[4][1].callback();eq(e.command.action,"recovery")
+        e.OrbitAndroid:onSuspend();e.done({ok=true});V.resume()
+        eq(v.page,"status");eq(v.focus,"updates");eq(v.dialog.focus,4)
+    end)
     test("reader companion: background permission changes and unrelated resumes never show sheets",function()
         local e,V,m=world();e.snapshot.helpers[3].permission=true
         e.OrbitAndroid:onResume();m.scheduled[1]();eq(m.shown,0)

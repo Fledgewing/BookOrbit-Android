@@ -19,8 +19,8 @@ function V:close()
     if V.active==self then V.active=nil end
 end
 function V:back()
-    if self.page=="permission" then self.page="helpers";self:paint()
-    elseif self.page=="helpers" then self.page="status";self:paint()
+    if self.page=="permission" then self.page="helpers";self.focus="screen";self:paint()
+    elseif self.page=="helpers" then self.page="status";self.focus="helpers";self:paint()
     else self:close() end
 end
 function V:external(action)
@@ -69,7 +69,9 @@ function V:paint()
     local focus=1
     local function row(id,text,callback,enabled)
         if id==self.focus then focus=#buttons+1 end
-        buttons[#buttons+1]={{id=id,text=text,align="left",callback=callback or function() end,enabled=enabled~=false and not self.busy}}
+        local action=callback or function() end
+        buttons[#buttons+1]={{id=id,text=text,align="left",callback=function() self.focus=id;return action() end,
+            enabled=enabled~=false and not self.busy}}
     end
     local title=self.page=="status" and "Reader Status" or "Reader Helpers"
     if s.unavailable then title=title.."\n"..s.problem
