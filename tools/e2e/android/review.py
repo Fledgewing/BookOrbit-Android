@@ -51,9 +51,9 @@ def review(device, out):
          'assert(AccountView.active.state.signedIn);return true')
     device.command('AccountView.active:close();HomeHost.show();return true')
     step("library",'HomeHost.active:showList("All books","all",{sort="title"});return true',
-         'assert(HomeHost.active.list_result.total==59);assert(#HomeHost.active.list_result.items<=24);return true')
+         'assert(HomeHost.active.list_result.total==59);assert(HomeHost.active.list_result.items[1] and HomeHost.active.list_result.items[25]==nil);return true')
     step("filter",'HomeHost.active.filter:header(HomeHost.active.list_result.total).callback();return true')
-    close()
+    device.command('click("Close");assert(not HomeHost.active.filter.alive);return true')
     step("series",'SeriesUI.show("The Glass Orchard");return true',
          'assert(HomeHost.active.series_result.total==5);return true')
     step("storage",'StorageUI.show();return true')

@@ -59,6 +59,14 @@ class EmulatorSafetyTest(unittest.TestCase):
             reset_profile(device)
             clears=[call.args for call in device.shell.call_args_list if call.args[:2]==("pm","clear")]
             self.assertEqual([("pm","clear","net.fledgewing.orbitcompanion")] if installed else [],clears)
+    def test_upgrade_reset_preserves_and_isolates_both_fixture_directories(self):
+        device=Mock();device.shell.return_value=""
+        with patch("upgrade.time.time_ns",return_value=1234):reset_profile(device)
+        moves=[c.args for c in device.shell.call_args_list if c.args[0]=="mv"]
+        self.assertEqual([("mv","/sdcard/koreader","/sdcard/koreader-upgrade-1234"),
+                          ("mv","/sdcard/Books","/sdcard/Books-upgrade-1234")],moves)
+        self.assertFalse(any(c.args[0]=="rm" for c in device.shell.call_args_list))
+
     def test_fixture_builder_never_overwrites_the_repo_or_an_unrelated_directory(self):
         with patch("shutil.copytree") as copy:
             with self.assertRaises(ValueError): build(ROOT/"fixture")

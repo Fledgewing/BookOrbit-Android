@@ -4,7 +4,9 @@ These tools install and exercise actual KOReader widgets on an explicitly select
 Android emulator. Every adb invocation carries `-s emulator-N`, and construction
 refuses a target unless `ro.kernel.qemu=1`. The host safety tests run in Android CI.
 Use a disposable AVD: setup replaces its plugin and seeds synthetic books; the
-upgrade test archives its KOReader directory and clears the two app profiles.
+upgrade test archives its KOReader and fixture Books directories together and
+clears the two app profiles. Prior synthetic legacy EPUBs stay in those archives
+instead of changing a later fresh fixture’s 59-book catalog.
 
 Tested with Android 14 Google APIs ARM64, KOReader v2026.07.1 ARM64, a Pixel Tablet
 AVD adjusted to 1200×1600 at 240 dpi, and the four-column `android-tablet` layout.
