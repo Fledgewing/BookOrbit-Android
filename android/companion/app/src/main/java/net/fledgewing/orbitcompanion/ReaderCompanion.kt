@@ -28,12 +28,13 @@ object ReaderCompanion {
             mapOf("id" to "sleep", "label" to "Sleep sync", "on" to (!addon || p.helperSleepSync),
                 "mutable" to addon, "detail" to "Save and send before sleep"),
             mapOf("id" to "screen", "label" to "Screen off after sync", "on" to (!addon || p.helperScreenOff),
-                "mutable" to addon, "permission" to admin,
-                "detail" to if (admin) "Permission available" else "Android permission needed to turn the screen off"),
+                "mutable" to (addon && p.helperSleepSync), "permission" to admin,
+                "detail" to if (addon && !p.helperSleepSync) "Sleep sync is off; ${if (admin) "permission available" else "permission needed"}"
+                    else if (admin) "Permission available" else "Android permission needed to turn the screen off"),
         )
         val result = mapOf("mode" to if (addon) "add-on" else "full", "protected" to Pin.locked(ctx),
             "helpers" to helpers, "sync" to LuaValue.str(if (p.lastSleepSyncAt == 0L) "Last sleep sync: unknown · your place stays saved on this reader" else "Last sleep sync: ${if (p.lastSleepSyncOk) "sent" else "delivery pending"} · ${freshness(p.lastSleepSyncAt)} at ${Ui.clock(ctx,p.lastSleepSyncAt)}"),
-            "setup" to LuaValue.str(if (p.setupPromptKey.isEmpty()) "Setup: unknown" else "Setup: ${p.setupNeeded} things need you · saved checklist, freshness unknown"),
+            "setup" to LuaValue.str(if (p.setupPromptKey.isEmpty()) "Setup: unknown" else "Setup: ${p.setupNeeded} ${if (p.setupNeeded == 1) "thing needs" else "things need"} you · saved checklist, freshness unknown"),
             "updates" to LuaValue.boundedText(if (p.updateStatusAt > 0L) "Updates: ${freshness(p.updateStatusAt)} · ${p.updateStatus.ifBlank { "unknown" }}"
                 else "Updates: unknown",256),
             "observed" to observed)
@@ -54,8 +55,9 @@ object ReaderCompanion {
                         if (Pin.locked(ctx)) { done(null, "protected"); return@post }
                         if (!Mode.isAddon(ctx)) { done(null, "mode"); return@post }
                         require(on != null)
-                        if (helper == "screen" && on && !Net.adminActive(ctx)) { done(null, "permission"); return@post }
                         val p = Prefs(ctx)
+                        if (helper == "screen" && on && !p.helperSleepSync) { done(null, "dependency"); return@post }
+                        if (helper == "screen" && on && !Net.adminActive(ctx)) { done(null, "permission"); return@post }
                         when (helper) {
                             "wifi" -> p.helperWifi = on
                             "sleep" -> p.helperSleepSync = on

@@ -30,7 +30,9 @@ class ReaderCompanionTest {
     }
     @Test fun addonStartsOffAndSnapshotStaysBoundedWithoutChecklistOrCatalog() {
         Prefs(ctx).mode=OrbitMode.ADDON
-        assertTrue(helpers().all { it["on"]==false && it["mutable"]==true })
+        assertTrue(helpers().all { it["on"]==false })
+        assertTrue(helpers().take(2).all { it["mutable"]==true })
+        assertEquals(false,helpers()[2]["mutable"])
         assertTrue(LuaValue.encode(ReaderCompanion.snapshot(ctx)).size<=16384)
         assertEquals(3,helpers().size)
         assertTrue((ReaderCompanion.snapshot(ctx)["sync"] as String).contains("unknown"))
@@ -43,6 +45,7 @@ class ReaderCompanionTest {
     }
     @Test fun missingScreenOffPermissionNeverEnablesHelper() {
         Prefs(ctx).mode=OrbitMode.ADDON
+        Prefs(ctx).helperSleepSync=true
         assertEquals(false,helpers()[2]["permission"])
         assertEquals("permission",command("action" to "set","helper" to "screen","on" to true))
         assertFalse(Prefs(ctx).helperScreenOff)
@@ -103,6 +106,17 @@ class ReaderCompanionTest {
         assertTrue((snapshot["updates"] as String).length<=256)
         assertTrue(LuaValue.transportText(snapshot).contains("Résumé"))
         assertFalse(LuaValue.transportText(snapshot).contains("�"))
+    }
+
+    @Test fun screenOffKeepsItsSavedChoiceButRequiresSleepSyncToChangeOn() {
+        val p=Prefs(ctx);p.mode=OrbitMode.ADDON;p.helperScreenOff=true
+        assertEquals(false,helpers()[2]["mutable"])
+        assertEquals(true,helpers()[2]["on"])
+        assertEquals("dependency",command("action" to "set","helper" to "screen","on" to true))
+        assertTrue(p.helperScreenOff)
+        assertFalse(p.helperSleepSync)
+        p.helperSleepSync=true
+        assertEquals(true,helpers()[2]["mutable"])
     }
 
 }

@@ -54,7 +54,8 @@ function V:toggle(helper)
     local _,retire=Library.companion.command({action="set",helper=helper.id,on=not helper.on},function(result)
         if not self.alive then return end
         self.busy=false
-        if result.error then self.error=result.error=="protected" and "Changes need the parent check. Open Protected settings." or "Change unavailable · review permissions and try again" end
+        if result.error then self.error=result.error=="protected" and "Changes need the parent check. Open Protected settings."
+            or result.error=="dependency" and "Turn on Sleep sync first." or "Change unavailable · review permissions and try again" end
         if Library.isForeground() and Library.companion.current(self.context) and UIManager:getTopmostVisibleWidget()==self.dialog then self:paint() end
     end)
     self.retire=retire

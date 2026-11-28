@@ -79,7 +79,9 @@ The existing policy matters here: Full mode includes the helpers; Add-on's exist
 Wi-Fi and Sleep sync opt-ins remain off by default. Sleep sync itself does not need
 the lock-screen permission. The permission explanation therefore names **Screen
 off after sync**, the operation that actually requires it. Granting it neither
-sets the screen-off helper nor enables Sleep sync. The normal worker owns helper
+sets the screen-off helper nor enables Sleep sync. Screen off remains dependent
+on Sleep sync; its saved choice is kept and its control is read-only while Sleep
+sync is off. The normal worker owns helper
 writes and rechecks protection, mode and permission at execution time. A successful
 write follows the existing service/status lifecycle and refreshes capabilities.
 
@@ -123,12 +125,12 @@ Native Android 14 review captures (1200×1600, synthetic books/accounts):
 [existing protected settings](evidence/reader-companion/protected.png).
 
 
-Validation on 2026-11-27: 261 Lua logic tests and 308 flow tests passed; Companion
-ran 919 JVM tests with zero failures/errors and four existing skips (915 passed),
+Validation on 2026-11-27: 265 Lua logic tests and 312 flow tests passed; Companion
+ran 951 JVM tests with zero failures/errors and four existing skips (947 passed),
 plus shared-version verification, debug assembly and lint. UI/server boundary
 guards passed all 18 tests, feature generation all four checks, and emulator host
 safety all ten checks. Native Android 14 passed 15 reader-companion checks, the
-existing 68-screen reading review, three Add-on recovery checks, and the four
+existing 69-screen reading review, three Add-on recovery checks, and the four
 upgrade/fresh-profile captures. Upgrade retained the seven-minute idle setting and
 synthetic sentinel and verified the once-only news acknowledgment. All device
 commands targeted the disposable emulator; no physical reader was used.

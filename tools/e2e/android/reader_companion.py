@@ -65,7 +65,7 @@ def review(device, out):
         check("full-reader-helpers",callback("helpers")+'\n')
         device.command('local v=ReaderCompanionView.active;assert(v.snapshot.mode=="full");assert(v.snapshot.helpers[1].on and not v.snapshot.helpers[1].mutable);v:close();return true')
         configure("addon")
-        check("addon-reader-helpers",'ReaderCompanionView.open("helpers");local v=ReaderCompanionView.active;assert(v.snapshot.mode=="add-on");assert(not v.snapshot.helpers[1].on and not v.snapshot.helpers[2].on);return true')
+        check("addon-reader-helpers",'ReaderCompanionView.open("helpers");local v=ReaderCompanionView.active;assert(v.snapshot.mode=="add-on");assert(not v.snapshot.helpers[1].on and not v.snapshot.helpers[2].on);assert(not v.snapshot.helpers[3].mutable);return true')
         for helper,index in (("wifi",1),("sleep",2)):
             device.command(callback(helper));helpers_ready()
             check(helper+"-explicit-on",'assert(ReaderCompanionView.active.snapshot.helpers['+str(index)+'].on);return true')
