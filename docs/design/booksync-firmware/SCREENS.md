@@ -405,7 +405,7 @@ No firmware or submodule pin changes; F36a/F36b remain separate.
 ## F37c independent logins and sign-out — NEEDS APPROVAL
 
 The [source-mapped proposal](F37c-account.md) and [real-device-frame gallery](f37c-account.html)
-add 30 states / 90 device views for separate sync/OPDS logins, origin results,
+add 31 states / 93 device views for separate sync/OPDS logins, origin results,
 service removal and all nine account-sign-out origin combinations. Android 0.12's
 plugin and companion define the wording and retention behavior. All additions are
 **NEEDS APPROVAL**; none is implemented or enabled by this docs-only change.

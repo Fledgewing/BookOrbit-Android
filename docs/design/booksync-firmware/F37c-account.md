@@ -62,14 +62,14 @@ results and returns to the same summary. No completion popup or automatic retry.
 ## Proposed states — all NEEDS APPROVAL
 
 Every state has X4 Pro touch, X4 Classic buttons and X3 bounded-text views.
-The gallery has **30 states / 90 device views**.
+The gallery has **31 states / 93 device views**.
 
 | Gallery IDs | Coverage |
 |---|---|
 | `logins-summary` | Three optional logins and origins |
 | `sync-none`, `sync-user`, `sync-account` | Not set / Set by you / Set up by your account |
 | `opds-none`, `opds-user`, `opds-account` | Same independent OPDS states |
-| `sync-entry`, `opds-entry` | Separate field entry; Pro bottom keyboard; explicit sync-key option |
+| `sync-entry`, `sync-derived-entry`, `opds-entry` | Separate field entry; Pro bottom keyboard; explicit sync-key option |
 | `sync-saving`, `opds-saving` | Pending submission and Cancel |
 | `sync-remove`, `opds-remove` | Service-specific consequence and Keep it / Remove |
 | `login-unauthorized`, `login-unavailable`, `login-forbidden`, `login-expired`, `login-failed` | Inline errors, same form and secret erasure |
@@ -109,8 +109,8 @@ Agents never flash readers or open serial ports. Before firmware merge, run the
 host gate, all three simulator suites and three real builds with bin/map/static-RAM
 measurements and at least 131,072 bytes free in each unchanged app slot.
 
-Documentation validation: Chromium checked all 90 device views at both 1200 px
-and 390 px widths (**180 view checks**): no content clipping, page overflow,
+Documentation validation: Chromium checked all 93 device views at both 1200 px
+and 390 px widths (**186 view checks**): no content clipping, page overflow,
 broken scene anchors or page errors. Representative entry, mixed sign-out, summary
 and origin-result views were visually inspected. Frame images are local and
 unmodified. Existing approved gallery articles are byte-for-byte unchanged.
