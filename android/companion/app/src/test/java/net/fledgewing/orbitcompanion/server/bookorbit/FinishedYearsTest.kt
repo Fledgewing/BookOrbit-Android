@@ -6,7 +6,7 @@ import org.junit.Test
 import java.nio.file.Files
 class FinishedYearsTest {
     private val path="/koreader/plugin/catalog/dashboard"
-    private val owner="reader|https://fixture.example.test"
+    private val owner="fixture-owner"
     private fun dashboard(year:Int,total:Any?=100L,n:Int=12)=mapOf("readingGoal" to mapOf("year" to year,"completedBooks" to total),"finishedThisYear" to (1..n).map { mapOf("id" to it.toLong(),"title" to LuaValue.str("Book 二 $it"),"authors" to listOf("Fixture"),"finishedOn" to "$year-06-01") })
     private fun <T> fixture(block:(CacheStore)->T):T {
         val root=Files.createTempDirectory("finished-year").toFile()
@@ -19,7 +19,7 @@ class FinishedYearsTest {
         val result=FinishedYears.window(st,owner,2025,mapOf("limit" to 5))
         assertEquals(12,result["total"]);assertEquals(5,(result["items"] as List<*>).size)
         val context=result["context"] as Map<*,*>;assertEquals(100L,context["finished_total"])
-        assertEquals("Saved selection · 12 books",context["coverage"])
+        assertEquals("Saved selection · 12 books",LuaValue.utf8(context["coverage"].toString()))
         assertEquals("Book 二 1",LuaValue.utf8(((result["items"] as List<*>)[0] as Map<*,*>)["title"].toString()))
         assertEquals(listOf("year:2026","year:2025"),FinishedYears.options(st,owner,1780000000).map { it["src"] })
     }
@@ -37,7 +37,7 @@ class FinishedYearsTest {
         val result=FinishedYears.window(st,owner,2026,emptyMap<Any,Any>())
         assertNull((result["context"] as Map<*,*>)["finished_total"])
         assertEquals("Finish date unknown",((result["items"] as List<*>).single() as Map<*,*>)["status_note"])
-        st.own("another|https://fixture.example.test")
+        st.own("other-fixture-owner")
         assertEquals(0L,st.db().query("SELECT count(*) FROM ${FinishedYears.TABLE}") { it.long(0)!! }.single())
         assertEquals(false,(FinishedYears.window(st,owner,2026,emptyMap<Any,Any>())["freshness"] as Map<*,*>)["saved"])
     }
@@ -63,6 +63,16 @@ class FinishedYearsTest {
         st.putEntry("dashboard",path,dashboard(2026,101L),400)
         val capped=FinishedYears.window(st,owner,2026,emptyMap<Any,Any>())
         assertEquals(12,capped["total"]);assertFalse((capped["context"] as Map<*,*>)["coverage"].toString().contains("pending"))
+    }
+
+    @Test fun boundedArchiveRetainsSeriesActionsWithoutOversizedMetadata()=fixture { st ->
+        val books=(1..12).map { mapOf("id" to it.toLong(),"title" to LuaValue.str("二".repeat(1000)),"authors" to List(100) { "Fixture".repeat(100) },"seriesId" to 7L,"seriesName" to "Series".repeat(1000),"seriesIndex" to it,"readStatus" to "read","formats" to List(100) { "EPUB" }) }
+        st.putEntry("dashboard",path,mapOf("readingGoal" to mapOf("year" to 2026,"completedBooks" to 100),"finishedThisYear" to books),100)
+        val r=FinishedYears.window(st,owner,2026,mapOf("limit" to 12))
+        assertEquals(12,(r["items"] as List<*>).size);assertTrue(LuaValue.encode(r).size<16384)
+        assertEquals(BookOrbitLibrary.key(owner,"series",7),((r["items"] as List<*>).first() as Map<*,*>)["series_key"])
+        val grouped=FinishedYears.window(st,owner,2026,mapOf("op" to "groups","query" to mapOf("group" to "series"),"limit" to 24))
+        assertEquals(1,grouped["group_total"]);assertEquals(12,((grouped["items"] as List<*>).single() as Map<*,*>)["count"])
     }
 
 }

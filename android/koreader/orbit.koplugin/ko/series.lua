@@ -114,7 +114,7 @@ function SeriesUI.groups(host)
         HomeWidgets.button(c,chip.label.." ×",x,scale(74),scale(136),scale(50),chip.callback); x=x+scale(140)
     end
     if message(host,c,result,scale(132)) then
-        if host.catalog_state=="ready" and not result.membership_incomplete then HomeWidgets.text(c,tostring(result.total or 0).." books",g.gap,scale(132),w-2*g.gap,16) end
+        if host.catalog_state=="ready" and not result.membership_incomplete then HomeWidgets.text(c,result.context and result.context.coverage or tostring(result.total or 0).." books",g.gap,scale(132),w-2*g.gap,16) end
         for i,row in ipairs(result.items or {}) do
             local y=scale(170)+(i-1)*scale(168)
             local clickable=row.series_key or row.partial

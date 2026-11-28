@@ -248,6 +248,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                 copies.removeAll { it["token"]==args["token"] && it["phase"]=="identity" };save()
             }
             "finish.mark" -> {
+                val previousBook=number(jobs[hash]?.get("book_id"))
                 require(hash!=null && Regex("[a-fA-F0-9]{32}").matches(hash))
                 if(args["complete"]==true) {
                     val book=id(args)
@@ -256,7 +257,7 @@ internal class CatalogWorkflow(private val worker: CacheWorker, private val cred
                         "token" to java.util.UUID.randomUUID().toString(),"created_at" to now(),"finished_on" to java.time.Instant.ofEpochSecond(now()).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString(),
                         "final_pos" to mapOf("percentage" to args["percentage"]),"status_seen" to status,"rating" to jobs[hash]?.get("rating"))
                 } else jobs.remove(hash)
-                yearPending(id(args),if(args["complete"]==true) jobs[hash]?.get("finished_on") as? String else null)
+                yearPending(id(args) ?: previousBook,if(args["complete"]==true) jobs[hash]?.get("finished_on") as? String else null)
                 save()
                 id(args)?.let { book -> worker.patch(book,mapOf("readStatus" to if(args["complete"]==true) "read" else "reading",
                     "progressPercentage" to ((args["percentage"] as? Number)?.toDouble()?.times(100))),true,false) }

@@ -27,10 +27,15 @@ internal object FinishedYears {
         val books=rows.take(12).mapIndexedNotNull { rank,v ->
             val b=v as? Map<*,*> ?: return@mapIndexedNotNull null
             if(count(b["id"])?.takeIf { it>0 }==null) return@mapIndexedNotNull null
-            val normalized=mapOf("key" to BookOrbitLibrary.key(owner,"book",count(b["id"])!!),
+            val bounded=mapOf("id" to count(b["id"])!!,
                 "title" to LuaValue.boundedText((b["title"] as? String)?.let(LuaValue::utf8).orEmpty(),160),
                 "authors" to (b["authors"] as? List<*>).orEmpty().filterIsInstance<String>().take(3).map { LuaValue.boundedText(LuaValue.utf8(it),80) },
-                "rank" to rank,"status" to "finished","progress" to 100)
+                "readStatus" to (b["readStatus"] as? String)?.take(32),"progressPercentage" to b["progressPercentage"],
+                "seriesName" to (b["seriesName"] as? String)?.let { LuaValue.boundedText(LuaValue.utf8(it),120) },
+                "seriesId" to count(b["seriesId"]),"seriesIndex" to b["seriesIndex"]?.toString()?.take(24),
+                "formats" to (b["formats"] as? List<*>)?.filterIsInstance<String>()?.take(10)?.map { it.take(12) })
+            val normalized=BookOrbitLibrary.summary(owner,bounded,rank.toLong(),null).filterKeys { it in setOf("key","title","authors","series","series_key","series_position","status","progress","formats","rank","on_device","available") }
+
             val date=(b["finishedOn"] as? String)?.let(LuaValue::utf8)?.let { value ->
                 runCatching { LocalDate.parse(value.take(10)) }.getOrNull()?.takeIf { it.year.toLong()==year }?.toString()
             }
@@ -55,7 +60,9 @@ internal object FinishedYears {
         val saved=store.db().query("SELECT year,body FROM $TABLE WHERE owner=? ORDER BY year DESC",BookOrbitLibrary.namespace(owner)) {
             it.long(0)!!.toInt() to ((it.bytes(1)?.let(LuaValue::parse)) as? Map<*,*>).orEmpty()
         }.toMap()
-        return (saved.keys+current).sortedDescending().map { year -> mapOf("src" to "year:$year","title" to "Finished in $year","count" to saved[year]?.get("finished_total"),"default_sort" to 0) }
+        val workflow=CatalogWorkflow.load(java.io.File(store.root,"workflows/${BookOrbitLibrary.namespace(owner)}.lua"))
+        val localYears=(workflow["year_pending"] as? Map<*,*>).orEmpty().values.mapNotNull { raw -> ((raw as? Map<*,*>)?.get("date") as? String)?.let { runCatching { LocalDate.parse(it).year }.getOrNull() } }.filter { it in 2000..2100 }
+        return (saved.keys+current+localYears).distinct().sortedDescending().map { year -> mapOf("src" to "year:$year","title" to "Finished in $year","count" to saved[year]?.get("finished_total"),"default_sort" to 0) }
     }
     fun window(store:CacheStore,owner:String,year:Int,args:Map<*,*>):Map<String,Any?> {
         require(year in 2000..2100)
@@ -78,6 +85,9 @@ internal object FinishedYears {
         val selected=display.filter { LibraryFilter.matches(it,query) }.sortedWith(LibraryFilter.comparator(query))
         val offset=((args["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
         val limit=((args["limit"] as? Number)?.toInt() ?: 12).coerceIn(1,32)
+        if(args["op"]=="groups") return SeriesPresentation.groups(selected,query,offset,limit,
+            ((args["preview"] as? Number)?.toInt() ?: 3).coerceIn(1,9),((args["group_limit"] as? Number)?.toInt() ?: 3).coerceIn(1,6))+
+            mapOf("context" to mapOf("coverage" to LuaValue.str("Saved selection · ${rows.size} books")),"freshness" to mapOf("saved" to (data!=null || pending.isNotEmpty()),"origin" to "cached-remote"))
         if(args["op"]=="facets") {
             val facet=LibraryFacets(args["field"].toString(),query.entries.associate { it.key.toString() to it.value },System.currentTimeMillis()/1000)
             display.forEach { facet.include(it) }
@@ -87,7 +97,7 @@ internal object FinishedYears {
         val total=data?.get("finished_total")
         val label="Finished in $year · ${total ?: "—"} total"
         return mapOf("items" to window,"total" to selected.size,"next" to (offset+window.size).takeIf { it<selected.size },
-            "context" to mapOf("title" to label,"coverage" to ((if(data==null) "Account year summary pending" else "Saved selection · ${rows.size} books") + if(pending.isNotEmpty()) " · ${pending.size} local pending" else ""),"year" to year,"finished_total" to total),
+            "context" to mapOf("title" to LuaValue.str(label),"coverage" to LuaValue.str((if(data==null) "Account year summary pending" else "Saved selection · ${rows.size} books") + if(pending.isNotEmpty()) " · ${pending.size} local pending" else ""),"year" to year,"finished_total" to total),
             "freshness" to mapOf("saved" to (data!=null || pending.isNotEmpty()),"origin" to "cached-remote","at" to data?.get("at")),"row_count" to window.size)
     }
 }

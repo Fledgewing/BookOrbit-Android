@@ -87,6 +87,7 @@ function HomeHostPlan.resolve(document,registry,caps)
             local valid,need=pcall(HomeHostPlan.need,p)
             need=valid and need or {}
             local supported=true
+            if type(need.source)=="table" and need.source.kind=="finished-year" and caps and caps.retainedFinishedYears==false then supported=false end
             if (p.widget == "lists" or type(need.source)=="table" and need.source.kind=="list")
                 and caps and type(caps.lists) == "table" and caps.lists.read == false then supported=false end
             if (p.widget == "booklist" or p.widget == "continue-reading") and caps and caps.catalog == false then supported=false end

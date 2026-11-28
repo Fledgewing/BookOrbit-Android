@@ -182,13 +182,13 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                     "goal" to (a["goal"] != null || remote?.goalAvailable == true),
                     "finished" to (a["finished"] != null || remote?.finished != null),
                     "yearReview" to false, "activityDetails" to false, "celebrations" to false),
-                "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
+                "retainedFinishedYears" to true,"readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
                 "series" to mapOf("read" to true, "downloadNext" to opds),
                 "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh").takeIf { !managed || (server["catalog"] as? Map<*,*>)?.get("canRefresh")==true }),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         }
         val requestedSource=a["source"] as? Map<*,*>
-        if(op in setOf("window","counts","facets") && requestedSource?.get("kind")=="finished-year") {
+        if(op in setOf("window","counts","facets","groups") && requestedSource?.get("kind")=="finished-year") {
             val year=if(requestedSource["key"]=="current") java.time.Instant.ofEpochSecond(clock()).atZone(java.time.ZoneId.systemDefault()).year else requestedSource["key"].toString().toIntOrNull() ?: throw IllegalArgumentException("invalid year")
             return FinishedYears.window(store,owner,year,a)
         }

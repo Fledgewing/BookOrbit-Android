@@ -54,7 +54,8 @@ class DeviceLibrary(private val roots: List<File>) : ServerAdapter {
         val fresh=mapOf("saved" to true,"origin" to "local-device")
         fun rows(items: List<*>) = mapOf("items" to items,"freshness" to fresh)
         val op=request["op"]
-        if(op=="capabilities") return mapOf("onDevice" to true,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,
+        if((request["source"] as? Map<*,*>)?.get("kind")=="finished-year") return unsupported()
+        if(op=="capabilities") return mapOf("onDevice" to true,"retainedFinishedYears" to false,"readingStats" to true,"catalog" to true,"detail" to true,"download" to false,"libraries" to false,"collections" to false,
             "lists" to mapOf("read" to false,"save" to false),"wantToRead" to false,"progress" to mapOf("read" to true,"write" to false),
             "status" to mapOf("read" to true,"write" to false))
         if(op in setOf("lists","collections")) return rows(emptyList<Any>())
