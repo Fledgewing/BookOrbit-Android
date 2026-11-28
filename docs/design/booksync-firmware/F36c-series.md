@@ -1,10 +1,11 @@
-# F36c Series and download next N — NEEDS APPROVAL
+# F36c Series and download next N — APPROVED (2026-11-28)
 
-Revision 2 · 28 November 2026. **NEEDS APPROVAL.** Documentation only.
-[Three-profile gallery](f36c-series.html). Merging these docs does not approve
-implementation. No firmware, pin, shipped feature cell or release changes.
-Home revision-16 and B1–B5 approvals remain unchanged. F36c stays off pending
-presentation approval and its Library dependencies; F36a/F36b remain separate.
+Revision 2 · **APPROVED (2026-11-28)** by the maintainer at ~00:45 PT:
+“I approve all the screens / widgets”. All revised compact scenes and states.
+[Three-profile gallery](f36c-series.html). Implementation and device acceptance
+remain required. No firmware, pin, shipped feature cell or release changes.
+Home revision-16 and B1–B5 approvals remain unchanged. F36c implementation
+depends on its Library services and tests; F36a/F36b remain separate.
 
 ## Photo comparison and visual rules
 

@@ -1,10 +1,11 @@
-# F40w compact X4 widgets — NEEDS APPROVAL
+# F40w compact X4 widgets — APPROVED (2026-11-28)
 
-Status: **NEEDS APPROVAL** for every main view, state and optional larger view.
+Status: **APPROVED (2026-11-28)** for every main view, state and optional larger view.
 This replaces #241's large main cards with the maintainer's 0.11-density brief.
 The proposed scope reduction was withdrawn: **X4 keeps exactly the 30 installed
-Android 0.12 registry types, with no invented widget type**. Nothing here changes
-firmware, Android, the pin, defaults, approval status or reader behavior.
+Android 0.12 registry types, with no invented widget type**. Maintainer approval on 2026-11-28 (~00:45 PT): “I approve all the screens / widgets”.
+Approval covers all 30 types, every state and optional size at this compact density.
+This record changes no firmware, Android, pin, defaults or reader behavior.
 
 [Review the replacement gallery](f40w-widgets.html). It starts with fully composed
 Home, Library and Stats examples on X4 Pro and X4 Classic, followed by each
@@ -87,7 +88,7 @@ layout is rewritten by this docs change. Larger cards below are optional only.
 
 ## Main-size inventory — exactly Android's installed types
 
-All entries are **NEEDS APPROVAL** on both X4 profiles. The order is Continue /
+All entries are **APPROVED (2026-11-28)** on both X4 profiles. The order is Continue /
 Also reading / Recently added / Book list, Stats, then the rest; the first two
 shelf/list presets appear next to Continue while remaining one Book list type.
 
@@ -195,8 +196,8 @@ Each future F40w widget still needs its own provider projection then renderer,
 independent known/complete-empty/not-saved/off/unsupported/stale/oversize tests,
 geometry/focus/sibling-isolation and stale-delivery/account checks. Word needs its
 bounded lookup-capture seam before projection. Account goals never substitute a
-local count, and unknown days never turn into zero. Scope parity is not scene
-approval: do not build these new compact scenes until the maintainer approves them.
+local count, and unknown days never turn into zero. These compact scenes are approved; implementation still requires the listed
+provider, renderer, boundary, resource and test gates.
 
 Implementation PRs must run the appropriate host/simulator suites, actual Pro,
 Classic and C3 builds and the unchanged 131,072-byte free-slot gate. Report image,

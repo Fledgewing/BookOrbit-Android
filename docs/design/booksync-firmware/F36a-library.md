@@ -1,6 +1,7 @@
-# F36a Library and lists — NEEDS APPROVAL
+# F36a Library and lists — APPROVED (2026-11-28)
 
-27 November 2026. **Docs-only proposal. Merging this docs-only PR does not approve implementation.**
+Maintainer approval: **APPROVED (2026-11-28)**, ~00:45 PT: “I approve all the screens / widgets”.
+All revised compact scenes and states are approved; implementation and device acceptance remain required.
 [Gallery](f36a-library.html) · [plan F36a–c](PLAN.md) · [inventory](SCREENS.md).
 All 30 state variants have X4 Pro touch, X4 Classic button and X3 text views.
 
@@ -10,15 +11,15 @@ detail/actions; F36c owns Series and download-next. This proposal draws only the
 F36a entry/return boundary to those owners, never their panels. No firmware source,
 submodule pin, feature cell, release or existing approval changes.
 
-## Why this needs review
+## Approval coverage
 
 The approved Home revision-16 gallery has `x4pro-list-by-series` and
 `x4c-list-by-series`, plus Library low-space views. Its general Library/list
 screens are Android examples, and it has no X3 catalog/list scene set.
 The firmware B1–B5 inventory has no F36a Library/list entries. General text fallback
 rules do not illustrate the required X3 offline, Back, download and error scenes.
-The [F36a assignment](PLAN.md) requires approved scenes in every profile; those
-missing presentations stay off until explicit approval. Existing approved Home
+The [F36a assignment](PLAN.md) requires approved scenes in every profile; the
+previously missing presentations are now approved by this record. Existing approved Home
 and B1–B5 presentations retain their approval.
 
 ## Android 0.12 evidence
@@ -129,7 +130,7 @@ initiating owner. There is no preparing, failure or completion destination.
 User-opened job information may show Resume; background
 completion cannot reopen a closed screen, steal reading focus or restart a device.
 
-## Proposed scenes — every row NEEDS APPROVAL
+## Proposed scenes — every row APPROVED (2026-11-28)
 
 | Scene | Existing surface | Example state |
 |---|---|---|

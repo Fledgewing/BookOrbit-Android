@@ -214,7 +214,8 @@ unillustrated states still need approval.
 
 F40w X4 scope follows the installed Android 0.12 widget registry and renderers,
 not the withdrawn 0.11-only filter. The [compact X4 proposal](F40w-widgets.md)
-is **NEEDS APPROVAL**: smallest useful main views at 0.11 density, optional larger
+is **APPROVED (2026-11-28)** for all 30 types, every state and optional size:
+smallest useful main views at 0.11 density, optional larger
 views, and All (n) › at the top-right of headers. Canonical registry IDs:
 `continue-reading`, `booklist`, `this-week`, `reading-streak`, `year-in-reading`, `when-you-read`, `reading-records`, `today`, `reading-goal`, `pages-read`, `monthly-reading`, `finish-forecast`, `battery`, `library`, `lists`, `recommended`, `discover`, `highlight`, `yearago`, `word`, `buddy`, `dust`, `achievements`, `sync-controls`, `reader-toggles`, `light`, `clock`, `moon`, `glyph`, `next-stop`.
 Book list presets (including Also reading, Recently added, Want to read, Finished,
