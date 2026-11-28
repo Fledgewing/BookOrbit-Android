@@ -28,3 +28,10 @@ source. Native review uses the actual cached projection, shelf, source picker an
 See all; no live server is required.
 
 Physical acceptance, firmware implementation and publication remain pending.
+
+Verification: **909 JVM tests**, zero failures/errors, four skips; shared-version,
+debug APK and lint pass. **261 Lua logic / 297 flows**, boundary guards **12/6**,
+feature matrix **4**, emulator driver **10**. Four native checks pass for the real
+cached rank, source picker/minimum span, counted See all and filtered selection;
+all four screenshots were inspected. The harness waits for the restored fixture
+owner after startup instead of treating companion readiness as account readiness.

@@ -6739,7 +6739,7 @@
         "android": {
           "status": "partial",
           "note": "Bounded saved server selection/rank, source/preset and counted See all.",
-          "reason": "deliberately deferred: native/physical acceptance and publication remain.",
+          "reason": "deliberately deferred: physical acceptance and publication remain.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-UP-NEXT.md",
