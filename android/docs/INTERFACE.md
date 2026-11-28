@@ -725,3 +725,9 @@ Source `{kind="finished-year",key="current"|"YYYY"}` selects a bounded saved yea
 selection plus qualified pending marks. Context carries year/account total and
 saved-selection coverage; window totals count only the displayed saved selection.
 Source projection revision 4 exposes archived years without reusing ready older lists.
+
+### Saved series-next selection
+
+Window/count/facet source `series-next` preserves the cached provider rank unless
+the reader explicitly sorts it. Context discloses Saved selection coverage;
+window totals count that selection, not all possible series recommendations.

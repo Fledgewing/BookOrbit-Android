@@ -19,7 +19,7 @@ return function(test,eq,ok,E,W,withHost)
                 local a=E.Cache.decode(raw)
                 if a.op=='library.summary' then eq(a.projection,2);return {total=7,in_progress=2,browse={libraries=1,authors=3,series=2,collections=1,lists=1},coverage='Saved catalog indexes',freshness={saved=true}},300 end
                 if a.op=='sources' then
-                    reads[#reads+1]=a;eq(a.projection,4)
+                    reads[#reads+1]=a;eq(a.projection,5)
                     return {items={{src=a.category=='libraries' and 'library:opaque:7' or 'list:opaque:9',title='Named source',count=2}},total=1,freshness={saved=true}},180
                 end
                 return read(raw)

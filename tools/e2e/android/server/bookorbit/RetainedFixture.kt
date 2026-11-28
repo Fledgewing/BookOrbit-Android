@@ -22,8 +22,8 @@ internal object RetainedFixture {
     }
     fun options(root:File,owner:String):List<Any> = cached(root,owner) { store ->
         val current=LocalDate.now().year
-        listOf(current,current-1).map { y -> mapOf("src" to "year:$y","title" to "Finished in $y","count" to 100L,"default_sort" to 0) }
+        listOf(mapOf("src" to "upnext","title" to "Up next in series","count" to 3L,"default_sort" to 0)) + listOf(current,current-1).map { y -> mapOf("src" to "year:$y","title" to "Finished in $y","count" to 100L,"default_sort" to 0) }
     }
-    fun handles(request:Map<*,*>) = (request["source"] as? Map<*,*>)?.get("kind")=="finished-year"
+    fun handles(request:Map<*,*>) = (request["source"] as? Map<*,*>)?.get("kind")=="finished-year" || request["source"]=="series-next"
     fun project(root:File,owner:String,request:Map<*,*>):Map<String,Any?> = cached(root,owner) { BookOrbitProjection(it).project(owner,request) }
 }

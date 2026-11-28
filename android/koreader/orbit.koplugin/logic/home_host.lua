@@ -29,7 +29,7 @@ function HomeHostPlan.cardGeometry(p,rect,scale)
         or math.max(0,math.floor(available/rowH))
     return {w=w,h=h,compact=compact,pad=pad,shelf=shelf,rowH=rowH,capacity=capacity}
 end
-local sources = {year={kind="finished-year",key="current"},pickup="pick-back-up",recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
+local sources = {upnext="series-next",year={kind="finished-year",key="current"},pickup="pick-back-up",recent="recently-added",wtr="want-to-read",device="on-device",reading="reading",finished="finished",custom="library/all"}
 function HomeHostPlan.need(p)
     local s=p.settings or {}
     if p.widget == "library" then return {op="library.summary",limit=1} end
@@ -88,6 +88,7 @@ function HomeHostPlan.resolve(document,registry,caps)
             need=valid and need or {}
             local supported=true
             if type(need.source)=="table" and need.source.kind=="finished-year" and caps and caps.retainedFinishedYears==false then supported=false end
+            if need.source=="series-next" and caps and caps.retainedSeriesNext==false then supported=false end
             if (p.widget == "lists" or type(need.source)=="table" and need.source.kind=="list")
                 and caps and type(caps.lists) == "table" and caps.lists.read == false then supported=false end
             if (p.widget == "booklist" or p.widget == "continue-reading") and caps and caps.catalog == false then supported=false end

@@ -182,7 +182,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                     "goal" to (a["goal"] != null || remote?.goalAvailable == true),
                     "finished" to (a["finished"] != null || remote?.finished != null),
                     "yearReview" to false, "activityDetails" to false, "celebrations" to false),
-                "retainedFinishedYears" to true,"readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
+                "retainedFinishedYears" to true,"retainedSeriesNext" to true,"readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
                 "series" to mapOf("read" to true, "downloadNext" to opds),
                 "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh").takeIf { !managed || (server["catalog"] as? Map<*,*>)?.get("canRefresh")==true }),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
@@ -192,6 +192,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             val year=if(requestedSource["key"]=="current") java.time.Instant.ofEpochSecond(clock()).atZone(java.time.ZoneId.systemDefault()).year else requestedSource["key"].toString().toIntOrNull() ?: throw IllegalArgumentException("invalid year")
             return FinishedYears.window(store,owner,year,a)
         }
+        if(op in setOf("window","counts","facets","groups") && a["source"]=="series-next") return UpNextSelection.window(store,owner,a,clock())
         if (op == "sources") {
             val category=a["category"] as? String ?: "builtin"
             require(category in setOf("builtin","lists","series","authors","collections","libraries"))
@@ -209,11 +210,11 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             val definitions=listOf(Triple("custom","Custom filter","library/all"),Triple("recent","Recently added","recently-added"),
                 Triple("wtr","Want to read","want-to-read"),Triple("reading","Reading now","reading"),
-                Triple("finished","All finished","finished"),Triple("device","On this device","on-device"),Triple("pickup","Pick back up","pick-back-up"))
+                Triple("finished","All finished","finished"),Triple("device","On this device","on-device"),Triple("pickup","Pick back up","pick-back-up"),Triple("upnext","Up next in series","series-next"))
                 .filter { (src,_,_) -> !(src=="wtr" && a["allow_wtr"]==false || src=="device" && a["allow_device"]==false) }
             val builtins=definitions.map { (src,title,source) ->
                 val count=project(owner,mapOf("op" to "counts","source" to source,"exclude_current" to (src=="reading")))
-                mapOf("src" to src,"title" to title,"default_sort" to 0.takeIf { src=="pickup" },"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
+                mapOf("src" to src,"title" to title,"default_sort" to 0.takeIf { src in setOf("pickup","upnext") },"count" to if ((count["freshness"] as? Map<*,*>)?.get("saved")==true) count["total"] else null)
             }
             val options=builtins+FinishedYears.options(store,owner,clock())
             val rows=options.drop(offset).take(limit)
