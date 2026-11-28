@@ -86,6 +86,12 @@ design and mockup approval still apply.
 | **Unified in-book menus** (Later 8b): BookSync reader screens and quick settings match Home, with stock KOReader/plugin escape; TOC, annotations, go to, search, book info, End of book and cached sleep presentation. No KOReader core patches; capability and flash gates per screen. | Android, X4 Pro, X4, X3 | implemented on feature/0.12 for Android ([owned navigation and reversible hooks](docs/design/booksync-home/F12-READER-NAVIGATION.md)); add-on setup recommendation integration, physical acceptance and firmware remain |
 | **No visible app switches** (Later 9) where the new Home makes them small. | Android | designing (ordinary status/helper surfaces [NEEDS APPROVAL](docs/design/booksync-home/READER-COMPANION-SURFACES.md); background work and transparent restart already implemented) |
 
+## 0.13
+
+| Outcome | Platforms | Status | Design |
+|---|---|---|---|
+| BookSync on jailbroken Kindle (KOReader + companion port) | Kindle | designing | [Kindle study and proposed design](docs/design/kindle/DESIGN.md) — NEEDS APPROVAL |
+
 ## Planned: backend independence
 
 BookSync's journey to backend independence: your reading works with the library server you
