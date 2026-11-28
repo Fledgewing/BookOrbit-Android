@@ -32,6 +32,24 @@ return function(test,eq,ok,E,W,withHost)
             E.require=requireSaved
         end)
     end)
+    test('quick controls: helper opt-in and active holds guard native writes',function()
+        local oldInput=E.Library.controlInput;local oldOff=E.Companion.wifiOff;local oldUp=E.Companion.netUp
+        local oldSync=E.Library.syncNow;local oldController=E.Library.controller;local oldRetry=E.Library.retry
+        local off,up,sync=0,0,0
+        local n={wifi_available=false,wifi_on=true,sync_available=true}
+        E.Library.controlInput=function() return n end;E.Library.retry=function() end
+        E.Companion.wifiOff=function(_,auto) eq(auto,false);off=off+1 end
+        E.Companion.netUp=function(_,opts) eq(opts.owner,"manual");up=up+1 end
+        E.Library.syncNow=function() sync=sync+1;return true end;E.Library.controller=function() return {} end
+        eq(E.Library.controlAction('control-wifi'),false);eq(off,0)
+        n.wifi_available=true;n.wifi_busy=true;eq(E.Library.controlAction('control-wifi'),false)
+        n.wifi_busy=false;ok(E.Library.controlAction('control-wifi'));eq(off,1)
+        n.wifi_on=false;ok(E.Library.controlAction('control-wifi'));eq(up,1)
+        n.sync_busy=true;eq(E.Library.controlAction('control-sync'),false);eq(sync,0)
+        n.sync_busy=false;ok(E.Library.controlAction('control-sync'));eq(sync,1)
+        E.Library.controlInput=oldInput;E.Companion.wifiOff=oldOff;E.Companion.netUp=oldUp
+        E.Library.syncNow=oldSync;E.Library.controller=oldController;E.Library.retry=oldRetry
+    end)
     test('local widgets: Home owns one batch for all three local projections and Back',function()
         withHost(function(batches)
             local ops={}

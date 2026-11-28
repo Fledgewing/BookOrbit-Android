@@ -6626,6 +6626,58 @@
         }
       },
       "deferred": "Physical acceptance, publication and firmware implementation."
+    },
+    {
+      "id": "android-quick-controls",
+      "feature": "Retained Sync and native quick controls (0.12; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Reading-sync check result/age and guarded Wi-Fi, native Night and Rotate.",
+          "reason": "deliberately deferred: physical acceptance and publication remain; six native checks and the 68-screen review pass.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-QUICK-CONTROLS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Quick controls follow Android-first.",
+          "reason": "deliberately deferred: firmware integration and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-QUICK-CONTROLS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Quick controls follow Android-first.",
+          "reason": "deliberately deferred: firmware integration and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-QUICK-CONTROLS.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Quick controls follow Android-first.",
+          "reason": "deliberately deferred: firmware integration and device acceptance are outside this Android outcome.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-QUICK-CONTROLS.md",
+              "line": 1
+            }
+          ]
+        }
+      },
+      "deferred": "Physical acceptance, publication and firmware implementation."
     }
   ],
   "release_evidence": {

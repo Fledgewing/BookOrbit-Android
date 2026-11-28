@@ -17,18 +17,19 @@ import java.io.File
 class CacheStore(override val root: File, private val log: (String) -> Unit = { OLog.i(it) }, private val open: (File) -> Sql = { AndroidSql(it) }) : ProjectionStore {
     val file get() = File(root, FILE)
     private var sql: Sql? = null
+    private val databaseLock=databaseLocks.computeIfAbsent(file.canonicalPath) { Any() }
 
     /** The open database: created on first use; a file of another schema version is replaced. */
-    @Synchronized override fun db(): Sql {
-        sql?.let { return it }
+    override fun db(): Sql = synchronized(databaseLock) {
+        sql?.let { return@synchronized it }
         NoMedia.directory(root)
         runCatching { File(root, ".nomedia").let { if (!it.exists()) it.createNewFile() } }
-        var s: Sql = CacheSql(open(file), this)
+        var s: Sql = CacheSql(open(file), databaseLock)
         val v = s.pragma("user_version")?.toIntOrNull() ?: 0
         if (v != VERSION && v != 0) {
             s.close()
             listOf(FILE, "$FILE-journal").forEach { File(root, it).delete() }
-            s = CacheSql(open(file), this)
+            s = CacheSql(open(file), databaseLock)
         }
         if (v != VERSION) {
             s.transaction { SCHEMA.forEach { s.exec(it) } }
@@ -37,10 +38,10 @@ class CacheStore(override val root: File, private val log: (String) -> Unit = { 
         sql = s
         BulkCatalog.initialize(s)
         LibraryReadModel.initialize(s)
-        return s
+        s
     }
 
-    @Synchronized override fun close() {
+    override fun close() = synchronized(databaseLock) {
         sql?.close()
         sql = null
     }
@@ -336,6 +337,8 @@ class CacheStore(override val root: File, private val log: (String) -> Unit = { 
     fun coversKept(): Set<String> = db().query("SELECT name FROM cover_keep") { it.text(0)!! }.toHashSet()
 
     companion object {
+        // All in-process handles of one cache share initialization, writes and close.
+        private val databaseLocks=java.util.concurrent.ConcurrentHashMap<String,Any>()
         const val FILE = "orbit.db"
 
         /**
